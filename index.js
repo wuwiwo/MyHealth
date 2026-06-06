@@ -17,19 +17,19 @@ const CARDIO_TYPES = [
 ];
 const LEVELS = {
   chap1:{name:'初出茅庐',levels:[
-    {id:'1-1',npc:'见习战士',atk:2,def:1,hp:12},
-    {id:'1-2',npc:'斥候兵',atk:3,def:2,hp:18},
-    {id:'1-3',npc:'轻装剑士',atk:4,def:2,hp:24}
+    {id:'1-1',npc:'见习战士',atk:20,def:10,hp:120},
+    {id:'1-2',npc:'斥候兵',atk:30,def:20,hp:180},
+    {id:'1-3',npc:'轻装剑士',atk:40,def:20,hp:240}
   ]},
   chap2:{name:'小试牛刀',levels:[
-    {id:'2-1',npc:'重装步兵',atk:3,def:4,hp:30},
-    {id:'2-2',npc:'弓弩手',atk:6,def:1,hp:22},
-    {id:'2-3',npc:'骑兵',atk:7,def:3,hp:28}
+    {id:'2-1',npc:'重装步兵',atk:30,def:40,hp:300},
+    {id:'2-2',npc:'弓弩手',atk:60,def:10,hp:220},
+    {id:'2-3',npc:'骑兵',atk:70,def:30,hp:280}
   ]},
   chap3:{name:'锋芒初露',levels:[
-    {id:'3-1',npc:'精英卫兵',atk:5,def:5,hp:40},
-    {id:'3-2',npc:'暗影刺客',atk:9,def:2,hp:30},
-    {id:'3-3',npc:'铁甲统领',atk:6,def:6,hp:50}
+    {id:'3-1',npc:'精英卫兵',atk:50,def:50,hp:400},
+    {id:'3-2',npc:'暗影刺客',atk:90,def:20,hp:300},
+    {id:'3-3',npc:'铁甲统领',atk:60,def:60,hp:500}
   ]}
 };
 
@@ -148,11 +148,8 @@ function renderStr(){
   document.getElementById('strDateMain').textContent=f.main
   document.getElementById('strDateSub').textContent=f.sub
   const entries=getStr(d)
-  // Header stats
-  const done=entries.filter(e=>e.actualReps>=e.targetReps).length
-  document.getElementById('todayDone').textContent=done
-  document.getElementById('todayTotal').textContent=entries.length
-  document.getElementById('todayReps').textContent=entries.reduce((s,e)=>s+e.actualReps,0)
+  // Plans
+  renderStrPlans()
   // Entries list
   const el=document.getElementById('strList')
   if(!entries.length){
@@ -204,6 +201,90 @@ function renderMissed(){
     const t=inp.value.trim();if(t){_missed.notes[dd]=t}else{delete _missed.notes[dd]}
     saveMissed();renderMissed();toast('已保存断签说明','s')
   }))
+}
+
+/* ========== PLANS ========== */
+/* ========== PLANS ========== */
+let _woPlan=null,_woIdx=0,_woReps=12,_woDone=[],_woTimer=null,_woRest=0;
+
+function renderStrPlans(){
+  const c=document.getElementById('strPlansList')
+  const plans=_plans.plans||[]
+  if(!plans.length){
+    c.innerHTML='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有训练计划</div><div class="empty-s">点下方按钮创建</div></div>'
+    return
+  }
+  c.innerHTML=plans.map(p=>{
+    const tags=p.exercises.map(e=>e.exercise).slice(0,6)
+    return '<div class="ec" style="cursor:pointer"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="startPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(n=>'<span style="font-size:.7rem;background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>').join('')+'</div></div></div>'
+  }).join('')
+  // Add new plan button
+  c.innerHTML+='<button class="add-btn" id="strNewPlan" style="margin-top:8px">＋ 新建计划</button>'
+}
+
+function startStrPlan(pid){
+  const plan=_plans.plans.find(p=>p.id===pid);if(!plan||!plan.exercises.length)return
+  _woPlan=plan;_woIdx=0;_woDone=[]
+  showWoExercise()
+}
+
+function showWoExercise(){
+  const ex=_woPlan.exercises[_woIdx]
+  _woReps=ex.targetReps
+  const overlay=document.createElement('div');overlay.id='woOverlay';overlay.className='battle-overlay open'
+  overlay.innerHTML='<div class="battle-hdr"><div class="battle-level">'+_woPlan.name+'</div><div class="battle-level">'+( _woIdx+1)+'/'+_woPlan.exercises.length+'</div><button class="speed-btn" id="woClose">✕</button></div>'
+    +'<div class="battle-arena" style="flex-direction:column;gap:12px"><div class="workout-exercise" style="text-align:center">'
+    +'<div style="font-size:2.2rem;font-weight:800">'+ex.exercise+'</div>'
+    +'<div style="font-size:.9rem;color:var(--text2);margin:4px 0 16px">'+ex.weight+' kg · 目标 '+ex.targetReps+' 次</div>'
+    +'<div style="font-family:var(--font);font-size:4rem;font-weight:900;color:var(--orange)" id="woRepsDisp">'+_woReps+'</div>'
+    +'<div style="font-size:.75rem;color:var(--text3);letter-spacing:1px">实际次数</div>'
+    +'<div style="display:flex;gap:24px;justify-content:center;margin:16px 0">'
+    +'<button class="speed-btn" id="woRepsD" style="width:56px;height:56px;border-radius:50%;font-size:2rem">−</button>'
+    +'<button class="speed-btn" id="woRepsU" style="width:56px;height:56px;border-radius:50%;font-size:2rem">+</button></div>'
+    +'<button class="sb-btn" id="woDone" style="max-width:300px">✅ 完成</button></div></div>'
+  document.body.appendChild(overlay)
+  document.getElementById('woRepsD').addEventListener('click',()=>{_woReps=Math.max(0,_woReps-1);document.getElementById('woRepsDisp').textContent=_woReps})
+  document.getElementById('woRepsU').addEventListener('click',()=>{_woReps=Math.min(999,_woReps+1);document.getElementById('woRepsDisp').textContent=_woReps})
+  document.getElementById('woDone').addEventListener('click',()=>completeWoSet())
+  document.getElementById('woClose').addEventListener('click',()=>{document.getElementById('woOverlay')?.remove()})
+}
+
+function completeWoSet(){
+  const ex=_woPlan.exercises[_woIdx]
+  _woDone.push({exercise:ex.exercise,weight:ex.weight,targetReps:ex.targetReps,actualReps:_woReps})
+  if(_woIdx+1<_woPlan.exercises.length){
+    _woIdx++
+    if(ex.restSeconds>0){showWoRest(ex.restSeconds)}
+    else{showWoExercise()}
+  }else{showWoSummary()}
+}
+
+function showWoRest(sec){
+  _woRest=sec
+  const el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
+  if(!el)return
+  el.innerHTML='<div style="text-align:center"><div style="font-size:.8rem;color:var(--text3);letter-spacing:1px;margin-bottom:8px">休息</div>'
+    +'<div style="font-size:5rem;font-weight:900;color:var(--orange)" id="woRestDisp">'+sec+'s</div>'
+    +'<div style="font-size:.8rem;color:var(--text2);margin:12px 0">下一组: '+_woPlan.exercises[_woIdx].exercise+'</div>'
+    +'<button class="speed-btn" id="woSkipRest">跳过 →</button></div>'
+  _woTimer=setInterval(()=>{_woRest--;if(_woRest<=0){clearInterval(_woTimer);_woTimer=null;showWoExercise();return}
+    document.getElementById('woRestDisp').textContent=_woRest+'s'},1000)
+  document.getElementById('woSkipRest')?.addEventListener('click',()=>{clearInterval(_woTimer);_woTimer=null;showWoExercise()})
+}
+
+function showWoSummary(){
+  const total=_woDone.reduce((s,d)=>s+d.actualReps,0),vol=_woDone.reduce((s,d)=>s+d.weight*d.actualReps,0)
+  const el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
+  if(!el)return
+  el.innerHTML='<div style="text-align:center"><div style="font-size:2.5rem;margin-bottom:4px">🎉</div><div style="font-size:1.5rem;font-weight:800;margin-bottom:12px">训练完成！</div>'
+    +_woDone.map(d=>'<div style="font-size:.8rem;color:var(--text2)">'+d.exercise+' '+d.weight+'kg × '+d.actualReps+'/'+d.targetReps+(d.actualReps>=d.targetReps?' ✅':'')+'</div>').join('')
+    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:1.5rem;font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:.65rem;color:var(--text3)">总次数</div></div><div><div style="font-size:1.5rem;font-weight:800;color:var(--blue)">'+vol+'</div><div style="font-size:.65rem;color:var(--text3)">总容量</div></div></div>'
+    +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
+  document.getElementById('woFinish').addEventListener('click',()=>{
+    _woDone.forEach(d=>{addStr({date:today(),exercise:d.exercise,weight:d.weight,targetReps:d.targetReps,actualReps:d.actualReps})})
+    document.getElementById('woOverlay')?.remove()
+    toast('训练已记录！','s');renderStr()
+  })
 }
 
 /* ========== HEATMAP ========== */
@@ -330,11 +411,15 @@ function renderChart(){
 /* ========== RENDER: GAME ========== */
 function renderGame(){
   const stats=getGameStats()
+  const mNames=['','一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
+  const n=new Date();const monthLabel=mNames[n.getMonth()+1]||''
   document.getElementById('gameStatsBar').innerHTML=
-    '<div class="gs-item"><div class="gs-v orange">'+stats.atk+'</div><div class="gs-l">攻击</div></div>'+
-    '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">防御</div></div>'+
-    '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">生命</div></div>'+
-    '<div class="gs-item"><div class="gs-v">'+_game.cleared.length+'</div><div class="gs-l">已通关</div></div>'
+    '<div class="gs-item"><div class="gs-v orange">'+stats.atk+'</div><div class="gs-l">⚔️ 攻击</div></div>'+
+    '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">🛡️ 防御</div></div>'+
+    '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">❤️ 生命</div></div>'+
+    '<div class="gs-item"><div class="gs-v">'+_game.cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v orange">'+stats.wkDays+'<span style="font-size:.6rem">/7</span>'+(stats.wkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.wkBonus+'</span>':'')+'</div><div class="gs-l">📅 本周训练</div></div>'+
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'
 
   const gc=document.getElementById('gameContent')
   let h=''
@@ -374,16 +459,37 @@ function allPrevCleared(chKey,lvId){
   return true
 }
 
+function getWeekDays(){
+  const n=new Date(),d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d))
+  const days=new Set()
+  ;(_str.entries||[]).filter(e=>e.date>=toDate(m)).forEach(e=>days.add(e.date))
+  ;(_car.entries||[]).filter(e=>e.date>=toDate(m)).forEach(e=>days.add(e.date))
+  return days.size
+}
+function getMonthDays(){
+  const n=new Date();const ms=toDate(new Date(n.getFullYear(),n.getMonth(),1))
+  const days=new Set()
+  ;(_str.entries||[]).filter(e=>e.date>=ms).forEach(e=>days.add(e.date))
+  ;(_car.entries||[]).filter(e=>e.date>=ms).forEach(e=>days.add(e.date))
+  return days.size
+}
+
 function getGameStats(){
   const thirty=toDate(new Date(Date.now()-30*86400000))
   const strE=(_str.entries||[]).filter(e=>e.date>=thirty)
   const carE=(_car.entries||[]).filter(e=>e.date>=thirty)
   const strVol=strE.reduce((s,e)=>s+e.weight*e.actualReps,0)
   const carDur=carE.reduce((s,e)=>s+e.duration,0)
+  // Weekly bonus: 4days→+2, 7days→+5 (scaled 10x: +20/+50)
+  const wk=getWeekDays();const wkBonus=wk>=7?50:wk>=4?20:0
+  const baseAtk=10+Math.floor(strVol/20)
+  const baseDef=10+Math.floor(carDur/6)
   return{
-    atk:1+Math.floor(strVol/200),
-    def:1+Math.floor(carDur/60),
-    hp:10+Math.floor(strVol/100)+Math.floor(carDur/30)
+    atk:baseAtk+Math.floor(wkBonus/2),
+    def:baseDef+Math.floor(wkBonus/2),
+    hp:100+Math.floor(strVol/10)+Math.floor(carDur/3)+wkBonus*3,
+    wkDays:wk,wkBonus:wkBonus,
+    monthDays:getMonthDays()
   }
 }
 
@@ -407,11 +513,11 @@ function startBattle(id){
   document.getElementById('beName').textContent='👹 '+lv.npc
   // Set stats display
   document.getElementById('bpHP').style.width='100%'
-  document.getElementById('bpHPText').textContent='HP: '+stats.hp+'/'+stats.hp
+  document.getElementById('bpHPText').textContent='❤️ '+stats.hp
   document.getElementById('bpAtk').textContent='⚔️ '+stats.atk
   document.getElementById('bpDef').textContent='🛡️ '+stats.def
   document.getElementById('beHP').style.width='100%'
-  document.getElementById('beHPText').textContent='HP: '+lv.hp+'/'+lv.hp
+  document.getElementById('beHPText').textContent='❤️ '+lv.hp
   document.getElementById('beAtk').textContent='⚔️ '+lv.atk
   document.getElementById('beDef').textContent='🛡️ '+lv.def
   document.getElementById('battleLog').innerHTML=''
@@ -428,13 +534,13 @@ function runBattle(){
   const tick=()=>{
     if(_bDone){_battleRunning=false;return}
     // Player attacks
-    const pDmg=Math.max(0,_bPlayer.atk-_bEnemy.def*0.3+Math.floor(Math.random()*3))
+    const pDmg=Math.max(1,_bPlayer.atk-Math.floor(_bEnemy.def*3/10)+Math.floor(Math.random()*4)+1)
     _bEnemy.hp-=pDmg
     addBattleLog('🧑 攻击 → '+pDmg+' 伤害','dmg')
     updateBattleHP()
     if(_bEnemy.hp<=0){_bEnemy.hp=0;endBattle(true);_battleRunning=false;return}
     // Enemy attacks
-    const eDmg=Math.max(0,_bEnemy.atk-_bPlayer.def*0.3+Math.floor(Math.random()*2))
+    const eDmg=Math.max(1,_bEnemy.atk-Math.floor(_bPlayer.def*3/10)+Math.floor(Math.random()*3)+1)
     _bPlayer.hp-=eDmg
     addBattleLog('👹 '+lv.npc+' 攻击 → '+eDmg+' 伤害','e')
     updateBattleHP()
@@ -607,6 +713,21 @@ document.addEventListener('click',function(e){
     document.querySelectorAll('.speed-btn').forEach(b=>b.classList.remove('active'))
     el.classList.add('active');_battleSpeed=parseInt(el.dataset.speed);return
   }
+
+  // Plans
+  if(act==='startPlan'){startStrPlan(el.dataset.pid);return}
+  if(act==='delPlan'){
+    if(confirm('确定删除这个计划？')){_plans.plans=_plans.plans.filter(p=>p.id!==el.dataset.pid);savePlans();renderStr()}
+    return}
+
+  // New plan button
+  if(id==='strNewPlan'){
+    var name=prompt('计划名称:','我的训练计划')
+    if(!name)return
+    var p={id:uid(),name:name,exercises:[],createdAt:Date.now()}
+    _plans.plans.push(p);savePlans();renderStr()
+    toast('计划已创建，接下来的版本将支持添加动作','s')
+    return}
 
   // Dynamic actions
   if(act==='strEdit'){
