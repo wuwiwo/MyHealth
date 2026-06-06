@@ -136,11 +136,8 @@
 
     <div class="section-hdr">⚖️ 体重记录</div>
     <div class="weight-form-row">
-      <div class="stepper" style="max-width:160px">
-        <button class="sp-btn" id="wtDown">−</button>
-        <span class="sp-val" id="wtVal">70.0</span>
-        <button class="sp-btn" id="wtUp">+</button>
-      </div>
+      <input type="number" class="fi" id="wtInput" value="70.0" step="0.1" min="20" max="300" style="width:100px;text-align:center;font-size:1.1rem;font-weight:700">
+      <span style="font-size:.85rem;color:var(--text2)">kg</span>
       <input class="fi" id="wtNote" placeholder="备注（可选）" style="flex:1;max-width:200px">
       <button class="sb-btn" id="wtSubmit" style="flex:0;padding:12px 20px;white-space:nowrap">📝 记录</button>
     </div>
@@ -211,6 +208,6 @@
   </section>
 </div>
 
-<script src="index.js?v5"></script>
+<script src="index.js?v12"></script>
 </body>
 </html>

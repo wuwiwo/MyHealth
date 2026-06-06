@@ -43,7 +43,7 @@ function save(k,v){localStorage.setItem(k,JSON.stringify(v))}
 
 /* Strength */
 let _str=load(SK.STR)||{entries:[]};let _plans=load(SK.STR_PLANS)||{plans:[]};let _missed=load(SK.MISS)||{notes:{}};
-function saveStr(){save(SK.STR,_str);scheduleSync()}
+function saveStr(){save(SK.STR,_str);scheduleSync();updateGameBar()}
 function savePlans(){save(SK.STR_PLANS,_plans);scheduleSync()}
 function saveMissed(){save(SK.MISS,_missed);scheduleSync()}
 function getStr(d){return(_str.entries||[]).filter(e=>e.date===d).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0))}
@@ -53,7 +53,7 @@ function delStr(id){_str.entries=_str.entries.filter(e=>e.id!==id);saveStr()}
 
 /* Cardio */
 let _car=load(SK.CAR)||{entries:[]};
-function saveCar(){save(SK.CAR,_car);scheduleSync()}
+function saveCar(){save(SK.CAR,_car);scheduleSync();updateGameBar()}
 function getCar(d){return(_car.entries||[]).filter(e=>e.date===d).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0))}
 function addCar(e){e.id=uid();e.createdAt=Date.now();_car.entries.push(e);saveCar()}
 function delCar(id){_car.entries=_car.entries.filter(e=>e.id!==id);saveCar()}
@@ -104,6 +104,12 @@ x.onload=function(){if(x.status===200&&x.responseText){try{
     if(d.profile)_prof=d.profile
     if(d.game)_game=d.game
     saveStr();savePlans();saveMissed();saveCar();saveWt();saveProf();saveGame()
+    // Re-render active tab
+    var activeTab=document.querySelector('.tab-btn.active')?.dataset.tab
+    if(activeTab==='profile')renderProf()
+    else if(activeTab==='cardio')renderCar()
+    else if(activeTab==='game')renderGame()
+    else renderStr()
     setSync('synced');if(cb)cb(true);return
   }}catch(e){}}
 setSync('error');if(cb)cb(false)}
@@ -190,10 +196,14 @@ function renderMissed(){
   if(!missed.length){c.innerHTML='<div style="font-size:.75rem;color:var(--text3);padding:8px 0">✅ 最近 7 天全勤！</div>';return}
   c.innerHTML=missed.map(dd=>{
     const note=_missed.notes[dd]||''
-    return '<div class="md-item"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button></div><div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(note||'')+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
+    return '<div class="md-item"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button><button class="md-write" data-date="'+dd+'" data-makeup="1" style="color:var(--green)">➕ 补签</button></div><div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(note||'')+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
   }).join('')
   c.querySelectorAll('.md-write').forEach(b=>b.addEventListener('click',()=>{
-    const dd=b.dataset.date;const show=b.closest('.md-item').querySelector('.md-edit, #me_'+dd)
+    const dd=b.dataset.date
+    // 补签 button
+    if(b.dataset.makeup){_strDate=dd;openMakeupDialog(dd);return}
+    // 说明原因 button
+    const show=b.closest('.md-item').querySelector('.md-edit, #me_'+dd)
     if(show)show.style.display=show.style.display==='none'?'block':'none'
   }))
   c.querySelectorAll('.md-save').forEach(b=>b.addEventListener('click',()=>{
@@ -203,7 +213,38 @@ function renderMissed(){
   }))
 }
 
-/* ========== PLANS ========== */
+/* ========== MAKEUP DIALOG ========== */
+function openMakeupDialog(dateStr){
+  var plans=_plans.plans||[]
+  if(!plans.length){toast('没有训练计划，请先创建','e');return}
+  var modal=document.createElement('div');modal.className='modal-overlay open'
+  var h='<div class="modal-sheet"><div class="modal-handle"></div>'
+    +'<div class="modal-title">📋 选择计划补签 '+dateStr+'</div>'
+    +'<div style="margin-bottom:12px">'
+  plans.forEach(function(p,i){
+    var tags=p.exercises.map(function(e){return e.exercise}).slice(0,5).join('、')
+    h+='<div class="ec" style="cursor:pointer;margin-bottom:8px" data-pick="'+p.id+'"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><span style="font-size:.7rem;color:var(--text3)">'+p.exercises.length+' 组</span></div></div><div class="ec-prog"><div style="font-size:.7rem;color:var(--text2)">'+tags+'</div></div></div>'
+  })
+  h+='</div><div class="modal-actions"><button class="m-btn-cancel" id="muCancel">取消</button></div></div>'
+  modal.innerHTML=h;document.body.appendChild(modal)
+  // Plan pick
+  modal.querySelectorAll('[data-pick]').forEach(function(el){
+    el.addEventListener('click',function(){doMakeup(dateStr,el.dataset.pick);modal.remove()})
+  })
+  document.getElementById('muCancel').addEventListener('click',function(){modal.remove()})
+  modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
+}
+
+function doMakeup(dateStr,planId){
+  var plan=_plans.plans.find(function(p){return p.id===planId})
+  if(!plan||!plan.exercises.length){toast('计划无效','e');return}
+  plan.exercises.forEach(function(ex){
+    addStr({date:dateStr,exercise:ex.exercise,weight:ex.weight||7,targetReps:ex.targetReps||12,actualReps:0})
+  })
+  renderStr()
+  toast('已补签 '+plan.exercises.length+' 组训练到 '+dateStr+' ✅','s')
+}
+
 /* ========== PLANS ========== */
 let _woPlan=null,_woIdx=0,_woReps=12,_woDone=[],_woTimer=null,_woRest=0;
 
@@ -231,6 +272,8 @@ function startStrPlan(pid){
 function showWoExercise(){
   const ex=_woPlan.exercises[_woIdx]
   _woReps=ex.targetReps
+  // Remove old overlay if exists
+  var old=document.getElementById('woOverlay');if(old)old.remove()
   const overlay=document.createElement('div');overlay.id='woOverlay';overlay.className='battle-overlay open'
   overlay.innerHTML='<div class="battle-hdr"><div class="battle-level">'+_woPlan.name+'</div><div class="battle-level">'+( _woIdx+1)+'/'+_woPlan.exercises.length+'</div><button class="speed-btn" id="woClose">✕</button></div>'
     +'<div class="battle-arena" style="flex-direction:column;gap:12px"><div class="workout-exercise" style="text-align:center">'
@@ -268,7 +311,7 @@ function showWoRest(sec){
     +'<div style="font-size:.8rem;color:var(--text2);margin:12px 0">下一组: '+_woPlan.exercises[_woIdx].exercise+'</div>'
     +'<button class="speed-btn" id="woSkipRest">跳过 →</button></div>'
   _woTimer=setInterval(()=>{_woRest--;if(_woRest<=0){clearInterval(_woTimer);_woTimer=null;showWoExercise();return}
-    document.getElementById('woRestDisp').textContent=_woRest+'s'},1000)
+    var rd=document.getElementById('woRestDisp');if(rd)rd.textContent=_woRest+'s'},1000)
   document.getElementById('woSkipRest')?.addEventListener('click',()=>{clearInterval(_woTimer);_woTimer=null;showWoExercise()})
 }
 
@@ -332,7 +375,7 @@ function renderCar(){
     el.innerHTML=entries.map(e=>{
       const ct=CARDIO_TYPES.find(x=>x.id===e.type)||{emoji:'🏃',name:'运动'}
       const ts=e.createdAt?new Date(e.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''
-      return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+ct.emoji+' '+ct.name+'</div><div class="ec-actions"><button class="ec-act" data-a="carDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span>⏱️ '+e.duration+' 分钟</span>'+(e.distance>0?'<span>📏 '+e.distance+' km</span>':'')+'<'/></div></div>'+(e.note?'<div style="font-size:.7rem;color:var(--text2);margin-top:4px">💬 '+e.note+'</div>':'')+'</div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+      return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+ct.emoji+' '+ct.name+'</div><div class="ec-actions"><button class="ec-act" data-a="carDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span>⏱️ '+e.duration+' 分钟</span>'+(e.distance>0?'<span>📏 '+e.distance+' km</span>':'')+'</div></div>'+(e.note?'<div style="font-size:.7rem;color:var(--text2);margin-top:4px">💬 '+e.note+'</div>':'')+'</div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
     }).join('')
   }
   renderCarStats()
@@ -356,6 +399,8 @@ function renderProf(){
     _prof.birthYear=parseInt(document.getElementById('pfBirth').value)||1990
     saveProf();toast('资料已保存','s')
   })
+  // Pre-fill weight with last recorded value
+  var recs=getWt();if(recs.length>0){var inp=document.getElementById('wtInput');if(inp)inp.value=recs[0].weight}
   renderWtList()
   renderChart()
 }
@@ -413,13 +458,29 @@ function renderGame(){
   const stats=getGameStats()
   const mNames=['','一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
   const n=new Date();const monthLabel=mNames[n.getMonth()+1]||''
+  // Calculate detail strings for attribute log
+  var thirty=toDate(new Date(Date.now()-30*86400000))
+  var strE=(_str.entries||[]).filter(function(e){return e.date>=thirty})
+  var carE=(_car.entries||[]).filter(function(e){return e.date>=thirty})
+  var strVol=strE.reduce(function(s,e){return s+e.weight*e.actualReps},0)
+  var carDur=carE.reduce(function(s,e){return s+e.duration},0)
+  var baseAtk=10+Math.floor(strVol/20),baseDef=10+Math.floor(carDur/6)
+  var baseHp=100+Math.floor(strVol/10)+Math.floor(carDur/3)
+  var atkInfo='攻击 = 10 + floor('+strVol+'/20) = '+baseAtk+(stats.wkBonus>0?' + 周奖励 +'+stats.wkBonus:'')+' = '+stats.atk
+  var defInfo='防御 = 10 + floor('+carDur+'/6) = '+baseDef+(stats.wkBonus>0?' + 周奖励 +'+Math.floor(stats.wkBonus/2):'')+' = '+stats.def
+  var hpInfo='生命 = 100 + floor('+strVol+'/10) + floor('+carDur+'/3) = '+baseHp+(stats.wkBonus>0?' + 周奖励 ×3 +'+stats.wkBonus*3:'')+' = '+stats.hp
+
   document.getElementById('gameStatsBar').innerHTML=
     '<div class="gs-item"><div class="gs-v orange">'+stats.atk+'</div><div class="gs-l">⚔️ 攻击</div></div>'+
     '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">🛡️ 防御</div></div>'+
     '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">❤️ 生命</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+_game.cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
     '<div class="gs-item" style="min-width:80px"><div class="gs-v orange">'+stats.wkDays+'<span style="font-size:.6rem">/7</span>'+(stats.wkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.wkBonus+'</span>':'')+'</div><div class="gs-l">📅 本周训练</div></div>'+
-    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
+    '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="attrInfoBtn" title="属性计算方式">📖</button></div>'
+
+  // Store calc info for the detail modal
+  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur}
 
   const gc=document.getElementById('gameContent')
   let h=''
@@ -495,7 +556,7 @@ function getGameStats(){
 
 /* ========== BATTLE ========== */
 let _battleRunning=false,_battleSpeed=1,_battleTimer=null
-let _bPlayer=null,_bEnemy=null,_bLog=[],_bDone=false
+let _bPlayer=null,_bEnemy=null,_bLog=[],_bDone=false,_attrCalcInfo={}
 
 function findLevel(id){
   for(const ch of Object.values(LEVELS))
@@ -504,9 +565,26 @@ function findLevel(id){
   return null
 }
 
+function updateGameBar(){
+  // Update the game stats bar without re-rendering the whole game tab
+  var bar=document.getElementById('gameStatsBar');if(!bar||!bar.isConnected)return
+  // Only update if game tab is currently visible
+  if(!document.getElementById('tabGame')?.classList.contains('active'))return
+  renderGame()
+}
+
 function startBattle(id){
   const lv=findLevel(id);if(!lv)return
-  const stats=getGameStats()
+  // Check daily attempt limit
+  if(!_game.attempts)_game.attempts={}
+  var todayKey=today()+'_'+id
+  var attempts=_game.attempts[todayKey]||0
+  if(attempts>=3){toast('今天已失败 3 次，不能再挑战了 😅','e');return}
+  // Check if trained today
+  var todayStr=today()
+  var trainedToday=(_str.entries||[]).some(function(e){return e.date===todayStr})||(_car.entries||[]).some(function(e){return e.date===todayStr})
+  if(!trainedToday&&attempts===0){toast('⚠️ 今天还没训练，属性较低，确定要挑战吗？点击重新尝试','e')}
+  var stats=getGameStats()
   _bPlayer={...stats};_bEnemy={atk:lv.atk,def:lv.def,hp:lv.hp,maxHP:lv.hp}
   _bLog=[];_bDone=false;_battleSpeed=1
   document.getElementById('battleLevel').textContent=id+' '+lv.npc
@@ -567,6 +645,13 @@ function addBattleLog(msg,type){
 function endBattle(won){
   _bDone=true;const el=document.getElementById('battleEnd')
   const lv=findLevel(_game.current)
+  // Track attempts on loss
+  if(!won){
+    if(!_game.attempts)_game.attempts={}
+    var todayKey=today()+'_'+_game.current
+    _game.attempts[todayKey]=(_game.attempts[todayKey]||0)+1
+    saveGame()
+  }
   if(won){
     if(!_game.cleared.includes(_game.current))_game.cleared.push(_game.current)
     // Unlock next
@@ -690,10 +775,8 @@ document.addEventListener('click',function(e){
       toast('有氧记录已保存 🏃','s');renderCar();return}
 
     // Weight
-    case 'wtDown':{const v=parseFloat(document.getElementById('wtVal').textContent);document.getElementById('wtVal').textContent=Math.max(20,v-0.1).toFixed(1);return}
-    case 'wtUp':{const v=parseFloat(document.getElementById('wtVal').textContent);document.getElementById('wtVal').textContent=Math.min(300,v+0.1).toFixed(1);return}
     case 'wtSubmit':{
-      const w=parseFloat(document.getElementById('wtVal').textContent)
+      const w=parseFloat(document.getElementById('wtInput').value)
       const note=document.getElementById('wtNote').value.trim()
       addWt({date:today(),weight:w,note})
       document.getElementById('wtNote').value=''
@@ -721,6 +804,25 @@ document.addEventListener('click',function(e){
     return}
 
   // New plan button
+  if(id==='attrInfoBtn'){
+    var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据'}
+    var modal=document.createElement('div');modal.className='modal-overlay open'
+    modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
+      +'<div style="font-size:.8rem;line-height:1.7;color:var(--text2);padding:4px 0">'
+      +'<div style="color:var(--orange);font-weight:700;margin-bottom:4px">⚔️ '+info.atk+'</div>'
+      +'<div style="color:var(--blue);font-weight:700;margin-bottom:4px">🛡️ '+info.def+'</div>'
+      +'<div style="color:var(--green);font-weight:700;margin-bottom:4px">❤️ '+info.hp+'</div>'
+      +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:.7rem;color:var(--text3)">'
+      +'📊 近30天力量容量: '+info.vol+' kg<br>'
+      +'🏃 近30天有氧时长: '+info.dur+' 分钟<br>'
+      +'📅 每周4天→+20攻防, 7天→+50攻防<br>'
+      +'💡 每200kg容量=+1攻击, 每60分钟=+1防御'
+      +'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
+    document.body.appendChild(modal)
+    document.getElementById('attrClose').addEventListener('click',function(){modal.remove()})
+    modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
+    return}
+
   if(id==='strNewPlan'){
     var name=prompt('计划名称:','我的训练计划')
     if(!name)return
