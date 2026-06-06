@@ -93,10 +93,15 @@ x.send(JSON.stringify(getAllData()))}
 function pullSync(cb){setSync('syncing')
 var x=new XMLHttpRequest();x.open('GET','/api/data',true)
 x.onload=function(){if(x.status===200&&x.responseText){try{
-  const d=JSON.parse(x.responseText);if(d&&d.version>=2){
-    if(d.entries)_str.entries=d.entries;if(d.plans)_plans.plans=d.plans
-    if(d.missed)_missed.notes=d.missed;if(d.cardio)_car.entries=d.cardio
-    if(d.weight)_wt.records=d.weight;if(d.profile)_prof=d.profile
+  const d=JSON.parse(x.responseText)
+  if(d&&(d.version>=2||(d.entries||d.cardio||d.weight))){
+    // Support both v1 (old sync, entries at root) and v2+ (full data object)
+    if(d.entries)_str.entries=d.entries
+    if(d.plans||d.plans?.plans)_plans.plans=d.plans?.plans||d.plans
+    if(d.missed||d.missed?.notes)_missed.notes=d.missed?.notes||d.missed
+    if(d.cardio||d.cardio?.entries)_car.entries=d.cardio?.entries||d.cardio
+    if(d.weight||d.weight?.records)_wt.records=d.weight?.records||d.weight
+    if(d.profile)_prof=d.profile
     if(d.game)_game=d.game
     saveStr();savePlans();saveMissed();saveCar();saveWt();saveProf();saveGame()
     setSync('synced');if(cb)cb(true);return
@@ -353,6 +358,15 @@ function renderGame(){
 
 function allPrevCleared(chKey,lvId){
   const ch=LEVELS[chKey];if(!ch)return false
+  // Must clear all levels from all previous chapters first
+  var seen=false
+  for(const[k,ch2]of Object.entries(LEVELS)){
+    if(k===chKey)break
+    for(const lv2 of ch2.levels){
+      if(!_game.cleared.includes(lv2.id))return false
+    }
+  }
+  // Then check levels before this one in current chapter
   for(const lv of ch.levels){
     if(lv.id===lvId)return true
     if(!_game.cleared.includes(lv.id))return false
@@ -512,6 +526,9 @@ function init(){
       if(!t.hasDist){_carDist=0;document.getElementById('carDistVal').textContent='0'}
     });ct.appendChild(b)})
 
+  // Migrate old localStorage data to new keys
+  migrateOldData()
+
   renderStr();renderCar();renderProf();renderGame()
 
   // Pull sync on load
@@ -649,6 +666,21 @@ const tc=document.createElement('div');tc.className='toast-c';tc.id='toastC'
 document.getElementById('app').appendChild(tc)
 
 init()
+
+/* ========== DATA MIGRATION ========== */
+function migrateOldData(){
+  // Migrate from old dumbbell-tracker keys
+  try{
+    var old=localStorage.getItem('dumbbell-tracker-v1')
+    if(old){var d=JSON.parse(old);if(d&&d.entries&&d.entries.length>0&&(!_str.entries||_str.entries.length===0)){
+      _str.entries=d.entries;saveStr();console.log('Migrated '+d.entries.length+' strength entries')
+    }}
+    var oldP=localStorage.getItem('dumbbell-tracker-plans-v1')
+    if(oldP){var dp=JSON.parse(oldP);if(dp&&dp.plans&&dp.plans.length>0&&(!_plans.plans||_plans.plans.length===0)){
+      _plans.plans=dp.plans;savePlans();console.log('Migrated '+dp.plans.length+' plans')
+    }}
+  }catch(e){console.log('Migration error:',e)}
+}
 
 // Export for inline onclick
 window.toggleTheme=toggleTheme
