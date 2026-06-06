@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: myhealth
+    env: python
+    buildCommand: ""
+    startCommand: python server.py
+    healthCheckPath: /api/data
+    envVars:
+      - key: PORT
+        value: "10000"

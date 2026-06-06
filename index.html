@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>💪 MyHealth</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
+<link rel="stylesheet" href="index.css?v1">
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="header-top">
+        <div class="header-brand">
+          <div class="header-logo">💪</div>
+          <div class="header-title-group">
+            <div class="header-title">My<span>Health</span></div>
+            <div class="header-subtitle">Personal Health Manager</div>
+          </div>
+        </div>
+        <div class="header-right">
+          <button class="header-btn" id="themeToggle">🌙</button>
+          <div class="sync-dot" id="syncIndicator" title="同步状态">🔄</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tab Bar -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="strength">🏋️ 力量</button>
+    <button class="tab-btn" data-tab="cardio">🏃 有氧</button>
+    <button class="tab-btn" data-tab="profile">📊 个人</button>
+    <button class="tab-btn" data-tab="game">🎮 挑战</button>
+  </nav>
+
+  <!-- ===== TAB: STRENGTH ===== -->
+  <section class="tab-content active" id="tabStrength">
+
+    <div class="section-hdr">📅 日期</div>
+    <div class="date-nav">
+      <button class="dn-btn" id="strPrevDay">◀</button>
+      <div class="dn-display">
+        <div class="dn-main" id="strDateMain">加载中...</div>
+        <div class="dn-sub" id="strDateSub"></div>
+      </div>
+      <button class="dn-btn" id="strNextDay">▶</button>
+      <button class="dn-btn dn-today" id="strGoToday">今天</button>
+    </div>
+
+    <div class="section-hdr">今日训练</div>
+    <button class="add-btn" id="strAddBtn">＋ 新增一组</button>
+    <div class="add-card" id="strAddCard">
+      <div class="fg">
+        <label class="fl">动作</label>
+        <div class="ex-suggest" id="strSuggest"></div>
+        <input class="fi" id="strExercise" list="strExList" placeholder="输入或选择...">
+        <datalist id="strExList"></datalist>
+      </div>
+      <div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="strWeight"></div></div>
+      <div class="fg">
+        <label class="fl">次数</label>
+        <div class="reps-row">
+          <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-">−</button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+">+</button></div></div>
+          <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-">−</button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+">+</button></div></div>
+        </div>
+      </div>
+      <button class="sb-btn" id="strSubmit">⚡ 记录</button>
+    </div>
+
+    <div id="strList"></div>
+
+    <!-- Break note for missed days -->
+    <div class="section-hdr" style="margin-top:20px">📝 断签说明</div>
+    <div id="strMissedDays"></div>
+
+    <div class="section-hdr" style="margin-top:20px">📅 月热力图</div>
+    <div id="strHeatmap"></div>
+
+    <div class="section-hdr">📊 本周统计</div>
+    <div class="stats-grid" id="strStats"></div>
+  </section>
+
+  <!-- ===== TAB: CARDIO ===== -->
+  <section class="tab-content" id="tabCardio">
+
+    <div class="section-hdr">📅 日期</div>
+    <div class="date-nav">
+      <button class="dn-btn" id="carPrevDay">◀</button>
+      <div class="dn-display">
+        <div class="dn-main" id="carDateMain">加载中...</div>
+        <div class="dn-sub" id="carDateSub"></div>
+      </div>
+      <button class="dn-btn" id="carNextDay">▶</button>
+      <button class="dn-btn dn-today" id="carGoToday">今天</button>
+    </div>
+
+    <div class="section-hdr">今日有氧</div>
+    <button class="add-btn" id="carAddBtn">＋ 新增记录</button>
+    <div class="add-card" id="carAddCard">
+      <div class="fg"><label class="fl">运动类型</label>
+        <div class="car-types" id="carTypes"></div>
+      </div>
+      <div class="fg"><label class="fl">时长 (分钟)</label>
+        <div class="stepper" style="max-width:200px">
+          <button class="sp-btn" id="carDurDown">−</button>
+          <span class="sp-val" id="carDurVal">30</span>
+          <button class="sp-btn" id="carDurUp">+</button>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">距离 (km) <span class="fl-note" id="carDistLabel">可选</span></label>
+        <div class="stepper" style="max-width:200px">
+          <button class="sp-btn" id="carDistDown">−</button>
+          <span class="sp-val" id="carDistVal">0</span>
+          <button class="sp-btn" id="carDistUp">+</button>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">备注</label><input class="fi" id="carNote" placeholder="感觉怎么样？"></div>
+      <button class="sb-btn" id="carSubmit">🏃 记录</button>
+    </div>
+
+    <div id="carList"></div>
+    <div class="section-hdr">本周有氧</div>
+    <div class="stats-grid" id="carStats"></div>
+  </section>
+
+  <!-- ===== TAB: PROFILE ===== -->
+  <section class="tab-content" id="tabProfile">
+    <div class="section-hdr">👤 基本信息</div>
+    <div class="profile-card" id="profileCard"></div>
+
+    <div class="section-hdr">⚖️ 体重记录</div>
+    <div class="weight-form-row">
+      <div class="stepper" style="max-width:160px">
+        <button class="sp-btn" id="wtDown">−</button>
+        <span class="sp-val" id="wtVal">70.0</span>
+        <button class="sp-btn" id="wtUp">+</button>
+      </div>
+      <input class="fi" id="wtNote" placeholder="备注（可选）" style="flex:1;max-width:200px">
+      <button class="sb-btn" id="wtSubmit" style="flex:0;padding:12px 20px;white-space:nowrap">📝 记录</button>
+    </div>
+
+    <div class="section-hdr">📈 体重趋势</div>
+    <div class="chart-wrap" id="weightChart">
+      <canvas id="weightCanvas"></canvas>
+    </div>
+    <div id="weightList"></div>
+  </section>
+
+  <!-- ===== TAB: GAME ===== -->
+  <section class="tab-content" id="tabGame">
+    <!-- Stats panel -->
+    <div class="game-stats-bar" id="gameStatsBar"></div>
+
+    <!-- Level select or battle -->
+    <div id="gameContent"></div>
+
+    <!-- Battle overlay (full screen inside tab) -->
+    <div class="battle-overlay" id="battleOverlay">
+      <div class="battle-hdr">
+        <div class="battle-level" id="battleLevel">1-1</div>
+        <div class="battle-speed">
+          <button class="speed-btn active" data-speed="1">1×</button>
+          <button class="speed-btn" data-speed="2">2×</button>
+          <button class="speed-btn" data-speed="4">4×</button>
+          <button class="speed-btn" data-speed="8">8×</button>
+        </div>
+        <button class="speed-btn" id="battleClose">✕</button>
+      </div>
+      <div class="battle-arena" id="battleArena">
+        <div class="battle-char" id="battlePlayer">
+          <div class="bc-name">🧑 你</div>
+          <div class="bc-hp-bar"><div class="bc-hp-fill" id="bpHP" style="width:100%"></div></div>
+          <div class="bc-hp-text" id="bpHPText">HP: 100</div>
+          <div class="bc-atk" id="bpAtk">⚔️ 1</div>
+          <div class="bc-def" id="bpDef">🛡️ 1</div>
+        </div>
+        <div class="battle-vs">⚔️</div>
+        <div class="battle-char" id="battleEnemy">
+          <div class="bc-name" id="beName">👹 敌人</div>
+          <div class="bc-hp-bar"><div class="bc-hp-fill enemy" id="beHP" style="width:100%"></div></div>
+          <div class="bc-hp-text" id="beHPText">HP: 100</div>
+          <div class="bc-atk" id="beAtk">⚔️ 1</div>
+          <div class="bc-def" id="beDef">🛡️ 1</div>
+        </div>
+      </div>
+      <div class="battle-log" id="battleLog"></div>
+      <div class="battle-end" id="battleEnd"></div>
+    </div>
+
+    <!-- Share card modal -->
+    <div class="share-overlay" id="shareOverlay">
+      <div class="share-card" id="shareCard">
+        <div class="share-header">🏆 挑战胜利！</div>
+        <div class="share-level" id="shareLevel">1-1 试炼之始</div>
+        <div class="share-stats" id="shareStats"></div>
+        <div class="share-vs" id="shareVS"></div>
+        <div class="share-footer">MyHealth · 练就强大</div>
+        <div class="share-watermark">myhealth.app</div>
+      </div>
+      <div class="share-actions">
+        <button class="sb-btn" id="shareClose">关闭</button>
+        <button class="sb-btn" id="shareSave" style="background:var(--green)">💾 保存图片</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="index.js?v1"></script>
+</body>
+</html>

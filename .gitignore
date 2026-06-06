@@ -1,0 +1,5 @@
+sync-data.json
+__pycache__/
+*.pyc
+.DS_Store
+server_pid.txt

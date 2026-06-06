@@ -1,0 +1,654 @@
+/* ============================================
+   MyHealth — Complete Application Logic
+   ============================================ */
+
+/* ========== DATA LAYER ========== */
+const SK = {
+  STR: 'dh-strength-v1', STR_PLANS: 'dh-plans-v1', MISS: 'dh-missed-v1',
+  CAR: 'dh-cardio-v1', WT: 'dh-weight-v1', PROF: 'dh-profile-v1',
+  GAME: 'dh-game-v1', THEME: 'dh-theme-v1'
+};
+const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
+const EXERCISES = ['二头弯举','肩推','深蹲','卧推','划船','硬拉','侧平举','前平举','锤式弯举','俯身飞鸟','颈后臂屈伸','俯身臂屈伸','直立划船','推举','阿诺德推举','哑铃飞鸟','哑铃耸肩','弓步蹲','保加利亚深蹲','站姿提踵'];
+const CARDIO_TYPES = [
+  {id:'run',name:'跑步',emoji:'🏃',hasDist:true},{id:'jump',name:'跳绳',emoji:'🪢',hasDist:false},
+  {id:'cycle',name:'骑行',emoji:'🚴',hasDist:true},{id:'swim',name:'游泳',emoji:'🏊',hasDist:true},
+  {id:'walk',name:'快走',emoji:'🚶',hasDist:true},{id:'hiit',name:'HIIT',emoji:'🔥',hasDist:false}
+];
+const LEVELS = {
+  chap1:{name:'初出茅庐',levels:[
+    {id:'1-1',npc:'见习战士',atk:2,def:1,hp:12},
+    {id:'1-2',npc:'斥候兵',atk:3,def:2,hp:18},
+    {id:'1-3',npc:'轻装剑士',atk:4,def:2,hp:24}
+  ]},
+  chap2:{name:'小试牛刀',levels:[
+    {id:'2-1',npc:'重装步兵',atk:3,def:4,hp:30},
+    {id:'2-2',npc:'弓弩手',atk:6,def:1,hp:22},
+    {id:'2-3',npc:'骑兵',atk:7,def:3,hp:28}
+  ]},
+  chap3:{name:'锋芒初露',levels:[
+    {id:'3-1',npc:'精英卫兵',atk:5,def:5,hp:40},
+    {id:'3-2',npc:'暗影刺客',atk:9,def:2,hp:30},
+    {id:'3-3',npc:'铁甲统领',atk:6,def:6,hp:50}
+  ]}
+};
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function toDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function parseDate(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
+function fmtDate(s){const d=parseDate(s);const w=['周日','周一','周二','周三','周四','周五','周六'];const i=s===today();return{main:(d.getMonth()+1)+'月'+d.getDate()+'日',sub:i?w[d.getDay()]+' · 今天':w[d.getDay()]}}
+function load(k){try{const r=localStorage.getItem(k);if(r){const d=JSON.parse(r);return d}}catch(e){}return null}
+function save(k,v){localStorage.setItem(k,JSON.stringify(v))}
+
+/* Strength */
+let _str=load(SK.STR)||{entries:[]};let _plans=load(SK.STR_PLANS)||{plans:[]};let _missed=load(SK.MISS)||{notes:{}};
+function saveStr(){save(SK.STR,_str);scheduleSync()}
+function savePlans(){save(SK.STR_PLANS,_plans);scheduleSync()}
+function saveMissed(){save(SK.MISS,_missed);scheduleSync()}
+function getStr(d){return(_str.entries||[]).filter(e=>e.date===d).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0))}
+function addStr(e){e.id=uid();e.createdAt=Date.now();_str.entries.push(e);saveStr()}
+function updateStr(id,data){const i=_str.entries.findIndex(e=>e.id===id);if(i>-1){_str.entries[i]={..._str.entries[i],...data};saveStr()}}
+function delStr(id){_str.entries=_str.entries.filter(e=>e.id!==id);saveStr()}
+
+/* Cardio */
+let _car=load(SK.CAR)||{entries:[]};
+function saveCar(){save(SK.CAR,_car);scheduleSync()}
+function getCar(d){return(_car.entries||[]).filter(e=>e.date===d).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0))}
+function addCar(e){e.id=uid();e.createdAt=Date.now();_car.entries.push(e);saveCar()}
+function delCar(id){_car.entries=_car.entries.filter(e=>e.id!==id);saveCar()}
+
+/* Weight */
+let _wt=load(SK.WT)||{records:[]};
+function saveWt(){save(SK.WT,_wt);scheduleSync()}
+function addWt(r){r.id=uid();r.createdAt=Date.now();_wt.records.push(r);saveWt()}
+function getWt(){return(_wt.records||[]).sort((a,b)=>a.date<b.date?1:-1)}
+
+/* Profile */
+let _prof=load(SK.PROF)||{height:175,gender:'男',birthYear:1990};
+function saveProf(){save(SK.PROF,_prof);scheduleSync()}
+
+/* Game */
+let _game=load(SK.GAME)||{cleared:[],current:''};
+function saveGame(){save(SK.GAME,_game);scheduleSync()}
+
+/* ========== SYNC ========== */
+let _syncT=null;
+function setSync(s,m){const e=document.getElementById('syncIndicator');if(!e)return
+e.className='sync-dot';if(s==='synced'){e.classList.add('synced');e.textContent='✓'}
+else if(s==='syncing'){e.classList.add('syncing');e.textContent='↻'}
+else if(s==='error'){e.classList.add('error');e.textContent='⚠'}
+else e.textContent='🔄'}
+function getAllData(){return{
+  version:2,lastUpdated:Date.now(),
+  entries:_str.entries,plans:_plans.plans,missed:_missed.notes,
+  cardio:_car.entries,weight:_wt.records,profile:_prof,game:_game
+}}
+function pushSync(cb){setSync('syncing')
+var x=new XMLHttpRequest();x.open('PUT','/api/data',true)
+x.setRequestHeader('Content-Type','application/json')
+x.onload=function(){if(x.status===200){setSync('synced');if(cb)cb(true)}else{setSync('error');if(cb)cb(false)}}
+x.onerror=function(){setSync('error');if(cb)cb(false)}
+x.send(JSON.stringify(getAllData()))}
+function pullSync(cb){setSync('syncing')
+var x=new XMLHttpRequest();x.open('GET','/api/data',true)
+x.onload=function(){if(x.status===200&&x.responseText){try{
+  const d=JSON.parse(x.responseText);if(d&&d.version>=2){
+    if(d.entries)_str.entries=d.entries;if(d.plans)_plans.plans=d.plans
+    if(d.missed)_missed.notes=d.missed;if(d.cardio)_car.entries=d.cardio
+    if(d.weight)_wt.records=d.weight;if(d.profile)_prof=d.profile
+    if(d.game)_game=d.game
+    saveStr();savePlans();saveMissed();saveCar();saveWt();saveProf();saveGame()
+    setSync('synced');if(cb)cb(true);return
+  }}catch(e){}}
+setSync('error');if(cb)cb(false)}
+x.onerror=function(){setSync('');if(cb)cb(false)};x.send()}
+function scheduleSync(){if(_syncT)clearTimeout(_syncT);_syncT=setTimeout(pushSync,800)}
+setInterval(function(){if(!document.getElementById('workoutOverlay')?.classList.contains('open'))pullSync()},30000)
+
+/* ========== TOAST ========== */
+let _tt=null;function toast(m,t){const c=document.getElementById('toastC')
+if(!c)return;const o=document.createElement('div');o.className='toast'+(t?' toast-'+t:'')
+o.textContent=(t==='s'?'✅':t==='e'?'😅':'💪')+' '+m;c.appendChild(o)
+clearTimeout(_tt);_tt=setTimeout(()=>c.innerHTML='',2200)}
+
+/* ========== CELEBRATE ========== */
+function celebrate(){const o=document.createElement('div');o.style='position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden'
+const cs=['#F97316','#22C55E','#3B82F6','#A855F7','#EAB308','#EF4444']
+for(let i=0;i<30;i++){const c=document.createElement('div')
+c.style=`position:absolute;left:${Math.random()*100}%;top:-10px;width:${4+Math.random()*8}px;height:${4+Math.random()*8}px;background:${cs[i%cs.length]};border-radius:${Math.random()>.5?'50%':'2px'};animation:cf${i} ${1.5+Math.random()*2}s linear forwards`
+c.id='cf'+i
+const s=document.createElement('style');s.textContent=`@keyframes cf${i}{0%{transform:translateY(0) rotate(0deg) scale(0);opacity:1}20%{transform:translateY(20vh) rotate(180deg) scale(1);opacity:1}100%{transform:translateY(100vh) rotate(720deg) scale(.5);opacity:0}}`
+c.appendChild(s);o.appendChild(c)}
+document.body.appendChild(o);setTimeout(()=>o.remove(),3500)}
+
+/* ========== THEME ========== */
+function getTheme(){return localStorage.getItem(SK.THEME)||'dark'}
+function setTheme(t){const d=t==='dark';document.documentElement.setAttribute('data-theme',d?'':'light')
+document.getElementById('themeToggle').textContent=d?'🌙':'☀️';localStorage.setItem(SK.THEME,t)}
+function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
+
+/* ========== WEIGHT GRID BUILDER ========== */
+function buildWtGrid(c,sel,onChg){c.innerHTML=''
+COMMON_W.forEach(w=>{const b=document.createElement('button')
+b.className='wt-btn'+(w===sel?' selected':'');b.textContent=w;b.dataset.w=w
+b.addEventListener('click',()=>{c.querySelectorAll('.wt-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');if(onChg)onChg(w)})
+c.appendChild(b)})}
+
+/* ========== RENDER: STRENGTH ========== */
+let _strDate=today(),_strSelW=COMMON_W[4],_strForm=false;
+
+function renderStr(){
+  const d=_strDate;const f=fmtDate(d)
+  document.getElementById('strDateMain').textContent=f.main
+  document.getElementById('strDateSub').textContent=f.sub
+  const entries=getStr(d)
+  // Header stats
+  const done=entries.filter(e=>e.actualReps>=e.targetReps).length
+  document.getElementById('todayDone').textContent=done
+  document.getElementById('todayTotal').textContent=entries.length
+  document.getElementById('todayReps').textContent=entries.reduce((s,e)=>s+e.actualReps,0)
+  // Entries list
+  const el=document.getElementById('strList')
+  if(!entries.length){
+    el.innerHTML='<div class="empty"><span class="empty-e">💪</span><div class="empty-t">今天还没练</div><div class="empty-s">点击「新增一组」开始记录</div></div>'
+  } else {
+    el.innerHTML=entries.map(e=>{
+      const r=e.targetReps>0?e.actualReps/e.targetReps:0;const p=Math.min(r,1)*100
+      const d=r>=1,o=r>1;let sc='under',ac='under'
+      if(o){sc='over';ac='over'}else if(r>=1){sc='done';ac='done'}
+      const ts=e.createdAt?new Date(e.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''
+      return '<div class="ec '+(d?'done':'')+'" data-id="'+e.id+'"><div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">● '+e.weight+' kg</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span class="ec-tgt">目标 '+e.targetReps+' 次</span><span class="ec-actual '+ac+'">'+e.actualReps+' 次 '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+    }).join('')
+  }
+  // Heatmap
+  renderHeatmap('strHeatmap','str',d)
+  // Stats
+  renderStrStats()
+  // Missed days
+  renderMissed()
+}
+
+function renderStrStats(){
+  const g=document.getElementById('strStats')
+  const we=getWeekStr();const t=we.length,r=we.reduce((s,e)=>s+e.actualReps,0),v=we.reduce((s,e)=>s+e.weight*e.actualReps,0)
+  const dn=we.filter(e=>e.actualReps>=e.targetReps).length,rate=t>0?Math.round(dn/t*100):0
+  const circ=2*Math.PI*31.5
+  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'</div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+v+'</div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v">最爱</div><div class="sc-l">动作</div></div>'
+}
+function getWeekStr(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(_str.entries||[]).filter(e=>e.date>=toDate(m))}
+
+/* ========== MISSED DAYS ========== */
+function renderMissed(){
+  const c=document.getElementById('strMissedDays')
+  const allDates=[];const d=new Date()
+  for(let i=6;i>=0;i--){const t=new Date(d);t.setDate(t.getDate()-i);allDates.push(toDate(t))}
+  const activeDays=new Set((_str.entries||[]).map(e=>e.date))
+  const missed=allDates.filter(dd=>!activeDays.has(dd)&&dd<=today())
+  if(!missed.length){c.innerHTML='<div style="font-size:.75rem;color:var(--text3);padding:8px 0">✅ 最近 7 天全勤！</div>';return}
+  c.innerHTML=missed.map(dd=>{
+    const note=_missed.notes[dd]||''
+    return '<div class="md-item"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button></div><div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(note||'')+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
+  }).join('')
+  c.querySelectorAll('.md-write').forEach(b=>b.addEventListener('click',()=>{
+    const dd=b.dataset.date;const show=b.closest('.md-item').querySelector('.md-edit, #me_'+dd)
+    if(show)show.style.display=show.style.display==='none'?'block':'none'
+  }))
+  c.querySelectorAll('.md-save').forEach(b=>b.addEventListener('click',()=>{
+    const dd=b.dataset.date;const inp=document.getElementById('mi_'+dd);if(!inp)return
+    const t=inp.value.trim();if(t){_missed.notes[dd]=t}else{delete _missed.notes[dd]}
+    saveMissed();renderMissed();toast('已保存断签说明','s')
+  }))
+}
+
+/* ========== HEATMAP ========== */
+let _hmY=new Date().getFullYear(),_hmM=new Date().getMonth()
+function renderHeatmap(cid,prefix,curDate){
+  const c=document.getElementById(cid);if(!c)return
+  const n=new Date(_hmY,_hmM);const y=n.getFullYear(),m=n.getMonth()
+  const dim=new Date(y,m+1,0).getDate(),fd=new Date(y,m,1).getDay()
+  const so=fd===0?6:fd-1,wd=['一','二','三','四','五','六','日']
+  const mn=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
+  const dd={}
+  for(let d=1;d<=dim;d++){const s=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')
+    const entries=prefix==='str'?getStr(s):[];const reps=entries.reduce((a,e)=>a+e.actualReps,0);dd[d]={reps,date:s}}
+  const max=Math.max(1,...Object.values(dd).map(d=>d.reps))
+  function lv(r){if(r===0)return 0;const ra=r/max;if(ra<=.1)return 1;if(ra<=.3)return 2;if(ra<=.5)return 3;if(ra<=.75)return 4;return 5}
+  let h='<div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav"><button class="hm-nav-btn" data-n="hmP">◀</button><button class="hm-nav-btn" data-n="hmT">📍</button><button class="hm-nav-btn" data-n="hmN">▶</button></div></div><div class="hm-grid">'
+  wd.forEach(d=>{h+='<div class="hm-dh">'+d+'</div>'})
+  for(let i=0;i<so;i++)h+='<div class="hm-cell"></div>'
+  for(let d=1;d<=dim;d++){const da=dd[d];const l=lv(da.reps);const t=da.date===today();const hd=da.reps>0
+    h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+l+'" data-date="'+da.date+'">'+d+'</div>'}
+  h+='</div><div class="hm-leg">少 <div class="l0"></div><div class="l1"></div><div class="l3"></div><div class="l5"></div> 多</div></div>'
+  c.innerHTML=h
+  c.querySelectorAll('[data-n="hmP"]').forEach(b=>b.addEventListener('click',()=>{_hmM--;if(_hmM<0){_hmM=11;_hmY--}renderHeatmap(cid,prefix,curDate)}))
+  c.querySelectorAll('[data-n="hmN"]').forEach(b=>b.addEventListener('click',()=>{_hmM++;if(_hmM>11){_hmM=0;_hmY++}renderHeatmap(cid,prefix,curDate)}))
+  c.querySelectorAll('[data-n="hmT"]').forEach(b=>b.addEventListener('click',()=>{const n=new Date();_hmY=n.getFullYear();_hmM=n.getMonth();renderHeatmap(cid,prefix,curDate)}))
+  c.querySelectorAll('.hm-cell[data-date]').forEach(b=>b.addEventListener('click',()=>{
+    _strDate=b.dataset.date;renderStr()
+    // Switch to log tab
+  }))
+}
+
+/* ========== RENDER: CARDIO ========== */
+let _carDate=today(),_carForm=false;
+let _carSelType='run',_carDur=30,_carDist=0;
+
+function renderCar(){
+  const d=_carDate;const f=fmtDate(d)
+  document.getElementById('carDateMain').textContent=f.main
+  document.getElementById('carDateSub').textContent=f.sub
+  const entries=getCar(d)
+  const el=document.getElementById('carList')
+  if(!entries.length){
+    el.innerHTML='<div class="empty"><span class="empty-e">🏃</span><div class="empty-t">今天还没有有氧记录</div><div class="empty-s">跑一跑、跳一跳，保持活力！</div></div>'
+  } else {
+    el.innerHTML=entries.map(e=>{
+      const ct=CARDIO_TYPES.find(x=>x.id===e.type)||{emoji:'🏃',name:'运动'}
+      const ts=e.createdAt?new Date(e.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''
+      return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+ct.emoji+' '+ct.name+'</div><div class="ec-actions"><button class="ec-act" data-a="carDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span>⏱️ '+e.duration+' 分钟</span>'+(e.distance>0?'<span>📏 '+e.distance+' km</span>':'')+'<'+(e.calories?'span>🔥 '+e.calories+' kcal</span>':'')+'/></div>'+(e.note?'<div style="font-size:.7rem;color:var(--text2);margin-top:4px">💬 '+e.note+'</div>':'')+'</div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+    }).join('')
+  }
+  renderCarStats()
+}
+
+function renderCarStats(){
+  const g=document.getElementById('carStats')
+  const we=getWeekCar()
+  const total=we.length,dur=we.reduce((s,e)=>s+e.duration,0),dist=we.reduce((s,e)=>s+(e.distance||0),0)
+  g.innerHTML='<div class="sc sc-total"><div class="sc-v">'+total+'</div><div class="sc-l">本周次数</div></div><div class="sc sc-vol"><div class="sc-v">'+dur+'</div><div class="sc-l">总分钟</div></div><div class="sc sc-fav"><div class="sc-v">'+(dist>0?dist+'km':'—')+'</div><div class="sc-l">总距离</div></div><div class="sc sc-rate"><div class="sc-v">🔥</div><div class="sc-l">坚持有氧</div></div>'
+}
+function getWeekCar(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(_car.entries||[]).filter(e=>e.date>=toDate(m))}
+
+/* ========== RENDER: PROFILE ========== */
+function renderProf(){
+  const pc=document.getElementById('profileCard')
+  pc.innerHTML='<div class="pf-row"><label>身高</label><input type="number" id="pfHeight" value="'+_prof.height+'" step="1" min="100" max="250"></div><div class="pf-row"><label>性别</label><select id="pfGender"><option value="男"'+(_prof.gender==='男'?' selected':'')+'>男</option><option value="女"'+(_prof.gender==='女'?' selected':'')+'>女</option></select></div><div class="pf-row"><label>出生年</label><input type="number" id="pfBirth" value="'+_prof.birthYear+'" step="1" min="1950" max="2010"></div><button class="sb-btn" id="pfSave" style="margin-top:4px">💾 保存资料</button>'
+  document.getElementById('pfSave').addEventListener('click',()=>{
+    _prof.height=parseFloat(document.getElementById('pfHeight').value)||175
+    _prof.gender=document.getElementById('pfGender').value
+    _prof.birthYear=parseInt(document.getElementById('pfBirth').value)||1990
+    saveProf();toast('资料已保存','s')
+  })
+  renderWtList()
+  renderChart()
+}
+
+function renderWtList(){
+  const el=document.getElementById('weightList')
+  const recs=getWt()
+  if(!recs.length){el.innerHTML='<div class="empty"><span class="empty-e">⚖️</span><div class="empty-t">还没有体重记录</div><div class="empty-s">输入体重并点击记录</div></div>';return}
+  el.innerHTML=recs.map(r=>'<div class="wt-entry"><div><span class="wt-val">'+r.weight+'</span> <span class="wt-date">kg · '+r.date+'</span>'+(r.note?'<br><span class="wt-note">💬 '+r.note+'</span>':'')+'</div><button class="ec-act" data-a="wtDel" data-id="'+r.id+'">🗑️</button></div>').join('')
+  el.querySelectorAll('[data-a="wtDel"]').forEach(b=>b.addEventListener('click',()=>{
+    _wt.records=_wt.records.filter(r=>r.id!==b.dataset.id);saveWt();renderWtList();renderChart()
+  }))
+}
+
+function renderChart(){
+  const c=document.getElementById('weightCanvas');if(!c)return
+  const rect=c.parentElement.getBoundingClientRect()
+  c.width=rect.width*2;c.height=180*2;c.style.width=rect.width+'px';c.style.height='180px'
+  const ctx=c.getContext('2d');ctx.scale(2,2)
+  const W=rect.width,H=180,pad=40
+  const recs=getWt().slice(0,30).reverse()
+  if(recs.length<2){
+    ctx.fillStyle='var(--text3)';ctx.font='12px sans-serif';ctx.textAlign='center'
+    ctx.fillText('至少需要 2 条记录才能显示趋势',W/2,H/2);return
+  }
+  const vals=recs.map(r=>r.weight);const min=Math.floor(Math.min(...vals)-1),max=Math.ceil(Math.max(...vals)+1)
+  const range=max-min;const xs=recs.map((_,i)=>pad+i*(W-pad*2)/(recs.length-1))
+  const yv=v=>H-20-(v-min)/range*(H-40)
+  // Grid
+  ctx.strokeStyle='rgba(100,116,139,.15)';ctx.lineWidth=.5
+  for(let v=min;v<=max;v++){const y=yv(v);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke()}
+  // Labels
+  ctx.fillStyle='var(--text3)';ctx.font='9px sans-serif';ctx.textAlign='center'
+  recs.forEach((r,i)=>{ctx.fillText(r.date.slice(5),xs[i],H-5)})
+  ctx.textAlign='right';ctx.fillText(min,W-3,yv(min)+3);ctx.fillText(max,W-3,yv(max)+3)
+  // Line
+  ctx.beginPath();recs.forEach((r,i)=>{const x=xs[i],y=yv(r.weight);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)})
+  ctx.strokeStyle='#F97316';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.stroke()
+  // Gradient fill
+  const grd=ctx.createLinearGradient(0,yv(min),0,yv(max));grd.addColorStop(0,'rgba(249,115,22,.15)');grd.addColorStop(1,'rgba(249,115,22,0)')
+  ctx.beginPath();ctx.moveTo(xs[0],yv(vals[0]))
+  recs.forEach((r,i)=>ctx.lineTo(xs[i],yv(r.weight)))
+  ctx.lineTo(xs[xs.length-1],yv(min));ctx.lineTo(xs[0],yv(min));ctx.closePath()
+  ctx.fillStyle=grd;ctx.fill()
+  // Dots
+  recs.forEach((r,i)=>{ctx.beginPath();ctx.arc(xs[i],yv(r.weight),3.5,0,Math.PI*2);ctx.fillStyle='#F97316';ctx.fill()
+    ctx.beginPath();ctx.arc(xs[i],yv(r.weight),5,0,Math.PI*2);ctx.fillStyle='rgba(249,115,22,.2)';ctx.fill()})
+  // Latest value
+  const last=recs[recs.length-1];ctx.fillStyle='#F97316';ctx.font='bold 12px sans-serif';ctx.textAlign='center'
+  ctx.fillText(last.weight+'kg',xs[xs.length-1],yv(last.weight)-10)
+}
+
+/* ========== RENDER: GAME ========== */
+function renderGame(){
+  const stats=getGameStats()
+  document.getElementById('gameStatsBar').innerHTML=
+    '<div class="gs-item"><div class="gs-v orange">'+stats.atk+'</div><div class="gs-l">攻击</div></div>'+
+    '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">防御</div></div>'+
+    '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">生命</div></div>'+
+    '<div class="gs-item"><div class="gs-v">'+_game.cleared.length+'</div><div class="gs-l">已通关</div></div>'
+
+  const gc=document.getElementById('gameContent')
+  let h=''
+  Object.entries(LEVELS).forEach(([k,ch])=>{
+    h+='<div class="chapter-hdr">📖 '+ch.name+'</div><div class="lv-grid">'
+    ch.levels.forEach(lv=>{
+      const cleared=_game.cleared.includes(lv.id)
+      const isCur=_game.current===lv.id
+      const allPrev=allPrevCleared(k,lv.id)
+      const locked=!cleared&&!isCur&&!allPrev
+      h+='<div class="lv-card'+(cleared?' done':'')+(isCur?' current':'')+(locked?' locked':'')+'" data-lv="'+lv.id+'"><div class="lv-num">'+lv.id+'</div><div class="lv-name">'+lv.npc+'</div><div class="lv-status '+(cleared?'done':isCur?'current':'locked')+'">'+(cleared?'✅ 已通关':isCur?'⚔️ 挑战中':locked?'🔒 未解锁':'⚔️ 可挑战')+'</div></div>'
+    })
+    h+='</div>'
+  })
+  gc.innerHTML=h
+  gc.querySelectorAll('.lv-card:not(.locked)').forEach(c=>c.addEventListener('click',()=>{
+    const id=c.dataset.lv;if(_game.cleared.includes(id))return
+    _game.current=id;saveGame();startBattle(id)
+  }))
+}
+
+function allPrevCleared(chKey,lvId){
+  const ch=LEVELS[chKey];if(!ch)return false
+  for(const lv of ch.levels){
+    if(lv.id===lvId)return true
+    if(!_game.cleared.includes(lv.id))return false
+  }
+  return true
+}
+
+function getGameStats(){
+  const thirty=toDate(new Date(Date.now()-30*86400000))
+  const strE=(_str.entries||[]).filter(e=>e.date>=thirty)
+  const carE=(_car.entries||[]).filter(e=>e.date>=thirty)
+  const strVol=strE.reduce((s,e)=>s+e.weight*e.actualReps,0)
+  const carDur=carE.reduce((s,e)=>s+e.duration,0)
+  return{
+    atk:1+Math.floor(strVol/200),
+    def:1+Math.floor(carDur/60),
+    hp:10+Math.floor(strVol/100)+Math.floor(carDur/30)
+  }
+}
+
+/* ========== BATTLE ========== */
+let _battleRunning=false,_battleSpeed=1,_battleTimer=null
+let _bPlayer=null,_bEnemy=null,_bLog=[],_bDone=false
+
+function findLevel(id){
+  for(const ch of Object.values(LEVELS))
+    for(const lv of ch.levels)
+      if(lv.id===id)return lv
+  return null
+}
+
+function startBattle(id){
+  const lv=findLevel(id);if(!lv)return
+  const stats=getGameStats()
+  _bPlayer={...stats};_bEnemy={atk:lv.atk,def:lv.def,hp:lv.hp,maxHP:lv.hp}
+  _bLog=[];_bDone=false;_battleSpeed=1
+  document.getElementById('battleLevel').textContent=id+' '+lv.npc
+  document.getElementById('beName').textContent='👹 '+lv.npc
+  // Set stats display
+  document.getElementById('bpHP').style.width='100%'
+  document.getElementById('bpHPText').textContent='HP: '+stats.hp+'/'+stats.hp
+  document.getElementById('bpAtk').textContent='⚔️ '+stats.atk
+  document.getElementById('bpDef').textContent='🛡️ '+stats.def
+  document.getElementById('beHP').style.width='100%'
+  document.getElementById('beHPText').textContent='HP: '+lv.hp+'/'+lv.hp
+  document.getElementById('beAtk').textContent='⚔️ '+lv.atk
+  document.getElementById('beDef').textContent='🛡️ '+lv.def
+  document.getElementById('battleLog').innerHTML=''
+  document.getElementById('battleEnd').innerHTML=''
+  document.getElementById('battleOverlay').classList.add('open')
+  // Auto-start after a brief delay
+  setTimeout(()=>runBattle(),500)
+}
+
+function runBattle(){
+  if(_bDone||_battleRunning)return
+  _battleRunning=true
+  const lv=findLevel(_game.current)
+  const tick=()=>{
+    if(_bDone){_battleRunning=false;return}
+    // Player attacks
+    const pDmg=Math.max(0,_bPlayer.atk-_bEnemy.def*0.3+Math.floor(Math.random()*3))
+    _bEnemy.hp-=pDmg
+    addBattleLog('🧑 攻击 → '+pDmg+' 伤害','dmg')
+    updateBattleHP()
+    if(_bEnemy.hp<=0){_bEnemy.hp=0;endBattle(true);_battleRunning=false;return}
+    // Enemy attacks
+    const eDmg=Math.max(0,_bEnemy.atk-_bPlayer.def*0.3+Math.floor(Math.random()*2))
+    _bPlayer.hp-=eDmg
+    addBattleLog('👹 '+lv.npc+' 攻击 → '+eDmg+' 伤害','e')
+    updateBattleHP()
+    if(_bPlayer.hp<=0){_bPlayer.hp=0;endBattle(false);_battleRunning=false;return}
+    // Next tick
+    _battleTimer=setTimeout(tick,600/_battleSpeed)
+  }
+  tick()
+}
+
+function updateBattleHP(){
+  document.getElementById('bpHP').style.width=Math.max(0,_bPlayer.hp/(_bPlayer.hp+_bEnemy.maxHP||1)*100)+'%'
+  document.getElementById('bpHPText').textContent='HP: '+Math.max(0,_bPlayer.hp)
+  document.getElementById('beHP').style.width=Math.max(0,_bEnemy.hp/_bEnemy.maxHP*100)+'%'
+  document.getElementById('beHPText').textContent='HP: '+Math.max(0,_bEnemy.hp)+'/'+_bEnemy.maxHP
+}
+
+function addBattleLog(msg,type){
+  const el=document.getElementById('battleLog')
+  const div=document.createElement('div');div.className='bl-entry '+(type==='dmg'?'bl-dmg':type==='e'?'bl-def':'')
+  div.textContent='▸ '+msg;el.appendChild(div);el.scrollTop=el.scrollHeight
+}
+
+function endBattle(won){
+  _bDone=true;const el=document.getElementById('battleEnd')
+  const lv=findLevel(_game.current)
+  if(won){
+    if(!_game.cleared.includes(_game.current))_game.cleared.push(_game.current)
+    // Unlock next
+    let nextId='';let found=false
+    for(const ch of Object.values(LEVELS)){
+      for(const lv2 of ch.levels){
+        if(found){nextId=lv2.id;found=false;break}
+        if(lv2.id===_game.current)found=true
+      }
+      if(nextId)break
+    }
+    if(nextId)_game.current=nextId
+    else _game.current=''
+    saveGame()
+    el.innerHTML='<div class="be-result be-win">🏆 胜利！</div><div class="be-replay"><button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button></div>'
+    celebrate()
+  } else {
+    el.innerHTML='<div class="be-result be-lose">💀 战败</div><div class="be-replay"><button class="be-btn be-btn-retry" id="battleRetry">🔄 重新挑战</button></div>'
+  }
+  document.getElementById('battleNext')?.addEventListener('click',()=>{document.getElementById('battleOverlay').classList.remove('open');renderGame()})
+  document.getElementById('battleRetry')?.addEventListener('click',()=>{document.getElementById('battleOverlay').classList.remove('open');setTimeout(()=>startBattle(_game.current),100)})
+  document.getElementById('battleShare')?.addEventListener('click',showShareCard)
+}
+
+/* ========== SHARE CARD ========== */
+function showShareCard(){
+  const lv=findLevel(_game.current)||findLevel(_game.cleared[_game.cleared.length-1])
+  if(!lv)return
+  const stats=getGameStats()
+  document.getElementById('shareLevel').textContent=_game.current+' '+lv.npc
+  document.getElementById('shareStats').innerHTML=
+    '<div class="share-stat"><div class="ss-v">'+stats.atk+'</div><div class="ss-l">攻击</div></div>'+
+    '<div class="share-stat"><div class="ss-v">'+stats.def+'</div><div class="ss-l">防御</div></div>'+
+    '<div class="share-stat"><div class="ss-v">'+stats.hp+'</div><div class="ss-l">生命</div></div>'
+  const clearedStr=_game.cleared.length>0?'已通关 '+_game.cleared.length+' 关':'刚刚开始征程'
+  const strE=(_str.entries||[]).length,carE=(_car.entries||[]).length
+  document.getElementById('shareVS').innerHTML=
+    '🧑 力量训练 '+strE+' 次 · 有氧 '+carE+' 次<br>💪 '+clearedStr
+  document.getElementById('shareOverlay').classList.add('open')
+}
+function hideShare(){document.getElementById('shareOverlay').classList.remove('open')}
+
+/* ========== INIT ========== */
+function init(){
+  document.documentElement.classList.add('no-transition')
+  setTheme(getTheme())
+  requestAnimationFrame(()=>document.documentElement.classList.remove('no-transition'))
+
+  // Build weight grids
+  buildWtGrid(document.getElementById('strWeight'),_strSelW,w=>_strSelW=w)
+  // Exercise suggestions
+  const sug=document.getElementById('strSuggest')
+  EXERCISES.forEach(n=>{const b=document.createElement('button');b.textContent=n
+    b.addEventListener('click',()=>document.getElementById('strExercise').value=n);sug.appendChild(b)})
+  const dl=document.getElementById('strExList')
+  EXERCISES.forEach(n=>{const o=document.createElement('option');o.value=n;dl.appendChild(o)})
+
+  // Cardio type buttons
+  const ct=document.getElementById('carTypes')
+  CARDIO_TYPES.forEach(t=>{const b=document.createElement('button');b.className='car-type'+(t.id==='run'?' selected':'');b.textContent=t.emoji+' '+t.name;b.dataset.ct=t.id
+    b.addEventListener('click',()=>{ct.querySelectorAll('.car-type').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');_carSelType=t.id
+      document.getElementById('carDistLabel').textContent=t.hasDist?'km':'无'
+      if(!t.hasDist){_carDist=0;document.getElementById('carDistVal').textContent='0'}
+    });ct.appendChild(b)})
+
+  renderStr();renderCar();renderProf();renderGame()
+
+  // Pull sync on load
+  setTimeout(pullSync,1500)
+}
+
+/* ========== EVENT DELEGATION ========== */
+document.addEventListener('click',function(e){
+  const el=e.target.closest('button,[id],[data-a],[data-s],[data-date]')
+  if(!el)return
+  const id=el.id,act=el.dataset.a,st=el.dataset.s
+
+  // Tab switching
+  if(el.classList.contains('tab-btn')){switchTab(el.dataset.tab);return}
+
+  switch(id){
+    case 'themeToggle':toggleTheme();return;
+    // Strength date nav
+    case 'strPrevDay':{const d=parseDate(_strDate);d.setDate(d.getDate()-1);_strDate=toDate(d);renderStr();return}
+    case 'strNextDay':{const d=parseDate(_strDate);d.setDate(d.getDate()+1);_strDate=toDate(d);renderStr();return}
+    case 'strGoToday':_strDate=today();renderStr();return;
+    case 'strAddBtn':_strForm=!_strForm;el.textContent=_strForm?'✖ 收起':'＋ 新增一组'
+      document.getElementById('strAddCard').classList.toggle('open',_strForm);if(_strForm)document.getElementById('strExercise').focus();return;
+    case 'strSubmit':{
+      const ex=document.getElementById('strExercise').value.trim()
+      if(!ex){toast('请输入动作名称','e');return}
+      const tgt=parseInt(document.getElementById('strTgtVal').textContent,10)
+      const act2=parseInt(document.getElementById('strActVal').textContent,10)
+      addStr({date:_strDate,exercise:ex,weight:_strSelW,targetReps:tgt,actualReps:act2})
+      document.getElementById('strExercise').value='';document.getElementById('strTgtVal').textContent='12';document.getElementById('strActVal').textContent='12'
+      _strSelW=COMMON_W[4];document.querySelectorAll('#strWeight .wt-btn').forEach(b=>b.classList.toggle('selected',parseInt(b.dataset.w)===_strSelW))
+      document.getElementById('strAddCard').classList.remove('open');_strForm=false;document.getElementById('strAddBtn').textContent='＋ 新增一组'
+      toast('记录成功！','s')
+      const te=getStr(_strDate);if(te.length&&te.every(e=>e.actualReps>=e.targetReps))setTimeout(celebrate,300)
+      renderStr();return}
+
+    // Cardio
+    case 'carPrevDay':{const d=parseDate(_carDate);d.setDate(d.getDate()-1);_carDate=toDate(d);renderCar();return}
+    case 'carNextDay':{const d=parseDate(_carDate);d.setDate(d.getDate()+1);_carDate=toDate(d);renderCar();return}
+    case 'carGoToday':_carDate=today();renderCar();return;
+    case 'carAddBtn':_carForm=!_carForm;el.textContent=_carForm?'✖ 收起':'＋ 新增记录'
+      document.getElementById('carAddCard').classList.toggle('open',_carForm);return;
+    case 'carDurDown':_carDur=Math.max(1,_carDur-5);document.getElementById('carDurVal').textContent=_carDur;return;
+    case 'carDurUp':_carDur=Math.min(999,_carDur+5);document.getElementById('carDurVal').textContent=_carDur;return;
+    case 'carDistDown':_carDist=Math.max(0,_carDist-0.5);document.getElementById('carDistVal').textContent=_carDist;return;
+    case 'carDistUp':_carDist=Math.min(999,_carDist+0.5);document.getElementById('carDistVal').textContent=_carDist;return;
+    case 'carSubmit':{
+      const note=document.getElementById('carNote').value.trim()
+      addCar({date:_carDate,type:_carSelType,duration:_carDur,distance:_carDist,note})
+      document.getElementById('carNote').value='';_carDur=30;_carDist=0
+      document.getElementById('carDurVal').textContent='30';document.getElementById('carDistVal').textContent='0'
+      document.getElementById('carAddCard').classList.remove('open');_carForm=false;document.getElementById('carAddBtn').textContent='＋ 新增记录'
+      toast('有氧记录已保存 🏃','s');renderCar();return}
+
+    // Weight
+    case 'wtDown':{const v=parseFloat(document.getElementById('wtVal').textContent);document.getElementById('wtVal').textContent=Math.max(20,v-0.1).toFixed(1);return}
+    case 'wtUp':{const v=parseFloat(document.getElementById('wtVal').textContent);document.getElementById('wtVal').textContent=Math.min(300,v+0.1).toFixed(1);return}
+    case 'wtSubmit':{
+      const w=parseFloat(document.getElementById('wtVal').textContent)
+      const note=document.getElementById('wtNote').value.trim()
+      addWt({date:today(),weight:w,note})
+      document.getElementById('wtNote').value=''
+      toast('体重已记录 ⚖️','s');renderWtList();renderChart();return}
+
+    // Game/Level click
+    case 'battleClose':_bDone=true;if(_battleTimer)clearTimeout(_battleTimer);_battleRunning=false
+      document.getElementById('battleOverlay').classList.remove('open');renderGame();return;
+    case 'shareClose':hideShare();return;
+    case 'shareSave':{
+      // Simple screenshot approach - alert user to screenshot
+      toast('长按或截图保存分享卡片 📸','s');return}
+  }
+
+  // Speed buttons
+  if(el.classList.contains('speed-btn')&&el.dataset.speed){
+    document.querySelectorAll('.speed-btn').forEach(b=>b.classList.remove('active'))
+    el.classList.add('active');_battleSpeed=parseInt(el.dataset.speed);return
+  }
+
+  // Dynamic actions
+  if(act==='strEdit'){
+    const e=_str.entries.find(x=>x.id===el.dataset.id);if(!e)return
+    openStrEdit(e);return}
+  if(act==='strDel'){
+    if(confirm('确定删除这条记录？')){delStr(el.dataset.id);renderStr();toast('已删除','s')};return}
+  if(act==='carDel'){
+    if(confirm('确定删除？')){delCar(el.dataset.id);renderCar();toast('已删除','s')};return}
+
+  // Close modals on overlay
+  if(el.classList.contains('modal-overlay')){el.classList.remove('open')}
+
+  // Stepper
+  if(st&&el.classList.contains('sp-btn')){
+    const dir=el.dataset.d;const isTgt=st==='strTgt'
+    const vid=isTgt?'strTgtVal':'strActVal'
+    const v=document.getElementById(vid);let n=parseInt(v.textContent,10)
+    n=dir==='+'?Math.min(n+1,999):Math.max(n-1,0);v.textContent=n;return
+  }
+})
+
+/* ========== STRENGTH EDIT MODAL ========== */
+function openStrEdit(entry){
+  const modal=document.createElement('div');modal.className='modal-overlay open';modal.id='strEditModal'
+  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">✏️ 编辑记录</div><div class="fg"><label class="fl">动作</label><input class="fi" id="seEx" value="'+entry.exercise+'"></div><div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="seWeight"></div></div><div class="fg"><label class="fl">次数</label><div class="reps-row"><div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" id="seTD">−</button><span class="sp-val" id="seTV">'+entry.targetReps+'</span><button class="sp-btn" id="seTU">+</button></div></div><div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" id="seAD">−</button><span class="sp-val" id="seAV">'+entry.actualReps+'</span><button class="sp-btn" id="seAU">+</button></div></div></div></div><div class="modal-actions"><button class="m-btn-cancel" id="seCancel">取消</button><button class="m-btn-save" id="seSave">💾 保存</button></div></div>'
+  document.body.appendChild(modal)
+  let selW=entry.weight
+  buildWtGrid(modal.querySelector('#seWeight'),selW,w=>selW=w,true)
+  document.getElementById('seTD').addEventListener('click',()=>{const e=document.getElementById('seTV');let v=parseInt(e.textContent,10);e.textContent=Math.max(0,v-1)})
+  document.getElementById('seTU').addEventListener('click',()=>{const e=document.getElementById('seTV');let v=parseInt(e.textContent,10);e.textContent=Math.min(999,v+1)})
+  document.getElementById('seAD').addEventListener('click',()=>{const e=document.getElementById('seAV');let v=parseInt(e.textContent,10);e.textContent=Math.max(0,v-1)})
+  document.getElementById('seAU').addEventListener('click',()=>{const e=document.getElementById('seAV');let v=parseInt(e.textContent,10);e.textContent=Math.min(999,v+1)})
+  document.getElementById('seCancel').addEventListener('click',()=>modal.remove())
+  document.getElementById('seSave').addEventListener('click',()=>{
+    const ex=document.getElementById('seEx').value.trim()
+    if(!ex){toast('请输入动作名称','e');return}
+    updateStr(entry.id,{exercise:ex,weight:selW,targetReps:parseInt(document.getElementById('seTV').textContent,10),actualReps:parseInt(document.getElementById('seAV').textContent,10)})
+    modal.remove();toast('已更新','s');renderStr()
+  })
+  modal.addEventListener('click',e=>{if(e.target===e.currentTarget)modal.remove()})
+}
+
+/* ========== TAB SWITCHING ========== */
+function switchTab(name){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name))
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active',c.id==='tab'+name.charAt(0).toUpperCase()+name.slice(1)))
+  if(name==='strength')renderStr()
+  if(name==='cardio')renderCar()
+  if(name==='profile')renderProf()
+  if(name==='game')renderGame()
+}
+
+/* ========== BOOT ========== */
+// Add toast container
+const tc=document.createElement('div');tc.className='toast-c';tc.id='toastC'
+document.getElementById('app').appendChild(tc)
+
+init()
+
+// Export for inline onclick
+window.toggleTheme=toggleTheme
