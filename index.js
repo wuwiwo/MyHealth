@@ -30,6 +30,30 @@ const LEVELS = {
     {id:'3-1',npc:'精英卫兵',atk:50,def:50,hp:400},
     {id:'3-2',npc:'暗影刺客',atk:90,def:20,hp:300},
     {id:'3-3',npc:'铁甲统领',atk:60,def:60,hp:500}
+  ]},
+  chap4:{name:'身经百战',levels:[
+    {id:'4-1',npc:'狂战士',atk:80,def:30,hp:600},
+    {id:'4-2',npc:'盾卫者',atk:40,def:80,hp:700},
+    {id:'4-3',npc:'猎手',atk:100,def:20,hp:450},
+    {id:'4-4',npc:'重骑兵',atk:90,def:50,hp:550},
+    {id:'4-5',npc:'咒术师',atk:110,def:30,hp:500},
+    {id:'4-6',npc:'BOSS 暗龙',atk:70,def:60,hp:900,boss:true}
+  ]},
+  chap5:{name:'浴血奋战',levels:[
+    {id:'5-1',npc:'死士',atk:100,def:40,hp:650},
+    {id:'5-2',npc:'铁卫',atk:60,def:90,hp:800},
+    {id:'5-3',npc:'刺客大师',atk:130,def:30,hp:500},
+    {id:'5-4',npc:'战争使徒',atk:110,def:60,hp:700},
+    {id:'5-5',npc:'毁灭者',atk:140,def:40,hp:600},
+    {id:'5-6',npc:'大魔导师',atk:120,def:70,hp:750}
+  ]},
+  chap6:{name:'终极试炼',levels:[
+    {id:'6-1',npc:'深渊守卫',atk:120,def:60,hp:850},
+    {id:'6-2',npc:'暗影领主',atk:150,def:40,hp:700},
+    {id:'6-3',npc:'钢铁巨像',atk:80,def:100,hp:1000},
+    {id:'6-4',npc:'混沌骑士',atk:140,def:70,hp:800},
+    {id:'6-5',npc:'灭世者',atk:170,def:50,hp:750},
+    {id:'6-6',npc:'BOSS 远古龙王',atk:100,def:80,hp:1200,boss:true}
   ]}
 };
 
@@ -556,13 +580,36 @@ function getGameStats(){
 
 /* ========== BATTLE ========== */
 let _battleRunning=false,_battleSpeed=1,_battleTimer=null
-let _bPlayer=null,_bEnemy=null,_bLog=[],_bDone=false,_attrCalcInfo={}
+let _bPlayer=null,_bEnemy=null,_bLog=[],_bDone=false,_attrCalcInfo={},_bBossAffix=null,_bTurn=0,_bRageCount=0
 
 function findLevel(id){
   for(const ch of Object.values(LEVELS))
     for(const lv of ch.levels)
       if(lv.id===id)return lv
   return null
+}
+
+/* Boss affix system */
+var BOSS_AFFIXES=[
+  {name:'虚弱诅咒',desc:'你防御低于50时,伤害减少10~20%',
+    apply:function(atk,def,isPlayer){
+      // If player's defense < 50, reduce damage by 10-20%
+      if(isPlayer&&def<50){var r=0.8+Math.random()*0.1;return Math.floor(atk*r)}
+      return atk
+    }},
+  {name:'荆棘之躯',desc:'攻击者受到50%反伤(可被防御减免)',
+    reflect:function(dmg,atkDef){return Math.max(1,Math.floor(dmg*0.5)-Math.floor(atkDef/2))}},
+  {name:'怒气勃发',desc:'每2~3回合攻击力+1~5(可叠加)',
+    onTurn:function(turn,enemyAtk,baseAtk){
+      if(turn>=2&&(turn%2===0||turn%3===0)&&Math.random()<0.6){
+        var bonus=1+Math.floor(Math.random()*5);return enemyAtk+bonus}
+      return enemyAtk
+    }}
+]
+
+function pickBossAffix(){
+  var idx=Math.floor(Math.random()*BOSS_AFFIXES.length)
+  return{index:idx,...BOSS_AFFIXES[idx]}
 }
 
 function updateGameBar(){
@@ -583,12 +630,14 @@ function startBattle(id){
   // Check if trained today
   var todayStr=today()
   var trainedToday=(_str.entries||[]).some(function(e){return e.date===todayStr})||(_car.entries||[]).some(function(e){return e.date===todayStr})
-  if(!trainedToday&&attempts===0){toast('⚠️ 今天还没训练，属性较低，确定要挑战吗？点击重新尝试','e')}
+  if(!trainedToday&&attempts===0){toast('⚠️ 今天还没训练，属性较低','e')}
   var stats=getGameStats()
   _bPlayer={...stats};_bEnemy={atk:lv.atk,def:lv.def,hp:lv.hp,maxHP:lv.hp}
-  _bLog=[];_bDone=false;_battleSpeed=1
-  document.getElementById('battleLevel').textContent=id+' '+lv.npc
-  document.getElementById('beName').textContent='👹 '+lv.npc
+  // Boss affix
+  if(lv.boss){_bBossAffix=pickBossAffix()}else{_bBossAffix=null}
+  _bLog=[];_bDone=false;_battleSpeed=1;_bTurn=0;_bRageCount=0
+  document.getElementById('battleLevel').textContent=id+' '+lv.npc+(_bBossAffix?' 👑':'')+(_bBossAffix?' ['+_bBossAffix.name+']':'')
+  document.getElementById('beName').textContent='👹 '+lv.npc+(_bBossAffix?' 👑':'')
   // Set stats display
   document.getElementById('bpHP').style.width='100%'
   document.getElementById('bpHPText').textContent='❤️ '+stats.hp
@@ -612,13 +661,30 @@ function runBattle(){
   const tick=()=>{
     if(_bDone){_battleRunning=false;return}
     // Player attacks
-    const pDmg=Math.max(1,_bPlayer.atk-Math.floor(_bEnemy.def*3/10)+Math.floor(Math.random()*4)+1)
+    _bTurn++
+    // Boss rage affix
+    var bossAtk=_bEnemy.atk
+    if(_bBossAffix&&_bBossAffix.onTurn&&_bBossAffix.index===2){
+      var newAtk=_bBossAffix.onTurn(_bTurn,_bEnemy.atk,lv.atk)
+      if(newAtk>bossAtk){bossAtk=newAtk;_bEnemy.atk=newAtk;addBattleLog('🔴 Boss 怒气勃发, 攻击力 +'+(newAtk-lv.atk-_bRageCount),'e');_bRageCount+=newAtk-lv.atk-_bRageCount}
+    }
+    // Player attacks
+    var pDmgBase=Math.max(1,_bPlayer.atk-Math.floor(_bEnemy.def/2)+Math.floor(Math.random()*4)+1)
+    // Boss:虚弱诅咒
+    var pDmg=_bBossAffix&&_bBossAffix.apply?_bBossAffix.apply(pDmgBase,_bPlayer.def,true):pDmgBase
     _bEnemy.hp-=pDmg
-    addBattleLog('🧑 攻击 → '+pDmg+' 伤害','dmg')
+    if(pDmg!==pDmgBase)addBattleLog('🧑 攻击 → '+pDmgBase+' (被诅咒减免至 '+pDmg+')','dmg')
+    else addBattleLog('🧑 攻击 → '+pDmg+' 伤害','dmg')
+    // Boss:荆棘反伤
+    if(_bBossAffix&&_bBossAffix.reflect&&pDmg>0){
+      var reflectDmg=_bBossAffix.reflect(pDmg,_bPlayer.def)
+      if(reflectDmg>0){_bPlayer.hp-=Math.min(_bPlayer.hp,reflectDmg);addBattleLog('🩸 荆棘反伤 → '+reflectDmg+' 伤害','e')}
+    }
     updateBattleHP()
     if(_bEnemy.hp<=0){_bEnemy.hp=0;endBattle(true);_battleRunning=false;return}
     // Enemy attacks
-    const eDmg=Math.max(1,_bEnemy.atk-Math.floor(_bPlayer.def*3/10)+Math.floor(Math.random()*3)+1)
+    var eDmgBase=Math.max(1,bossAtk-Math.floor(_bPlayer.def/2)+Math.floor(Math.random()*3)+1)
+    var eDmg=_bBossAffix&&_bBossAffix.apply&&_bBossAffix.index===0?_bBossAffix.apply(eDmgBase,bossAtk,false):eDmgBase
     _bPlayer.hp-=eDmg
     addBattleLog('👹 '+lv.npc+' 攻击 → '+eDmg+' 伤害','e')
     updateBattleHP()
