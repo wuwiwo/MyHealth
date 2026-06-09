@@ -160,13 +160,15 @@ function importData(){
     reader.onload=function(ev){
       try{
         var data=JSON.parse(ev.target.result)
-        if(data.entries){_str.entries=data.entries;saveStr()}
-        if(data.plans){_plans.plans=Array.isArray(data.plans)?data.plans:data.plans.plans||[];savePlans()}
-        if(data.cardio){_car.entries=Array.isArray(data.cardio)?data.cardio:data.cardio.entries||[];saveCar()}
-        if(data.weight){_wt.records=Array.isArray(data.weight)?data.weight:data.weight.records||[];saveWt()}
-        if(data.profile){_prof=data.profile;saveProf()}
-        if(data.game){_game=data.game;saveGame()}
-        if(data.missed){_missed.notes=typeof data.missed==='object'?data.missed:data.missed.notes||{};saveMissed()}
+        // Only overwrite if imported data actually has content (don't clear with empty)
+        function hasItems(v){return Array.isArray(v)&&v.length>0}
+        if(hasItems(data.entries)){_str.entries=data.entries;saveStr()}
+        if(hasItems(data.plans)){_plans.plans=Array.isArray(data.plans)?data.plans:data.plans.plans||[];savePlans()}
+        if(hasItems(data.cardio)){_car.entries=Array.isArray(data.cardio)?data.cardio:data.cardio.entries||[];saveCar()}
+        if(hasItems(data.weight)){_wt.records=Array.isArray(data.weight)?data.weight:data.weight.records||[];saveWt()}
+        if(data.profile&&typeof data.profile==='object'){_prof=data.profile;saveProf()}
+        if(data.game&&typeof data.game==='object'){_game=data.game;saveGame()}
+        if(data.missed&&typeof data.missed==='object'){_missed.notes=data.missed;saveMissed()}
         toast('数据导入成功 ✅','s')
         renderStr();renderCar();renderProf();renderGame()
       }catch(e){toast('文件格式错误: '+e.message,'e')}
