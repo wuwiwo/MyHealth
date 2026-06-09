@@ -1,4 +1,6 @@
-import { put, list } from '@vercel/blob';
+// Vercel Serverless — Data Sync via Blob REST API (no SDK needed)
+const BLOB_BASE = 'https://gdq7v04phurwco3e.private.blob.vercel-storage.com';
+const BLOB_PATH = 'myhealth-data.json';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -6,24 +8,19 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  const fileUrl = BLOB_BASE + '/' + BLOB_PATH;
+
   if (req.method === 'GET') {
     try {
-      const { blobs } = await list({ prefix: 'myhealth-sync-' });
-      if (!blobs || blobs.length === 0) {
+      const r = await fetch(fileUrl, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!r.ok) {
         return res.status(200).json({ version: 1, entries: [], plans: [] });
       }
-      blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-      let best = null, bestCount = -1;
-      for (const b of blobs) {
-        try {
-          const resp = await fetch(b.url);
-          const d = await resp.json();
-          const cnt = (d.entries?.length || 0) + (d.plans?.length || 0);
-          if (cnt > bestCount) { best = d; bestCount = cnt; }
-        } catch(e) {}
-      }
-      if (best) return res.status(200).json(best);
-      return res.status(200).json({ version: 1, entries: [], plans: [] });
+      const data = await r.json();
+      return res.status(200).json(data);
     } catch (e) {
       return res.status(200).json({ version: 1, entries: [], plans: [] });
     }
@@ -32,11 +29,19 @@ export default async function handler(req, res) {
   if (req.method === 'PUT') {
     try {
       const jsonStr = JSON.stringify(req.body);
-      const { url } = await put('myhealth-sync-' + Date.now() + '.json', jsonStr, {
-        contentType: 'application/json',
-        access: 'private',
+      const r = await fetch(fileUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: jsonStr
       });
-      return res.status(200).json({ ok: true, url });
+      if (!r.ok) {
+        const err = await r.text();
+        return res.status(500).json({ ok: false, error: err });
+      }
+      return res.status(200).json({ ok: true });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message });
     }
