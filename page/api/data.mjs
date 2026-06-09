@@ -1,55 +1,44 @@
-import { put, get, del } from '@vercel/blob';
+// Vercel Serverless Function — Data Sync via Vercel Blob REST API
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-export const config = { runtime: 'edge' };
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-const BLOB_NAME = 'myhealth-sync-data.json';
-
-export default async function handler(req) {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
-
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 200, headers });
-  }
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  const fileUrl = 'https://blob.vercel-storage.com/myhealth-sync.json';
 
   if (req.method === 'GET') {
     try {
-      const blob = await get(BLOB_NAME);
-      if (!blob) {
-        return new Response(JSON.stringify({ version: 1, entries: [], plans: [] }), {
-          status: 200, headers: { ...headers, 'Content-Type': 'application/json' }
-        });
-      }
-      const text = await blob.text();
-      return new Response(text, {
-        status: 200, headers: { ...headers, 'Content-Type': 'application/json' }
+      const r = await fetch(fileUrl, {
+        headers: { Authorization: `Bearer ${token}` }
       });
+      if (!r.ok) throw new Error('not found');
+      const data = await r.json();
+      return res.status(200).json(data);
     } catch (e) {
-      return new Response(JSON.stringify({ version: 1, entries: [], plans: [] }), {
-        status: 200, headers: { ...headers, 'Content-Type': 'application/json' }
-      });
+      return res.status(200).json({ version: 1, entries: [], plans: [] });
     }
   }
 
   if (req.method === 'PUT') {
     try {
-      const body = await req.json();
-      await put(BLOB_NAME, JSON.stringify(body), {
-        contentType: 'application/json',
-        access: 'private',
+      const body = JSON.stringify(req.body);
+      await fetch(fileUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'x-vercel-blob-access': 'private'
+        },
+        body
       });
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200, headers: { ...headers, 'Content-Type': 'application/json' }
-      });
+      return res.status(200).json({ ok: true });
     } catch (e) {
-      return new Response(JSON.stringify({ ok: false, error: e.message }), {
-        status: 500, headers: { ...headers, 'Content-Type': 'application/json' }
-      });
+      return res.status(500).json({ ok: false, error: e.message });
     }
   }
 
-  return new Response(null, { status: 404, headers });
+  res.status(404).end();
 }
