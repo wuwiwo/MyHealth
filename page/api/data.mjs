@@ -49,7 +49,8 @@ export default async function handler(req, res) {
       await put('myhealth-sync-' + Date.now() + '.json', jsonStr, {
         contentType: 'application/json',
         access: 'private',
-        addRandomSuffix: true
+        addRandomSuffix: true,
+        token: process.env.BLOB_READ_WRITE_TOKEN
       });
       return res.status(200).json({ ok: true });
     } catch (e) {
