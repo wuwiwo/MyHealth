@@ -142,6 +142,38 @@ function scheduleSync(){if(_syncT)clearTimeout(_syncT);_syncT=setTimeout(pushSyn
 // Vercel: pull every 2 min instead of 30s (serverless cold start cost)
 setInterval(function(){if(!document.getElementById('workoutOverlay')?.classList.contains('open'))pullSync()},120000)
 
+/* ========== EXPORT / IMPORT ========== */
+function exportData(){
+  var data=JSON.stringify(getAllData(),null,2)
+  var blob=new Blob([data],{type:'application/json'})
+  var url=URL.createObjectURL(blob)
+  var a=document.createElement('a');a.href=url;a.download='myhealth-backup-'+today()+'.json'
+  a.click();URL.revokeObjectURL(url)
+  toast('数据已导出 ✅','s')
+}
+
+function importData(){
+  var input=document.createElement('input');input.type='file';input.accept='.json'
+  input.onchange=function(e){
+    var file=e.target.files[0];if(!file)return
+    var reader=new FileReader()
+    reader.onload=function(ev){
+      try{
+        var data=JSON.parse(ev.target.result)
+        if(data.entries){_str.entries=data.entries;saveStr()}
+        if(data.plans){_plans.plans=Array.isArray(data.plans)?data.plans:data.plans.plans||[];savePlans()}
+        if(data.cardio){_car.entries=Array.isArray(data.cardio)?data.cardio:data.cardio.entries||[];saveCar()}
+        if(data.weight){_wt.records=Array.isArray(data.weight)?data.weight:data.weight.records||[];saveWt()}
+        if(data.profile){_prof=data.profile;saveProf()}
+        if(data.game){_game=data.game;saveGame()}
+        if(data.missed){_missed.notes=typeof data.missed==='object'?data.missed:data.missed.notes||{};saveMissed()}
+        toast('数据导入成功 ✅','s')
+        renderStr();renderCar();renderProf();renderGame()
+      }catch(e){toast('文件格式错误: '+e.message,'e')}
+    };reader.readAsText(file)
+  };input.click()
+}
+
 /* ========== TOAST ========== */
 let _tt=null;function toast(m,t){const c=document.getElementById('toastC')
 if(!c)return;const o=document.createElement('div');o.className='toast'+(t?' toast-'+t:'')
@@ -921,6 +953,9 @@ document.addEventListener('click',function(e){
     document.getElementById('attrClose').addEventListener('click',function(){modal.remove()})
     modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
     return}
+
+  if(id==='exportDataBtn'){exportData();return}
+  if(id==='importDataBtn'){importData();return}
 
   if(id==='strNewPlan'){
     var name=prompt('计划名称:','我的训练计划')
