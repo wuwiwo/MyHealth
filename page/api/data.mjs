@@ -1,6 +1,4 @@
-// Vercel Serverless — Data Sync via Blob REST API (no SDK needed)
-const BLOB_BASE = 'https://gdq7v04phurwco3e.private.blob.vercel-storage.com';
-const BLOB_PATH = 'myhealth-data.json';
+import { put, list } from '@vercel/blob';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,19 +6,24 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  const fileUrl = BLOB_BASE + '/' + BLOB_PATH;
-
   if (req.method === 'GET') {
     try {
-      const r = await fetch(fileUrl, {
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      if (!r.ok) {
+      const { blobs } = await list({ prefix: 'myhealth-sync-' });
+      if (!blobs || blobs.length === 0) {
         return res.status(200).json({ version: 1, entries: [], plans: [] });
       }
-      const data = await r.json();
-      return res.status(200).json(data);
+      blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+      let best = null, bestCount = -1;
+      for (const b of blobs) {
+        try {
+          const resp = await fetch(b.url);
+          const d = await resp.json();
+          const cnt = (d.entries?.length || 0) + (d.plans?.length || 0);
+          if (cnt > bestCount) { best = d; bestCount = cnt; }
+        } catch(e) {}
+      }
+      if (best) return res.status(200).json(best);
+      return res.status(200).json({ version: 1, entries: [], plans: [] });
     } catch (e) {
       return res.status(200).json({ version: 1, entries: [], plans: [] });
     }
@@ -28,25 +31,15 @@ export default async function handler(req, res) {
 
   if (req.method === 'PUT') {
     try {
-      if (!token) {
-        return res.status(200).json({ ok: false, error: 'BLOB_READ_WRITE_TOKEN not set' });
-      }
       const jsonStr = JSON.stringify(req.body);
-      const r = await fetch(fileUrl, {
-        method: 'PUT',
-        headers: {
-          Authorization: 'Bearer ' + token,
-          'Content-Type': 'application/json'
-        },
-        body: jsonStr
+      await put('myhealth-sync-' + Date.now() + '.json', jsonStr, {
+        contentType: 'application/json',
+        access: 'private',
+        addRandomSuffix: false
       });
-      if (!r.ok) {
-        const err = await r.text();
-        return res.status(200).json({ ok: false, error: 'blob put failed: ' + (err || r.status) });
-      }
       return res.status(200).json({ ok: true });
     } catch (e) {
-      return res.status(200).json({ ok: false, error: 'exception: ' + e.message });
+      return res.status(200).json({ ok: false, error: e.message });
     }
   }
 
