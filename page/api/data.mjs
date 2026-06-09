@@ -1,6 +1,5 @@
 import { put, list } from '@vercel/blob';
 
-// Helper: parse JSON body from Vercel Node.js request (req.body is undefined by default)
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -19,9 +18,18 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  console.log('ENV CHECK:', {
+    storeId: process.env.BLOB_STORE_ID,
+    tokenPresent: !!process.env.BLOB_READ_WRITE_TOKEN,
+    tokenPrefix: process.env.BLOB_READ_WRITE_TOKEN?.substring(0, 20)
+  });
+
   if (req.method === 'GET') {
     try {
-      const { blobs } = await list({ prefix: 'myhealth-sync-' });
+      const { blobs } = await list({
+        prefix: 'myhealth-sync-',
+        token: process.env.BLOB_READ_WRITE_TOKEN
+      });
       if (!blobs || blobs.length === 0) {
         return res.status(200).json({ version: 1, entries: [], plans: [] });
       }
@@ -46,15 +54,18 @@ export default async function handler(req, res) {
     try {
       const body = await parseBody(req);
       const jsonStr = JSON.stringify(body);
+      console.log('PUT: body length', jsonStr.length);
       await put('myhealth-sync-' + Date.now() + '.json', jsonStr, {
         contentType: 'application/json',
-        access: 'public',
+        access: 'private',
         addRandomSuffix: true,
         token: process.env.BLOB_READ_WRITE_TOKEN
       });
+      console.log('PUT: success');
       return res.status(200).json({ ok: true });
     } catch (e) {
-      return res.status(200).json({ ok: false, error: e.message });
+      console.error('PUT error:', e);
+      return res.status(200).json({ ok: false, error: e.message, stack: e.stack?.split('\n')[0] });
     }
   }
 
