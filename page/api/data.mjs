@@ -48,7 +48,7 @@ export default async function handler(req, res) {
       const jsonStr = JSON.stringify(body);
       await put('myhealth-sync-' + Date.now() + '.json', jsonStr, {
         contentType: 'application/json',
-        access: 'private',
+        access: 'public',
         addRandomSuffix: true
       });
       return res.status(200).json({ ok: true });
