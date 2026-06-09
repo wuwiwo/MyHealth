@@ -20,12 +20,18 @@ export default async function handler(req, res) {
       if (blobs.length === 0) {
         return res.status(200).json({ version: 1, entries: [], plans: [] });
       }
+      // Prefer blob with most entries (has real data), fallback to latest
       blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-      const latest = await fetch(blobs[0].url, {
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      const data = await latest.json();
-      return res.status(200).json(data);
+      let best = null, bestCount = -1;
+      for (const b of blobs) {
+        try {
+          const r = await fetch(b.url, { headers: { Authorization: 'Bearer ' + token } });
+          const d = await r.json();
+          const cnt = (d.entries?.length || 0) + (d.plans?.length || 0);
+          if (cnt > bestCount) { best = d; bestCount = cnt; }
+        } catch(e) {}
+      }
+      if (best) return res.status(200).json(best);
     } catch (e) {
       return res.status(200).json({ version: 1, entries: [], plans: [] });
     }
