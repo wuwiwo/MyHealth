@@ -490,8 +490,8 @@ function renderGame(){
   var carDur=carE.reduce(function(s,e){return s+e.duration},0)
   var baseAtk=10+Math.floor(strVol/20),baseDef=10+Math.floor(carDur/6)
   var baseHp=100+Math.floor(strVol/10)+Math.floor(carDur/3)
-  var atkInfo='攻击 = 10 + floor('+strVol+'/20) = '+baseAtk+(stats.wkBonus>0?' + 周奖励 +'+stats.wkBonus:'')+' = '+stats.atk
-  var defInfo='防御 = 10 + floor('+carDur+'/6) = '+baseDef+(stats.wkBonus>0?' + 周奖励 +'+Math.floor(stats.wkBonus/2):'')+' = '+stats.def
+  var atkInfo='攻击 = 10 + floor('+strVol+'/20) = '+baseAtk+(stats.wkBonus>0?' + 周奖励 +'+stats.wkBonus:'')+(stats.atkPenalty>0?' - 缺勤('+stats.missedDays+'天×3) -'+stats.atkPenalty:'')+' = '+stats.atk
+  var defInfo='防御 = 10 + floor('+carDur+'/6) = '+baseDef+(stats.wkBonus>0?' + 周奖励 +'+Math.floor(stats.wkBonus/2):'')+(stats.defPenalty>0?' - 缺勤('+stats.missedDays+'天×2) -'+stats.defPenalty:'')+' = '+stats.def
   var hpInfo='生命 = 100 + floor('+strVol+'/10) + floor('+carDur+'/3) = '+baseHp+(stats.wkBonus>0?' + 周奖励 ×3 +'+stats.wkBonus*3:'')+' = '+stats.hp
 
   document.getElementById('gameStatsBar').innerHTML=
@@ -499,12 +499,33 @@ function renderGame(){
     '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">🛡️ 防御</div></div>'+
     '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">❤️ 生命</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+_game.cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
-    '<div class="gs-item" style="min-width:80px"><div class="gs-v orange">'+stats.wkDays+'<span style="font-size:.6rem">/7</span>'+(stats.wkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.wkBonus+'</span>':'')+'</div><div class="gs-l">📅 本周训练</div></div>'+
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v '+(stats.missedDays>0?'red':'orange')+'">'+stats.wkDays+'<span style="font-size:.6rem">/7</span>'+(stats.wkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.wkBonus+'</span>':'')+(stats.missedDays>0?' <span style="font-size:.6rem;color:var(--red)">-'+stats.atkPenalty+'</span>':'')+'</div><div class="gs-l">📅 本周训练</div></div>'+
     '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
-    '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="attrInfoBtn" title="属性计算方式">📖</button></div>'
+    '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="attrInfoBtn" title="属性计算方式">📖</button></div>'+
+    '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="resetGameBtn" title="重置挑战进度" style="font-size:.75rem">↺</button></div>'
 
   // Store calc info for the detail modal
-  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur}
+  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,penalty:stats.atkPenalty,missed:stats.missedDays}
+
+  // Dismissible weekly penalty warning
+  var warnKey='warn_'+toDate(new Date())+'_miss'
+  var warnDismissed=localStorage.getItem(warnKey)
+  if(stats.missedDays>0&&!warnDismissed){
+    var gameContent=document.getElementById('gameContent')
+    if(gameContent&&!document.getElementById('penaltyBanner')){
+      var banner=document.createElement('div');banner.id='penaltyBanner'
+      banner.style='background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:.8rem'
+      banner.innerHTML='<span style="font-size:1.2rem">⚠️</span><span style="flex:1;color:var(--red)">本周缺练 '+stats.missedDays+' 天，攻击 -'+stats.atkPenalty+'，防御 -'+stats.defPenalty+'。本周练满 3 天恢复。</span><button class="speed-btn" id="dismissPenalty" style="border-color:var(--red);color:var(--red);padding:4px 12px">知道了</button>'
+      gameContent.parentNode.insertBefore(banner,gameContent)
+      setTimeout(function(){
+        var btn=document.getElementById('dismissPenalty')
+        if(btn)btn.addEventListener('click',function(){localStorage.setItem(warnKey,'1');banner.remove()})
+      },100)
+    }
+  }else{
+    var existing=document.getElementById('penaltyBanner')
+    if(existing)existing.remove()
+  }
 
   const gc=document.getElementById('gameContent')
   let h=''
@@ -567,13 +588,17 @@ function getGameStats(){
   const carDur=carE.reduce((s,e)=>s+e.duration,0)
   // Weekly bonus: 4days→+2, 7days→+5 (scaled 10x: +20/+50)
   const wk=getWeekDays();const wkBonus=wk>=7?50:wk>=4?20:0
-  const baseAtk=10+Math.floor(strVol/20)
-  const baseDef=10+Math.floor(carDur/6)
+  // Weekly penalty: each missed day under 3 = -3 atk, -2 def
+  var missedDays=Math.max(0,3-wk)
+  var atkPenalty=missedDays*3
+  var defPenalty=missedDays*2
+  var baseAtk=10+Math.floor(strVol/20)
+  var baseDef=10+Math.floor(carDur/6)
   return{
-    atk:baseAtk+Math.floor(wkBonus/2),
-    def:baseDef+Math.floor(wkBonus/2),
+    atk:Math.max(1,baseAtk+Math.floor(wkBonus/2)-atkPenalty),
+    def:Math.max(1,baseDef+Math.floor(wkBonus/2)-defPenalty),
     hp:100+Math.floor(strVol/10)+Math.floor(carDur/3)+wkBonus*3,
-    wkDays:wk,wkBonus:wkBonus,
+    wkDays:wk,wkBonus:wkBonus,missedDays:missedDays,atkPenalty:atkPenalty,defPenalty:defPenalty,
     monthDays:getMonthDays()
   }
 }
@@ -870,6 +895,13 @@ document.addEventListener('click',function(e){
     return}
 
   // New plan button
+  if(id==='resetGameBtn'){
+    if(confirm('确定重置所有挑战进度？此操作不可撤销')){
+      _game.cleared=[];_game.current='1-1';_game.attempts={};saveGame();renderGame()
+      toast('挑战进度已重置','s')
+    }
+    return}
+
   if(id==='attrInfoBtn'){
     var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据'}
     var modal=document.createElement('div');modal.className='modal-overlay open'
@@ -882,8 +914,8 @@ document.addEventListener('click',function(e){
       +'📊 近30天力量容量: '+info.vol+' kg<br>'
       +'🏃 近30天有氧时长: '+info.dur+' 分钟<br>'
       +'📅 每周4天→+20攻防, 7天→+50攻防<br>'
-      +'💡 每200kg容量=+1攻击, 每60分钟=+1防御'
-      +'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
+      +'💡 每200kg容量=+1攻击, 每60分钟=+1防御<br>'
+      +(info.penalty>0?'⚠️ 本周训练不足3天, 属性降低 '+info.penalty+'%<br>':'✅ 每周训练3天以上属性正常<br>')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
     document.body.appendChild(modal)
     document.getElementById('attrClose').addEventListener('click',function(){modal.remove()})
     modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
