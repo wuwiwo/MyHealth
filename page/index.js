@@ -139,7 +139,8 @@ x.onload=function(){if(x.status===200&&x.responseText){try{
 setSync('error');if(cb)cb(false)}
 x.onerror=function(){setSync('');if(cb)cb(false)};x.send()}
 function scheduleSync(){if(_syncT)clearTimeout(_syncT);_syncT=setTimeout(pushSync,800)}
-setInterval(function(){if(!document.getElementById('workoutOverlay')?.classList.contains('open'))pullSync()},30000)
+// Vercel: pull every 2 min instead of 30s (serverless cold start cost)
+setInterval(function(){if(!document.getElementById('workoutOverlay')?.classList.contains('open'))pullSync()},120000)
 
 /* ========== TOAST ========== */
 let _tt=null;function toast(m,t){const c=document.getElementById('toastC')
@@ -813,8 +814,8 @@ function init(){
 
   renderStr();renderCar();renderProf();renderGame()
 
-  // Pull sync on load
-  setTimeout(pullSync,1500)
+  // Pull sync on load (longer delay on Vercel for cold start)
+  setTimeout(pullSync,3000)
 }
 
 /* ========== EVENT DELEGATION ========== */
