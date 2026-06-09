@@ -118,15 +118,21 @@ function pullSync(cb){setSync('syncing')
 var x=new XMLHttpRequest();x.open('GET','/api/data',true)
 x.onload=function(){if(x.status===200&&x.responseText){try{
   const d=JSON.parse(x.responseText)
-  if(d&&(d.version>=2||(d.entries||d.cardio||d.weight))){
-    // Support both v1 (old sync, entries at root) and v2+ (full data object)
-    if(d.entries)_str.entries=d.entries
-    if(d.plans||d.plans?.plans)_plans.plans=d.plans?.plans||d.plans
-    if(d.missed||d.missed?.notes)_missed.notes=d.missed?.notes||d.missed
-    if(d.cardio||d.cardio?.entries)_car.entries=d.cardio?.entries||d.cardio
-    if(d.weight||d.weight?.records)_wt.records=d.weight?.records||d.weight
-    if(d.profile)_prof=d.profile
-    if(d.game)_game=d.game
+  // Only apply if server has meaningful data (not empty arrays/objects)
+  function hasItems(v){return Array.isArray(v)?v.length>0:false}
+  function hasKeys(v){return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length>0}
+  if(d&&(d.version>=2||hasItems(d.entries)||hasItems(d.cardio)||hasItems(d.weight))){
+    if(hasItems(d.entries))_str.entries=d.entries
+    if(hasItems(d.plans))_plans.plans=d.plans
+    else if(d.plans?.plans&&hasItems(d.plans.plans))_plans.plans=d.plans.plans
+    if(hasKeys(d.missed))_missed.notes=d.missed
+    else if(d.missed?.notes&&hasKeys(d.missed.notes))_missed.notes=d.missed.notes
+    if(hasItems(d.cardio))_car.entries=d.cardio
+    else if(d.cardio?.entries&&hasItems(d.cardio.entries))_car.entries=d.cardio.entries
+    if(hasItems(d.weight))_wt.records=d.weight
+    else if(d.weight?.records&&hasItems(d.weight.records))_wt.records=d.weight.records
+    if(d.profile&&hasKeys(d.profile))_prof=d.profile
+    if(d.game&&typeof d.game==='object')_game=d.game
     saveStr();savePlans();saveMissed();saveCar();saveWt();saveProf();saveGame()
     // Re-render active tab
     var activeTab=document.querySelector('.tab-btn.active')?.dataset.tab
