@@ -1,21 +1,30 @@
-// Vercel Serverless Function — Data Sync via Vercel Blob REST API
+// Vercel Serverless — Data Sync via Blob (list + latest)
+const PREFIX = 'myhealth-sync-';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const token = process.env.BLOB_READ_WRITE_TOKEN;
-  const fileUrl = 'https://blob.vercel-storage.com/myhealth-sync.json';
+  const base = 'https://blob.vercel-storage.com';
 
   if (req.method === 'GET') {
     try {
-      const r = await fetch(fileUrl, {
-        headers: { Authorization: `Bearer ${token}` }
+      const list = await fetch(base + '/?prefix=' + PREFIX, {
+        headers: { Authorization: 'Bearer ' + token }
       });
-      if (!r.ok) throw new Error('not found');
-      const data = await r.json();
+      const listData = await list.json();
+      const blobs = listData.blobs || [];
+      if (blobs.length === 0) {
+        return res.status(200).json({ version: 1, entries: [], plans: [] });
+      }
+      blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+      const latest = await fetch(blobs[0].url, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await latest.json();
       return res.status(200).json(data);
     } catch (e) {
       return res.status(200).json({ version: 1, entries: [], plans: [] });
@@ -25,14 +34,17 @@ export default async function handler(req, res) {
   if (req.method === 'PUT') {
     try {
       const body = JSON.stringify(req.body);
-      await fetch(fileUrl, {
-        method: 'PUT',
+      await fetch(base + '/upload', {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'x-vercel-blob-access': 'private'
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json'
         },
-        body
+        body: JSON.stringify({
+          pathname: PREFIX + 'data.json',
+          data: body,
+          contentType: 'application/json'
+        })
       });
       return res.status(200).json({ ok: true });
     } catch (e) {
