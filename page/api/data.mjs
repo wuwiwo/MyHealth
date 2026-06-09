@@ -1,5 +1,18 @@
 import { put, list } from '@vercel/blob';
 
+// Helper: parse JSON body from Vercel Node.js request (req.body is undefined by default)
+function parseBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', chunk => data += chunk);
+    req.on('end', () => {
+      try { resolve(JSON.parse(data || '{}')); }
+      catch(e) { resolve({}); }
+    });
+    req.on('error', reject);
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
@@ -31,11 +44,12 @@ export default async function handler(req, res) {
 
   if (req.method === 'PUT') {
     try {
-      const jsonStr = JSON.stringify(req.body);
+      const body = await parseBody(req);
+      const jsonStr = JSON.stringify(body);
       await put('myhealth-sync-' + Date.now() + '.json', jsonStr, {
         contentType: 'application/json',
         access: 'private',
-        addRandomSuffix: false
+        addRandomSuffix: true
       });
       return res.status(200).json({ ok: true });
     } catch (e) {
