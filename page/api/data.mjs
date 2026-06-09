@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       console.log('PUT: body length', jsonStr.length);
       await put('myhealth-sync-' + Date.now() + '.json', jsonStr, {
         contentType: 'application/json',
-        access: 'private',
+        access: 'public',
         addRandomSuffix: true,
         token: process.env.BLOB_READ_WRITE_TOKEN
       });
