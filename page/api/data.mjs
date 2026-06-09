@@ -39,18 +39,35 @@ export default async function handler(req, res) {
 
   if (req.method === 'PUT') {
     try {
-      const jsonStr = JSON.stringify(req.body);
-      const fd = new FormData();
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      fd.append('file', blob, PREFIX + 'data.json');
-      const upRes = await fetch(base + '/upload', {
+      // Step 1: Get signed upload URL
+      const bodyData = JSON.stringify(req.body);
+      const urlRes = await fetch(base + '/upload', {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + token },
-        body: fd
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          pathname: PREFIX + 'data.json',
+          contentType: 'application/json'
+        })
       });
-      const upData = await upRes.json();
-      if (!upRes.ok) {
-        return res.status(500).json({ ok: false, error: JSON.stringify(upData) });
+      if (!urlRes.ok) {
+        const errText = await urlRes.text();
+        return res.status(500).json({ ok: false, error: 'signed url failed: ' + errText });
+      }
+      const urlData = await urlRes.json();
+      if (!urlData.url) {
+        return res.status(500).json({ ok: false, error: 'no url returned' });
+      }
+      // Step 2: PUT data to signed URL
+      const putRes = await fetch(urlData.url, {
+        method: 'PUT',
+        body: bodyData
+      });
+      if (!putRes.ok) {
+        const errText = await putRes.text();
+        return res.status(500).json({ ok: false, error: 'put failed: ' + errText });
       }
       return res.status(200).json({ ok: true });
     } catch (e) {
