@@ -1,54 +1,55 @@
-// Vercel Serverless Function — Data Sync API
-// Uses Vercel KV (Redis) for persistent storage
+import { put, get, del } from '@vercel/blob';
 
-const KV_REST_API_URL = process.env.KV_REST_API_URL;
-const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN;
-const KV_KEY = 'myhealth_sync_data';
+export const config = { runtime: 'edge' };
 
-export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+const BLOB_NAME = 'myhealth-sync-data.json';
+
+export default async function handler(req) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return new Response(null, { status: 200, headers });
   }
 
   if (req.method === 'GET') {
     try {
-      if (!KV_REST_API_URL || !KV_REST_API_TOKEN) {
-        return res.status(200).json({ version: 1, entries: [], plans: [] });
+      const blob = await get(BLOB_NAME);
+      if (!blob) {
+        return new Response(JSON.stringify({ version: 1, entries: [], plans: [] }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' }
+        });
       }
-      const response = await fetch(`${KV_REST_API_URL}/get/${KV_KEY}`, {
-        headers: { Authorization: `Bearer ${KV_REST_API_TOKEN}` }
+      const text = await blob.text();
+      return new Response(text, {
+        status: 200, headers: { ...headers, 'Content-Type': 'application/json' }
       });
-      const data = await response.json();
-      const result = data.result ? JSON.parse(data.result) : { version: 1, entries: [], plans: [] };
-      return res.status(200).json(result);
     } catch (e) {
-      return res.status(200).json({ version: 1, entries: [], plans: [] });
+      return new Response(JSON.stringify({ version: 1, entries: [], plans: [] }), {
+        status: 200, headers: { ...headers, 'Content-Type': 'application/json' }
+      });
     }
   }
 
   if (req.method === 'PUT') {
     try {
-      const body = JSON.stringify(req.body);
-      if (KV_REST_API_URL && KV_REST_API_TOKEN) {
-        await fetch(`${KV_REST_API_URL}/set/${KV_KEY}`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${KV_REST_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body)
-        });
-      }
-      return res.status(200).json({ ok: true });
+      const body = await req.json();
+      await put(BLOB_NAME, JSON.stringify(body), {
+        contentType: 'application/json',
+        access: 'private',
+      });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200, headers: { ...headers, 'Content-Type': 'application/json' }
+      });
     } catch (e) {
-      return res.status(500).json({ ok: false, error: e.message });
+      return new Response(JSON.stringify({ ok: false, error: e.message }), {
+        status: 500, headers: { ...headers, 'Content-Type': 'application/json' }
+      });
     }
   }
 
-  return res.status(404).end();
+  return new Response(null, { status: 404, headers });
 }
