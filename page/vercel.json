@@ -1,6 +1,7 @@
 {
   "installCommand": "npm install",
   "buildCommand": "echo ok",
+  "outputDirectory": ".",
   "framework": null,
   "cleanUrls": true
 }
