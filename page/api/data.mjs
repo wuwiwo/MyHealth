@@ -39,19 +39,19 @@ export default async function handler(req, res) {
 
   if (req.method === 'PUT') {
     try {
-      const body = JSON.stringify(req.body);
-      await fetch(base + '/upload', {
+      const jsonStr = JSON.stringify(req.body);
+      const fd = new FormData();
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      fd.append('file', blob, PREFIX + 'data.json');
+      const upRes = await fetch(base + '/upload', {
         method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + token,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          pathname: PREFIX + 'data.json',
-          data: body,
-          contentType: 'application/json'
-        })
+        headers: { Authorization: 'Bearer ' + token },
+        body: fd
       });
+      const upData = await upRes.json();
+      if (!upRes.ok) {
+        return res.status(500).json({ ok: false, error: JSON.stringify(upData) });
+      }
       return res.status(200).json({ ok: true });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message });
