@@ -28,6 +28,9 @@ export default async function handler(req, res) {
 
   if (req.method === 'PUT') {
     try {
+      if (!token) {
+        return res.status(200).json({ ok: false, error: 'BLOB_READ_WRITE_TOKEN not set' });
+      }
       const jsonStr = JSON.stringify(req.body);
       const r = await fetch(fileUrl, {
         method: 'PUT',
@@ -39,11 +42,11 @@ export default async function handler(req, res) {
       });
       if (!r.ok) {
         const err = await r.text();
-        return res.status(500).json({ ok: false, error: err });
+        return res.status(200).json({ ok: false, error: 'blob put failed: ' + (err || r.status) });
       }
       return res.status(200).json({ ok: true });
     } catch (e) {
-      return res.status(500).json({ ok: false, error: e.message });
+      return res.status(200).json({ ok: false, error: 'exception: ' + e.message });
     }
   }
 
