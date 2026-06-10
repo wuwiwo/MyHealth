@@ -328,6 +328,42 @@ function renderStrPlans(){
   c.innerHTML+='<button class="add-btn" id="strNewPlan" style="margin-top:8px">＋ 新建计划</button>'
 }
 
+/* Plan Editor */
+var _peEditing=null,_peEditId=null,_peTempEx=null,_peTempIdx=null
+
+function openPlanEditor(editId){
+  _peEditId=editId
+  var plan=editId?_plans.plans.find(function(p){return p.id===editId}):null
+  _peEditing=plan?JSON.parse(JSON.stringify(plan)):{exercises:[]}
+  var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='peModal'
+  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(editId?'✏️ 编辑计划':'📋 新建计划')+'</div><div class="fg"><label class="fl">计划名称</label><input class="fi" id="peName" value="'+(plan?plan.name:'')+'" placeholder="计划名称"></div><div class="fg"><label class="fl">动作列表</label><div id="peExList"></div><button class="add-btn" id="peAddEx" style="margin-top:4px;padding:10px">＋ 添加动作</button></div><div class="modal-actions"><button class="m-btn-cancel" id="peCancel">取消</button><button class="m-btn-save" id="peSave">保存</button></div></div>'
+  document.body.appendChild(modal)
+  renderPeList()
+}
+
+function renderPeList(){
+  var el=document.getElementById('peExList');if(!el)return
+  if(!_peEditing.exercises.length){
+    el.innerHTML='<div style="font-size:.78rem;color:var(--text3);padding:12px 0;text-align:center">还没有动作，点击下方添加</div>'
+    return
+  }
+  el.innerHTML=_peEditing.exercises.map(function(ex,i){
+    return '<div class="ec" style="padding:10px;margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+(i+1)+'. '+ex.exercise+'</div><div class="ec-actions"><button class="ec-act" data-a="peExEdit" data-idx="'+i+'">✏️</button><button class="ec-act" data-a="peExDel" data-idx="'+i+'">🗑️</button></div></div><div style="font-size:.72rem;color:var(--text2);margin-top:4px">'+ex.weight+' kg × '+ex.targetReps+' 次 · 休息 '+ex.restSeconds+'s</div></div>'
+  }).join('')
+}
+
+function showPeExForm(idx){
+  _peTempIdx=idx
+  var ex=idx!==null?_peEditing.exercises[idx]:{exercise:'',weight:7,targetReps:12,restSeconds:60}
+  var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='peExModal'
+  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(idx!==null?'编辑动作':'添加动作')+'</div><div class="fg"><label class="fl">动作名称</label><input class="fi" id="peExName" value="'+ex.exercise+'" placeholder="如: 弯举"></div>'
+    +'<div class="fg"><label class="fl">重量 (kg)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExWDown">−</button><span class="sp-val" id="peExWeight">'+ex.weight+'</span><button class="sp-btn" id="peExWUp">+</button></div></div>'
+    +'<div class="fg"><label class="fl">目标次数</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExRDown">−</button><span class="sp-val" id="peExReps">'+ex.targetReps+'</span><button class="sp-btn" id="peExRUp">+</button></div></div>'
+    +'<div class="fg"><label class="fl">休息 (秒)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExSDown">−</button><span class="sp-val" id="peExRest">'+ex.restSeconds+'</span><button class="sp-btn" id="peExSUp">+</button></div></div>'
+    +'<div class="modal-actions"><button class="m-btn-cancel" id="peExCancel">取消</button><button class="m-btn-save" id="peExConfirm">✅ 确定</button></div></div>'
+  document.body.appendChild(modal)
+}
+
 function startStrPlan(pid){
   const plan=_plans.plans.find(p=>p.id===pid);if(!plan||!plan.exercises.length)return
   _woPlan=plan;_woIdx=0;_woDone=[]
@@ -934,6 +970,7 @@ document.addEventListener('click',function(e){
   if(act==='delPlan'){
     if(confirm('确定删除这个计划？')){_plans.plans=_plans.plans.filter(p=>p.id!==el.dataset.pid);savePlans();renderStr()}
     return}
+  if(act==='peExEdit'){_peTempIdx=parseInt(el.dataset.idx);showPeExForm(_peTempIdx);return}
 
   // New plan button
   if(id==='resetGameBtn'){
@@ -965,13 +1002,45 @@ document.addEventListener('click',function(e){
   if(id==='exportDataBtn'){exportData();return}
   if(id==='importDataBtn'){importData();return}
 
-  if(id==='strNewPlan'){
-    var name=prompt('计划名称:','我的训练计划')
-    if(!name)return
-    var p={id:uid(),name:name,exercises:[],createdAt:Date.now()}
-    _plans.plans.push(p);savePlans();renderStr()
-    toast('计划已创建，接下来的版本将支持添加动作','s')
+  if(id==='strNewPlan'){openPlanEditor(null);return}
+
+  // Plan editor event delegation
+  if(id==='peSave'){
+    var pName=document.getElementById('peName').value.trim()
+    if(!pName){toast('请输入计划名称','e');return}
+    if(!_peEditing||_peEditing.exercises.length===0){toast('请至少添加一个动作','e');return}
+    if(_peEditId){
+      var existing=_plans.plans.find(function(x){return x.id===_peEditId})
+      if(existing){existing.name=pName;existing.exercises=_peEditing.exercises;savePlans();renderStr();toast('计划已更新','s')}
+    }else{
+      _plans.plans.push({id:uid(),name:pName,exercises:_peEditing.exercises,createdAt:Date.now()});savePlans();renderStr();toast('新计划已创建','s')
+    }
+    document.getElementById('peModal')?.remove();return}
+  if(id==='peCancel'||id==='peClose'){document.getElementById('peModal')?.remove();return}
+  if(id==='peAddEx'){
+    _peTempEx={exercise:'',weight:7,targetReps:12,restSeconds:60}
+    showPeExForm(null);return}
+  if(id==='peExConfirm'){
+    var exName=document.getElementById('peExName').value.trim()
+    if(!exName){toast('请输入动作名称','e');return}
+    var exWeight=parseFloat(document.getElementById('peExWeight').textContent)
+    var exReps=parseInt(document.getElementById('peExReps').textContent)
+    var exRest=parseInt(document.getElementById('peExRest').textContent)
+    if(_peTempIdx!==null){_peEditing.exercises[_peTempIdx]={exercise:exName,weight:exWeight,targetReps:exReps,restSeconds:exRest}}
+    else{_peEditing.exercises.push({exercise:exName,weight:exWeight,targetReps:exReps,restSeconds:exRest})}
+    document.getElementById('peExModal')?.remove();renderPeList()
     return}
+  if(id==='peExCancel'){document.getElementById('peExModal')?.remove();return}
+  // Stepper in plan editor
+  if(id==='peExWDown'){var v=parseFloat(document.getElementById('peExWeight').textContent);document.getElementById('peExWeight').textContent=Math.max(1,v-1);return}
+  if(id==='peExWUp'){var v=parseFloat(document.getElementById('peExWeight').textContent);document.getElementById('peExWeight').textContent=Math.min(50,v+1);return}
+  if(id==='peExRDown'){var v=parseInt(document.getElementById('peExReps').textContent);document.getElementById('peExReps').textContent=Math.max(1,v-1);return}
+  if(id==='peExRUp'){var v=parseInt(document.getElementById('peExReps').textContent);document.getElementById('peExReps').textContent=Math.min(999,v+1);return}
+  if(id==='peExSDown'){var v=parseInt(document.getElementById('peExRest').textContent);document.getElementById('peExRest').textContent=Math.max(0,v-15);return}
+  if(id==='peExSUp'){var v=parseInt(document.getElementById('peExRest').textContent);document.getElementById('peExRest').textContent=Math.min(300,v+15);return}
+  // Delete exercise from plan
+  if(act==='peExDel'){
+    _peEditing.exercises.splice(parseInt(el.dataset.idx),1);renderPeList();return}
 
   // Dynamic actions
   if(act==='strEdit'){
