@@ -567,32 +567,42 @@ function renderGame(){
   var carDur=carE.reduce(function(s,e){return s+e.duration},0)
   var baseAtk=10+Math.floor(strVol/20),baseDef=10+Math.floor(carDur/6)
   var baseHp=100+Math.floor(strVol/10)+Math.floor(carDur/3)
-  var atkInfo='攻击 = 10 + floor('+strVol+'/20) = '+baseAtk+(stats.wkBonus>0?' + 周奖励 +'+stats.wkBonus:'')+(stats.atkPenalty>0?' - 缺勤('+stats.missedDays+'天×3) -'+stats.atkPenalty:'')+' = '+stats.atk
-  var defInfo='防御 = 10 + floor('+carDur+'/6) = '+baseDef+(stats.wkBonus>0?' + 周奖励 +'+Math.floor(stats.wkBonus/2):'')+(stats.defPenalty>0?' - 缺勤('+stats.missedDays+'天×2) -'+stats.defPenalty:'')+' = '+stats.def
+  var atkInfo='攻击 = 10 + floor('+strVol+'/20) = '+baseAtk+(stats.wkBonus>0?' + 周奖励 +'+stats.wkBonus:'')+(stats.permPenAtk>0?' - 永久惩罚 -'+stats.permPenAtk:'')+' = '+stats.atk
+  var defInfo='防御 = 10 + floor('+carDur+'/6) = '+baseDef+(stats.wkBonus>0?' + 周奖励 +'+Math.floor(stats.wkBonus/2):'')+(stats.permPenDef>0?' - 永久惩罚 -'+stats.permPenDef:'')+' = '+stats.def
   var hpInfo='生命 = 100 + floor('+strVol+'/10) + floor('+carDur+'/3) = '+baseHp+(stats.wkBonus>0?' + 周奖励 ×3 +'+stats.wkBonus*3:'')+' = '+stats.hp
+
+  // Weekly status: encouragement or warning
+  var wkStatus='',wkColor='orange'
+  if(stats.wkDays===0&&(new Date().getDay()>=5)){wkStatus='⚠️ 还没练，抓紧！';wkColor='red'}
+  else if(stats.wkDays===0){wkStatus='😴 本周还没动，开始吧';wkColor='orange'}
+  else if(stats.wkDays===1){wkStatus='💪 练了1天，继续！';wkColor='orange'}
+  else if(stats.wkDays===2){wkStatus='🔥 还差1天免惩罚！';wkColor='yellow'}
+  else if(stats.wkDays>=3&&stats.wkDays<5){wkStatus='✅ 已达标，本周安全';wkColor='green'}
+  else if(stats.wkDays>=5){wkStatus='🎉 太强了！本周满勤在望';wkColor='green'}
 
   document.getElementById('gameStatsBar').innerHTML=
     '<div class="gs-item"><div class="gs-v orange">'+stats.atk+'</div><div class="gs-l">⚔️ 攻击</div></div>'+
     '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">🛡️ 防御</div></div>'+
     '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">❤️ 生命</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+_game.cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
-    '<div class="gs-item" style="min-width:80px"><div class="gs-v '+(stats.missedDays>0?'red':'orange')+'">'+stats.wkDays+'<span style="font-size:.6rem">/7</span>'+(stats.wkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.wkBonus+'</span>':'')+(stats.missedDays>0?' <span style="font-size:.6rem;color:var(--red)">-'+stats.atkPenalty+'</span>':'')+'</div><div class="gs-l">📅 本周训练</div></div>'+
+    '<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.wkDays+'<span style="font-size:.6rem">/7</span>'+(stats.wkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.wkBonus+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:.6rem;color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:.6rem">'+wkStatus+'</div></div>'+
     '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
     '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="attrInfoBtn" title="属性计算方式">📖</button></div>'+
     '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="resetGameBtn" title="重置挑战进度" style="font-size:.75rem">↺</button></div>'
 
   // Store calc info for the detail modal
-  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,penalty:stats.atkPenalty,missed:stats.missedDays}
+  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,lastWkDays:stats.lastWkDays,thisWk:stats.wkDays}
 
   // Dismissible weekly penalty warning
   var warnKey='warn_'+toDate(new Date())+'_miss'
   var warnDismissed=localStorage.getItem(warnKey)
-  if(stats.missedDays>0&&!warnDismissed){
+  if(stats.lastWkDays<3&&stats.lastWkDays>=0&&!warnDismissed){
     var gameContent=document.getElementById('gameContent')
     if(gameContent&&!document.getElementById('penaltyBanner')){
       var banner=document.createElement('div');banner.id='penaltyBanner'
       banner.style='background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:.8rem'
-      banner.innerHTML='<span style="font-size:1.2rem">⚠️</span><span style="flex:1;color:var(--red)">本周缺练 '+stats.missedDays+' 天，攻击 -'+stats.atkPenalty+'，防御 -'+stats.defPenalty+'。本周练满 3 天恢复。</span><button class="speed-btn" id="dismissPenalty" style="border-color:var(--red);color:var(--red);padding:4px 12px">知道了</button>'
+      var missDays=3-stats.lastWkDays
+      banner.innerHTML='<span style="font-size:1.2rem">⚠️</span><span style="flex:1;color:var(--red)">上周只练了 '+stats.lastWkDays+' 天，永久扣除攻击 -'+(missDays*2)+'，防御 -'+(missDays*1)+'。本周练满 3 天可避免下周惩罚。</span><button class="speed-btn" id="dismissPenalty" style="border-color:var(--red);color:var(--red);padding:4px 12px">知道了</button>'
       gameContent.parentNode.insertBefore(banner,gameContent)
       setTimeout(function(){
         var btn=document.getElementById('dismissPenalty')
@@ -657,25 +667,47 @@ function getMonthDays(){
   return days.size
 }
 
+function getLastWeekDays(){
+  var now=new Date();var dow=now.getDay()
+  var lastMon=new Date(now);lastMon.setDate(now.getDate()-dow-6)
+  var lastSun=new Date(now);lastSun.setDate(now.getDate()-dow)
+  var days=new Set()
+  ;(_str.entries||[]).filter(function(e){return e.date>=toDate(lastMon)&&e.date<=toDate(lastSun)}).forEach(function(e){days.add(e.date)})
+  ;(_car.entries||[]).filter(function(e){return e.date>=toDate(lastMon)&&e.date<=toDate(lastSun)}).forEach(function(e){days.add(e.date)})
+  return days.size
+}
+
 function getGameStats(){
-  const thirty=toDate(new Date(Date.now()-30*86400000))
-  const strE=(_str.entries||[]).filter(e=>e.date>=thirty)
-  const carE=(_car.entries||[]).filter(e=>e.date>=thirty)
-  const strVol=strE.reduce((s,e)=>s+e.weight*e.actualReps,0)
-  const carDur=carE.reduce((s,e)=>s+e.duration,0)
-  // Weekly bonus: 4days→+2, 7days→+5 (scaled 10x: +20/+50)
-  const wk=getWeekDays();const wkBonus=wk>=7?50:wk>=4?20:0
-  // Weekly penalty: each missed day under 3 = -3 atk, -2 def
-  var missedDays=Math.max(0,3-wk)
-  var atkPenalty=missedDays*3
-  var defPenalty=missedDays*2
+  var thirty=toDate(new Date(Date.now()-30*86400000))
+  var strE=(_str.entries||[]).filter(function(e){return e.date>=thirty})
+  var carE=(_car.entries||[]).filter(function(e){return e.date>=thirty})
+  var strVol=strE.reduce(function(s,e){return s+e.weight*e.actualReps},0)
+  var carDur=carE.reduce(function(s,e){return s+e.duration},0)
+  var wk=getWeekDays();var wkBonus=wk>=7?50:wk>=4?20:0
+  // Last week penalty (permanent deduction, applied this week)
+  var lastWk=getLastWeekDays()
+  var lastMissed=Math.max(0,3-lastWk)
+  var newAtkPen=lastMissed*2,newDefPen=lastMissed*1
+  // Accumulate permanent penalty
+  if(!_game.permPen)_game.permPen={atk:0,def:0}
+  // Check if we already applied last week's penalty (store as week number)
+  var weekKey=toDate(new Date())+'_pen_applied'
+  if(lastMissed>0&&!_game.permPenLastWeek){
+    _game.permPen.atk+=newAtkPen;_game.permPen.def+=newDefPen
+    _game.permPenLastWeek=true;saveGame()
+  }
+  // Reset on Monday
+  if(new Date().getDay()===1&&_game.permPenLastWeek){
+    _game.permPenLastWeek=false;saveGame()
+  }
   var baseAtk=10+Math.floor(strVol/20)
   var baseDef=10+Math.floor(carDur/6)
   return{
-    atk:Math.max(1,baseAtk+Math.floor(wkBonus/2)-atkPenalty),
-    def:Math.max(1,baseDef+Math.floor(wkBonus/2)-defPenalty),
+    atk:Math.max(1,baseAtk+Math.floor(wkBonus/2)-(_game.permPen.atk||0)),
+    def:Math.max(1,baseDef+Math.floor(wkBonus/2)-(_game.permPen.def||0)),
     hp:100+Math.floor(strVol/10)+Math.floor(carDur/3)+wkBonus*3,
-    wkDays:wk,wkBonus:wkBonus,missedDays:missedDays,atkPenalty:atkPenalty,defPenalty:defPenalty,
+    wkDays:wk,wkBonus:wkBonus,lastWkDays:lastWk,
+    permPenAtk:_game.permPen.atk||0,permPenDef:_game.permPen.def||0,
     monthDays:getMonthDays()
   }
 }
