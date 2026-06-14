@@ -16,6 +16,7 @@ function renderProf(){
   renderWtList()
   renderChart()
   renderHeatmap()
+  renderPRs()
 }
 
 function renderWtList(){
@@ -36,6 +37,28 @@ function renderChart(){
     values:recs.map(function(r){return r.weight}),
     color:'#F97316',suffix:'kg'
   })
+}
+
+/* ========== PERSONAL RECORDS ========== */
+function renderPRs(){
+  var prs=store.get('prs')||{}
+  var keys=Object.keys(prs)
+  if(!keys.length)return
+  var h='<div class="section-hdr">🏆 个人最佳</div><div class="stats-grid">'
+  keys.forEach(function(ex){
+    var pr=prs[ex]
+    h+='<div class="sc"><div class="sc-v" style="font-size:1rem">'+ex+'</div><div class="sc-l" style="font-size:.65rem;line-height:1.5">'
+    if(pr.maxWeight)h+='🏋️ '+pr.maxWeight+'kg<br>'
+    if(pr.maxReps)h+='🔢 '+pr.maxReps+'次<br>'
+    if(pr.maxVolume)h+='📊 '+pr.maxVolume+'kg'
+    h+='</div></div>'
+  })
+  h+='</div>'
+  var existing=document.getElementById('prSection')
+  if(existing)existing.remove()
+  var div=document.createElement('div');div.id='prSection';div.innerHTML=h
+  var pc=document.getElementById('profileCard')
+  if(pc&&pc.parentNode)pc.parentNode.insertBefore(div,pc.nextSibling)
 }
 
 /* ========== HEATMAP ========== */

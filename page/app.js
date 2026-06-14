@@ -4,9 +4,19 @@
 
 /* ========== DATA LAYER (via store.js) ========== */
 function getStr(d){var s=store.get('strength')||{entries:[]};return(s.entries||[]).filter(function(e){return e.date===d}).sort(function(a,b){return(a.createdAt||0)-(b.createdAt||0)})}
-function addStr(e){var s=store.get('strength')||{entries:[]};e.id=uid();e.createdAt=Date.now();s.entries.push(e);store.set('strength',s)}
+function addStr(e){var s=store.get('strength')||{entries:[]};e.id=uid();e.createdAt=Date.now();s.entries.push(e);store.set('strength',s);checkPR(e)}
 function updateStr(id,data){var s=store.get('strength')||{entries:[]};var i=s.entries.findIndex(function(e){return e.id===id});if(i>-1){s.entries[i]=Object.assign({},s.entries[i],data);store.set('strength',s)}}
 function delStr(id){var s=store.get('strength')||{entries:[]};s.entries=s.entries.filter(function(e){return e.id!==id});store.set('strength',s)}
+function checkPR(e){
+  var prs=store.get('prs')||{}
+  var ex=prs[e.exercise]||{}
+  var broken=[]
+  var vol=e.weight*e.actualReps
+  if(!ex.maxWeight||e.weight>ex.maxWeight){ex.maxWeight=e.weight;ex.weightDate=e.date;broken.push('重量 '+e.weight+'kg')}
+  if(!ex.maxReps||e.actualReps>ex.maxReps){ex.maxReps=e.actualReps;ex.repsDate=e.date;broken.push('次数 '+e.actualReps+'次')}
+  if(!ex.maxVolume||vol>ex.maxVolume){ex.maxVolume=vol;ex.volDate=e.date;broken.push('容量 '+vol+'kg')}
+  if(broken.length){prs[e.exercise]=ex;store.set('prs',prs);toast('🏆 '+e.exercise+' 新PR: '+broken.join(', '),'s')}
+}
 
 function getPlans(){var p=store.get('plans');return p?p.plans||[]:[]}
 function savePlans(plans){store.set('plans',{plans:plans})}
