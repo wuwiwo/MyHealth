@@ -259,3 +259,70 @@ function openStrEdit(entry){
   })
   modal.addEventListener('click',e=>{if(e.target===e.currentTarget)modal.remove()})
 }
+
+/* ========== STRENGTH EVENT HANDLER ========== */
+function onStrengthEvent(el,id,act){
+  switch(id){
+    case 'strPrevDay':{var d=parseDate(_strDate);d.setDate(d.getDate()-1);_strDate=toDate(d);renderStr();return true}
+    case 'strNextDay':{var d=parseDate(_strDate);d.setDate(d.getDate()+1);_strDate=toDate(d);renderStr();return true}
+    case 'strGoToday':_strDate=today();renderStr();return true;
+    case 'strAddBtn':_strForm=!_strForm;el.textContent=_strForm?'✖ 收起':'＋ 新增一组'
+      document.getElementById('strAddCard').classList.toggle('open',_strForm);if(_strForm)document.getElementById('strExercise').focus();return true;
+    case 'strSubmit':{
+      var ex=document.getElementById('strExercise').value.trim()
+      if(!ex){toast('请输入动作名称','e');return true}
+      var tgt=parseInt(document.getElementById('strTgtVal').textContent,10)
+      var ac=parseInt(document.getElementById('strActVal').textContent,10)
+      addStr({date:_strDate,exercise:ex,weight:_strSelW,targetReps:tgt,actualReps:ac})
+      document.getElementById('strExercise').value='';document.getElementById('strTgtVal').textContent='12';document.getElementById('strActVal').textContent='12'
+      _strSelW=COMMON_W[4];document.querySelectorAll('#strWeight .wt-btn').forEach(function(b){b.classList.toggle('selected',parseInt(b.dataset.w)===_strSelW)})
+      document.getElementById('strAddCard').classList.remove('open');_strForm=false;document.getElementById('strAddBtn').textContent='＋ 新增一组'
+      toast('记录成功！','s')
+      var te=getStr(_strDate);if(te.length&&te.every(function(e){return e.actualReps>=e.targetReps}))setTimeout(celebrate,300)
+      renderStr();return true}
+    case 'strNewPlan':openPlanEditor(null);return true;
+    case 'exportDataBtn':exportData();return true;
+    case 'importDataBtn':importData();return true;
+    case 'peSave':{
+      var pName=document.getElementById('peName').value.trim()
+      if(!pName){toast('请输入计划名称','e');return true}
+      if(!_peEditing||_peEditing.exercises.length===0){toast('请至少添加一个动作','e');return true}
+      if(_peEditId){
+        var existing=getPlans().find(function(x){return x.id===_peEditId})
+        if(existing){existing.name=pName;existing.exercises=_peEditing.exercises;savePlans(getPlans());renderStr();toast('计划已更新','s')}
+      }else{
+        var pl=getPlans();pl.push({id:uid(),name:pName,exercises:_peEditing.exercises,createdAt:Date.now()});savePlans(pl);renderStr();toast('新计划已创建','s')
+      }
+      document.getElementById('peModal')?.remove();return true}
+    case 'peCancel':case 'peClose':document.getElementById('peModal')?.remove();return true;
+    case 'peAddEx':_peTempEx={exercise:'',weight:7,targetReps:12,restSeconds:60};showPeExForm(null);return true;
+    case 'peExConfirm':{
+      var exName=document.getElementById('peExName').value.trim()
+      if(!exName){toast('请输入动作名称','e');return true}
+      var exWeight=parseFloat(document.getElementById('peExWeight').textContent)
+      var exReps=parseInt(document.getElementById('peExReps').textContent)
+      var exRest=parseInt(document.getElementById('peExRest').textContent)
+      if(_peTempIdx!==null){_peEditing.exercises[_peTempIdx]={exercise:exName,weight:exWeight,targetReps:exReps,restSeconds:exRest}}
+      else{_peEditing.exercises.push({exercise:exName,weight:exWeight,targetReps:exReps,restSeconds:exRest})}
+      document.getElementById('peExModal')?.remove();renderPeList();return true}
+    case 'peExCancel':document.getElementById('peExModal')?.remove();return true;
+    case 'peExWDown':{var v=parseFloat(document.getElementById('peExWeight').textContent);document.getElementById('peExWeight').textContent=Math.max(1,v-1);return true}
+    case 'peExWUp':{var v=parseFloat(document.getElementById('peExWeight').textContent);document.getElementById('peExWeight').textContent=Math.min(50,v+1);return true}
+    case 'peExRDown':{var v=parseInt(document.getElementById('peExReps').textContent);document.getElementById('peExReps').textContent=Math.max(1,v-1);return true}
+    case 'peExRUp':{var v=parseInt(document.getElementById('peExReps').textContent);document.getElementById('peExReps').textContent=Math.min(999,v+1);return true}
+    case 'peExSDown':{var v=parseInt(document.getElementById('peExRest').textContent);document.getElementById('peExRest').textContent=Math.max(0,v-15);return true}
+    case 'peExSUp':{var v=parseInt(document.getElementById('peExRest').textContent);document.getElementById('peExRest').textContent=Math.min(300,v+15);return true}
+  }
+  if(act==='startPlan'){startStrPlan(el.dataset.pid);return true}
+  if(act==='delPlan'){
+    if(confirm('确定删除这个计划？')){savePlans(getPlans().filter(function(p){return p.id!==el.dataset.pid}));renderStr()}
+    return true}
+  if(act==='peExEdit'){_peTempIdx=parseInt(el.dataset.idx);showPeExForm(_peTempIdx);return true}
+  if(act==='peExDel'){_peEditing.exercises.splice(parseInt(el.dataset.idx),1);renderPeList();return true}
+  if(act==='strEdit'){
+    var entry=(store.get('strength')||{entries:[]}).entries.find(function(x){return x.id===el.dataset.id});if(!entry)return false
+    openStrEdit(entry);return true}
+  if(act==='strDel'){
+    if(confirm('确定删除这条记录？')){delStr(el.dataset.id);renderStr();toast('已删除','s')};return true}
+  return false
+}

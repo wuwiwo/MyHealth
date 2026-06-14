@@ -252,3 +252,38 @@ function showShareCard(){
   document.getElementById('shareOverlay').classList.add('open')
 }
 function hideShare(){document.getElementById('shareOverlay').classList.remove('open')}
+
+/* ========== GAME EVENT HANDLER ========== */
+function onGameEvent(el,id,act){
+  switch(id){
+    case 'battleClose':_battle.done=true;if(_battleTimer)clearTimeout(_battleTimer);_battleRunning=false
+      document.getElementById('battleOverlay').classList.remove('open');renderGame();return true;
+    case 'shareClose':hideShare();return true;
+    case 'shareSave':toast('长按或截图保存分享卡片 📸','s');return true;
+    case 'resetGameBtn':
+      if(confirm('确定重置所有挑战进度？此操作不可撤销')){
+        var g=getGame();g.cleared=[];g.current='1-1';g.attempts={};setGame(g);renderGame()
+        toast('挑战进度已重置','s')
+      }
+      return true;
+    case 'attrInfoBtn':{
+      var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据'}
+      var modal=document.createElement('div');modal.className='modal-overlay open'
+      modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
+        +'<div style="font-size:.8rem;line-height:1.7;color:var(--text2);padding:4px 0">'
+        +'<div style="color:var(--orange);font-weight:700;margin-bottom:4px">⚔️ '+info.atk+'</div>'
+        +'<div style="color:var(--blue);font-weight:700;margin-bottom:4px">🛡️ '+info.def+'</div>'
+        +'<div style="color:var(--green);font-weight:700;margin-bottom:4px">❤️ '+info.hp+'</div>'
+        +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:.7rem;color:var(--text3)">'
+        +'📊 近30天力量容量: '+info.vol+' kg<br>'
+        +'🏃 近30天有氧时长: '+info.dur+' 分钟<br>'
+        +'📅 每周4天→+20攻防, 7天→+50攻防<br>'
+        +'💡 每200kg容量=+1攻击, 每60分钟=+1防御<br>'
+        +(info.penalty>0?'⚠️ 本周训练不足3天, 属性降低 '+info.penalty+'%<br>':'✅ 每周训练3天以上属性正常<br>')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
+      document.body.appendChild(modal)
+      document.getElementById('attrClose').addEventListener('click',function(){modal.remove()})
+      modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
+      return true}
+  }
+  return false
+}
