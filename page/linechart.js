@@ -7,45 +7,79 @@ function hexToRgba(hex,alpha){
   return'rgba('+r+','+g+','+b+','+alpha+')';
 }
 
-/**
- * Render a line chart onto a canvas element.
- *
- * @param {HTMLCanvasElement} canvas
- * @param {object} opts
- * @param {string[]} opts.labels     Short labels for x-axis
- * @param {number[]} opts.values     Y-axis values
- * @param {string}   [opts.color]    Line color hex (default #F97316)
- * @param {string}   [opts.suffix]   Unit suffix on latest value (default '')
- * @param {string}   [opts.emptyMsg] Message when < 2 data points
- */
 function drawLineChart(canvas,opts){
   var labels=opts.labels||[],values=opts.values||[],color=opts.color||'#F97316',suffix=opts.suffix||'';
   if(values.length<2){
     var ctx=canvas.getContext('2d');canvas.width=280*2;canvas.height=180*2;canvas.style.width='280px';canvas.style.height='180px';ctx.scale(2,2);
-    ctx.fillStyle='var(--text3)';ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillStyle='#94a3b8';ctx.font='12px sans-serif';ctx.textAlign='center';
     ctx.fillText(opts.emptyMsg||'至少需要 2 条记录才能显示趋势',140,90);return;
   }
   var rect=canvas.parentElement.getBoundingClientRect();
-  canvas.width=rect.width*2;canvas.height=180*2;canvas.style.width=rect.width+'px';canvas.style.height='180px';
+  var W=Math.max(280,rect.width),H=190,pad=44;
+  canvas.width=W*2;canvas.height=H*2;canvas.style.width=W+'px';canvas.style.height=H+'px';
   var ctx=canvas.getContext('2d');ctx.scale(2,2);
-  var W=rect.width,H=180,pad=40;
+
   var min=Math.floor(Math.min.apply(null,values)-1),max=Math.ceil(Math.max.apply(null,values)+1);
-  var range=Math.max(1,max-min),xs=values.map(function(_,i){return pad+i*(W-pad*2)/(values.length-1)});
-  var yv=function(v){return H-20-(v-min)/range*(H-40)};
-  ctx.strokeStyle='rgba(100,116,139,.15)';ctx.lineWidth=.5;
-  for(var v=min;v<=max;v++){var y=yv(v);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke()}
-  ctx.fillStyle='var(--text3)';ctx.font='9px sans-serif';ctx.textAlign='center';
-  values.forEach(function(_,i){ctx.fillText(labels[i]||'',xs[i],H-5)});
-  ctx.textAlign='right';ctx.fillText(min,W-3,yv(min)+3);ctx.fillText(max,W-3,yv(max)+3);
-  ctx.beginPath();values.forEach(function(v,i){var x=xs[i],y=yv(v);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
-  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.stroke();
-  var grd=ctx.createLinearGradient(0,yv(min),0,yv(max));
-  grd.addColorStop(0,hexToRgba(color,.15));grd.addColorStop(1,hexToRgba(color,0));
-  ctx.beginPath();ctx.moveTo(xs[0],yv(values[0]));values.forEach(function(v,i){ctx.lineTo(xs[i],yv(v))});
-  ctx.lineTo(xs[xs.length-1],yv(min));ctx.lineTo(xs[0],yv(min));ctx.closePath();
+  var range=Math.max(1,max-min),n=values.length;
+  var xs=values.map(function(_,i){return pad+i*(W-pad*2)/(n-1)});
+  var yv=function(v){return H-24-(v-min)/range*(H-44)};
+
+  // Subtle grid
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=.5;
+  for(var v=min;v<=max;v++){if(v===min||v===max)continue;var y=yv(v);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke()}
+
+  // Base line
+  ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad,yv(min));ctx.lineTo(W-pad,yv(min));ctx.stroke()
+
+  // X-axis labels
+  ctx.fillStyle='#94a3b8';ctx.font='10px sans-serif';ctx.textAlign='center';
+  var step=Math.max(1,Math.floor(n/6));
+  for(var i=0;i<n;i+=step){ctx.fillText(labels[i]||'',xs[i],H-6)}
+  // First and last always
+  if(n>1){ctx.fillText(labels[0]||'',xs[0],H-6);ctx.fillText(labels[n-1]||'',xs[n-1],H-6)}
+
+  // Y-axis labels
+  ctx.textAlign='right';ctx.font='9px sans-serif';
+  ctx.fillText(min,W-4,yv(min)+3);ctx.fillText(max,W-4,yv(max)+3);
+
+  // Gradient area fill
+  var grd=ctx.createLinearGradient(0,yv(max),0,yv(min));
+  grd.addColorStop(0,hexToRgba(color,0));grd.addColorStop(1,hexToRgba(color,.12));
+  ctx.beginPath();ctx.moveTo(xs[0],yv(min));
+  for(var i=0;i<n-1;i++){
+    var xc=(xs[i]+xs[i+1])/2,y0=yv(values[i]),y1=yv(values[i+1]);
+    ctx.bezierCurveTo(xc,y0,xc,y1,xs[i+1],y1);
+  }
+  ctx.lineTo(xs[n-1],yv(min));ctx.lineTo(xs[0],yv(min));ctx.closePath();
   ctx.fillStyle=grd;ctx.fill();
-  values.forEach(function(v,i){ctx.beginPath();ctx.arc(xs[i],yv(v),3.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
-    ctx.beginPath();ctx.arc(xs[i],yv(v),5,0,Math.PI*2);ctx.fillStyle=hexToRgba(color,.2);ctx.fill()});
-  var last=values[values.length-1];ctx.fillStyle=color;ctx.font='bold 12px sans-serif';ctx.textAlign='center';
-  ctx.fillText(last+suffix,xs[xs.length-1],yv(last)-10);
+
+  // Smooth line
+  ctx.beginPath();ctx.moveTo(xs[0],yv(values[0]));
+  for(var i=0;i<n-1;i++){
+    var xc=(xs[i]+xs[i+1])/2,y0=yv(values[i]),y1=yv(values[i+1]);
+    ctx.bezierCurveTo(xc,y0,xc,y1,xs[i+1],y1);
+  }
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+
+  // Line glow
+  ctx.beginPath();ctx.moveTo(xs[0],yv(values[0]));
+  for(var i=0;i<n-1;i++){
+    var xc=(xs[i]+xs[i+1])/2,y0=yv(values[i]),y1=yv(values[i+1]);
+    ctx.bezierCurveTo(xc,y0,xc,y1,xs[i+1],y1);
+  }
+  ctx.strokeStyle=hexToRgba(color,.5);ctx.lineWidth=5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+
+  // Dots
+  for(var i=0;i<n;i++){
+    var xx=xs[i],yy=yv(values[i]);
+    ctx.beginPath();ctx.arc(xx,yy,4,0,Math.PI*2);ctx.fillStyle='var(--bg2)';ctx.fill();
+    ctx.beginPath();ctx.arc(xx,yy,3.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+  }
+
+  // Latest value label
+  var last=values[n-1];
+  ctx.fillStyle='var(--bg2)';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.strokeStyle='var(--bg2)';ctx.lineWidth=3;ctx.strokeText(last+suffix,xs[n-1],yv(last)-12);
+  ctx.fillStyle=color;ctx.fillText(last+suffix,xs[n-1],yv(last)-12);
 }
