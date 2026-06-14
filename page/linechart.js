@@ -71,7 +71,6 @@ function drawLineChart(canvas,opts){
 
   // Latest value label
   var last=values[n-1];
-  ctx.fillStyle='var(--bg2)';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-  ctx.strokeStyle='var(--bg2)';ctx.lineWidth=3;ctx.strokeText(last+suffix,xs[n-1],yv(last)-12);
-  ctx.fillStyle=color;ctx.fillText(last+suffix,xs[n-1],yv(last)-12);
+  ctx.fillStyle=color;ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText(last+suffix,xs[n-1],yv(last)-12);
 }

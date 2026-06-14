@@ -38,7 +38,7 @@ function renderGame(){
     '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="resetGameBtn" title="重置挑战进度" style="font-size:.75rem">↺</button></div>'
 
   _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,lastWkDays:stats.lastWkDays,thisWk:stats.wkDays}
-  trackStats(stats)
+  trackStats(stats,{strVol:strVol,carDur:carDur,carEff:carEff})
   renderRecords()
 
   var warnKey='warn_'+toDate(new Date())+'_miss'
@@ -255,7 +255,7 @@ function trackLevel(id){
   store.set('records',recs)
 }
 
-function trackStats(stats){
+function trackStats(stats,detail){
   var now=today()
   var monthKey=now.slice(0,7)
   var log=store.get('attrLog')||[]
@@ -263,9 +263,11 @@ function trackStats(stats){
   var changed=!last||last.atk!==stats.atk||last.def!==stats.def||last.hp!==stats.hp
   if(changed&&(last?last.date!==now:true)){
     var reason=[]
+    reason.push('容量'+detail.strVol+'kg')
+    reason.push('有效有氧'+detail.carEff+'分钟')
     if(stats.wkBonus)reason.push('周奖励+'+stats.wkBonus)
-    if(stats.permPenAtk||stats.permPenDef)reason.push('永久惩罚')
-    log.push({date:now,atk:stats.atk,def:stats.def,hp:stats.hp,reason:reason.join(',')||'基础属性',wkDays:stats.wkDays})
+    if(stats.permPenAtk||stats.permPenDef)reason.push('惩罚攻-'+stats.permPenAtk+'防-'+stats.permPenDef)
+    log.push({date:now,atk:stats.atk,def:stats.def,hp:stats.hp,reason:reason.join(' · '),wkDays:stats.wkDays})
     if(log.length>60)log=log.slice(-60)
     store.set('attrLog',log)
   }
