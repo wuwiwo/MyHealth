@@ -28,6 +28,7 @@ function setGame(g){store.set('game',g)}
 
 /* ========== INIT ========== */
 function init(){
+  document.getElementById('appVersion').textContent='v'+APP_VERSION
   document.documentElement.classList.add('no-transition')
   setTheme(getTheme())
   requestAnimationFrame(()=>document.documentElement.classList.remove('no-transition'))
