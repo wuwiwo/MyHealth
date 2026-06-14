@@ -205,6 +205,7 @@ function renderCardioPlans(){
   var plans=getCardioPlans()
   if(!plans.length){
     c.innerHTML='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有有氧计划</div><div class="empty-s">点下方按钮创建</div></div>'
+    c.innerHTML+='<button class="add-btn" id="carNewPlan" style="margin-top:8px">＋ 新建有氧计划</button>'
     return
   }
   c.innerHTML=plans.map(function(p){

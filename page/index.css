@@ -49,6 +49,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .tab-btn:active{background:var(--bg3)}
 .tab-content{display:none;animation:fi .25s}
 .tab-content.active{display:block}
+.sub-tab{display:none}
+.sub-tab.active{display:block}
 @keyframes fi{from{opacity:0}to{opacity:1}}
 
 /* Section Header */

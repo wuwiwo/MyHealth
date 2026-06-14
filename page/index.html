@@ -143,28 +143,39 @@
 
   <!-- ===== TAB: PROFILE ===== -->
   <section class="tab-content" id="tabProfile">
-    <div class="section-hdr">👤 基本信息</div>
-    <div class="profile-card" id="profileCard"></div>
+    <!-- Sub-tab bar -->
+    <nav class="tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
+      <button class="tab-btn active" data-sub="personal">👤 个人数据</button>
+      <button class="tab-btn" data-sub="training">📊 训练数据</button>
+    </nav>
 
-    <div class="section-hdr">⚖️ 体重记录</div>
-    <div class="weight-form-row">
-      <input type="number" class="fi" id="wtInput" value="70.0" step="0.1" min="20" max="300" style="width:100px;text-align:center;font-size:1.1rem;font-weight:700">
-      <span style="font-size:.85rem;color:var(--text2)">kg</span>
-      <input class="fi" id="wtNote" placeholder="备注（可选）" style="flex:1;max-width:200px">
-      <button class="sb-btn" id="wtSubmit" style="flex:0;padding:12px 20px;white-space:nowrap">📝 记录</button>
+    <!-- Sub-tab: Personal Data -->
+    <div class="sub-tab active" id="subPersonal">
+      <div class="section-hdr">👤 基本信息</div>
+      <div class="profile-card" id="profileCard"></div>
+
+      <div class="section-hdr">⚖️ 体重记录</div>
+      <div class="weight-form-row">
+        <input type="number" class="fi" id="wtInput" value="70.0" step="0.1" min="20" max="300" style="width:100px;text-align:center;font-size:1.1rem;font-weight:700">
+        <span style="font-size:.85rem;color:var(--text2)">kg</span>
+        <input class="fi" id="wtNote" placeholder="备注（可选）" style="flex:1;max-width:200px">
+        <button class="sb-btn" id="wtSubmit" style="flex:0;padding:12px 20px;white-space:nowrap">📝 记录</button>
+      </div>
+
+      <div class="section-hdr">📈 体重趋势</div>
+      <div class="chart-wrap" id="weightChart">
+        <canvas id="weightCanvas"></canvas>
+      </div>
+      <div id="weightList"></div>
     </div>
 
-    <div class="section-hdr">📈 体重趋势</div>
-    <div class="chart-wrap" id="weightChart">
-      <canvas id="weightCanvas"></canvas>
+    <!-- Sub-tab: Training Data -->
+    <div class="sub-tab" id="subTraining">
+      <div id="statsSection"></div>
+
+      <div class="section-hdr">📅 训练热力图</div>
+      <div id="profileHeatmap"></div>
     </div>
-    <div id="weightList"></div>
-
-    <div class="section-hdr">📊 训练统计</div>
-    <div id="statsSection"></div>
-
-    <div class="section-hdr">📅 训练热力图</div>
-    <div id="profileHeatmap"></div>
   </section>
 
   <!-- ===== TAB: GAME ===== -->

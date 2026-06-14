@@ -28,10 +28,14 @@ function renderStr(){
 
 function renderStrStats(){
   const g=document.getElementById('strStats')
-  const we=getWeekStr();const t=we.length,r=we.reduce((s,e)=>s+e.actualReps,0),v=we.reduce((s,e)=>s+e.weight*e.actualReps,0)
-  const dn=we.filter(e=>e.actualReps>=e.targetReps).length,rate=t>0?Math.round(dn/t*100):0
+  const we=getWeekStr()
+  const t=we.length,r=we.reduce((s,e)=>s+e.actualReps,0),v=we.reduce((s,e)=>s+e.weight*e.actualReps,0),days=new Set(we.map(function(e){return e.date})).size
+  const dn=we.filter(function(e){return e.actualReps>=e.targetReps}).length,rate=t>0?Math.round(dn/t*100):0
   const circ=2*Math.PI*31.5
-  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'</div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+v+'</div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v">最爱</div><div class="sc-l">动作</div></div>'
+  var exCount={}
+  we.forEach(function(e){exCount[e.exercise]=(exCount[e.exercise]||0)+1})
+  var fav=Object.keys(exCount).sort(function(a,b){return exCount[b]-exCount[a]})[0]||'—'
+  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span style="font-size:.6rem"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+v+'<span style="font-size:.6rem"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v" style="font-size:.75rem">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
 }
 function getWeekStr(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(store.get('strength')||{entries:[]}).entries.filter(e=>e.date>=toDate(m))}
 

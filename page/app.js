@@ -69,7 +69,11 @@ document.addEventListener('click',function(e){
   if(!el)return
   const id=el.id,act=el.dataset.a,st=el.dataset.s
 
-  if(el.classList.contains('tab-btn')){switchTab(el.dataset.tab);return}
+  if(el.classList.contains('tab-btn')){
+    if(el.dataset.tab)switchTab(el.dataset.tab)
+    else if(el.dataset.sub)switchProfileSub(el.dataset.sub)
+    return
+  }
   if(id==='themeToggle'){toggleTheme();return}
 
   if(el.classList.contains('speed-btn')&&el.dataset.speed){

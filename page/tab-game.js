@@ -286,22 +286,37 @@ function renderRecords(){
   var recs=store.get('records')||{}
   if(!recs.maxAtk&&!recs.maxCleared)return
   var h=''
+
+  // Monthly best with navigation
+  var mKey=_recMonth||today().slice(0,7)
+  var m=recs.monthly&&recs.monthly[mKey]
+  var mParts=mKey.split('-'),mLabel=mParts[1]+'月'
+  h+='<div class="section-hdr" style="margin-bottom:4px">📅 '+mLabel+'最佳 <span style="font-size:.65rem;font-weight:400;margin-left:8px"><button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" onclick="_recMonth=prevMonth(_recMonth);renderRecords()">◀</button> <button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" id="recMonthNow">本月</button> <button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" onclick="_recMonth=nextMonth(_recMonth);renderRecords()">▶</button></span></div>'
+  if(m&&(m.maxAtk||m.maxCleared)){
+    h+='<div class="stats-grid">'
+    if(m.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:.9rem">📖 '+m.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
+    if(m.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+m.maxAtk+'</div><div class="sc-l">最高攻击</div></div>'
+    if(m.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+m.maxDef+'</div><div class="sc-l">最高防御</div></div>'
+    if(m.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+m.maxHp+'</div><div class="sc-l">最高生命</div></div>'
+    h+='</div>'
+  }else{h+='<div style="font-size:.7rem;color:var(--text3);padding:8px 0">暂无数据</div>'}
+
+  // Historical best
+  h+='<div class="section-hdr">🏆 历史最佳</div><div class="stats-grid">'
   if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:.9rem">📖 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>'
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>'
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>'
-  var monthKey=today().slice(0,7)
-  var m=recs.monthly&&recs.monthly[monthKey]
-  var sub=''
-  if(m){
-    if(m.maxCleared)sub+='关卡'+m.maxCleared
-    if(m.maxAtk){if(sub)sub+=' · ';sub+='攻'+m.maxAtk}
-    if(m.maxDef)sub+=' · 防'+m.maxDef
-  }
-  if(sub)sub='<div style="font-size:.6rem;color:var(--text3);margin-top:4px">本月: '+sub+'</div>'
+  h+='</div>'
+
   var el=document.getElementById('recordsCard')
-  if(el)el.innerHTML='<div class="section-hdr">🏆 历史最佳</div><div class="stats-grid">'+h+'</div>'+sub
+  if(el)el.innerHTML=h
+  var nowBtn=document.getElementById('recMonthNow')
+  if(nowBtn)nowBtn.addEventListener('click',function(){_recMonth=null;renderRecords()})
 }
+var _recMonth=null
+function prevMonth(key){var k=key||today().slice(0,7);var p=k.split('-');var y=parseInt(p[0]),m=parseInt(p[1])-1;if(m<1){m=12;y--}return y+'-'+String(m).padStart(2,'0')}
+function nextMonth(key){var k=key||today().slice(0,7);var p=k.split('-');var y=parseInt(p[0]),m=parseInt(p[1])+1;if(m>12){m=1;y++};var now=new Date();if(y>now.getFullYear()||(y===now.getFullYear()&&m>now.getMonth()+1))return key;return y+'-'+String(m).padStart(2,'0')}
 
 function showAttrLog(){
   var log=store.get('attrLog')||[]
