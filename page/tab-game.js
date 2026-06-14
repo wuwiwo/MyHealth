@@ -137,37 +137,8 @@ function getGameStats(){
 }
 
 /* ========== BATTLE ========== */
-let _battleRunning=false,_battleSpeed=1,_battleTimer=null
-let _bPlayer=null,_bEnemy=null,_bLog=[],_bDone=false,_bBossAffix=null,_bTurn=0,_bRageCount=0
+let _battleRunning=false,_battleSpeed=1,_battleTimer=null,_battle=null
 var _attrCalcInfo={}
-
-function findLevel(id){
-  for(const ch of Object.values(LEVELS))
-    for(const lv of ch.levels)
-      if(lv.id===id)return lv
-  return null
-}
-
-var BOSS_AFFIXES=[
-  {name:'虚弱诅咒',desc:'你防御低于50时,伤害减少10~20%',
-    apply:function(atk,def,isPlayer){
-      if(isPlayer&&def<50){var r=0.8+Math.random()*0.1;return Math.floor(atk*r)}
-      return atk
-    }},
-  {name:'荆棘之躯',desc:'攻击者受到50%反伤(可被防御减免)',
-    reflect:function(dmg,atkDef){return Math.max(1,Math.floor(dmg*0.5)-Math.floor(atkDef/2))}},
-  {name:'怒气勃发',desc:'每2~3回合攻击力+1~5(可叠加)',
-    onTurn:function(turn,enemyAtk,baseAtk){
-      if(turn>=2&&(turn%2===0||turn%3===0)&&Math.random()<0.6){
-        var bonus=1+Math.floor(Math.random()*5);return enemyAtk+bonus}
-      return enemyAtk
-    }}
-]
-
-function pickBossAffix(){
-  var idx=Math.floor(Math.random()*BOSS_AFFIXES.length)
-  return{index:idx,...BOSS_AFFIXES[idx]}
-}
 
 function updateGameBar(){
   var bar=document.getElementById('gameStatsBar');if(!bar||!bar.isConnected)return
@@ -185,11 +156,11 @@ function startBattle(id){
   var trainedToday=((store.get('strength')||{entries:[]}).entries||[]).some(function(e){return e.date===todayStr})||((store.get('cardio')||{entries:[]}).entries||[]).some(function(e){return e.date===todayStr})
   if(!trainedToday&&attempts===0){toast('⚠️ 今天还没训练，属性较低','e')}
   var stats=getGameStats()
-  _bPlayer={...stats};_bEnemy={atk:lv.atk,def:lv.def,hp:lv.hp,maxHP:lv.hp}
-  if(lv.boss){_bBossAffix=pickBossAffix()}else{_bBossAffix=null}
-  _bLog=[];_bDone=false;_battleSpeed=1;_bTurn=0;_bRageCount=0
-  document.getElementById('battleLevel').textContent=id+' '+lv.npc+(_bBossAffix?' 👑':'')+(_bBossAffix?' ['+_bBossAffix.name+']':'')
-  document.getElementById('beName').textContent='👹 '+lv.npc+(_bBossAffix?' 👑':'')
+  var affix=lv.boss?pickBossAffix():null
+  _battle=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp},{atk:lv.atk,def:lv.def,hp:lv.hp},{npc:lv.npc,boss:lv.boss},affix)
+  _battleRunning=false;_battleSpeed=1;_battleTimer=null
+  document.getElementById('battleLevel').textContent=id+' '+lv.npc+(affix?' 👑':'')+(affix?' ['+affix.name+']':'')
+  document.getElementById('beName').textContent='👹 '+lv.npc+(affix?' 👑':'')
   document.getElementById('bpHP').style.width='100%'
   document.getElementById('bpHPText').textContent='❤️ '+stats.hp
   document.getElementById('bpAtk').textContent='⚔️ '+stats.atk
@@ -205,44 +176,25 @@ function startBattle(id){
 }
 
 function runBattle(){
-  if(_bDone||_battleRunning)return
+  if(_battle.done||_battleRunning)return
   _battleRunning=true
-  const lv=findLevel(getGame().current)
   const tick=()=>{
-    if(_bDone){_battleRunning=false;return}
-    _bTurn++
-    var bossAtk=_bEnemy.atk
-    if(_bBossAffix&&_bBossAffix.onTurn&&_bBossAffix.index===2){
-      var newAtk=_bBossAffix.onTurn(_bTurn,_bEnemy.atk,lv.atk)
-      if(newAtk>bossAtk){bossAtk=newAtk;_bEnemy.atk=newAtk;addBattleLog('🔴 Boss 怒气勃发, 攻击力 +'+(newAtk-lv.atk-_bRageCount),'e');_bRageCount+=newAtk-lv.atk-_bRageCount}
-    }
-    var pDmgBase=Math.max(1,_bPlayer.atk-Math.floor(_bEnemy.def/2)+Math.floor(Math.random()*4)+1)
-    var pDmg=_bBossAffix&&_bBossAffix.apply?_bBossAffix.apply(pDmgBase,_bPlayer.def,true):pDmgBase
-    _bEnemy.hp-=pDmg
-    if(pDmg!==pDmgBase)addBattleLog('🧑 攻击 → '+pDmgBase+' (被诅咒减免至 '+pDmg+')','dmg')
-    else addBattleLog('🧑 攻击 → '+pDmg+' 伤害','dmg')
-    if(_bBossAffix&&_bBossAffix.reflect&&pDmg>0){
-      var reflectDmg=_bBossAffix.reflect(pDmg,_bPlayer.def)
-      if(reflectDmg>0){_bPlayer.hp-=Math.min(_bPlayer.hp,reflectDmg);addBattleLog('🩸 荆棘反伤 → '+reflectDmg+' 伤害','e')}
-    }
-    updateBattleHP()
-    if(_bEnemy.hp<=0){_bEnemy.hp=0;endBattle(true);_battleRunning=false;return}
-    var eDmgBase=Math.max(1,bossAtk-Math.floor(_bPlayer.def/2)+Math.floor(Math.random()*3)+1)
-    var eDmg=_bBossAffix&&_bBossAffix.apply&&_bBossAffix.index===0?_bBossAffix.apply(eDmgBase,bossAtk,false):eDmgBase
-    _bPlayer.hp-=eDmg
-    addBattleLog('👹 '+lv.npc+' 攻击 → '+eDmg+' 伤害','e')
-    updateBattleHP()
-    if(_bPlayer.hp<=0){_bPlayer.hp=0;endBattle(false);_battleRunning=false;return}
+    if(_battle.done){_battleRunning=false;return}
+    var result=battleTick(_battle)
+    _battle.turn=result.turn
+    result.events.forEach(function(ev){addBattleLog(ev.msg,ev.type)})
+    renderBattleHP()
+    if(_battle.done){endBattle(_battle.winner);_battleRunning=false;return}
     _battleTimer=setTimeout(tick,600/_battleSpeed)
   }
   tick()
 }
 
-function updateBattleHP(){
-  document.getElementById('bpHP').style.width=Math.max(0,_bPlayer.hp/(_bPlayer.hp+_bEnemy.maxHP||1)*100)+'%'
-  document.getElementById('bpHPText').textContent='HP: '+Math.max(0,_bPlayer.hp)
-  document.getElementById('beHP').style.width=Math.max(0,_bEnemy.hp/_bEnemy.maxHP*100)+'%'
-  document.getElementById('beHPText').textContent='HP: '+Math.max(0,_bEnemy.hp)+'/'+_bEnemy.maxHP
+function renderBattleHP(){
+  document.getElementById('bpHP').style.width=Math.max(0,_battle.player.hp/(_battle.player.hp+_battle.enemy.maxHP||1)*100)+'%'
+  document.getElementById('bpHPText').textContent='HP: '+Math.max(0,_battle.player.hp)
+  document.getElementById('beHP').style.width=Math.max(0,_battle.enemy.hp/_battle.enemy.maxHP*100)+'%'
+  document.getElementById('beHPText').textContent='HP: '+Math.max(0,_battle.enemy.hp)+'/'+_battle.enemy.maxHP
 }
 
 function addBattleLog(msg,type){
@@ -252,8 +204,7 @@ function addBattleLog(msg,type){
 }
 
 function endBattle(won){
-  _bDone=true;const el=document.getElementById('battleEnd')
-  const lv=findLevel(getGame().current)
+  _battle.done=true;const el=document.getElementById('battleEnd')
   var g=getGame()
   if(!won){
     if(!g.attempts)g.attempts={}

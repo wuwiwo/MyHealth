@@ -103,7 +103,7 @@ document.addEventListener('click',function(e){
       addWt({date:today(),weight:w,note})
       document.getElementById('wtNote').value=''
       toast('体重已记录 ⚖️','s');renderWtList();renderChart();return}
-    case 'battleClose':_bDone=true;if(_battleTimer)clearTimeout(_battleTimer);_battleRunning=false
+    case 'battleClose':_battle.done=true;if(_battleTimer)clearTimeout(_battleTimer);_battleRunning=false
       document.getElementById('battleOverlay').classList.remove('open');renderGame();return;
     case 'shareClose':hideShare();return;
     case 'shareSave':toast('长按或截图保存分享卡片 📸','s');return;
