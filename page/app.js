@@ -22,6 +22,8 @@ function getPlans(){var p=store.get('plans');return p?p.plans||[]:[]}
 function savePlans(plans){store.set('plans',{plans:plans})}
 function getMissed(){var m=store.get('missed');return m?m.notes||{}:{}}
 function saveMissed(notes){store.set('missed',{notes:notes})}
+function getCardioPlans(){var p=store.get('cardioPlans');return p?p.plans||[]:[]}
+function saveCardioPlans(plans){store.set('cardioPlans',{plans:plans})}
 
 function getCar(d){var c=store.get('cardio')||{entries:[]};return(c.entries||[]).filter(function(e){return e.date===d}).sort(function(a,b){return(a.createdAt||0)-(b.createdAt||0)})}
 function addCar(e){var c=store.get('cardio')||{entries:[]};e.id=uid();e.createdAt=Date.now();c.entries.push(e);store.set('cardio',c)}

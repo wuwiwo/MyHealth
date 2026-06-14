@@ -17,6 +17,50 @@ function renderProf(){
   renderChart()
   renderHeatmap()
   renderPRs()
+  renderStats()
+}
+
+/* ========== TRAINING STATISTICS ========== */
+function renderStats(){
+  var strEntries=(store.get('strength')||{entries:[]}).entries||[]
+  var carEntries=(store.get('cardio')||{entries:[]}).entries||[]
+  var totalDays=new Set()
+  strEntries.forEach(function(e){totalDays.add(e.date)})
+  carEntries.forEach(function(e){totalDays.add(e.date)})
+
+  // Monthly volume for last 6 months
+  var now=new Date(),labels=[],volumes=[]
+  for(var i=5;i>=0;i--){
+    var y=now.getFullYear(),m=now.getMonth()-i
+    if(m<0){m+=12;y--}
+    var start=y+'-'+String(m+1).padStart(2,'0')+'-01'
+    var end=y+'-'+String(m+1).padStart(2,'0')+'-31'
+    var vol=strEntries.filter(function(e){return e.date>=start&&e.date<end}).reduce(function(s,e){return s+e.weight*e.actualReps},0)
+    labels.push((m+1)+'月');volumes.push(vol)
+  }
+
+  // Favorite exercises TOP5
+  var exCount={}
+  strEntries.forEach(function(e){exCount[e.exercise]=(exCount[e.exercise]||0)+1})
+  var top5=Object.keys(exCount).sort(function(a,b){return exCount[b]-exCount[a]}).slice(0,5)
+
+  var h='<div class="stats-grid" style="margin-bottom:8px">'
+  h+='<div class="sc sc-total"><div class="sc-v">'+totalDays.size+'</div><div class="sc-l">训练天数</div></div>'
+  h+='<div class="sc sc-vol"><div class="sc-v">'+strEntries.length+'</div><div class="sc-l">力量组数</div></div>'
+  h+='<div class="sc sc-rate"><div class="sc-v">'+carEntries.length+'</div><div class="sc-l">有氧次数</div></div>'
+  h+='<div class="sc sc-fav"><div class="sc-v">🔥</div><div class="sc-l">'+top5.slice(0,2).join('<br>')+'</div></div>'
+  h+='</div>'
+  if(volumes.some(function(v){return v>0})){
+    h+='<div class="chart-wrap"><canvas id="statsCanvas"></canvas></div>'
+  }
+  document.getElementById('statsSection').innerHTML=h
+
+  var canvas=document.getElementById('statsCanvas')
+  if(canvas){
+    drawLineChart(canvas,{
+      labels:labels,values:volumes,color:'#22C55E',suffix:'kg'
+    })
+  }
 }
 
 function renderWtList(){
