@@ -86,9 +86,6 @@
     <div class="section-hdr" style="margin-top:20px">📝 断签说明</div>
     <div id="strMissedDays"></div>
 
-    <div class="section-hdr" style="margin-top:20px">📅 月热力图</div>
-    <div id="strHeatmap"></div>
-
     <div class="section-hdr">📊 本周统计</div>
     <div class="stats-grid" id="strStats"></div>
   </section>
@@ -112,6 +109,10 @@
     <div class="add-card" id="carAddCard">
       <div class="fg"><label class="fl">运动类型</label>
         <div class="car-types" id="carTypes"></div>
+        <button class="md-write" id="carCustomType" style="margin-top:4px;font-size:.7rem">＋ 自定义类型</button>
+      </div>
+      <div class="fg"><label class="fl">强度</label>
+        <div class="car-types" id="carIntensity"></div>
       </div>
       <div class="fg"><label class="fl">时长 (分钟)</label>
         <div class="stepper" style="max-width:200px">
@@ -154,6 +155,9 @@
       <canvas id="weightCanvas"></canvas>
     </div>
     <div id="weightList"></div>
+
+    <div class="section-hdr">📅 训练热力图</div>
+    <div id="profileHeatmap"></div>
   </section>
 
   <!-- ===== TAB: GAME ===== -->

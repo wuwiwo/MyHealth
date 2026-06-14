@@ -42,11 +42,7 @@ function init(){
   EXERCISES.forEach(n=>{const o=document.createElement('option');o.value=n;dl.appendChild(o)})
 
   const ct=document.getElementById('carTypes')
-  CARDIO_TYPES.forEach(t=>{const b=document.createElement('button');b.className='car-type'+(t.id==='run'?' selected':'');b.textContent=t.emoji+' '+t.name;b.dataset.ct=t.id
-    b.addEventListener('click',()=>{ct.querySelectorAll('.car-type').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');_carSelType=t.id
-      document.getElementById('carDistLabel').textContent=t.hasDist?'km':'无'
-      if(!t.hasDist){_carDist=0;document.getElementById('carDistVal').textContent='0'}
-    });ct.appendChild(b)})
+  initCardioTypes()
 
   migrateOldData()
 

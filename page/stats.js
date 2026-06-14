@@ -10,10 +10,25 @@ function sumVolume(entries) {
 }
 
 /**
- * Sum cardio duration (minutes)
+ * Sum cardio duration (raw minutes, no intensity weighting)
  */
 function sumDuration(entries) {
-  return entries.reduce(function(s, e) { return s + e.duration; }, 0);
+  return entries.reduce(function(s, e) { return s + (e.duration || 0); }, 0);
+}
+
+/**
+ * Sum cardio effective duration: minutes × intensity multiplier.
+ * Falls back to type's default intensity if entry has no intensity field.
+ *
+ * @param {Array}  entries   Cardio entries with {duration, type, intensity?}
+ * @param {object} typeMap   { typeId: {intensity: N} } lookup
+ * @returns {number} Weighted total minutes
+ */
+function sumEffectiveDuration(entries, typeMap) {
+  return entries.reduce(function(s, e) {
+    var intensity = e.intensity || (typeMap && typeMap[e.type] ? typeMap[e.type].intensity : 1);
+    return s + (e.duration || 0) * intensity;
+  }, 0);
 }
 
 /**
@@ -40,16 +55,17 @@ function countActiveDaysInRange(strEntries, carEntries, since, until) {
  * Calculate player stats from aggregated data.
  * Pure function — no side effects, no DOM, no store.
  *
- * @param {number} strVol    30-day total volume (weight × reps)
- * @param {number} carDur    30-day total cardio duration (minutes)
- * @param {number} wkBonus   50 for 7-day week, 20 for 4+, 0 otherwise
+ * @param {number} strVol      30-day total volume (weight × reps)
+ * @param {number} carDur      30-day raw cardio duration (minutes, for HP)
+ * @param {number} carEff       30-day intensity-weighted duration (for defense)
+ * @param {number} wkBonus     50 for 7-day week, 20 for 4+, 0 otherwise
  * @param {number} permPenAtk  Accumulated permanent attack penalty
  * @param {number} permPenDef  Accumulated permanent defense penalty
  * @returns {{ atk, def, hp }}
  */
-function calculateStats(strVol, carDur, wkBonus, permPenAtk, permPenDef) {
+function calculateStats(strVol, carDur, carEff, wkBonus, permPenAtk, permPenDef) {
   var baseAtk = 10 + Math.floor(strVol / 20);
-  var baseDef = 10 + Math.floor(carDur / 6);
+  var baseDef = 10 + Math.floor(carEff / 15);
   return {
     atk: Math.max(1, baseAtk + Math.floor(wkBonus / 2) - (permPenAtk || 0)),
     def: Math.max(1, baseDef + Math.floor(wkBonus / 2) - (permPenDef || 0)),

@@ -22,7 +22,6 @@ function renderStr(){
       return '<div class="ec '+(d?'done':'')+'" data-id="'+e.id+'"><div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">● '+e.weight+' kg</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span class="ec-tgt">目标 '+e.targetReps+' 次</span><span class="ec-actual '+ac+'">'+e.actualReps+' 次 '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
     }).join('')
   }
-  renderHeatmap('strHeatmap','str',d)
   renderStrStats()
   renderMissed()
 }
@@ -209,34 +208,6 @@ function showWoSummary(){
     document.getElementById('woOverlay')?.remove()
     toast('训练已记录！','s');renderStr()
   })
-}
-
-/* ========== HEATMAP ========== */
-let _hmY=new Date().getFullYear(),_hmM=new Date().getMonth()
-function renderHeatmap(cid,prefix,curDate){
-  const c=document.getElementById(cid);if(!c)return
-  const n=new Date(_hmY,_hmM);const y=n.getFullYear(),m=n.getMonth()
-  const dim=new Date(y,m+1,0).getDate(),fd=new Date(y,m,1).getDay()
-  const so=fd===0?6:fd-1,wd=['一','二','三','四','五','六','日']
-  const mn=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
-  const dd={}
-  for(let d=1;d<=dim;d++){const s=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')
-    const entries=prefix==='str'?getStr(s):[];const reps=entries.reduce((a,e)=>a+e.actualReps,0);dd[d]={reps,date:s}}
-  const max=Math.max(1,...Object.values(dd).map(d=>d.reps))
-  function lv(r){if(r===0)return 0;const ra=r/max;if(ra<=.1)return 1;if(ra<=.3)return 2;if(ra<=.5)return 3;if(ra<=.75)return 4;return 5}
-  let h='<div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav"><button class="hm-nav-btn" data-n="hmP">◀</button><button class="hm-nav-btn" data-n="hmT">📍</button><button class="hm-nav-btn" data-n="hmN">▶</button></div></div><div class="hm-grid">'
-  wd.forEach(d=>{h+='<div class="hm-dh">'+d+'</div>'})
-  for(let i=0;i<so;i++)h+='<div class="hm-cell"></div>'
-  for(let d=1;d<=dim;d++){const da=dd[d];const l=lv(da.reps);const t=da.date===today();const hd=da.reps>0
-    h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+l+'" data-date="'+da.date+'">'+d+'</div>'}
-  h+='</div><div class="hm-leg">少 <div class="l0"></div><div class="l1"></div><div class="l3"></div><div class="l5"></div> 多</div></div>'
-  c.innerHTML=h
-  c.querySelectorAll('[data-n="hmP"]').forEach(b=>b.addEventListener('click',()=>{_hmM--;if(_hmM<0){_hmM=11;_hmY--;if(_hmY<2020){_hmY=2020;_hmM=0}}renderHeatmap(cid,prefix,curDate)}))
-  c.querySelectorAll('[data-n="hmN"]').forEach(b=>b.addEventListener('click',()=>{_hmM++;if(_hmM>11){_hmM=0;_hmY++;var maxY=new Date().getFullYear()+1;if(_hmY>maxY){_hmY=maxY;_hmM=11}}renderHeatmap(cid,prefix,curDate)}))
-  c.querySelectorAll('[data-n="hmT"]').forEach(b=>b.addEventListener('click',()=>{const n=new Date();_hmY=n.getFullYear();_hmM=n.getMonth();renderHeatmap(cid,prefix,curDate)}))
-  c.querySelectorAll('.hm-cell[data-date]').forEach(b=>b.addEventListener('click',()=>{
-    _strDate=b.dataset.date;renderStr()
-  }))
 }
 
 /* ========== STRENGTH EDIT MODAL ========== */

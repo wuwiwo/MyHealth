@@ -10,11 +10,12 @@ function renderGame(){
   var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
   var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
   var strVol=strE.reduce(function(s,e){return s+e.weight*e.actualReps},0)
-  var carDur=carE.reduce(function(s,e){return s+e.duration},0)
-  var baseAtk=10+Math.floor(strVol/20),baseDef=10+Math.floor(carDur/6)
+  var carDur=sumDuration(carE)
+  var carEff=sumEffectiveDuration(carE,getCardioTypeMap())
+  var baseAtk=10+Math.floor(strVol/20),baseDef=10+Math.floor(carEff/15)
   var baseHp=100+Math.floor(strVol/10)+Math.floor(carDur/3)
   var atkInfo='攻击 = 10 + floor('+strVol+'/20) = '+baseAtk+(stats.wkBonus>0?' + 周奖励 +'+stats.wkBonus:'')+(stats.permPenAtk>0?' - 永久惩罚 -'+stats.permPenAtk:'')+' = '+stats.atk
-  var defInfo='防御 = 10 + floor('+carDur+'/6) = '+baseDef+(stats.wkBonus>0?' + 周奖励 +'+Math.floor(stats.wkBonus/2):'')+(stats.permPenDef>0?' - 永久惩罚 -'+stats.permPenDef:'')+' = '+stats.def
+  var defInfo='防御 = 10 + floor('+carEff+'/15) = '+baseDef+(stats.wkBonus>0?' + 周奖励 +'+Math.floor(stats.wkBonus/2):'')+(stats.permPenDef>0?' - 永久惩罚 -'+stats.permPenDef:'')+' = '+stats.def
   var hpInfo='生命 = 100 + floor('+strVol+'/10) + floor('+carDur+'/3) = '+baseHp+(stats.wkBonus>0?' + 周奖励 ×3 +'+stats.wkBonus*3:'')+' = '+stats.hp
 
   var wkStatus='',wkColor='orange'
@@ -115,6 +116,7 @@ function getGameStats(){
   var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
   var strVol=sumVolume(strE)
   var carDur=sumDuration(carE)
+  var carEff=sumEffectiveDuration(carE,getCardioTypeMap())
   var wk=getWeekDays();var wkBonus=wk>=7?50:wk>=4?20:0
   var lastWk=getLastWeekDays()
   var lastMissed=Math.max(0,3-lastWk)
@@ -127,7 +129,7 @@ function getGameStats(){
   if(new Date().getDay()===1&&getGame().permPenLastWeek){
     getGame().permPenLastWeek=false;setGame(getGame())
   }
-  var calc=calculateStats(strVol,carDur,wkBonus,getGame().permPen.atk||0,getGame().permPen.def||0)
+  var calc=calculateStats(strVol,carDur,carEff,wkBonus,getGame().permPen.atk||0,getGame().permPen.def||0)
   return{
     atk:calc.atk,def:calc.def,hp:calc.hp,
     wkDays:wk,wkBonus:wkBonus,lastWkDays:lastWk,
