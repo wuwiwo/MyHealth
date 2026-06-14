@@ -2,12 +2,7 @@
    MyHealth — Complete Application Logic
    ============================================ */
 
-/* ========== DATA LAYER ========== */
-const SK = {
-  STR: 'dh-strength-v1', STR_PLANS: 'dh-plans-v1', MISS: 'dh-missed-v1',
-  CAR: 'dh-cardio-v1', WT: 'dh-weight-v1', PROF: 'dh-profile-v1',
-  GAME: 'dh-game-v1', THEME: 'dh-theme-v1'
-};
+/* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
 const EXERCISES = ['二头弯举','肩推','深蹲','卧推','划船','硬拉','侧平举','前平举','锤式弯举','俯身飞鸟','颈后臂屈伸','俯身臂屈伸','直立划船','推举','阿诺德推举','哑铃飞鸟','哑铃耸肩','弓步蹲','保加利亚深蹲','站姿提踵'];
 const CARDIO_TYPES = [
@@ -57,44 +52,36 @@ const LEVELS = {
   ]}
 };
 
+/* ========== UTILITIES ========== */
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function toDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function parseDate(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
 function fmtDate(s){const d=parseDate(s);const w=['周日','周一','周二','周三','周四','周五','周六'];const i=s===today();return{main:(d.getMonth()+1)+'月'+d.getDate()+'日',sub:i?w[d.getDay()]+' · 今天':w[d.getDay()]}}
-function load(k){try{const r=localStorage.getItem(k);if(r){const d=JSON.parse(r);return d}}catch(e){}return null}
-function save(k,v){localStorage.setItem(k,JSON.stringify(v))}
 
-/* Strength */
-let _str=load(SK.STR)||{entries:[]};let _plans=load(SK.STR_PLANS)||{plans:[]};let _missed=load(SK.MISS)||{notes:{}};
-function saveStr(){save(SK.STR,_str);scheduleSync();updateGameBar()}
-function savePlans(){save(SK.STR_PLANS,_plans);scheduleSync()}
-function saveMissed(){save(SK.MISS,_missed);scheduleSync()}
-function getStr(d){return(_str.entries||[]).filter(e=>e.date===d).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0))}
-function addStr(e){e.id=uid();e.createdAt=Date.now();_str.entries.push(e);saveStr()}
-function updateStr(id,data){const i=_str.entries.findIndex(e=>e.id===id);if(i>-1){_str.entries[i]={..._str.entries[i],...data};saveStr()}}
-function delStr(id){_str.entries=_str.entries.filter(e=>e.id!==id);saveStr()}
+/* ========== DATA LAYER (via store.js) ========== */
+function getStr(d){var s=store.get('strength')||{entries:[]};return(s.entries||[]).filter(function(e){return e.date===d}).sort(function(a,b){return(a.createdAt||0)-(b.createdAt||0)})}
+function addStr(e){var s=store.get('strength')||{entries:[]};e.id=uid();e.createdAt=Date.now();s.entries.push(e);store.set('strength',s)}
+function updateStr(id,data){var s=store.get('strength')||{entries:[]};var i=s.entries.findIndex(function(e){return e.id===id});if(i>-1){s.entries[i]=Object.assign({},s.entries[i],data);store.set('strength',s)}}
+function delStr(id){var s=store.get('strength')||{entries:[]};s.entries=s.entries.filter(function(e){return e.id!==id});store.set('strength',s)}
 
-/* Cardio */
-let _car=load(SK.CAR)||{entries:[]};
-function saveCar(){save(SK.CAR,_car);scheduleSync();updateGameBar()}
-function getCar(d){return(_car.entries||[]).filter(e=>e.date===d).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0))}
-function addCar(e){e.id=uid();e.createdAt=Date.now();_car.entries.push(e);saveCar()}
-function delCar(id){_car.entries=_car.entries.filter(e=>e.id!==id);saveCar()}
+function getPlans(){var p=store.get('plans');return p?p.plans||[]:[]}
+function savePlans(plans){store.set('plans',{plans:plans})}
+function getMissed(){var m=store.get('missed');return m?m.notes||{}:{}}
+function saveMissed(notes){store.set('missed',{notes:notes})}
 
-/* Weight */
-let _wt=load(SK.WT)||{records:[]};
-function saveWt(){save(SK.WT,_wt);scheduleSync()}
-function addWt(r){r.id=uid();r.createdAt=Date.now();_wt.records.push(r);saveWt()}
-function getWt(){return(_wt.records||[]).sort((a,b)=>a.date<b.date?1:-1)}
+function getCar(d){var c=store.get('cardio')||{entries:[]};return(c.entries||[]).filter(function(e){return e.date===d}).sort(function(a,b){return(a.createdAt||0)-(b.createdAt||0)})}
+function addCar(e){var c=store.get('cardio')||{entries:[]};e.id=uid();e.createdAt=Date.now();c.entries.push(e);store.set('cardio',c)}
+function delCar(id){var c=store.get('cardio')||{entries:[]};c.entries=c.entries.filter(function(e){return e.id!==id});store.set('cardio',c)}
 
-/* Profile */
-let _prof=load(SK.PROF)||{height:175,gender:'男',birthYear:1990};
-function saveProf(){save(SK.PROF,_prof);scheduleSync()}
+function getWt(){var w=store.get('weight')||{records:[]};return(w.records||[]).sort(function(a,b){return a.date<b.date?1:-1})}
+function addWt(r){var w=store.get('weight')||{records:[]};r.id=uid();r.createdAt=Date.now();w.records.push(r);store.set('weight',w)}
 
-/* Game */
-let _game=load(SK.GAME)||{cleared:[],current:''};
-function saveGame(){save(SK.GAME,_game);scheduleSync()}
+function getProf(){return store.get('profile')||{height:175,gender:'男',birthYear:1990}}
+function setProf(p){store.set('profile',p)}
+
+function getGame(){return store.get('game')||{cleared:[],current:''}}
+function setGame(g){store.set('game',g)}
 
 /* ========== SYNC ========== */
 let _syncT=null;
@@ -103,11 +90,18 @@ e.className='sync-dot';if(s==='synced'){e.classList.add('synced');e.textContent=
 else if(s==='syncing'){e.classList.add('syncing');e.textContent='↻'}
 else if(s==='error'){e.classList.add('error');e.textContent='⚠'}
 else e.textContent='🔄'}
-function getAllData(){return{
-  version:2,lastUpdated:Date.now(),
-  entries:_str.entries,plans:_plans.plans,missed:_missed.notes,
-  cardio:_car.entries,weight:_wt.records,profile:_prof,game:_game
-}}
+function getAllData(){
+  var s=store.get('strength')||{entries:[]};
+  var p=store.get('plans')||{plans:[]};
+  var m=store.get('missed')||{notes:{}};
+  var c=store.get('cardio')||{entries:[]};
+  var w=store.get('weight')||{records:[]};
+  return{
+    version:2,lastUpdated:Date.now(),
+    entries:s.entries,plans:p.plans,missed:m.notes,
+    cardio:c.entries,weight:w.records,profile:getProf(),game:getGame()
+  }
+}
 function pushSync(cb){setSync('syncing')
 var x=new XMLHttpRequest();x.open('PUT','/api/data',true)
 x.setRequestHeader('Content-Type','application/json')
@@ -118,22 +112,23 @@ function pullSync(cb){setSync('syncing')
 var x=new XMLHttpRequest();x.open('GET','/api/data',true)
 x.onload=function(){if(x.status===200&&x.responseText){try{
   const d=JSON.parse(x.responseText)
-  // Only apply if server has meaningful data (not empty arrays/objects)
   function hasItems(v){return Array.isArray(v)?v.length>0:false}
   function hasKeys(v){return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length>0}
   if(d&&(d.version>=2||hasItems(d.entries)||hasItems(d.cardio)||hasItems(d.weight))){
-    if(hasItems(d.entries))_str.entries=d.entries
-    if(hasItems(d.plans))_plans.plans=d.plans
-    else if(d.plans?.plans&&hasItems(d.plans.plans))_plans.plans=d.plans.plans
-    if(hasKeys(d.missed))_missed.notes=d.missed
-    else if(d.missed?.notes&&hasKeys(d.missed.notes))_missed.notes=d.missed.notes
-    if(hasItems(d.cardio))_car.entries=d.cardio
-    else if(d.cardio?.entries&&hasItems(d.cardio.entries))_car.entries=d.cardio.entries
-    if(hasItems(d.weight))_wt.records=d.weight
-    else if(d.weight?.records&&hasItems(d.weight.records))_wt.records=d.weight.records
-    if(d.profile&&hasKeys(d.profile))_prof=d.profile
-    if(d.game&&typeof d.game==='object')_game=d.game
-    saveStr();savePlans();saveMissed();saveCar();saveWt();saveProf();saveGame()
+    // Build merge map from legacy flat format
+    var merge={}
+    if(hasItems(d.entries)){merge.strength={entries:d.entries}}
+    if(hasItems(d.plans)){merge.plans={plans:d.plans}}
+    else if(d.plans?.plans&&hasItems(d.plans.plans)){merge.plans={plans:d.plans.plans}}
+    if(hasKeys(d.missed)){merge.missed={notes:d.missed}}
+    else if(d.missed?.notes&&hasKeys(d.missed.notes)){merge.missed={notes:d.missed.notes}}
+    if(hasItems(d.cardio)){merge.cardio={entries:d.cardio}}
+    else if(d.cardio?.entries&&hasItems(d.cardio.entries)){merge.cardio={entries:d.cardio.entries}}
+    if(hasItems(d.weight)){merge.weight={records:d.weight}}
+    else if(d.weight?.records&&hasItems(d.weight.records)){merge.weight={records:d.weight.records}}
+    if(d.profile&&hasKeys(d.profile)){merge.profile=d.profile}
+    if(d.game&&typeof d.game==='object'){merge.game=d.game}
+    store.mergeAll(merge)
     // Re-render active tab
     var activeTab=document.querySelector('.tab-btn.active')?.dataset.tab
     if(activeTab==='profile')renderProf()
@@ -145,6 +140,11 @@ x.onload=function(){if(x.status===200&&x.responseText){try{
 setSync('error');if(cb)cb(false)}
 x.onerror=function(){setSync('');if(cb)cb(false)};x.send()}
 function scheduleSync(){if(_syncT)clearTimeout(_syncT);_syncT=setTimeout(pushSync,800)}
+// Wire store changes to sync + game bar updates
+store.onChange(function(key){
+  scheduleSync();
+  if(key==='strength'||key==='cardio'||key==='game')updateGameBar()
+})
 // Vercel: pull every 2 min instead of 30s (serverless cold start cost)
 setInterval(function(){if(!document.getElementById('workoutOverlay')?.classList.contains('open'))pullSync()},120000)
 
@@ -168,13 +168,15 @@ function importData(){
         var data=JSON.parse(ev.target.result)
         // Only overwrite if imported data actually has content (don't clear with empty)
         function hasItems(v){return Array.isArray(v)&&v.length>0}
-        if(hasItems(data.entries)){_str.entries=data.entries;saveStr()}
-        if(hasItems(data.plans)){_plans.plans=Array.isArray(data.plans)?data.plans:data.plans.plans||[];savePlans()}
-        if(hasItems(data.cardio)){_car.entries=Array.isArray(data.cardio)?data.cardio:data.cardio.entries||[];saveCar()}
-        if(hasItems(data.weight)){_wt.records=Array.isArray(data.weight)?data.weight:data.weight.records||[];saveWt()}
-        if(data.profile&&typeof data.profile==='object'){_prof=data.profile;saveProf()}
-        if(data.game&&typeof data.game==='object'){_game=data.game;saveGame()}
-        if(data.missed&&typeof data.missed==='object'){_missed.notes=data.missed;saveMissed()}
+        var importMap={}
+        if(hasItems(data.entries)){importMap.strength={entries:data.entries}}
+        if(hasItems(data.plans)){importMap.plans={plans:Array.isArray(data.plans)?data.plans:data.plans.plans||[]}}
+        if(hasItems(data.cardio)){importMap.cardio={entries:Array.isArray(data.cardio)?data.cardio:data.cardio.entries||[]}}
+        if(hasItems(data.weight)){importMap.weight={records:Array.isArray(data.weight)?data.weight:data.weight.records||[]}}
+        if(data.profile&&typeof data.profile==='object'){importMap.profile=data.profile}
+        if(data.game&&typeof data.game==='object'){importMap.game=data.game}
+        if(data.missed&&typeof data.missed==='object'){importMap.missed={notes:data.missed}}
+        store.mergeAll(importMap)
         toast('数据导入成功 ✅','s')
         renderStr();renderCar();renderProf();renderGame()
       }catch(e){toast('文件格式错误: '+e.message,'e')}
@@ -199,9 +201,9 @@ c.appendChild(s);o.appendChild(c)}
 document.body.appendChild(o);setTimeout(()=>o.remove(),3500)}
 
 /* ========== THEME ========== */
-function getTheme(){return localStorage.getItem(SK.THEME)||'dark'}
+function getTheme(){return store.get('theme')||'dark'}
 function setTheme(t){const d=t==='dark';document.documentElement.setAttribute('data-theme',d?'':'light')
-document.getElementById('themeToggle').textContent=d?'🌙':'☀️';localStorage.setItem(SK.THEME,t)}
+document.getElementById('themeToggle').textContent=d?'🌙':'☀️';store.set('theme',t)}
 function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
 
 /* ========== WEIGHT GRID BUILDER ========== */
@@ -249,18 +251,18 @@ function renderStrStats(){
   const circ=2*Math.PI*31.5
   g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'</div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+v+'</div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v">最爱</div><div class="sc-l">动作</div></div>'
 }
-function getWeekStr(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(_str.entries||[]).filter(e=>e.date>=toDate(m))}
+function getWeekStr(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(store.get('strength')||{entries:[]}).entries.filter(e=>e.date>=toDate(m))}
 
 /* ========== MISSED DAYS ========== */
 function renderMissed(){
   const c=document.getElementById('strMissedDays')
   const allDates=[];const d=new Date()
   for(let i=6;i>=0;i--){const t=new Date(d);t.setDate(t.getDate()-i);allDates.push(toDate(t))}
-  const activeDays=new Set((_str.entries||[]).map(e=>e.date))
+  const activeDays=new Set((store.get('strength')||{entries:[]}).entries.map(e=>e.date))
   const missed=allDates.filter(dd=>!activeDays.has(dd)&&dd<=today())
   if(!missed.length){c.innerHTML='<div style="font-size:.75rem;color:var(--text3);padding:8px 0">✅ 最近 7 天全勤！</div>';return}
   c.innerHTML=missed.map(dd=>{
-    const note=_missed.notes[dd]||''
+    const note=getMissed()[dd]||''
     return '<div class="md-item"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button><button class="md-write" data-date="'+dd+'" data-makeup="1" style="color:var(--green)">➕ 补签</button></div><div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(note||'')+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
   }).join('')
   c.querySelectorAll('.md-write').forEach(b=>b.addEventListener('click',()=>{
@@ -273,14 +275,14 @@ function renderMissed(){
   }))
   c.querySelectorAll('.md-save').forEach(b=>b.addEventListener('click',()=>{
     const dd=b.dataset.date;const inp=document.getElementById('mi_'+dd);if(!inp)return
-    const t=inp.value.trim();if(t){_missed.notes[dd]=t}else{delete _missed.notes[dd]}
-    saveMissed();renderMissed();toast('已保存断签说明','s')
+    const t=inp.value.trim();var missed=getMissed();if(t){missed[dd]=t}else{delete missed[dd]}
+    saveMissed(missed);renderMissed();toast('已保存断签说明','s')
   }))
 }
 
 /* ========== MAKEUP DIALOG ========== */
 function openMakeupDialog(dateStr){
-  var plans=_plans.plans||[]
+  var plans=getPlans()
   if(!plans.length){toast('没有训练计划，请先创建','e');return}
   var modal=document.createElement('div');modal.className='modal-overlay open'
   var h='<div class="modal-sheet"><div class="modal-handle"></div>'
@@ -301,7 +303,7 @@ function openMakeupDialog(dateStr){
 }
 
 function doMakeup(dateStr,planId){
-  var plan=_plans.plans.find(function(p){return p.id===planId})
+  var plan=getPlans().find(function(p){return p.id===planId})
   if(!plan||!plan.exercises.length){toast('计划无效','e');return}
   plan.exercises.forEach(function(ex){
     addStr({date:dateStr,exercise:ex.exercise,weight:ex.weight||7,targetReps:ex.targetReps||12,actualReps:0})
@@ -315,7 +317,7 @@ let _woPlan=null,_woIdx=0,_woReps=12,_woDone=[],_woTimer=null,_woRest=0;
 
 function renderStrPlans(){
   const c=document.getElementById('strPlansList')
-  const plans=_plans.plans||[]
+  const plans=getPlans()
   if(!plans.length){
     c.innerHTML='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有训练计划</div><div class="empty-s">点下方按钮创建</div></div>'
     return
@@ -333,7 +335,7 @@ var _peEditing=null,_peEditId=null,_peTempEx=null,_peTempIdx=null
 
 function openPlanEditor(editId){
   _peEditId=editId
-  var plan=editId?_plans.plans.find(function(p){return p.id===editId}):null
+  var plan=editId?getPlans().find(function(p){return p.id===editId}):null
   _peEditing=plan?JSON.parse(JSON.stringify(plan)):{exercises:[]}
   var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='peModal'
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(editId?'✏️ 编辑计划':'📋 新建计划')+'</div><div class="fg"><label class="fl">计划名称</label><input class="fi" id="peName" value="'+(plan?plan.name:'')+'" placeholder="计划名称"></div><div class="fg"><label class="fl">动作列表</label><div id="peExList"></div><button class="add-btn" id="peAddEx" style="margin-top:4px;padding:10px">＋ 添加动作</button></div><div class="modal-actions"><button class="m-btn-cancel" id="peCancel">取消</button><button class="m-btn-save" id="peSave">保存</button></div></div>'
@@ -365,7 +367,7 @@ function showPeExForm(idx){
 }
 
 function startStrPlan(pid){
-  const plan=_plans.plans.find(p=>p.id===pid);if(!plan||!plan.exercises.length)return
+  const plan=getPlans().find(p=>p.id===pid);if(!plan||!plan.exercises.length)return
   _woPlan=plan;_woIdx=0;_woDone=[]
   showWoExercise()
 }
@@ -488,17 +490,18 @@ function renderCarStats(){
   const total=we.length,dur=we.reduce((s,e)=>s+e.duration,0),dist=we.reduce((s,e)=>s+(e.distance||0),0)
   g.innerHTML='<div class="sc sc-total"><div class="sc-v">'+total+'</div><div class="sc-l">本周次数</div></div><div class="sc sc-vol"><div class="sc-v">'+dur+'</div><div class="sc-l">总分钟</div></div><div class="sc sc-fav"><div class="sc-v">'+(dist>0?dist+'km':'—')+'</div><div class="sc-l">总距离</div></div><div class="sc sc-rate"><div class="sc-v">🔥</div><div class="sc-l">坚持有氧</div></div>'
 }
-function getWeekCar(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(_car.entries||[]).filter(e=>e.date>=toDate(m))}
+function getWeekCar(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(store.get('cardio')||{entries:[]}).entries.filter(e=>e.date>=toDate(m))}
 
 /* ========== RENDER: PROFILE ========== */
 function renderProf(){
   const pc=document.getElementById('profileCard')
-  pc.innerHTML='<div class="pf-row"><label>身高</label><input type="number" id="pfHeight" value="'+_prof.height+'" step="1" min="100" max="250"></div><div class="pf-row"><label>性别</label><select id="pfGender"><option value="男"'+(_prof.gender==='男'?' selected':'')+'>男</option><option value="女"'+(_prof.gender==='女'?' selected':'')+'>女</option></select></div><div class="pf-row"><label>出生年</label><input type="number" id="pfBirth" value="'+_prof.birthYear+'" step="1" min="1950" max="2010"></div><button class="sb-btn" id="pfSave" style="margin-top:4px">💾 保存资料</button>'
+  var prof=getProf()
+  pc.innerHTML='<div class="pf-row"><label>身高</label><input type="number" id="pfHeight" value="'+prof.height+'" step="1" min="100" max="250"></div><div class="pf-row"><label>性别</label><select id="pfGender"><option value="男"'+(prof.gender==='男'?' selected':'')+'>男</option><option value="女"'+(prof.gender==='女'?' selected':'')+'>女</option></select></div><div class="pf-row"><label>出生年</label><input type="number" id="pfBirth" value="'+prof.birthYear+'" step="1" min="1950" max="2010"></div><button class="sb-btn" id="pfSave" style="margin-top:4px">💾 保存资料</button>'
   document.getElementById('pfSave').addEventListener('click',()=>{
-    _prof.height=parseFloat(document.getElementById('pfHeight').value)||175
-    _prof.gender=document.getElementById('pfGender').value
-    _prof.birthYear=parseInt(document.getElementById('pfBirth').value)||1990
-    saveProf();toast('资料已保存','s')
+    prof.height=parseFloat(document.getElementById('pfHeight').value)||175
+    prof.gender=document.getElementById('pfGender').value
+    prof.birthYear=parseInt(document.getElementById('pfBirth').value)||1990
+    setProf(prof);toast('资料已保存','s')
   })
   // Pre-fill weight with last recorded value
   var recs=getWt();if(recs.length>0){var inp=document.getElementById('wtInput');if(inp)inp.value=recs[0].weight}
@@ -512,7 +515,7 @@ function renderWtList(){
   if(!recs.length){el.innerHTML='<div class="empty"><span class="empty-e">⚖️</span><div class="empty-t">还没有体重记录</div><div class="empty-s">输入体重并点击记录</div></div>';return}
   el.innerHTML=recs.map(r=>'<div class="wt-entry"><div><span class="wt-val">'+r.weight+'</span> <span class="wt-date">kg · '+r.date+'</span>'+(r.note?'<br><span class="wt-note">💬 '+r.note+'</span>':'')+'</div><button class="ec-act" data-a="wtDel" data-id="'+r.id+'">🗑️</button></div>').join('')
   el.querySelectorAll('[data-a="wtDel"]').forEach(b=>b.addEventListener('click',()=>{
-    _wt.records=_wt.records.filter(r=>r.id!==b.dataset.id);saveWt();renderWtList();renderChart()
+    var wt=store.get('weight')||{records:[]};wt.records=wt.records.filter(r=>r.id!==b.dataset.id);store.set('weight',wt);renderWtList();renderChart()
   }))
 }
 
@@ -561,8 +564,8 @@ function renderGame(){
   const n=new Date();const monthLabel=mNames[n.getMonth()+1]||''
   // Calculate detail strings for attribute log
   var thirty=toDate(new Date(Date.now()-30*86400000))
-  var strE=(_str.entries||[]).filter(function(e){return e.date>=thirty})
-  var carE=(_car.entries||[]).filter(function(e){return e.date>=thirty})
+  var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
+  var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
   var strVol=strE.reduce(function(s,e){return s+e.weight*e.actualReps},0)
   var carDur=carE.reduce(function(s,e){return s+e.duration},0)
   var baseAtk=10+Math.floor(strVol/20),baseDef=10+Math.floor(carDur/6)
@@ -584,7 +587,7 @@ function renderGame(){
     '<div class="gs-item"><div class="gs-v orange">'+stats.atk+'</div><div class="gs-l">⚔️ 攻击</div></div>'+
     '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">🛡️ 防御</div></div>'+
     '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">❤️ 生命</div></div>'+
-    '<div class="gs-item"><div class="gs-v">'+_game.cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
+    '<div class="gs-item"><div class="gs-v">'+getGame().cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
     '<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.wkDays+'<span style="font-size:.6rem">/7</span>'+(stats.wkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.wkBonus+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:.6rem;color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:.6rem">'+wkStatus+'</div></div>'+
     '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
     '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="attrInfoBtn" title="属性计算方式">📖</button></div>'+
@@ -619,8 +622,8 @@ function renderGame(){
   Object.entries(LEVELS).forEach(([k,ch])=>{
     h+='<div class="chapter-hdr">📖 '+ch.name+'</div><div class="lv-grid">'
     ch.levels.forEach(lv=>{
-      const cleared=_game.cleared.includes(lv.id)
-      const isCur=_game.current===lv.id
+      const cleared=getGame().cleared.includes(lv.id)
+      const isCur=getGame().current===lv.id
       const allPrev=allPrevCleared(k,lv.id)
       const locked=!cleared&&!isCur&&!allPrev
       h+='<div class="lv-card'+(cleared?' done':'')+(isCur?' current':'')+(locked?' locked':'')+'" data-lv="'+lv.id+'"><div class="lv-num">'+lv.id+'</div><div class="lv-name">'+lv.npc+'</div><div class="lv-status '+(cleared?'done':isCur?'current':'locked')+'">'+(cleared?'✅ 已通关':isCur?'⚔️ 挑战中':locked?'🔒 未解锁':'⚔️ 可挑战')+'</div></div>'
@@ -629,8 +632,8 @@ function renderGame(){
   })
   gc.innerHTML=h
   gc.querySelectorAll('.lv-card:not(.locked)').forEach(c=>c.addEventListener('click',()=>{
-    const id=c.dataset.lv;if(_game.cleared.includes(id))return
-    _game.current=id;saveGame();startBattle(id)
+    const id=c.dataset.lv;if(getGame().cleared.includes(id))return
+    getGame().current=id;setGame(getGame());startBattle(id)
   }))
 }
 
@@ -641,13 +644,13 @@ function allPrevCleared(chKey,lvId){
   for(const[k,ch2]of Object.entries(LEVELS)){
     if(k===chKey)break
     for(const lv2 of ch2.levels){
-      if(!_game.cleared.includes(lv2.id))return false
+      if(!getGame().cleared.includes(lv2.id))return false
     }
   }
   // Then check levels before this one in current chapter
   for(const lv of ch.levels){
     if(lv.id===lvId)return true
-    if(!_game.cleared.includes(lv.id))return false
+    if(!getGame().cleared.includes(lv.id))return false
   }
   return true
 }
@@ -655,15 +658,15 @@ function allPrevCleared(chKey,lvId){
 function getWeekDays(){
   const n=new Date(),d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d))
   const days=new Set()
-  ;(_str.entries||[]).filter(e=>e.date>=toDate(m)).forEach(e=>days.add(e.date))
-  ;(_car.entries||[]).filter(e=>e.date>=toDate(m)).forEach(e=>days.add(e.date))
+  ;((store.get('strength')||{entries:[]}).entries||[]).filter(e=>e.date>=toDate(m)).forEach(e=>days.add(e.date))
+  ;((store.get('cardio')||{entries:[]}).entries||[]).filter(e=>e.date>=toDate(m)).forEach(e=>days.add(e.date))
   return days.size
 }
 function getMonthDays(){
   const n=new Date();const ms=toDate(new Date(n.getFullYear(),n.getMonth(),1))
   const days=new Set()
-  ;(_str.entries||[]).filter(e=>e.date>=ms).forEach(e=>days.add(e.date))
-  ;(_car.entries||[]).filter(e=>e.date>=ms).forEach(e=>days.add(e.date))
+  ;((store.get('strength')||{entries:[]}).entries||[]).filter(e=>e.date>=ms).forEach(e=>days.add(e.date))
+  ;((store.get('cardio')||{entries:[]}).entries||[]).filter(e=>e.date>=ms).forEach(e=>days.add(e.date))
   return days.size
 }
 
@@ -672,15 +675,15 @@ function getLastWeekDays(){
   var lastMon=new Date(now);lastMon.setDate(now.getDate()-dow-6)
   var lastSun=new Date(now);lastSun.setDate(now.getDate()-dow)
   var days=new Set()
-  ;(_str.entries||[]).filter(function(e){return e.date>=toDate(lastMon)&&e.date<=toDate(lastSun)}).forEach(function(e){days.add(e.date)})
-  ;(_car.entries||[]).filter(function(e){return e.date>=toDate(lastMon)&&e.date<=toDate(lastSun)}).forEach(function(e){days.add(e.date)})
+  ;((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=toDate(lastMon)&&e.date<=toDate(lastSun)}).forEach(function(e){days.add(e.date)})
+  ;((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=toDate(lastMon)&&e.date<=toDate(lastSun)}).forEach(function(e){days.add(e.date)})
   return days.size
 }
 
 function getGameStats(){
   var thirty=toDate(new Date(Date.now()-30*86400000))
-  var strE=(_str.entries||[]).filter(function(e){return e.date>=thirty})
-  var carE=(_car.entries||[]).filter(function(e){return e.date>=thirty})
+  var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
+  var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
   var strVol=strE.reduce(function(s,e){return s+e.weight*e.actualReps},0)
   var carDur=carE.reduce(function(s,e){return s+e.duration},0)
   var wk=getWeekDays();var wkBonus=wk>=7?50:wk>=4?20:0
@@ -689,25 +692,25 @@ function getGameStats(){
   var lastMissed=Math.max(0,3-lastWk)
   var newAtkPen=lastMissed*2,newDefPen=lastMissed*1
   // Accumulate permanent penalty
-  if(!_game.permPen)_game.permPen={atk:0,def:0}
+  if(!getGame().permPen)getGame().permPen={atk:0,def:0}
   // Check if we already applied last week's penalty (store as week number)
   var weekKey=toDate(new Date())+'_pen_applied'
-  if(lastMissed>0&&!_game.permPenLastWeek){
-    _game.permPen.atk+=newAtkPen;_game.permPen.def+=newDefPen
-    _game.permPenLastWeek=true;saveGame()
+  if(lastMissed>0&&!getGame().permPenLastWeek){
+    getGame().permPen.atk+=newAtkPen;getGame().permPen.def+=newDefPen
+    getGame().permPenLastWeek=true;setGame(getGame())
   }
   // Reset on Monday
-  if(new Date().getDay()===1&&_game.permPenLastWeek){
-    _game.permPenLastWeek=false;saveGame()
+  if(new Date().getDay()===1&&getGame().permPenLastWeek){
+    getGame().permPenLastWeek=false;setGame(getGame())
   }
   var baseAtk=10+Math.floor(strVol/20)
   var baseDef=10+Math.floor(carDur/6)
   return{
-    atk:Math.max(1,baseAtk+Math.floor(wkBonus/2)-(_game.permPen.atk||0)),
-    def:Math.max(1,baseDef+Math.floor(wkBonus/2)-(_game.permPen.def||0)),
+    atk:Math.max(1,baseAtk+Math.floor(wkBonus/2)-(getGame().permPen.atk||0)),
+    def:Math.max(1,baseDef+Math.floor(wkBonus/2)-(getGame().permPen.def||0)),
     hp:100+Math.floor(strVol/10)+Math.floor(carDur/3)+wkBonus*3,
     wkDays:wk,wkBonus:wkBonus,lastWkDays:lastWk,
-    permPenAtk:_game.permPen.atk||0,permPenDef:_game.permPen.def||0,
+    permPenAtk:getGame().permPen.atk||0,permPenDef:getGame().permPen.def||0,
     monthDays:getMonthDays()
   }
 }
@@ -757,13 +760,13 @@ function updateGameBar(){
 function startBattle(id){
   const lv=findLevel(id);if(!lv)return
   // Check daily attempt limit
-  if(!_game.attempts)_game.attempts={}
+  if(!getGame().attempts)getGame().attempts={}
   var todayKey=today()+'_'+id
-  var attempts=_game.attempts[todayKey]||0
+  var attempts=getGame().attempts[todayKey]||0
   if(attempts>=3){toast('今天已失败 3 次，不能再挑战了 😅','e');return}
   // Check if trained today
   var todayStr=today()
-  var trainedToday=(_str.entries||[]).some(function(e){return e.date===todayStr})||(_car.entries||[]).some(function(e){return e.date===todayStr})
+  var trainedToday=((store.get('strength')||{entries:[]}).entries||[]).some(function(e){return e.date===todayStr})||((store.get('cardio')||{entries:[]}).entries||[]).some(function(e){return e.date===todayStr})
   if(!trainedToday&&attempts===0){toast('⚠️ 今天还没训练，属性较低','e')}
   var stats=getGameStats()
   _bPlayer={...stats};_bEnemy={atk:lv.atk,def:lv.def,hp:lv.hp,maxHP:lv.hp}
@@ -791,7 +794,7 @@ function startBattle(id){
 function runBattle(){
   if(_bDone||_battleRunning)return
   _battleRunning=true
-  const lv=findLevel(_game.current)
+  const lv=findLevel(getGame().current)
   const tick=()=>{
     if(_bDone){_battleRunning=false;return}
     // Player attacks
@@ -844,50 +847,51 @@ function addBattleLog(msg,type){
 
 function endBattle(won){
   _bDone=true;const el=document.getElementById('battleEnd')
-  const lv=findLevel(_game.current)
+  const lv=findLevel(getGame().current)
+  var g=getGame()
   // Track attempts on loss
   if(!won){
-    if(!_game.attempts)_game.attempts={}
-    var todayKey=today()+'_'+_game.current
-    _game.attempts[todayKey]=(_game.attempts[todayKey]||0)+1
-    saveGame()
+    if(!g.attempts)g.attempts={}
+    var todayKey=today()+'_'+g.current
+    g.attempts[todayKey]=(g.attempts[todayKey]||0)+1
+    setGame(g)
   }
   if(won){
-    if(!_game.cleared.includes(_game.current))_game.cleared.push(_game.current)
+    if(!g.cleared.includes(g.current))g.cleared.push(g.current)
     // Unlock next
     let nextId='';let found=false
     for(const ch of Object.values(LEVELS)){
       for(const lv2 of ch.levels){
         if(found){nextId=lv2.id;found=false;break}
-        if(lv2.id===_game.current)found=true
+        if(lv2.id===g.current)found=true
       }
       if(nextId)break
     }
-    if(nextId)_game.current=nextId
-    else _game.current=''
-    saveGame()
+    if(nextId)g.current=nextId
+    else g.current=''
+    setGame(g)
     el.innerHTML='<div class="be-result be-win">🏆 胜利！</div><div class="be-replay"><button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button></div>'
     celebrate()
   } else {
     el.innerHTML='<div class="be-result be-lose">💀 战败</div><div class="be-replay"><button class="be-btn be-btn-retry" id="battleRetry">🔄 重新挑战</button></div>'
   }
   document.getElementById('battleNext')?.addEventListener('click',()=>{document.getElementById('battleOverlay').classList.remove('open');renderGame()})
-  document.getElementById('battleRetry')?.addEventListener('click',()=>{document.getElementById('battleOverlay').classList.remove('open');setTimeout(()=>startBattle(_game.current),100)})
+  document.getElementById('battleRetry')?.addEventListener('click',()=>{document.getElementById('battleOverlay').classList.remove('open');setTimeout(()=>startBattle(getGame().current),100)})
   document.getElementById('battleShare')?.addEventListener('click',showShareCard)
 }
 
 /* ========== SHARE CARD ========== */
 function showShareCard(){
-  const lv=findLevel(_game.current)||findLevel(_game.cleared[_game.cleared.length-1])
+  const lv=findLevel(getGame().current)||findLevel(getGame().cleared[getGame().cleared.length-1])
   if(!lv)return
   const stats=getGameStats()
-  document.getElementById('shareLevel').textContent=_game.current+' '+lv.npc
+  document.getElementById('shareLevel').textContent=getGame().current+' '+lv.npc
   document.getElementById('shareStats').innerHTML=
     '<div class="share-stat"><div class="ss-v">'+stats.atk+'</div><div class="ss-l">攻击</div></div>'+
     '<div class="share-stat"><div class="ss-v">'+stats.def+'</div><div class="ss-l">防御</div></div>'+
     '<div class="share-stat"><div class="ss-v">'+stats.hp+'</div><div class="ss-l">生命</div></div>'
-  const clearedStr=_game.cleared.length>0?'已通关 '+_game.cleared.length+' 关':'刚刚开始征程'
-  const strE=(_str.entries||[]).length,carE=(_car.entries||[]).length
+  const clearedStr=getGame().cleared.length>0?'已通关 '+getGame().cleared.length+' 关':'刚刚开始征程'
+  const strE=((store.get('strength')||{entries:[]}).entries||[]).length,carE=((store.get('cardio')||{entries:[]}).entries||[]).length
   document.getElementById('shareVS').innerHTML=
     '🧑 力量训练 '+strE+' 次 · 有氧 '+carE+' 次<br>💪 '+clearedStr
   document.getElementById('shareOverlay').classList.add('open')
@@ -1000,14 +1004,14 @@ document.addEventListener('click',function(e){
   // Plans
   if(act==='startPlan'){startStrPlan(el.dataset.pid);return}
   if(act==='delPlan'){
-    if(confirm('确定删除这个计划？')){_plans.plans=_plans.plans.filter(p=>p.id!==el.dataset.pid);savePlans();renderStr()}
+    if(confirm('确定删除这个计划？')){savePlans(getPlans().filter(p=>p.id!==el.dataset.pid));renderStr()}
     return}
   if(act==='peExEdit'){_peTempIdx=parseInt(el.dataset.idx);showPeExForm(_peTempIdx);return}
 
   // New plan button
   if(id==='resetGameBtn'){
     if(confirm('确定重置所有挑战进度？此操作不可撤销')){
-      _game.cleared=[];_game.current='1-1';_game.attempts={};saveGame();renderGame()
+      var g=getGame();g.cleared=[];g.current='1-1';g.attempts={};setGame(g);renderGame()
       toast('挑战进度已重置','s')
     }
     return}
@@ -1042,10 +1046,10 @@ document.addEventListener('click',function(e){
     if(!pName){toast('请输入计划名称','e');return}
     if(!_peEditing||_peEditing.exercises.length===0){toast('请至少添加一个动作','e');return}
     if(_peEditId){
-      var existing=_plans.plans.find(function(x){return x.id===_peEditId})
-      if(existing){existing.name=pName;existing.exercises=_peEditing.exercises;savePlans();renderStr();toast('计划已更新','s')}
+      var existing=getPlans().find(function(x){return x.id===_peEditId})
+      if(existing){existing.name=pName;existing.exercises=_peEditing.exercises;savePlans(getPlans());renderStr();toast('计划已更新','s')}
     }else{
-      _plans.plans.push({id:uid(),name:pName,exercises:_peEditing.exercises,createdAt:Date.now()});savePlans();renderStr();toast('新计划已创建','s')
+      var pl=getPlans();pl.push({id:uid(),name:pName,exercises:_peEditing.exercises,createdAt:Date.now()});savePlans(pl);renderStr();toast('新计划已创建','s')
     }
     document.getElementById('peModal')?.remove();return}
   if(id==='peCancel'||id==='peClose'){document.getElementById('peModal')?.remove();return}
@@ -1076,7 +1080,7 @@ document.addEventListener('click',function(e){
 
   // Dynamic actions
   if(act==='strEdit'){
-    const e=_str.entries.find(x=>x.id===el.dataset.id);if(!e)return
+    const e=(store.get('strength')||{entries:[]}).entries.find(x=>x.id===el.dataset.id);if(!e)return
     openStrEdit(e);return}
   if(act==='strDel'){
     if(confirm('确定删除这条记录？')){delStr(el.dataset.id);renderStr();toast('已删除','s')};return}
@@ -1135,15 +1139,14 @@ init()
 
 /* ========== DATA MIGRATION ========== */
 function migrateOldData(){
-  // Migrate from old dumbbell-tracker keys
   try{
     var old=localStorage.getItem('dumbbell-tracker-v1')
-    if(old){var d=JSON.parse(old);if(d&&d.entries&&d.entries.length>0&&(!_str.entries||_str.entries.length===0)){
-      _str.entries=d.entries;saveStr();console.log('Migrated '+d.entries.length+' strength entries')
+    if(old){var d=JSON.parse(old);var curStr=store.get('strength');if(d&&d.entries&&d.entries.length>0&&(!curStr||!curStr.entries||curStr.entries.length===0)){
+      store.set('strength',{entries:d.entries});console.log('Migrated '+d.entries.length+' strength entries')
     }}
     var oldP=localStorage.getItem('dumbbell-tracker-plans-v1')
-    if(oldP){var dp=JSON.parse(oldP);if(dp&&dp.plans&&dp.plans.length>0&&(!_plans.plans||_plans.plans.length===0)){
-      _plans.plans=dp.plans;savePlans();console.log('Migrated '+dp.plans.length+' plans')
+    if(oldP){var dp=JSON.parse(oldP);var curPl=getPlans();if(dp&&dp.plans&&dp.plans.length>0&&(!curPl||curPl.length===0)){
+      savePlans(dp.plans);console.log('Migrated '+dp.plans.length+' plans')
     }}
   }catch(e){console.log('Migration error:',e)}
 }
