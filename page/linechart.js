@@ -62,14 +62,6 @@ function drawLineChart(canvas,opts){
   }
   ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
 
-  // Line glow
-  ctx.beginPath();ctx.moveTo(xs[0],yv(values[0]));
-  for(var i=0;i<n-1;i++){
-    var xc=(xs[i]+xs[i+1])/2,y0=yv(values[i]),y1=yv(values[i+1]);
-    ctx.bezierCurveTo(xc,y0,xc,y1,xs[i+1],y1);
-  }
-  ctx.strokeStyle=hexToRgba(color,.5);ctx.lineWidth=5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
-
   // Dots
   for(var i=0;i<n;i++){
     var xx=xs[i],yy=yv(values[i]);
