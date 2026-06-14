@@ -191,7 +191,7 @@ function runBattle(){
 }
 
 function renderBattleHP(){
-  document.getElementById('bpHP').style.width=Math.max(0,_battle.player.hp/(_battle.player.hp+_battle.enemy.maxHP||1)*100)+'%'
+  document.getElementById('bpHP').style.width=Math.max(0,_battle.player.hp/(_battle.player.maxHP||1)*100)+'%'
   document.getElementById('bpHPText').textContent='HP: '+Math.max(0,_battle.player.hp)
   document.getElementById('beHP').style.width=Math.max(0,_battle.enemy.hp/_battle.enemy.maxHP*100)+'%'
   document.getElementById('beHPText').textContent='HP: '+Math.max(0,_battle.enemy.hp)+'/'+_battle.enemy.maxHP
@@ -279,7 +279,7 @@ function onGameEvent(el,id,act){
         +'🏃 近30天有氧时长: '+info.dur+' 分钟<br>'
         +'📅 每周4天→+20攻防, 7天→+50攻防<br>'
         +'💡 每200kg容量=+1攻击, 每60分钟=+1防御<br>'
-        +(info.penalty>0?'⚠️ 本周训练不足3天, 属性降低 '+info.penalty+'%<br>':'✅ 每周训练3天以上属性正常<br>')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
+        +((info.permPenAtk+info.permPenDef)>0?'⚠️ 上周训练不足, 永久惩罚 攻-'+info.permPenAtk+' 防-'+info.permPenDef+'<br>':'✅ 每周训练3天以上属性正常<br>')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
       document.body.appendChild(modal)
       document.getElementById('attrClose').addEventListener('click',function(){modal.remove()})
       modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})

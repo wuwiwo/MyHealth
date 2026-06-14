@@ -30,7 +30,7 @@ function drawLineChart(canvas,opts){
   var ctx=canvas.getContext('2d');ctx.scale(2,2);
   var W=rect.width,H=180,pad=40;
   var min=Math.floor(Math.min.apply(null,values)-1),max=Math.ceil(Math.max.apply(null,values)+1);
-  var range=max-min,xs=values.map(function(_,i){return pad+i*(W-pad*2)/(values.length-1)});
+  var range=Math.max(1,max-min),xs=values.map(function(_,i){return pad+i*(W-pad*2)/(values.length-1)});
   var yv=function(v){return H-20-(v-min)/range*(H-40)};
   ctx.strokeStyle='rgba(100,116,139,.15)';ctx.lineWidth=.5;
   for(var v=min;v<=max;v++){var y=yv(v);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke()}

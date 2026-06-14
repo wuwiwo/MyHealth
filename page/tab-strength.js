@@ -170,7 +170,7 @@ function showWoExercise(){
   document.getElementById('woRepsD').addEventListener('click',()=>{_woReps=Math.max(0,_woReps-1);document.getElementById('woRepsDisp').textContent=_woReps})
   document.getElementById('woRepsU').addEventListener('click',()=>{_woReps=Math.min(999,_woReps+1);document.getElementById('woRepsDisp').textContent=_woReps})
   document.getElementById('woDone').addEventListener('click',()=>completeWoSet())
-  document.getElementById('woClose').addEventListener('click',()=>{document.getElementById('woOverlay')?.remove()})
+  document.getElementById('woClose').addEventListener('click',()=>{if(_woTimer){clearInterval(_woTimer);_woTimer=null}document.getElementById('woOverlay')?.remove()})
 }
 
 function completeWoSet(){
@@ -231,8 +231,8 @@ function renderHeatmap(cid,prefix,curDate){
     h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+l+'" data-date="'+da.date+'">'+d+'</div>'}
   h+='</div><div class="hm-leg">少 <div class="l0"></div><div class="l1"></div><div class="l3"></div><div class="l5"></div> 多</div></div>'
   c.innerHTML=h
-  c.querySelectorAll('[data-n="hmP"]').forEach(b=>b.addEventListener('click',()=>{_hmM--;if(_hmM<0){_hmM=11;_hmY--}renderHeatmap(cid,prefix,curDate)}))
-  c.querySelectorAll('[data-n="hmN"]').forEach(b=>b.addEventListener('click',()=>{_hmM++;if(_hmM>11){_hmM=0;_hmY++}renderHeatmap(cid,prefix,curDate)}))
+  c.querySelectorAll('[data-n="hmP"]').forEach(b=>b.addEventListener('click',()=>{_hmM--;if(_hmM<0){_hmM=11;_hmY--;if(_hmY<2020){_hmY=2020;_hmM=0}}renderHeatmap(cid,prefix,curDate)}))
+  c.querySelectorAll('[data-n="hmN"]').forEach(b=>b.addEventListener('click',()=>{_hmM++;if(_hmM>11){_hmM=0;_hmY++;var maxY=new Date().getFullYear()+1;if(_hmY>maxY){_hmY=maxY;_hmM=11}}renderHeatmap(cid,prefix,curDate)}))
   c.querySelectorAll('[data-n="hmT"]').forEach(b=>b.addEventListener('click',()=>{const n=new Date();_hmY=n.getFullYear();_hmM=n.getMonth();renderHeatmap(cid,prefix,curDate)}))
   c.querySelectorAll('.hm-cell[data-date]').forEach(b=>b.addEventListener('click',()=>{
     _strDate=b.dataset.date;renderStr()

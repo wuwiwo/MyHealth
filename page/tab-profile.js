@@ -41,6 +41,7 @@ function renderChart(){
 function onProfileEvent(el,id,act){
   if(id==='wtSubmit'){
     var w=parseFloat(document.getElementById('wtInput').value)
+    if(isNaN(w)||w<=0||w>500){toast('请输入有效体重 (1-500 kg)','e');return true}
     var note=document.getElementById('wtNote').value.trim()
     addWt({date:today(),weight:w,note:note})
     document.getElementById('wtNote').value=''

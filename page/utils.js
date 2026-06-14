@@ -78,7 +78,7 @@ document.body.appendChild(o);setTimeout(()=>o.remove(),3500)}
 /* ========== THEME ========== */
 function getTheme(){return store.get('theme')||'dark'}
 function setTheme(t){const d=t==='dark';document.documentElement.setAttribute('data-theme',d?'':'light')
-document.getElementById('themeToggle').textContent=d?'🌙':'☀️';store.set('theme',t)}
+var btn=document.getElementById('themeToggle');if(btn)btn.textContent=d?'🌙':'☀️';store.set('theme',t)}
 function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
 
 /* ========== WEIGHT GRID BUILDER ========== */

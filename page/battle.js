@@ -36,7 +36,7 @@ function rollDamage(atk,def,variance){
 
 function createBattle(playerStats,enemyStats,levelInfo,affix){
   return{
-    player:{atk:playerStats.atk,def:playerStats.def,hp:playerStats.hp},
+    player:{atk:playerStats.atk,def:playerStats.def,hp:playerStats.hp,maxHP:playerStats.hp},
     enemy:{atk:enemyStats.atk,def:enemyStats.def,hp:enemyStats.hp,maxHP:enemyStats.hp},
     level:levelInfo||{},
     affix:affix||null,
