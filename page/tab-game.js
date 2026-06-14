@@ -94,36 +94,27 @@ function allPrevCleared(chKey,lvId){
 }
 
 function getWeekDays(){
-  const n=new Date(),d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d))
-  const days=new Set()
-  ;((store.get('strength')||{entries:[]}).entries||[]).filter(e=>e.date>=toDate(m)).forEach(e=>days.add(e.date))
-  ;((store.get('cardio')||{entries:[]}).entries||[]).filter(e=>e.date>=toDate(m)).forEach(e=>days.add(e.date))
-  return days.size
+  var n=new Date(),d=n.getDay();var m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));
+  return countActiveDays((store.get('strength')||{entries:[]}).entries,(store.get('cardio')||{entries:[]}).entries,toDate(m))
 }
 function getMonthDays(){
-  const n=new Date();const ms=toDate(new Date(n.getFullYear(),n.getMonth(),1))
-  const days=new Set()
-  ;((store.get('strength')||{entries:[]}).entries||[]).filter(e=>e.date>=ms).forEach(e=>days.add(e.date))
-  ;((store.get('cardio')||{entries:[]}).entries||[]).filter(e=>e.date>=ms).forEach(e=>days.add(e.date))
-  return days.size
+  var n=new Date();var ms=toDate(new Date(n.getFullYear(),n.getMonth(),1))
+  return countActiveDays((store.get('strength')||{entries:[]}).entries,(store.get('cardio')||{entries:[]}).entries,ms)
 }
 
 function getLastWeekDays(){
   var now=new Date();var dow=now.getDay()
   var lastMon=new Date(now);lastMon.setDate(now.getDate()-dow-6)
   var lastSun=new Date(now);lastSun.setDate(now.getDate()-dow)
-  var days=new Set()
-  ;((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=toDate(lastMon)&&e.date<=toDate(lastSun)}).forEach(function(e){days.add(e.date)})
-  ;((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=toDate(lastMon)&&e.date<=toDate(lastSun)}).forEach(function(e){days.add(e.date)})
-  return days.size
+  return countActiveDaysInRange((store.get('strength')||{entries:[]}).entries,(store.get('cardio')||{entries:[]}).entries,toDate(lastMon),toDate(lastSun))
 }
 
 function getGameStats(){
   var thirty=toDate(new Date(Date.now()-30*86400000))
   var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
   var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
-  var strVol=strE.reduce(function(s,e){return s+e.weight*e.actualReps},0)
-  var carDur=carE.reduce(function(s,e){return s+e.duration},0)
+  var strVol=sumVolume(strE)
+  var carDur=sumDuration(carE)
   var wk=getWeekDays();var wkBonus=wk>=7?50:wk>=4?20:0
   var lastWk=getLastWeekDays()
   var lastMissed=Math.max(0,3-lastWk)
@@ -136,12 +127,9 @@ function getGameStats(){
   if(new Date().getDay()===1&&getGame().permPenLastWeek){
     getGame().permPenLastWeek=false;setGame(getGame())
   }
-  var baseAtk=10+Math.floor(strVol/20)
-  var baseDef=10+Math.floor(carDur/6)
+  var calc=calculateStats(strVol,carDur,wkBonus,getGame().permPen.atk||0,getGame().permPen.def||0)
   return{
-    atk:Math.max(1,baseAtk+Math.floor(wkBonus/2)-(getGame().permPen.atk||0)),
-    def:Math.max(1,baseDef+Math.floor(wkBonus/2)-(getGame().permPen.def||0)),
-    hp:100+Math.floor(strVol/10)+Math.floor(carDur/3)+wkBonus*3,
+    atk:calc.atk,def:calc.def,hp:calc.hp,
     wkDays:wk,wkBonus:wkBonus,lastWkDays:lastWk,
     permPenAtk:getGame().permPen.atk||0,permPenDef:getGame().permPen.def||0,
     monthDays:getMonthDays()

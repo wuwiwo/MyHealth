@@ -2,13 +2,30 @@
    MyHealth — Cloud Sync & Export/Import
    ============================================ */
 
-/* ========== SYNC ========== */
+/* ========== SYNC ENGINE ========== */
 let _syncT=null;
-function setSync(s,m){const e=document.getElementById('syncIndicator');if(!e)return
+
+/* UI indicator — DOM concern, not network */
+function setSync(s){var e=document.getElementById('syncIndicator');if(!e)return
 e.className='sync-dot';if(s==='synced'){e.classList.add('synced');e.textContent='✓'}
 else if(s==='syncing'){e.classList.add('syncing');e.textContent='↻'}
 else if(s==='error'){e.classList.add('error');e.textContent='⚠'}
 else e.textContent='🔄'}
+
+/* Network layer — pure I/O, no DOM */
+function apiPut(data,cb){var x=new XMLHttpRequest()
+x.open('PUT','/api/data',true)
+x.setRequestHeader('Content-Type','application/json')
+x.onload=function(){cb(x.status===200)}
+x.onerror=function(){cb(false)}
+x.send(JSON.stringify(data))}
+
+function apiGet(cb){var x=new XMLHttpRequest()
+x.open('GET','/api/data',true)
+x.onload=function(){if(x.status===200&&x.responseText){try{cb(null,JSON.parse(x.responseText));return}catch(e){}}cb(true,null)}
+x.onerror=function(){cb(true,null)};x.send()}
+
+/* Data assembler */
 function getAllData(){
   var s=store.get('strength')||{entries:[]};
   var p=store.get('plans')||{plans:[]};
@@ -21,41 +38,44 @@ function getAllData(){
     cardio:c.entries,weight:w.records,profile:getProf(),game:getGame()
   }
 }
-function pushSync(cb){setSync('syncing')
-var x=new XMLHttpRequest();x.open('PUT','/api/data',true)
-x.setRequestHeader('Content-Type','application/json')
-x.onload=function(){if(x.status===200){setSync('synced');if(cb)cb(true)}else{setSync('error');if(cb)cb(false)}}
-x.onerror=function(){setSync('error');if(cb)cb(false)}
-x.send(JSON.stringify(getAllData()))}
-function pullSync(cb){setSync('syncing')
-var x=new XMLHttpRequest();x.open('GET','/api/data',true)
-x.onload=function(){if(x.status===200&&x.responseText){try{
-  const d=JSON.parse(x.responseText)
+
+/* Merge server response into local store */
+function mergeServerData(d){
   function hasItems(v){return Array.isArray(v)?v.length>0:false}
   function hasKeys(v){return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length>0}
-  if(d&&(d.version>=2||hasItems(d.entries)||hasItems(d.cardio)||hasItems(d.weight))){
-    var merge={}
-    if(hasItems(d.entries)){merge.strength={entries:d.entries}}
-    if(hasItems(d.plans)){merge.plans={plans:d.plans}}
-    else if(d.plans?.plans&&hasItems(d.plans.plans)){merge.plans={plans:d.plans.plans}}
-    if(hasKeys(d.missed)){merge.missed={notes:d.missed}}
-    else if(d.missed?.notes&&hasKeys(d.missed.notes)){merge.missed={notes:d.missed.notes}}
-    if(hasItems(d.cardio)){merge.cardio={entries:d.cardio}}
-    else if(d.cardio?.entries&&hasItems(d.cardio.entries)){merge.cardio={entries:d.cardio.entries}}
-    if(hasItems(d.weight)){merge.weight={records:d.weight}}
-    else if(d.weight?.records&&hasItems(d.weight.records)){merge.weight={records:d.weight.records}}
-    if(d.profile&&hasKeys(d.profile)){merge.profile=d.profile}
-    if(d.game&&typeof d.game==='object'){merge.game=d.game}
-    store.mergeAll(merge)
-    var activeTab=document.querySelector('.tab-btn.active')?.dataset.tab
-    if(activeTab==='profile')renderProf()
-    else if(activeTab==='cardio')renderCar()
-    else if(activeTab==='game')renderGame()
-    else renderStr()
-    setSync('synced');if(cb)cb(true);return
-  }}catch(e){}}
-setSync('error');if(cb)cb(false)}
-x.onerror=function(){setSync('');if(cb)cb(false)};x.send()}
+  if(!d||!(d.version>=2||hasItems(d.entries)||hasItems(d.cardio)||hasItems(d.weight)))return false
+  var merge={}
+  if(hasItems(d.entries)){merge.strength={entries:d.entries}}
+  if(hasItems(d.plans)){merge.plans={plans:d.plans}}
+  else if(d.plans?.plans&&hasItems(d.plans.plans)){merge.plans={plans:d.plans.plans}}
+  if(hasKeys(d.missed)){merge.missed={notes:d.missed}}
+  else if(d.missed?.notes&&hasKeys(d.missed.notes)){merge.missed={notes:d.missed.notes}}
+  if(hasItems(d.cardio)){merge.cardio={entries:d.cardio}}
+  else if(d.cardio?.entries&&hasItems(d.cardio.entries)){merge.cardio={entries:d.cardio.entries}}
+  if(hasItems(d.weight)){merge.weight={records:d.weight}}
+  else if(d.weight?.records&&hasItems(d.weight.records)){merge.weight={records:d.weight.records}}
+  if(d.profile&&hasKeys(d.profile)){merge.profile=d.profile}
+  if(d.game&&typeof d.game==='object'){merge.game=d.game}
+  store.mergeAll(merge)
+  return true
+}
+
+/* Orchestrators — wire network + DOM + store */
+function pushSync(cb){setSync('syncing')
+apiPut(getAllData(),function(ok){setSync(ok?'synced':'error');if(cb)cb(ok)})}
+
+function pullSync(){setSync('syncing')
+apiGet(function(err,d){
+  if(err||!d){setSync('error');return}
+  if(!mergeServerData(d)){setSync('error');return}
+  var activeTab=document.querySelector('.tab-btn.active')?.dataset.tab
+  if(activeTab==='profile')renderProf()
+  else if(activeTab==='cardio')renderCar()
+  else if(activeTab==='game')renderGame()
+  else renderStr()
+  setSync('synced')
+})}
+
 function scheduleSync(){if(_syncT)clearTimeout(_syncT);_syncT=setTimeout(pushSync,800)}
 store.onChange(function(key){
   scheduleSync();
