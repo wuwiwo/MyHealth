@@ -314,12 +314,23 @@ function trackStats(stats,detail){
   var last=log.length?log[log.length-1]:null
   var changed=!last||last.atk!==stats.atk||last.def!==stats.def||last.hp!==stats.hp
   if(changed&&(last?last.date!==now:true)){
+    var atkDiff=last?stats.atk-last.atk:0
+    var defDiff=last?stats.def-last.def:0
+    var hpDiff=last?stats.hp-last.hp:0
+    var strVolDiff=last.strVol?detail.strVol-last.strVol:detail.strVol
+    var carEffDiff=last.carEff?detail.carEff-last.carEff:detail.carEff
     var reason=[]
-    reason.push('容量'+detail.strVol+'kg')
-    reason.push('有效有氧'+detail.carEff+'分钟')
+    if(strVolDiff)reason.push('容量'+(strVolDiff>0?'+':'')+strVolDiff+'kg→攻'+(atkDiff>0?'+':'')+atkDiff)
+    if(carEffDiff)reason.push('有效有氧'+(carEffDiff>0?'+':'')+carEffDiff+'min')
     if(stats.wkBonus)reason.push('周奖励+'+stats.wkBonus)
     if(stats.permPenAtk||stats.permPenDef)reason.push('惩罚攻-'+stats.permPenAtk+'防-'+stats.permPenDef)
-    log.push({date:now,atk:stats.atk,def:stats.def,hp:stats.hp,reason:reason.join(' · '),wkDays:stats.wkDays})
+    log.push({
+      date:now,atk:stats.atk,def:stats.def,hp:stats.hp,
+      atkDiff:atkDiff,defDiff:defDiff,hpDiff:hpDiff,
+      reason:reason.join(' · ')||'属性变化',
+      wkDays:stats.wkDays,
+      strVol:detail.strVol,carEff:detail.carEff
+    })
     if(log.length>60)log=log.slice(-60)
     store.set('attrLog',log)
   }
@@ -379,7 +390,15 @@ function showAttrLog(){
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📜 属性变更日志</div><div style="max-height:60vh;overflow-y:auto;font-size:.75rem">'
   for(var i=log.length-1;i>=0;i--){
     var l=log[i]
-    h+='<div style="padding:8px 0;border-bottom:1px solid var(--bd)"><div style="font-weight:700">'+l.date+'</div><div style="color:var(--text2)">⚔️'+l.atk+' 🛡️'+l.def+' ❤️'+l.hp+' · '+l.reason+'</div><div style="color:var(--text3);font-size:.65rem">周训练'+l.wkDays+'天</div></div>'
+    function dl(v){return v>0?'<span style="color:var(--green)">+'+v+'</span>':v<0?'<span style="color:var(--red)">'+v+'</span>':''}
+    var dlAtk=dl(l.atkDiff),dlDef=dl(l.defDiff),dlHp=dl(l.hpDiff)
+    var attrs='⚔️ <b>'+l.atk+'</b>'+dlAtk+' 🛡️ <b>'+l.def+'</b>'+dlDef+' ❤️ <b>'+l.hp+'</b>'+dlHp
+    h+='<div style="padding:10px 0;border-bottom:1px solid var(--bd)">'
+      +'<div style="font-weight:700;font-size:.8rem">'+l.date+'</div>'
+      +'<div style="font-size:.85rem;margin:2px 0">'+attrs+'</div>'
+      +'<div style="color:var(--text2);margin-bottom:2px">'+l.reason+'</div>'
+      +'<div style="color:var(--text3);font-size:.65rem">周训练'+l.wkDays+'天</div>'
+      +'</div>'
   }
   h+='</div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
   modal.innerHTML=h;document.body.appendChild(modal)
