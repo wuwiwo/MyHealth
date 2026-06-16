@@ -107,7 +107,7 @@ function renderStrPlans(){
   }
   c.innerHTML=plans.map(p=>{
     const tags=p.exercises.map(e=>e.exercise).slice(0,6)
-    return '<div class="ec" style="cursor:pointer"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="startPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(n=>'<span style="font-size:.7rem;background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>').join('')+'</div></div></div>'
+    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="editPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="startPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(n=>'<span style="font-size:.7rem;background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>').join('')+'</div></div></div>'
   }).join('')
   c.innerHTML+='<button class="add-btn" id="strNewPlan" style="margin-top:8px">＋ 新建计划</button>'
 }
@@ -139,13 +139,19 @@ function renderPeList(){
 function showPeExForm(idx){
   _peTempIdx=idx
   var ex=idx!==null?_peEditing.exercises[idx]:{exercise:'',weight:7,targetReps:12,restSeconds:60}
-  var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='peExModal'
-  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(idx!==null?'编辑动作':'添加动作')+'</div><div class="fg"><label class="fl">动作名称</label><input class="fi" id="peExName" value="'+ex.exercise+'" placeholder="如: 弯举"></div>'
+  var form=document.getElementById('peExForm')
+  if(!form){
+    var el=document.getElementById('peExList').parentNode
+    form=document.createElement('div');form.id='peExForm'
+    form.style='background:var(--bg);border:1px solid var(--bd);border-radius:var(--rs);padding:12px;margin-bottom:8px'
+    el.insertBefore(form,document.getElementById('peAddEx'))
+  }
+  form.innerHTML='<div class="fg"><label class="fl">动作名称</label><input class="fi" id="peExName" value="'+ex.exercise+'" placeholder="如: 弯举"></div>'
     +'<div class="fg"><label class="fl">重量 (kg)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExWDown">−</button><span class="sp-val" id="peExWeight">'+ex.weight+'</span><button class="sp-btn" id="peExWUp">+</button></div></div>'
     +'<div class="fg"><label class="fl">目标次数</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExRDown">−</button><span class="sp-val" id="peExReps">'+ex.targetReps+'</span><button class="sp-btn" id="peExRUp">+</button></div></div>'
     +'<div class="fg"><label class="fl">休息 (秒)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExSDown">−</button><span class="sp-val" id="peExRest">'+ex.restSeconds+'</span><button class="sp-btn" id="peExSUp">+</button></div></div>'
-    +'<div class="modal-actions"><button class="m-btn-cancel" id="peExCancel">取消</button><button class="m-btn-save" id="peExConfirm">✅ 确定</button></div></div>'
-  document.body.appendChild(modal)
+    +'<div class="modal-actions"><button class="m-btn-cancel" id="peExCancel">取消</button><button class="m-btn-save" id="peExConfirm">✅ 确定</button></div>'
+  form.scrollIntoView({behavior:'smooth'})
 }
 
 function startStrPlan(pid){
@@ -268,9 +274,10 @@ function onStrengthEvent(el,id,act){
       }else{
         var pl=getPlans();pl.push({id:uid(),name:pName,exercises:_peEditing.exercises,createdAt:Date.now()});savePlans(pl);renderStr();toast('新计划已创建','s')
       }
+      var f=document.getElementById('peExForm');if(f)f.remove()
       document.getElementById('peModal')?.remove();return true}
     case 'peCancel':case 'peClose':document.getElementById('peModal')?.remove();return true;
-    case 'peAddEx':_peTempEx={exercise:'',weight:7,targetReps:12,restSeconds:60};showPeExForm(null);return true;
+    case 'peAddEx':var f=document.getElementById('peExForm');if(f)f.remove();_peTempEx={exercise:'',weight:7,targetReps:12,restSeconds:60};showPeExForm(null);return true;
     case 'peExConfirm':{
       var exName=document.getElementById('peExName').value.trim()
       if(!exName){toast('请输入动作名称','e');return true}
@@ -279,8 +286,9 @@ function onStrengthEvent(el,id,act){
       var exRest=parseInt(document.getElementById('peExRest').textContent)
       if(_peTempIdx!==null){_peEditing.exercises[_peTempIdx]={exercise:exName,weight:exWeight,targetReps:exReps,restSeconds:exRest}}
       else{_peEditing.exercises.push({exercise:exName,weight:exWeight,targetReps:exReps,restSeconds:exRest})}
-      document.getElementById('peExModal')?.remove();renderPeList();return true}
-    case 'peExCancel':document.getElementById('peExModal')?.remove();return true;
+      var form=document.getElementById('peExForm');if(form)form.remove()
+      renderPeList();return true}
+    case 'peExCancel':var form=document.getElementById('peExForm');if(form)form.remove();return true;
     case 'peExWDown':{var v=parseFloat(document.getElementById('peExWeight').textContent);document.getElementById('peExWeight').textContent=Math.max(1,v-1);return true}
     case 'peExWUp':{var v=parseFloat(document.getElementById('peExWeight').textContent);document.getElementById('peExWeight').textContent=Math.min(50,v+1);return true}
     case 'peExRDown':{var v=parseInt(document.getElementById('peExReps').textContent);document.getElementById('peExReps').textContent=Math.max(1,v-1);return true}
@@ -288,6 +296,7 @@ function onStrengthEvent(el,id,act){
     case 'peExSDown':{var v=parseInt(document.getElementById('peExRest').textContent);document.getElementById('peExRest').textContent=Math.max(0,v-15);return true}
     case 'peExSUp':{var v=parseInt(document.getElementById('peExRest').textContent);document.getElementById('peExRest').textContent=Math.min(300,v+15);return true}
   }
+  if(act==='editPlan'){openPlanEditor(el.dataset.pid);return true}
   if(act==='startPlan'){startStrPlan(el.dataset.pid);return true}
   if(act==='delPlan'){
     if(confirm('确定删除这个计划？')){savePlans(getPlans().filter(function(p){return p.id!==el.dataset.pid}));renderStr()}
