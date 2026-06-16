@@ -4,6 +4,9 @@
 
 /* ========== SYNC ENGINE ========== */
 let _syncT=null;
+var _lastSyncTime=parseInt(localStorage.getItem('dh-sync-time')||'0',10)
+
+function saveSyncTime(){_lastSyncTime=Date.now();localStorage.setItem('dh-sync-time',String(_lastSyncTime))}
 
 /* UI indicator — DOM concern, not network */
 function setSync(s){var e=document.getElementById('syncIndicator');if(!e)return
@@ -62,12 +65,15 @@ function mergeServerData(d){
 
 /* Orchestrators — wire network + DOM + store */
 function pushSync(cb){setSync('syncing')
-apiPut(getAllData(),function(ok){setSync(ok?'synced':'error');if(cb)cb(ok)})}
+apiPut(getAllData(),function(ok){saveSyncTime();setSync(ok?'synced':'error');if(cb)cb(ok)})}
 
 function pullSync(){setSync('syncing')
 apiGet(function(err,d){
   if(err||!d){setSync('error');return}
+  // Only merge if server data is newer than our last known state
+  if(d.lastUpdated&&d.lastUpdated<=_lastSyncTime&&_lastSyncTime>0){setSync('synced');return}
   if(!mergeServerData(d)){setSync('error');return}
+  saveSyncTime()
   var activeTab=document.querySelector('.tab-btn.active')?.dataset.tab
   if(activeTab==='profile')renderProf()
   else if(activeTab==='cardio')renderCar()
