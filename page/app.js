@@ -59,8 +59,6 @@ function init(){
   migrateOldData()
 
   renderStr();renderCar();renderProf();renderGame()
-
-  setTimeout(pullSync,3000)
 }
 
 /* ========== EVENT DELEGATION ========== */
@@ -75,6 +73,7 @@ document.addEventListener('click',function(e){
     return
   }
   if(id==='themeToggle'){toggleTheme();return}
+  if(id==='syncBtn'){showSyncDialog();return}
 
   if(el.classList.contains('speed-btn')&&el.dataset.speed){
     document.querySelectorAll('.speed-btn').forEach(b=>b.classList.remove('active'))
