@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.3
+> Personal Health Manager — 个人健身健康管理应用 v1.4
 
 一个**纯前端单页应用**，帮助记录和追踪个人健身数据，通过**游戏化 RPG 挑战系统**将训练量转化为角色属性进行对战。
 
@@ -86,4 +86,4 @@ vercel --prod
 
 ## 版本
 
-`v1.3` — 见 `doc/changelog-v1.3.md`
+`v1.4` — 见 `doc/changelog-v1.4.md`
