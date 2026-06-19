@@ -272,6 +272,8 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 .battle-char{text-align:center;flex:1;max-width:160px;position:relative}
 .bc-name{font-size:.85rem;font-weight:700;margin-bottom:8px}
 .bc-hp-bar{height:12px;background:var(--bg3);border-radius:var(--rp);overflow:hidden;margin-bottom:4px}
+.battle-char.hit{animation:hitShake .3s ease}
+@keyframes hitShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 .bc-hp-fill{height:100%;border-radius:var(--rp);background:linear-gradient(90deg,var(--green-d),var(--green));transition:width .3s ease}
 .bc-hp-fill.enemy{background:linear-gradient(90deg,var(--red),#f87171)}
 .bc-hp-text{font-size:.68rem;color:var(--text3);margin-bottom:4px}

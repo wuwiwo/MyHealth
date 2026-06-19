@@ -77,13 +77,6 @@
     <div class="section-hdr" style="margin-top:20px">📋 训练计划</div>
     <div id="strPlansList"></div>
 
-    <div class="section-hdr" style="margin-top:24px;">📂 数据管理</div>
-    <div style="display:flex;gap:8px;">
-      <button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="exportDataBtn">📤 导出数据</button>
-      <button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="importDataBtn">📥 导入数据</button>
-    </div>
-    <div style="text-align:center;margin-top:6px;font-size:.7rem;color:var(--text3);">用于手动备份或跨设备转移数据</div>
-
     <div class="section-hdr" style="margin-top:20px">📝 断签说明</div>
     <div id="strMissedDays"></div>
 
@@ -154,6 +147,7 @@
     <div class="sub-tab active" id="subPersonal">
       <div class="section-hdr">👤 基本信息</div>
       <div class="profile-card" id="profileCard"></div>
+      <div id="prSection"></div>
 
       <div class="section-hdr">⚖️ 体重记录</div>
       <div class="weight-form-row">
@@ -168,6 +162,13 @@
         <canvas id="weightCanvas"></canvas>
       </div>
       <div id="weightList"></div>
+
+      <div class="section-hdr" style="margin-top:20px">📂 数据管理</div>
+      <div style="display:flex;gap:8px;">
+        <button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="exportDataBtn">📤 导出数据</button>
+        <button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="importDataBtn">📥 导入数据</button>
+      </div>
+      <div style="text-align:center;margin-top:6px;font-size:.7rem;color:var(--text3);">用于手动备份或跨设备转移数据</div>
     </div>
 
     <!-- Sub-tab: Training Data -->

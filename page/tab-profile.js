@@ -40,7 +40,8 @@ function renderChart(){
 function renderPRs(){
   var prs=store.get('prs')||{}
   var keys=Object.keys(prs)
-  if(!keys.length)return
+  var el=document.getElementById('prSection');if(!el)return
+  if(!keys.length){el.innerHTML='';return}
   var h='<div class="section-hdr">🏆 个人最佳</div><div class="stats-grid">'
   keys.forEach(function(ex){var pr=prs[ex]
     h+='<div class="sc"><div class="sc-v" style="font-size:1rem">'+ex+'</div><div class="sc-l" style="font-size:.65rem;line-height:1.5">'
@@ -50,11 +51,7 @@ function renderPRs(){
     h+='</div></div>'
   })
   h+='</div>'
-  var existing=document.getElementById('prSection')
-  if(existing)existing.remove()
-  var div=document.createElement('div');div.id='prSection';div.innerHTML=h
-  var pc=document.getElementById('profileCard')
-  if(pc&&pc.parentNode)pc.parentNode.insertBefore(div,pc.nextSibling)
+  el.innerHTML=h
 }
 
 /* ========== TRAINING STATISTICS ========== */

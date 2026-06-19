@@ -76,8 +76,7 @@ function renderGame(){
   })
   gc.innerHTML=h
   gc.querySelectorAll('.lv-card:not(.locked)').forEach(c=>c.addEventListener('click',()=>{
-    const id=c.dataset.lv;if(getGame().cleared.includes(id))return
-    showLevelPreview(id)
+    showLevelPreview(c.dataset.lv)
   }))
 }
 
@@ -144,52 +143,54 @@ function getGameStats(){
 function showLevelPreview(id){
   var lv=findLevel(id);if(!lv)return
   var stats=getGameStats()
-  var affix=lv.boss?{index:Math.floor(Math.random()*3)}:null
+  var cleared=getGame().cleared.includes(id)
 
-  // Estimate win rate
-  var pDmg=Math.max(1,stats.atk-Math.floor(lv.def/2)+2)
-  var eDmg=Math.max(1,lv.atk-Math.floor(stats.def/2)+1.5)
-  if(affix&&affix.index===0&&stats.def<50){pDmg=Math.floor(pDmg*0.85)}  // weaken
-  var pTurns=Math.ceil(lv.hp/pDmg),eTurns=Math.ceil(stats.hp/eDmg)
-  var rate=Math.min(95,Math.max(5,Math.round(50+(pTurns<eTurns?40:(pTurns===eTurns?15:-(eTurns-pTurns)*10)))))
-  if(affix&&affix.index===1)rate=Math.max(5,rate-15)  // thorns harder
-  if(affix&&affix.index===2)rate=Math.max(5,rate-10)  // rage harder
+  // Simulate 50 battles for accurate win rate
+  var wins=0
+  for(var s=0;s<50;s++){
+    var batt=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp},{atk:lv.atk,def:lv.def,hp:lv.hp},{npc:lv.npc,boss:lv.boss},lv.boss?pickBossAffix():null)
+    for(var t=0;t<100&&!batt.done;t++){battleTick(batt)}
+    if(batt.winner)wins++
+  }
+  var rate=Math.min(98,Math.max(2,Math.round(wins/50*100)))
   var rateColor=rate>=70?'var(--green)':rate>=40?'var(--yellow)':'var(--red)'
 
   var modal=document.createElement('div');modal.className='modal-overlay open'
   var h='<div class="modal-sheet"><div class="modal-handle"></div>'
-    +'<div class="modal-title">'+lv.id+' '+lv.npc+'</div>'
+    +'<div class="modal-title">'+lv.id+' '+lv.npc+(lv.boss?' 👑':'')+(cleared?' ✅':':')+'</div>'
     +'<div class="stats-grid" style="margin-bottom:12px">'
     +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:var(--orange)">⚔️ '+lv.atk+'</div><div class="sc-l">攻击</div></div>'
     +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:var(--blue)">🛡️ '+lv.def+'</div><div class="sc-l">防御</div></div>'
     +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:var(--green)">❤️ '+lv.hp+'</div><div class="sc-l">生命</div></div>'
-    +'<div class="sc"><div class="sc-v" style="font-size:1rem">'+rate+'%</div><div class="sc-l">胜率</div></div>'
+    +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:'+rateColor+'">'+rate+'%</div><div class="sc-l">胜率(50次模拟)</div></div>'
     +'</div>'
 
   // Boss affix info
   if(lv.boss){
-    var affixes=['虚弱诅咒: 防御<50时伤害降低10-20%','荆棘之躯: 攻击者受50%反伤, 可被防御减免','怒气勃发: 每2-3回合攻击力递增1-5, 可叠加']
+    var affixes=BOSS_AFFIXES.map(function(a){return a.name+': '+a.desc})
     h+='<div style="background:rgba(249,115,22,.08);border:1px solid var(--orange-g);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:.72rem;color:var(--text2)">'
-      +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">👑 Boss 词缀</div>'
+      +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">👑 Boss 词缀 (随机1种)</div>'
       +affixes.map(function(a){return'<div style="padding:2px 0">• '+a+'</div>'}).join('')
       +'</div>'
   }
 
   // Player stats comparison
   h+='<div style="font-size:.72rem;color:var(--text3);text-align:center;margin-bottom:4px">你的属性: ⚔️'+stats.atk+' 🛡️'+stats.def+' ❤️'+stats.hp+'</div>'
-    +'<div style="text-align:center;margin-bottom:12px">'
-    +'<span style="font-size:.65rem;color:var(--text3)">每回合伤害: 🧑~'+pDmg+' | 👹~'+eDmg+'</span></div>'
 
   h+='<div class="modal-actions">'
-    +'<button class="m-btn-cancel" id="lvCancel">取消</button>'
-    +'<button class="m-btn-save" style="background:linear-gradient(135deg,var(--red),#dc2626)" id="lvChallenge">⚔️ 挑战</button></div>'
-    +'</div>'
+    +'<button class="m-btn-cancel" id="lvCancel">关闭</button>'
+  if(!cleared){
+    h+='<button class="m-btn-save" style="background:linear-gradient(135deg,var(--red),#dc2626)" id="lvChallenge">⚔️ 挑战</button>'
+  }
+  h+='</div></div>'
   modal.innerHTML=h;document.body.appendChild(modal)
 
   document.getElementById('lvCancel').addEventListener('click',function(){modal.remove()})
-  document.getElementById('lvChallenge').addEventListener('click',function(){
-    modal.remove();getGame().current=id;setGame(getGame());startBattle(id)
-  })
+  if(!cleared){
+    document.getElementById('lvChallenge').addEventListener('click',function(){
+      modal.remove();getGame().current=id;setGame(getGame());startBattle(id)
+    })
+  }
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
 }
 
@@ -241,6 +242,12 @@ function runBattle(){
     _battle.turn=result.turn
     result.events.forEach(function(ev){addBattleLog(ev.msg,ev.type)})
     renderBattleHP()
+    // Hit animation
+    var pEl=document.getElementById('battlePlayer'),eEl=document.getElementById('battleEnemy')
+    result.events.forEach(function(ev){
+      if(ev.type==='e'&&eEl){eEl.classList.remove('hit');void eEl.offsetWidth;eEl.classList.add('hit')}
+      if(ev.type==='dmg'&&pEl){pEl.classList.remove('hit');void pEl.offsetWidth;pEl.classList.add('hit')}
+    })
     if(_battle.done){endBattle(_battle.winner);_battleRunning=false;return}
     _battleTimer=setTimeout(tick,600/_battleSpeed)
   }
