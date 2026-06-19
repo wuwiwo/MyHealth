@@ -46,9 +46,11 @@ function getAllData(){
   var c=store.get('cardio')||{entries:[]};
   var w=store.get('weight')||{records:[]};
   return{
-    version:2,lastUpdated:Date.now(),
+    version:3,lastUpdated:Date.now(),
     entries:s.entries,plans:p.plans,missed:m.notes,
-    cardio:c.entries,weight:w.records,profile:getProf(),game:getGame()
+    cardio:c.entries,weight:w.records,profile:getProf(),game:getGame(),
+    prs:store.get('prs'),records:store.get('records'),
+    attrLog:store.get('attrLog'),cardioTypes:store.get('cardioTypes')
   }
 }
 
@@ -69,6 +71,10 @@ function mergeServerData(d){
   else if(d.weight?.records&&hasItems(d.weight.records)){merge.weight={records:d.weight.records}}
   if(d.profile&&hasKeys(d.profile)){merge.profile=d.profile}
   if(d.game&&typeof d.game==='object'){merge.game=d.game}
+  if(d.prs&&typeof d.prs==='object'){merge.prs=d.prs}
+  if(d.records&&typeof d.records==='object'){merge.records=d.records}
+  if(d.attrLog&&Array.isArray(d.attrLog)){merge.attrLog=d.attrLog}
+  if(d.cardioTypes&&Array.isArray(d.cardioTypes)){merge.cardioTypes=d.cardioTypes}
   store.mergeAll(merge)
   return true
 }
@@ -124,14 +130,30 @@ function showSyncDialog(){
       +'<div>🎮 通关: '+remoteSummary.gameC+' 关</div><div></div>'
       +'</div></div>'
 
-    // Warning / suggestion
+    // Suggestion
+    var suggestion=''
+    if(localNewer&&remoteData.entries){
+      suggestion='<div style="background:rgba(249,115,22,.12);border:2px solid var(--orange);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:.75rem;line-height:1.6">'
+        +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">💡 建议：推送本地数据到云端</div>'
+        +'<div style="color:var(--text2)">本地数据更新 ('+localSummary.time+')，包含 '+localSummary.strE+' 组力量记录。云端数据较旧。</div></div>'
+    }else if(remoteNewer&&remoteData.entries){
+      suggestion='<div style="background:rgba(34,197,94,.08);border:2px solid var(--green);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:.75rem;line-height:1.6">'
+        +'<div style="font-weight:700;color:var(--green);margin-bottom:4px">💡 建议：从云端拉取数据</div>'
+        +'<div style="color:var(--text2)">云端数据更新 ('+remoteSummary.time+')，包含 '+remoteSummary.strE+' 组力量记录。本地数据较旧。</div></div>'
+    }else if(localData.entries&&remoteData.entries&&localSummary.strE===remoteSummary.strE){
+      suggestion='<div style="background:rgba(100,116,139,.08);border:1px solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:.72rem;color:var(--text2);text-align:center">✅ 本地与云端数据一致，无需同步</div>'
+    }else{
+      suggestion='<div style="background:rgba(100,116,139,.08);border:1px solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:.72rem;color:var(--text2);text-align:center">⚠️ 无法判断新旧关系，请手动选择</div>'
+    }
+    h+=suggestion
+
+    // Warning
     if(localNewer&&remoteData.entries&&localSummary.strE>remoteSummary.strE){
-      h+='<div style="background:rgba(234,179,8,.1);border:1px solid var(--yellow);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px;font-size:.68rem;color:var(--yellow)">⚠️ 本地数据较新，拉取会丢失部分记录</div>'
+      h+='<div style="background:rgba(234,179,8,.1);border:1px solid var(--yellow);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px;font-size:.68rem;color:var(--yellow)">⚠️ 拉取云端会丢失 '+Math.max(0,localSummary.strE-remoteSummary.strE)+' 组力量记录</div>'
     }
     if(remoteNewer&&remoteData.entries&&remoteSummary.strE>localSummary.strE){
-      h+='<div style="background:rgba(34,197,94,.08);border:1px solid var(--green);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px;font-size:.68rem;color:var(--green)">💡 云端数据较新，拉取可同步手机端记录</div>'
+      h+='<div style="background:rgba(234,179,8,.1);border:1px solid var(--yellow);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px;font-size:.68rem;color:var(--yellow)">⚠️ 推送本地会丢失云端 '+Math.max(0,remoteSummary.strE-localSummary.strE)+' 组力量记录</div>'
     }
-
     h+='<div class="modal-actions" style="flex-wrap:wrap">'
       +'<button class="m-btn-cancel" id="syncCancel" style="flex:1;min-width:80px">取消</button>'
       +'<button class="be-btn" id="syncPull" style="flex:1;min-width:80px;background:var(--blue);color:white">☁️ 拉取云端</button>'
@@ -194,6 +216,10 @@ function importData(){
         if(data.profile&&typeof data.profile==='object'){importMap.profile=data.profile}
         if(data.game&&typeof data.game==='object'){importMap.game=data.game}
         if(data.missed&&typeof data.missed==='object'){importMap.missed={notes:data.missed}}
+        if(data.prs&&typeof data.prs==='object'){importMap.prs=data.prs}
+        if(data.records&&typeof data.records==='object'){importMap.records=data.records}
+        if(data.attrLog&&Array.isArray(data.attrLog)){importMap.attrLog=data.attrLog}
+        if(data.cardioTypes&&Array.isArray(data.cardioTypes)){importMap.cardioTypes=data.cardioTypes}
         store.mergeAll(importMap)
         toast('数据导入成功 ✅','s')
         renderStr();renderCar();renderProf();renderGame()
