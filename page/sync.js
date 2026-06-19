@@ -34,8 +34,12 @@ function dataSummary(d){
   var wtE=d.weight?d.weight.length:0
   var plans=d.plans?d.plans.length:0
   var gameC=d.game&&d.game.cleared?d.game.cleared.length:0
+  var prsC=d.prs?Object.keys(d.prs).length:0
+  var recC=d.records?Object.keys(d.records).length:0
+  var logC=d.attrLog?d.attrLog.length:0
+  var ctC=d.cardioTypes?d.cardioTypes.length:0
   var time=d.lastUpdated?new Date(d.lastUpdated).toLocaleString('zh-CN'):'未知'
-  return{strE:strE,carE:carE,wtE:wtE,plans:plans,gameC:gameC,time:time}
+  return{strE:strE,carE:carE,wtE:wtE,plans:plans,gameC:gameC,prsC:prsC,recC:recC,logC:logC,ctC:ctC,time:time}
 }
 
 /* Data assembler */
@@ -85,7 +89,7 @@ function autoBackup(){
     var data=JSON.stringify(getAllData(),null,2)
     var blob=new Blob([data],{type:'application/json'})
     var url=URL.createObjectURL(blob)
-    var a=document.createElement('a');a.href=url;a.download='myhealth-auto-'+today()+'.json'
+    var a=document.createElement('a');a.href=url;a.download='myhealth-auto-'+today()+'-'+Date.now().toString(36)+'.json'
     a.click();URL.revokeObjectURL(url)
     return true
   }catch(e){return false}
@@ -102,10 +106,12 @@ function showSyncDialog(){
       return
     }
     var remoteSummary=dataSummary(remoteData)
-    var localNewer=_lastSyncTime>0&&(!remoteData.lastUpdated||remoteData.lastUpdated<=_lastSyncTime)
-    var remoteNewer=remoteData.lastUpdated&&remoteData.lastUpdated>_lastSyncTime
-    var localAge=localNewer?' (较新)':remoteNewer?' (较旧)':''
-    var remoteAge=remoteNewer?' (较新)':localNewer?' (较旧)':''
+    var isFirst=_lastSyncTime===0
+    var hasLocal=localData.entries&&localData.entries.length>0
+    var localNewer=isFirst?false:(_lastSyncTime>0&&(!remoteData.lastUpdated||remoteData.lastUpdated<=_lastSyncTime))
+    var remoteNewer=isFirst?false:(remoteData.lastUpdated&&remoteData.lastUpdated>_lastSyncTime)
+    var localAge=isFirst?' (未同步)':localNewer?' (较新)':remoteNewer?' (较旧)':''
+    var remoteAge=isFirst?' (未同步)':remoteNewer?' (较新)':localNewer?' (较旧)':''
 
     var modal=document.createElement('div');modal.className='modal-overlay open'
     var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🔄 同步数据</div>'
@@ -117,7 +123,9 @@ function showSyncDialog(){
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.72rem;color:var(--text2)">'
       +'<div>🏋️ 力量: '+localSummary.strE+' 组</div><div>🏃 有氧: '+localSummary.carE+' 次</div>'
       +'<div>⚖️ 体重: '+localSummary.wtE+' 条</div><div>📋 计划: '+localSummary.plans+' 个</div>'
-      +'<div>🎮 通关: '+localSummary.gameC+' 关</div><div></div>'
+      +'<div>🎮 通关: '+localSummary.gameC+' 关</div>'
+      +'<div>🏆 PR: '+localSummary.prsC+' 项</div>'
+      +'<div>📜 日志: '+localSummary.logC+' 条</div><div></div>'
       +'</div></div>'
 
     // Remote card
@@ -127,20 +135,26 @@ function showSyncDialog(){
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.72rem;color:var(--text2)">'
       +'<div>🏋️ 力量: '+remoteSummary.strE+' 组</div><div>🏃 有氧: '+remoteSummary.carE+' 次</div>'
       +'<div>⚖️ 体重: '+remoteSummary.wtE+' 条</div><div>📋 计划: '+remoteSummary.plans+' 个</div>'
-      +'<div>🎮 通关: '+remoteSummary.gameC+' 关</div><div></div>'
+      +'<div>🎮 通关: '+remoteSummary.gameC+' 关</div>'
+      +'<div>🏆 PR: '+remoteSummary.prsC+' 项</div>'
+      +'<div>📜 日志: '+remoteSummary.logC+' 条</div><div></div>'
       +'</div></div>'
 
     // Suggestion
     var suggestion=''
-    if(localNewer&&remoteData.entries){
+    if(isFirst){
+      suggestion='<div style="background:rgba(100,116,139,.08);border:2px solid var(--bd-l);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:.75rem;line-height:1.6">'
+        +'<div style="font-weight:700;color:var(--text);margin-bottom:4px">🆕 首次同步</div>'
+        +'<div style="color:var(--text2)">请选择：推送本地数据到云端，或从云端拉取数据覆盖本地。</div></div>'
+    }else if(localNewer&&remoteData.entries){
       suggestion='<div style="background:rgba(249,115,22,.12);border:2px solid var(--orange);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:.75rem;line-height:1.6">'
         +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">💡 建议：推送本地数据到云端</div>'
-        +'<div style="color:var(--text2)">本地数据更新 ('+localSummary.time+')，包含 '+localSummary.strE+' 组力量记录。云端数据较旧。</div></div>'
+        +'<div style="color:var(--text2)">本地数据更新 ('+localSummary.time+')，包含 '+localSummary.strE+' 组力量.'+localSummary.prsC+'项PR。云端数据较旧。</div></div>'
     }else if(remoteNewer&&remoteData.entries){
       suggestion='<div style="background:rgba(34,197,94,.08);border:2px solid var(--green);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:.75rem;line-height:1.6">'
         +'<div style="font-weight:700;color:var(--green);margin-bottom:4px">💡 建议：从云端拉取数据</div>'
-        +'<div style="color:var(--text2)">云端数据更新 ('+remoteSummary.time+')，包含 '+remoteSummary.strE+' 组力量记录。本地数据较旧。</div></div>'
-    }else if(localData.entries&&remoteData.entries&&localSummary.strE===remoteSummary.strE){
+        +'<div style="color:var(--text2)">云端数据更新 ('+remoteSummary.time+')，包含 '+remoteSummary.strE+' 组力量。本地数据较旧。</div></div>'
+    }else if(hasLocal&&remoteData.entries&&localSummary.strE===remoteSummary.strE){
       suggestion='<div style="background:rgba(100,116,139,.08);border:1px solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:.72rem;color:var(--text2);text-align:center">✅ 本地与云端数据一致，无需同步</div>'
     }else{
       suggestion='<div style="background:rgba(100,116,139,.08);border:1px solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:.72rem;color:var(--text2);text-align:center">⚠️ 无法判断新旧关系，请手动选择</div>'
@@ -193,6 +207,25 @@ store.onChange(function(key){
   if(key==='strength'||key==='cardio'||key==='game')updateGameBar()
 })
 
+/* Shared: build import map from flat backup/cloud data */
+function buildImportMap(data){
+  function hasItems(v){return Array.isArray(v)&&v.length>0}
+  function hasKeys(v){return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length>0}
+  var map={}
+  if(hasItems(data.entries)){map.strength={entries:data.entries}}
+  if(hasItems(data.plans)){map.plans={plans:Array.isArray(data.plans)?data.plans:data.plans.plans||[]}}
+  if(hasItems(data.cardio)){map.cardio={entries:Array.isArray(data.cardio)?data.cardio:data.cardio.entries||[]}}
+  if(hasItems(data.weight)){map.weight={records:Array.isArray(data.weight)?data.weight:data.weight.records||[]}}
+  if(data.profile&&hasKeys(data.profile)){map.profile=data.profile}
+  if(data.game&&typeof data.game==='object'){map.game=data.game}
+  if(data.missed&&hasKeys(data.missed)){map.missed={notes:data.missed}}
+  if(data.prs&&typeof data.prs==='object'){map.prs=data.prs}
+  if(data.records&&typeof data.records==='object'){map.records=data.records}
+  if(data.attrLog&&Array.isArray(data.attrLog)){map.attrLog=data.attrLog}
+  if(data.cardioTypes&&Array.isArray(data.cardioTypes)){map.cardioTypes=data.cardioTypes}
+  return map
+}
+
 /* ========== EXPORT / IMPORT ========== */
 function exportData(){
   autoBackup()
@@ -207,20 +240,7 @@ function importData(){
     reader.onload=function(ev){
       try{
         var data=JSON.parse(ev.target.result)
-        function hasItems(v){return Array.isArray(v)&&v.length>0}
-        var importMap={}
-        if(hasItems(data.entries)){importMap.strength={entries:data.entries}}
-        if(hasItems(data.plans)){importMap.plans={plans:Array.isArray(data.plans)?data.plans:data.plans.plans||[]}}
-        if(hasItems(data.cardio)){importMap.cardio={entries:Array.isArray(data.cardio)?data.cardio:data.cardio.entries||[]}}
-        if(hasItems(data.weight)){importMap.weight={records:Array.isArray(data.weight)?data.weight:data.weight.records||[]}}
-        if(data.profile&&typeof data.profile==='object'){importMap.profile=data.profile}
-        if(data.game&&typeof data.game==='object'){importMap.game=data.game}
-        if(data.missed&&typeof data.missed==='object'){importMap.missed={notes:data.missed}}
-        if(data.prs&&typeof data.prs==='object'){importMap.prs=data.prs}
-        if(data.records&&typeof data.records==='object'){importMap.records=data.records}
-        if(data.attrLog&&Array.isArray(data.attrLog)){importMap.attrLog=data.attrLog}
-        if(data.cardioTypes&&Array.isArray(data.cardioTypes)){importMap.cardioTypes=data.cardioTypes}
-        store.mergeAll(importMap)
+        store.mergeAll(buildImportMap(data))
         toast('数据导入成功 ✅','s')
         renderStr();renderCar();renderProf();renderGame()
       }catch(e){toast('文件格式错误: '+e.message,'e')}
