@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.4
+> Personal Health Manager — 个人健身健康管理应用 v1.5.1
 
 一个**纯前端单页应用**，帮助记录和追踪个人健身数据，通过**游戏化 RPG 挑战系统**将训练量转化为角色属性进行对战。
 
@@ -14,7 +14,7 @@
 | 🏃 有氧运动 | 6 种默认类型 + 自定义、强度选择（低/中/高）、有氧训练计划 |
 | 📊 个人数据 | 基本信息、体重记录与趋势图、PR 个人最佳 |
 | 📈 训练数据 | 热力图（力量+有氧）、月度容量趋势图、累计统计、最爱动作 TOP5 |
-| 🎮 挑战模式 | 6 章 31 关 RPG 战斗、关卡预览与胜率估算、属性变更日志、历史最佳记录 |
+| 🎮 挑战模式 | 9 章 45 关 RPG 战斗、关卡预览与胜率模拟、属性变更日志、历史最佳记录 |
 
 ---
 
@@ -37,6 +37,7 @@
 page/
 ├── store.js           数据 Store（K-V 接口 + onChange 通知）
 ├── utils.js           常量、工具函数、toast、主题
+├── levels.js          关卡配置（9章45关）
 ├── stats.js           纯函数统计计算
 ├── battle.js          战斗引擎（纯逻辑）
 ├── linechart.js       Canvas 折线图（可复用）
@@ -57,7 +58,10 @@ doc/
 ├── project-analysis-v1.0.md
 ├── code-review-v1.0.md
 ├── roadmap-v1.1.md
-└── changelog-v1.3.md
+├── roadmap-v1.1.md
+├── changelog-v1.3.md
+├── changelog-v1.4.md
+└── changelog-v1.5.md
 ```
 
 ---
@@ -86,4 +90,4 @@ vercel --prod
 
 ## 版本
 
-`v1.4` — 见 `doc/changelog-v1.4.md`
+`v1.5.1` — 见 `doc/changelog-v1.5.md`
