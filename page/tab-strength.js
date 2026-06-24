@@ -29,7 +29,7 @@ function renderStr(){
 function renderStrStats(){
   const g=document.getElementById('strStats')
   const we=getWeekStr()
-  const t=we.length,r=we.reduce((s,e)=>s+e.actualReps,0),v=we.reduce((s,e)=>s+e.weight*e.actualReps,0),days=new Set(we.map(function(e){return e.date})).size
+  const t=we.length,r=we.reduce((s,e)=>s+e.actualReps,0),v=sumVolume(we,getExerciseMap()),days=new Set(we.map(function(e){return e.date})).size
   const dn=we.filter(function(e){return e.actualReps>=e.targetReps}).length,rate=t>0?Math.round(dn/t*100):0
   const circ=2*Math.PI*31.5
   var exCount={}
@@ -206,7 +206,7 @@ function showWoRest(sec){
 }
 
 function showWoSummary(){
-  const total=_woDone.reduce((s,d)=>s+d.actualReps,0),vol=_woDone.reduce((s,d)=>s+d.weight*d.actualReps,0)
+  const total=_woDone.reduce((s,d)=>s+d.actualReps,0),vol=sumVolume(_woDone,getExerciseMap())
   const el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
   if(!el)return
   el.innerHTML='<div style="text-align:center"><div style="font-size:2.5rem;margin-bottom:4px">🎉</div><div style="font-size:1.5rem;font-weight:800;margin-bottom:12px">训练完成！</div>'
@@ -262,8 +262,6 @@ function onStrengthEvent(el,id,act){
       var te=getStr(_strDate);if(te.length&&te.every(function(e){return e.actualReps>=e.targetReps}))setTimeout(celebrate,300)
       renderStr();return true}
     case 'strNewPlan':openPlanEditor(null);return true;
-    case 'exportDataBtn':exportData();return true;
-    case 'importDataBtn':importData();return true;
     case 'peSave':{
       var pName=document.getElementById('peName').value.trim()
       if(!pName){toast('请输入计划名称','e');return true}

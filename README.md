@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.5.1
+> Personal Health Manager — 个人健身健康管理应用 v1.6
 
 一个**纯前端单页应用**，帮助记录和追踪个人健身数据，通过**游戏化 RPG 挑战系统**将训练量转化为角色属性进行对战。
 
@@ -10,11 +10,10 @@
 
 | 模块 | 功能 |
 |------|------|
-| 🏋️ 力量训练 | 记录动作/重量/次数、训练计划创建与执行、周统计、补签 |
-| 🏃 有氧运动 | 6 种默认类型 + 自定义、强度选择（低/中/高）、有氧训练计划 |
-| 📊 个人数据 | 基本信息、体重记录与趋势图、PR 个人最佳 |
-| 📈 训练数据 | 热力图（力量+有氧）、月度容量趋势图、累计统计、最爱动作 TOP5 |
-| 🎮 挑战模式 | 9 章 45 关 RPG 战斗、关卡预览与胜率模拟、属性变更日志、历史最佳记录 |
+| 🏋️ 训练 | 力量（记录/计划/断签/周统计）+ 有氧（记录/计划/统计）子 Tab |
+| 📊 个人 | 基本信息、体重记录与趋势图、PR 个人最佳、训练统计与热力图 |
+| 🎮 挑战 | 9 章 45 关 RPG 战斗、关卡预览与胜率模拟、属性变更日志、历史最佳记录 |
+| ⚙️ 设置 | 动作库管理（CRUD + ratio）、计划管理、挑战管理、数据管理（导出/导入/同步） |
 
 ---
 
@@ -38,15 +37,16 @@ page/
 ├── store.js           数据 Store（K-V 接口 + onChange 通知）
 ├── utils.js           常量、工具函数、toast、主题
 ├── levels.js          关卡配置（9章45关）
-├── stats.js           纯函数统计计算
+├── stats.js           纯函数统计计算（含 ratio 加权容量）
 ├── battle.js          战斗引擎（纯逻辑）
 ├── linechart.js       Canvas 折线图（可复用）
 ├── sync.js            云同步 + 导出/导入
-├── app.js             数据层 + 事件委托 + 初始化 + 迁移
-├── tab-strength.js    力量 Tab
-├── tab-cardio.js      有氧 Tab
+├── app.js             数据层 + 事件委托 + 初始化 + 迁移 + Tab切换
+├── tab-strength.js    力量训练子 Tab
+├── tab-cardio.js      有氧运动子 Tab
 ├── tab-profile.js     个人 Tab（2 个子 Tab）
 ├── tab-game.js        挑战 Tab
+├── tab-settings.js    设置 Tab（动作库/计划/挑战/数据 4 个子 Tab）
 ├── index.html         页面骨架
 ├── index.css          样式表
 ├── api/
@@ -61,7 +61,9 @@ doc/
 ├── roadmap-v1.1.md
 ├── changelog-v1.3.md
 ├── changelog-v1.4.md
-└── changelog-v1.5.md
+├── changelog-v1.5.md
+├── changelog-v1.6.md
+└── roadmap-v1.6.md
 ```
 
 ---
@@ -99,5 +101,6 @@ vercel --prod
 | v1.4 | 2026-06-16 | 属性日志增量显示、UI全局美化、平滑曲线图 | `doc/changelog-v1.4.md` |
 | v1.5.0 | 2026-06-19 | 7-9章关卡、5种Boss词缀、手动同步、计划编辑 | `doc/changelog-v1.5.md` |
 | v1.5.1 | 2026-06-19 | 全量数据同步修复、关卡配置独立、同步建议增强 | `doc/changelog-v1.5.md` |
+| v1.6 | 2026-06-24 | 页面重构（训练+设置Tab）、动作库驱动、ratio容量加权、子Tab泛化 | `doc/changelog-v1.6.md` |
 
-> 当前版本：**v1.5.1**
+> 当前版本：**v1.6**

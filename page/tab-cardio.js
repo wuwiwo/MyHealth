@@ -154,9 +154,10 @@ function showCustomCardioDialog(){
     var name=document.getElementById('ccName').value.trim()
     var emoji=document.getElementById('ccEmoji').value.trim()||'🏃'
     if(!name){toast('请输入名称','e');return}
-    var custom=store.get('cardioTypes')||[]
-    custom.push({id:'custom'+Date.now().toString(36),name:name,emoji:emoji,hasDist:document.getElementById('ccHasDist').checked,intensity:ccInt})
-    store.set('cardioTypes',custom)
+    var list=getExercises();
+    var newId='custom'+Date.now().toString(36);
+    list.push({id:newId,name:name,type:'cardio',ratio:null,intensity:ccInt,emoji:emoji,hasDist:document.getElementById('ccHasDist').checked});
+    saveExercises(list);
     initCardioTypes()
     modal.remove()
     toast('已添加「'+name+'」','s')

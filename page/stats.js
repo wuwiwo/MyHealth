@@ -3,10 +3,18 @@
    ============================================ */
 
 /**
- * Sum strength volume (weight × actualReps)
+ * Sum strength volume (weight × actualReps × ratio%).
+ * ratio is looked up from exerciseMap by entry.exercise; defaults to 100%.
+ *
+ * @param {Array}  entries      Strength entries with {exercise, weight, actualReps}
+ * @param {object} [exerciseMap] { exerciseId: {ratio: N} } lookup from getExerciseMap()
+ * @returns {number} Total volume
  */
-function sumVolume(entries) {
-  return entries.reduce(function(s, e) { return s + e.weight * e.actualReps; }, 0);
+function sumVolume(entries, exerciseMap) {
+  return entries.reduce(function(s, e) {
+    var ratio = (exerciseMap && exerciseMap[e.exercise] && exerciseMap[e.exercise].ratio != null) ? exerciseMap[e.exercise].ratio : 100;
+    return s + e.weight * e.actualReps * (ratio / 100);
+  }, 0);
 }
 
 /**

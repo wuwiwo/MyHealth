@@ -69,7 +69,7 @@ function renderStats(){
     if(m<0){m+=12;y--}
     var start=y+'-'+String(m+1).padStart(2,'0')+'-01'
     var end=y+'-'+String(m+1).padStart(2,'0')+'-31'
-    var vol=strEntries.filter(function(e){return e.date>=start&&e.date<end}).reduce(function(s,e){return s+e.weight*e.actualReps},0)
+    var vol=sumVolume(strEntries.filter(function(e){return e.date>=start&&e.date<end}),getExerciseMap())
     labels.push((m+1)+'月');volumes.push(vol)
   }
 
@@ -121,7 +121,7 @@ function renderHeatmap(){
   c.querySelectorAll('[data-n="hmP"]').forEach(function(b){b.addEventListener('click',function(){_hmM--;if(_hmM<0){_hmM=11;_hmY--;if(_hmY<2020){_hmY=2020;_hmM=0}}renderHeatmap()})})
   c.querySelectorAll('[data-n="hmN"]').forEach(function(b){b.addEventListener('click',function(){_hmM++;if(_hmM>11){_hmM=0;_hmY++;var maxY=new Date().getFullYear()+1;if(_hmY>maxY){_hmY=maxY;_hmM=11}}renderHeatmap()})})
   c.querySelectorAll('[data-n="hmT"]').forEach(function(b){b.addEventListener('click',function(){var n=new Date();_hmY=n.getFullYear();_hmM=n.getMonth();renderHeatmap()})})
-  c.querySelectorAll('.hm-cell[data-date]').forEach(function(b){b.addEventListener('click',function(){_strDate=b.dataset.date;renderStr();switchTab('strength')})})
+  c.querySelectorAll('.hm-cell[data-date]').forEach(function(b){b.addEventListener('click',function(){_strDate=b.dataset.date;renderStr();switchTab('training');switchSub('training','strength')})})
 }
 
 /* ========== PROFILE EVENT HANDLER ========== */
@@ -137,9 +137,4 @@ function onProfileEvent(el,id,act){
   return false
 }
 
-/* ========== SUB-TAB SWITCHING ========== */
-function switchProfileSub(name){
-  document.querySelectorAll('#tabProfile .tab-btn').forEach(function(b){b.classList.toggle('active',b.dataset.sub===name)})
-  document.querySelectorAll('#tabProfile .sub-tab').forEach(function(c){c.classList.toggle('active',c.id==='sub'+name.charAt(0).toUpperCase()+name.slice(1))})
-  if(name==='training'){renderStats();renderHeatmap()}
-}
+/* Sub-tab switching is now handled by the generic switchSub() in app.js */

@@ -38,8 +38,9 @@ function dataSummary(d){
   var recC=d.records?Object.keys(d.records).length:0
   var logC=d.attrLog?d.attrLog.length:0
   var ctC=d.cardioTypes?d.cardioTypes.length:0
+  var exC=d.exercises?d.exercises.length:0
   var time=d.lastUpdated?new Date(d.lastUpdated).toLocaleString('zh-CN'):'未知'
-  return{strE:strE,carE:carE,wtE:wtE,plans:plans,gameC:gameC,prsC:prsC,recC:recC,logC:logC,ctC:ctC,time:time}
+  return{strE:strE,carE:carE,wtE:wtE,plans:plans,gameC:gameC,prsC:prsC,recC:recC,logC:logC,ctC:ctC,exC:exC,time:time}
 }
 
 /* Data assembler */
@@ -50,11 +51,12 @@ function getAllData(){
   var c=store.get('cardio')||{entries:[]};
   var w=store.get('weight')||{records:[]};
   return{
-    version:3,lastUpdated:Date.now(),
+    version:4,lastUpdated:Date.now(),
     entries:s.entries,plans:p.plans,missed:m.notes,
     cardio:c.entries,weight:w.records,profile:getProf(),game:getGame(),
     prs:store.get('prs'),records:store.get('records'),
-    attrLog:store.get('attrLog'),cardioTypes:store.get('cardioTypes')
+    attrLog:store.get('attrLog'),cardioTypes:store.get('cardioTypes'),
+    exercises:store.get('exercises')
   }
 }
 
@@ -79,6 +81,7 @@ function mergeServerData(d){
   if(d.records&&typeof d.records==='object'){merge.records=d.records}
   if(d.attrLog&&Array.isArray(d.attrLog)){merge.attrLog=d.attrLog}
   if(d.cardioTypes&&Array.isArray(d.cardioTypes)){merge.cardioTypes=d.cardioTypes}
+  if(d.exercises&&Array.isArray(d.exercises)){merge.exercises=d.exercises}
   store.mergeAll(merge)
   return true
 }
@@ -125,7 +128,7 @@ function showSyncDialog(){
       +'<div>⚖️ 体重: '+localSummary.wtE+' 条</div><div>📋 计划: '+localSummary.plans+' 个</div>'
       +'<div>🎮 通关: '+localSummary.gameC+' 关</div>'
       +'<div>🏆 PR: '+localSummary.prsC+' 项</div>'
-      +'<div>📜 日志: '+localSummary.logC+' 条</div><div></div>'
+      +'<div>📜 日志: '+localSummary.logC+' 条</div><div>🏋️ 动作: '+localSummary.exC+' 个</div>'
       +'</div></div>'
 
     // Remote card
@@ -137,7 +140,7 @@ function showSyncDialog(){
       +'<div>⚖️ 体重: '+remoteSummary.wtE+' 条</div><div>📋 计划: '+remoteSummary.plans+' 个</div>'
       +'<div>🎮 通关: '+remoteSummary.gameC+' 关</div>'
       +'<div>🏆 PR: '+remoteSummary.prsC+' 项</div>'
-      +'<div>📜 日志: '+remoteSummary.logC+' 条</div><div></div>'
+      +'<div>📜 日志: '+remoteSummary.logC+' 条</div><div>🏋️ 动作: '+remoteSummary.exC+' 个</div>'
       +'</div></div>'
 
     // Suggestion
@@ -183,7 +186,7 @@ function showSyncDialog(){
         if(mergeServerData(remoteData)){
           saveSyncTime()
           toast('已从云端拉取','s')
-          renderStr();renderCar();renderProf();renderGame()
+          renderStr();renderCar();renderProf();renderGame();renderSettings();initCardioTypes()
           setSync('synced')
         }else{setSync('error');toast('云端数据无效','e')}
       }else{setSync('synced')}
@@ -223,6 +226,7 @@ function buildImportMap(data){
   if(data.records&&typeof data.records==='object'){map.records=data.records}
   if(data.attrLog&&Array.isArray(data.attrLog)){map.attrLog=data.attrLog}
   if(data.cardioTypes&&Array.isArray(data.cardioTypes)){map.cardioTypes=data.cardioTypes}
+  if(data.exercises&&Array.isArray(data.exercises)){map.exercises=data.exercises}
   return map
 }
 
@@ -242,7 +246,7 @@ function importData(){
         var data=JSON.parse(ev.target.result)
         store.mergeAll(buildImportMap(data))
         toast('数据导入成功 ✅','s')
-        renderStr();renderCar();renderProf();renderGame()
+        renderStr();renderCar();renderProf();renderGame();renderSettings();initCardioTypes()
       }catch(e){toast('文件格式错误: '+e.message,'e')}
     };reader.readAsText(file)
   };input.click()

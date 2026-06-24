@@ -2,19 +2,10 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
-const EXERCISES = ['二头弯举','肩推','深蹲','卧推','划船','硬拉','侧平举','前平举','锤式弯举','俯身飞鸟','颈后臂屈伸','俯身臂屈伸','直立划船','推举','阿诺德推举','哑铃飞鸟','哑铃耸肩','弓步蹲','保加利亚深蹲','站姿提踵'];
-const CARDIO_TYPES = [
-  {id:'run',name:'跑步',emoji:'🏃',hasDist:true,intensity:2},
-  {id:'jump',name:'跳绳',emoji:'🪢',hasDist:false,intensity:3},
-  {id:'cycle',name:'骑行',emoji:'🚴',hasDist:true,intensity:2},
-  {id:'swim',name:'游泳',emoji:'🏊',hasDist:true,intensity:3},
-  {id:'walk',name:'快走',emoji:'🚶',hasDist:true,intensity:1},
-  {id:'hiit',name:'HIIT',emoji:'🔥',hasDist:false,intensity:3}
-];
 const INTENSITY_LEVELS = [
   {id:1,name:'低强度',emoji:'🟢'},
   {id:2,name:'中强度',emoji:'🟡'},
@@ -50,10 +41,21 @@ function setTheme(t){const d=t==='dark';document.documentElement.setAttribute('d
 var btn=document.getElementById('themeToggle');if(btn)btn.textContent=d?'🌙':'☀️';store.set('theme',t)}
 function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
 
-/* ========== WEIGHT GRID BUILDER ========== */
+/* ========== EXERCISE LIBRARY (data layer in app.js) ========== */
+/* getExercises/saveExercises/getExerciseMap/getStrengthExercises/getCardioExercises
+   are defined in app.js (loaded after utils.js). */
+
+/* ========== CARDIO TYPES (read from exercises library) ========== */
 function getAllCardioTypes(){
+  var fromLib=getCardioExercises();
+  if(fromLib.length>0){
+    return fromLib.map(function(ex){
+      return {id:ex.id,name:ex.name,emoji:ex.emoji||'🏃',hasDist:ex.hasDist!==false,intensity:ex.intensity||2};
+    });
+  }
+  // Fallback: legacy custom types (pre-v1.6 data before migration runs)
   var custom=store.get('cardioTypes')||[];
-  return CARDIO_TYPES.concat(custom);
+  return custom.length>0?custom:[];
 }
 function getCardioTypeMap(){
   var map={};

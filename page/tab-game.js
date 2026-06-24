@@ -9,7 +9,7 @@ function renderGame(){
   var thirty=toDate(new Date(Date.now()-30*86400000))
   var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
   var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
-  var strVol=strE.reduce(function(s,e){return s+e.weight*e.actualReps},0)
+  var strVol=sumVolume(strE,getExerciseMap())
   var carDur=sumDuration(carE)
   var carEff=sumEffectiveDuration(carE,getCardioTypeMap())
   var baseAtk=10+Math.floor(strVol/20),baseDef=10+Math.floor(carEff/15)
@@ -32,11 +32,7 @@ function renderGame(){
     '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">❤️ 生命</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+getGame().cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
     '<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.wkDays+'<span style="font-size:.6rem">/7</span>'+(stats.wkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.wkBonus+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:.6rem;color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:.6rem">'+wkStatus+'</div></div>'+
-    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
-    '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="attrInfoBtn" title="属性计算方式">📖</button></div>'+
-    '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="attrLogBtn" title="属性变更日志">📜</button></div>'+
-    '<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="resetGameBtn" title="重置挑战进度" style="font-size:.75rem">↺</button></div>'
-
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'
   _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,lastWkDays:stats.lastWkDays,thisWk:stats.wkDays}
   trackStats(stats,{strVol:strVol,carDur:carDur,carEff:carEff})
   renderRecords()
@@ -116,7 +112,7 @@ function getGameStats(){
   var thirty=toDate(new Date(Date.now()-30*86400000))
   var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
   var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
-  var strVol=sumVolume(strE)
+  var strVol=sumVolume(strE,getExerciseMap())
   var carDur=sumDuration(carE)
   var carEff=sumEffectiveDuration(carE,getCardioTypeMap())
   var wk=getWeekDays();var wkBonus=wk>=7?50:wk>=4?20:0
@@ -438,31 +434,6 @@ function onGameEvent(el,id,act){
       document.getElementById('battleOverlay').classList.remove('open');renderGame();return true;
     case 'shareClose':hideShare();return true;
     case 'shareSave':toast('长按或截图保存分享卡片 📸','s');return true;
-    case 'resetGameBtn':
-      if(confirm('确定重置所有挑战进度？此操作不可撤销')){
-        var g=getGame();g.cleared=[];g.current='1-1';g.attempts={};setGame(g);renderGame()
-        toast('挑战进度已重置','s')
-      }
-      return true;
-    case 'attrLogBtn':showAttrLog();return true;
-    case 'attrInfoBtn':{
-      var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据'}
-      var modal=document.createElement('div');modal.className='modal-overlay open'
-      modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
-        +'<div style="font-size:.8rem;line-height:1.7;color:var(--text2);padding:4px 0">'
-        +'<div style="color:var(--orange);font-weight:700;margin-bottom:4px">⚔️ '+info.atk+'</div>'
-        +'<div style="color:var(--blue);font-weight:700;margin-bottom:4px">🛡️ '+info.def+'</div>'
-        +'<div style="color:var(--green);font-weight:700;margin-bottom:4px">❤️ '+info.hp+'</div>'
-        +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:.7rem;color:var(--text3)">'
-        +'📊 近30天力量容量: '+info.vol+' kg<br>'
-        +'🏃 近30天有氧时长: '+info.dur+' 分钟<br>'
-        +'📅 每周4天→+20攻防, 7天→+50攻防<br>'
-        +'💡 每200kg容量=+1攻击, 每60分钟=+1防御<br>'
-        +((info.permPenAtk+info.permPenDef)>0?'⚠️ 上周训练不足, 永久惩罚 攻-'+info.permPenAtk+' 防-'+info.permPenDef+'<br>':'✅ 每周训练3天以上属性正常<br>')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
-      document.body.appendChild(modal)
-      document.getElementById('attrClose').addEventListener('click',function(){modal.remove()})
-      modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
-      return true}
   }
   return false
 }

@@ -31,114 +31,120 @@
 
   <!-- Tab Bar -->
   <nav class="tab-bar">
-    <button class="tab-btn active" data-tab="strength">🏋️ 力量</button>
-    <button class="tab-btn" data-tab="cardio">🏃 有氧</button>
+    <button class="tab-btn active" data-tab="training">🏋️ 训练</button>
     <button class="tab-btn" data-tab="profile">📊 个人</button>
     <button class="tab-btn" data-tab="game">🎮 挑战</button>
+    <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
   </nav>
 
-  <!-- ===== TAB: STRENGTH ===== -->
-  <section class="tab-content active" id="tabStrength">
+  <!-- ===== TAB: TRAINING (strength + cardio sub-tabs) ===== -->
+  <section class="tab-content active" id="tabTraining">
+    <nav class="tab-bar sub-tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
+      <button class="tab-btn active" data-sub="strength">💪 力量</button>
+      <button class="tab-btn" data-sub="cardio">🏃 有氧</button>
+    </nav>
 
-    <div class="section-hdr">📅 日期</div>
-    <div class="date-nav">
-      <button class="dn-btn" id="strPrevDay">◀</button>
-      <div class="dn-display">
-        <div class="dn-main" id="strDateMain">加载中...</div>
-        <div class="dn-sub" id="strDateSub"></div>
-      </div>
-      <button class="dn-btn" id="strNextDay">▶</button>
-      <button class="dn-btn dn-today" id="strGoToday">今天</button>
-    </div>
-
-    <div class="section-hdr">今日训练</div>
-    <button class="add-btn" id="strAddBtn">＋ 新增一组</button>
-    <div class="add-card" id="strAddCard">
-      <div class="fg">
-        <label class="fl">动作</label>
-        <div class="ex-suggest" id="strSuggest"></div>
-        <input class="fi" id="strExercise" list="strExList" placeholder="输入或选择...">
-        <datalist id="strExList"></datalist>
-      </div>
-      <div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="strWeight"></div></div>
-      <div class="fg">
-        <label class="fl">次数</label>
-        <div class="reps-row">
-          <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-">−</button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+">+</button></div></div>
-          <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-">−</button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+">+</button></div></div>
+    <!-- Sub-tab: Strength -->
+    <div class="sub-tab active" id="subStrength">
+      <div class="section-hdr">📅 日期</div>
+      <div class="date-nav">
+        <button class="dn-btn" id="strPrevDay">◀</button>
+        <div class="dn-display">
+          <div class="dn-main" id="strDateMain">加载中...</div>
+          <div class="dn-sub" id="strDateSub"></div>
         </div>
+        <button class="dn-btn" id="strNextDay">▶</button>
+        <button class="dn-btn dn-today" id="strGoToday">今天</button>
       </div>
-      <button class="sb-btn" id="strSubmit">⚡ 记录</button>
-    </div>
 
-    <div id="strList"></div>
-
-    <!-- Break note for missed days -->
-    <div class="section-hdr" style="margin-top:20px">📋 训练计划</div>
-    <div id="strPlansList"></div>
-
-    <div class="section-hdr" style="margin-top:20px">📝 断签说明</div>
-    <div id="strMissedDays"></div>
-
-    <div class="section-hdr">📊 本周统计</div>
-    <div class="stats-grid" id="strStats"></div>
-  </section>
-
-  <!-- ===== TAB: CARDIO ===== -->
-  <section class="tab-content" id="tabCardio">
-
-    <div class="section-hdr">📅 日期</div>
-    <div class="date-nav">
-      <button class="dn-btn" id="carPrevDay">◀</button>
-      <div class="dn-display">
-        <div class="dn-main" id="carDateMain">加载中...</div>
-        <div class="dn-sub" id="carDateSub"></div>
-      </div>
-      <button class="dn-btn" id="carNextDay">▶</button>
-      <button class="dn-btn dn-today" id="carGoToday">今天</button>
-    </div>
-
-    <div class="section-hdr">今日有氧</div>
-    <button class="add-btn" id="carAddBtn">＋ 新增记录</button>
-    <div class="add-card" id="carAddCard">
-      <div class="fg"><label class="fl">运动类型</label>
-        <div class="car-types" id="carTypes"></div>
-        <button class="md-write" id="carCustomType" style="margin-top:4px;font-size:.7rem">＋ 自定义类型</button>
-      </div>
-      <div class="fg"><label class="fl">强度</label>
-        <div class="car-types" id="carIntensity"></div>
-      </div>
-      <div class="fg"><label class="fl">时长 (分钟)</label>
-        <div class="stepper" style="max-width:200px">
-          <button class="sp-btn" id="carDurDown">−</button>
-          <span class="sp-val" id="carDurVal">30</span>
-          <button class="sp-btn" id="carDurUp">+</button>
+      <div class="section-hdr">今日训练</div>
+      <button class="add-btn" id="strAddBtn">＋ 新增一组</button>
+      <div class="add-card" id="strAddCard">
+        <div class="fg">
+          <label class="fl">动作</label>
+          <div class="ex-suggest" id="strSuggest"></div>
+          <input class="fi" id="strExercise" list="strExList" placeholder="输入或选择...">
+          <datalist id="strExList"></datalist>
         </div>
-      </div>
-      <div class="fg"><label class="fl">距离 (km) <span class="fl-note" id="carDistLabel">可选</span></label>
-        <div class="stepper" style="max-width:200px">
-          <button class="sp-btn" id="carDistDown">−</button>
-          <span class="sp-val" id="carDistVal">0</span>
-          <button class="sp-btn" id="carDistUp">+</button>
+        <div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="strWeight"></div></div>
+        <div class="fg">
+          <label class="fl">次数</label>
+          <div class="reps-row">
+            <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-">−</button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+">+</button></div></div>
+            <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-">−</button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+">+</button></div></div>
+          </div>
         </div>
+        <button class="sb-btn" id="strSubmit">⚡ 记录</button>
       </div>
-      <div class="fg"><label class="fl">备注</label><input class="fi" id="carNote" placeholder="感觉怎么样？"></div>
-      <button class="sb-btn" id="carSubmit">🏃 记录</button>
+
+      <div id="strList"></div>
+
+      <!-- Break note for missed days -->
+      <div class="section-hdr" style="margin-top:20px">📋 训练计划</div>
+      <div id="strPlansList"></div>
+
+      <div class="section-hdr" style="margin-top:20px">📝 断签说明</div>
+      <div id="strMissedDays"></div>
+
+      <div class="section-hdr">📊 本周统计</div>
+      <div class="stats-grid" id="strStats"></div>
     </div>
 
-    <div id="carList"></div>
+    <!-- Sub-tab: Cardio -->
+    <div class="sub-tab" id="subCardio">
+      <div class="section-hdr">📅 日期</div>
+      <div class="date-nav">
+        <button class="dn-btn" id="carPrevDay">◀</button>
+        <div class="dn-display">
+          <div class="dn-main" id="carDateMain">加载中...</div>
+          <div class="dn-sub" id="carDateSub"></div>
+        </div>
+        <button class="dn-btn" id="carNextDay">▶</button>
+        <button class="dn-btn dn-today" id="carGoToday">今天</button>
+      </div>
 
-    <div class="section-hdr" style="margin-top:20px">📋 有氧计划</div>
-    <div id="carPlansList"></div>
+      <div class="section-hdr">今日有氧</div>
+      <button class="add-btn" id="carAddBtn">＋ 新增记录</button>
+      <div class="add-card" id="carAddCard">
+        <div class="fg"><label class="fl">运动类型</label>
+          <div class="car-types" id="carTypes"></div>
+          <button class="md-write" id="carCustomType" style="margin-top:4px;font-size:.7rem">＋ 自定义类型</button>
+        </div>
+        <div class="fg"><label class="fl">强度</label>
+          <div class="car-types" id="carIntensity"></div>
+        </div>
+        <div class="fg"><label class="fl">时长 (分钟)</label>
+          <div class="stepper" style="max-width:200px">
+            <button class="sp-btn" id="carDurDown">−</button>
+            <span class="sp-val" id="carDurVal">30</span>
+            <button class="sp-btn" id="carDurUp">+</button>
+          </div>
+        </div>
+        <div class="fg"><label class="fl">距离 (km) <span class="fl-note" id="carDistLabel">可选</span></label>
+          <div class="stepper" style="max-width:200px">
+            <button class="sp-btn" id="carDistDown">−</button>
+            <span class="sp-val" id="carDistVal">0</span>
+            <button class="sp-btn" id="carDistUp">+</button>
+          </div>
+        </div>
+        <div class="fg"><label class="fl">备注</label><input class="fi" id="carNote" placeholder="感觉怎么样？"></div>
+        <button class="sb-btn" id="carSubmit">🏃 记录</button>
+      </div>
 
-    <div class="section-hdr">本周有氧</div>
-    <div class="stats-grid" id="carStats"></div>
+      <div id="carList"></div>
+
+      <div class="section-hdr" style="margin-top:20px">📋 有氧计划</div>
+      <div id="carPlansList"></div>
+
+      <div class="section-hdr">本周有氧</div>
+      <div class="stats-grid" id="carStats"></div>
+    </div>
   </section>
 
   <!-- ===== TAB: PROFILE ===== -->
   <section class="tab-content" id="tabProfile">
     <!-- Sub-tab bar -->
-    <nav class="tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
+    <nav class="tab-bar sub-tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
       <button class="tab-btn active" data-sub="personal">👤 个人数据</button>
       <button class="tab-btn" data-sub="training">📊 训练数据</button>
     </nav>
@@ -162,13 +168,6 @@
         <canvas id="weightCanvas"></canvas>
       </div>
       <div id="weightList"></div>
-
-      <div class="section-hdr" style="margin-top:20px">📂 数据管理</div>
-      <div style="display:flex;gap:8px;">
-        <button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="exportDataBtn">📤 导出数据</button>
-        <button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="importDataBtn">📥 导入数据</button>
-      </div>
-      <div style="text-align:center;margin-top:6px;font-size:.7rem;color:var(--text3);">用于手动备份或跨设备转移数据</div>
     </div>
 
     <!-- Sub-tab: Training Data -->
@@ -236,6 +235,21 @@
       </div>
     </div>
   </section>
+
+  <!-- ===== TAB: SETTINGS ===== -->
+  <section class="tab-content" id="tabSettings">
+    <nav class="tab-bar sub-tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
+      <button class="tab-btn active" data-sub="library">🏋️ 动作库</button>
+      <button class="tab-btn" data-sub="plans">📋 计划</button>
+      <button class="tab-btn" data-sub="game">🎮 挑战</button>
+      <button class="tab-btn" data-sub="data">📂 数据</button>
+    </nav>
+
+    <div class="sub-tab active" id="subLibrary"></div>
+    <div class="sub-tab" id="subPlans"></div>
+    <div class="sub-tab" id="subGame"></div>
+    <div class="sub-tab" id="subData"></div>
+  </section>
 </div>
 
 <script src="store.js?v1"></script>
@@ -250,6 +264,7 @@
 <script src="tab-cardio.js?v1"></script>
 <script src="tab-profile.js?v1"></script>
 <script src="tab-game.js?v1"></script>
+<script src="tab-settings.js?v1"></script>
 <script>init()</script>
 </body>
 </html>
