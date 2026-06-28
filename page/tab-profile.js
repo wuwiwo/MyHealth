@@ -42,12 +42,21 @@ function renderPRs(){
   var keys=Object.keys(prs)
   var el=document.getElementById('prSection');if(!el)return
   if(!keys.length){el.innerHTML='';return}
+  var exMap=getExerciseMap()
   var h='<div class="section-hdr">🏆 个人最佳</div><div class="stats-grid">'
   keys.forEach(function(ex){var pr=prs[ex]
     h+='<div class="sc"><div class="sc-v" style="font-size:1rem">'+ex+'</div><div class="sc-l" style="font-size:.65rem;line-height:1.5">'
     if(pr.maxWeight)h+='🏋️ '+pr.maxWeight+'kg<br>'
     if(pr.maxReps)h+='🔢 '+pr.maxReps+'次<br>'
-    if(pr.maxVolume)h+='📊 '+pr.maxVolume+'kg'
+    if(pr.maxVolume){
+      var ratio=exMap[ex]&&exMap[ex].ratio!=null?exMap[ex].ratio:100
+      if(ratio<100){
+        var eff=Math.round(pr.maxVolume*ratio/100)
+        h+='📊 '+pr.maxVolume+'kg <span style="font-size:.6rem;color:var(--text3)">→'+eff+'</span>'
+      }else{
+        h+='📊 '+pr.maxVolume+'kg'
+      }
+    }
     h+='</div></div>'
   })
   h+='</div>'
