@@ -146,7 +146,9 @@ function showPeExForm(idx){
     form.style='background:var(--bg);border:1px solid var(--bd);border-radius:var(--rs);padding:12px;margin-bottom:8px'
     el.insertBefore(form,document.getElementById('peAddEx'))
   }
-  form.innerHTML='<div class="fg"><label class="fl">动作名称</label><input class="fi" id="peExName" value="'+ex.exercise+'" placeholder="如: 弯举"></div>'
+  form.innerHTML='<div class="fg"><label class="fl">动作</label><select class="fi" id="peExName">'
+    +getStrengthExercises().map(function(s){return'<option value="'+s.name+'"'+(s.name===ex.exercise?' selected':'')+'>'+s.name+'</option>'}).join('')
+    +'</select></div>'
     +'<div class="fg"><label class="fl">重量 (kg)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExWDown">−</button><span class="sp-val" id="peExWeight">'+ex.weight+'</span><button class="sp-btn" id="peExWUp">+</button></div></div>'
     +'<div class="fg"><label class="fl">目标次数</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExRDown">−</button><span class="sp-val" id="peExReps">'+ex.targetReps+'</span><button class="sp-btn" id="peExRUp">+</button></div></div>'
     +'<div class="fg"><label class="fl">休息 (秒)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExSDown">−</button><span class="sp-val" id="peExRest">'+ex.restSeconds+'</span><button class="sp-btn" id="peExSUp">+</button></div></div>'
@@ -278,7 +280,7 @@ function onStrengthEvent(el,id,act){
     case 'peAddEx':var f=document.getElementById('peExForm');if(f)f.remove();_peTempEx={exercise:'',weight:7,targetReps:12,restSeconds:60};showPeExForm(null);return true;
     case 'peExConfirm':{
       var exName=document.getElementById('peExName').value.trim()
-      if(!exName){toast('请输入动作名称','e');return true}
+      if(!exName){toast('请选择动作','e');return true}
       var exWeight=parseFloat(document.getElementById('peExWeight').textContent)
       var exReps=parseInt(document.getElementById('peExReps').textContent)
       var exRest=parseInt(document.getElementById('peExRest').textContent)

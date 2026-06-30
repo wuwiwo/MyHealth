@@ -10,8 +10,14 @@
   var S = '-v1';
   var _cache = {};
   var _listeners = [];
+  var _modKey = P + 'mod-time';
 
   function fullKey(name) { return P + name + S; }
+
+  function touchModTime() {
+    var now = Date.now();
+    localStorage.setItem(_modKey, String(now));
+  }
 
   // Load existing dh-* keys into cache on init
   for (var i = 0; i < localStorage.length; i++) {
@@ -40,6 +46,7 @@
     set: function(name, value) {
       _cache[name] = value;
       localStorage.setItem(fullKey(name), JSON.stringify(value));
+      touchModTime();
       for (var i = 0; i < _listeners.length; i++) {
         _listeners[i](name, value);
       }
@@ -82,6 +89,7 @@
           localStorage.setItem(fullKey(k), JSON.stringify(v));
         }
       }
+      touchModTime();
       for (var i = 0; i < _listeners.length; i++) {
         _listeners[i]('*', _cache);
       }
@@ -98,9 +106,19 @@
         _cache[k] = data[k];
         localStorage.setItem(fullKey(k), JSON.stringify(data[k]));
       }
+      touchModTime();
       for (var i = 0; i < _listeners.length; i++) {
         _listeners[i]('*', _cache);
       }
+    },
+
+    /**
+     * Returns the timestamp of the last data modification (set/mergeAll/setAll).
+     * Used by sync engine to judge local vs remote freshness.
+     * @returns {number} ms timestamp, or 0 if never modified
+     */
+    getLastModTime: function() {
+      return parseInt(localStorage.getItem(_modKey) || '0', 10);
     }
   };
 })();

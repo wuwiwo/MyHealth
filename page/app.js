@@ -76,6 +76,7 @@ function init(){
   initCardioTypes()
 
   migrateExercises()
+  migrateExercisesV17()
   migrateOldData()
 
   renderStr();renderCar();renderProf();renderGame();renderSettings()
@@ -156,7 +157,7 @@ function migrateExercises(){
   if(store.get('exercises'))return;
   var list=[];
   var seen={};
-  function add(ex){if(!ex||seen[ex.id])return;seen[ex.id]=true;list.push(ex)}
+  function add(ex){if(!ex||seen[ex.id])return;seen[ex.id]=true;if(ex.description==null)ex.description='';list.push(ex)}
   // Seed strength exercises (built-in defaults, ratio=100)
   var seedStrength=['二头弯举','肩推','深蹲','卧推','划船','硬拉','侧平举','前平举','锤式弯举','俯身飞鸟','颈后臂屈伸','俯身臂屈伸','直立划船','推举','阿诺德推举','哑铃飞鸟','哑铃耸肩','弓步蹲','保加利亚深蹲','站姿提踵'];
   seedStrength.forEach(function(name){add({id:name,name:name,type:'strength',ratio:100,intensity:null,emoji:null,hasDist:false})});
@@ -181,6 +182,17 @@ function migrateExercises(){
   carEntries.forEach(function(e){if(e.type&&!seen[e.type])add({id:e.type,name:e.type,type:'cardio',ratio:null,intensity:2,emoji:'🏃',hasDist:false})});
   store.set('exercises',list);
   console.log('Migrated '+list.length+' exercises to library');
+}
+
+// v1.7: backfill description field for users who already migrated in v1.6
+function migrateExercisesV17(){
+  var list=store.get('exercises');
+  if(!list||!list.length)return;
+  var changed=false;
+  for(var i=0;i<list.length;i++){
+    if(list[i].description==null){list[i].description='';changed=true}
+  }
+  if(changed){store.set('exercises',list);console.log('Backfilled description on '+list.length+' exercises')}
 }
 
 function migrateOldData(){

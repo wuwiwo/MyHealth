@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.7';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -18,6 +18,44 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function toDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function parseDate(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
 function fmtDate(s){const d=parseDate(s);const w=['周日','周一','周二','周三','周四','周五','周六'];const i=s===today();return{main:(d.getMonth()+1)+'月'+d.getDate()+'日',sub:i?w[d.getDay()]+' · 今天':w[d.getDay()]}}
+
+/* ========== MINI MARKDOWN RENDERER ========== */
+function renderMd(src){
+  if(!src)return'';
+  var s=String(src);
+  s=s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var lines=s.split(/\r?\n/);
+  var html='',inList=false;
+  function escInline(t){
+    return t
+      .replace(/`([^`]+)`/g,'<code style="background:var(--bg3);padding:1px 5px;border-radius:4px;font-size:.85em">$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  }
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i];
+    if(/^#\s+/.test(line)){
+      if(inList){html+='</ul>';inList=false}
+      html+='<div style="font-weight:700;font-size:.9rem;margin:6px 0 4px">'+escInline(line.replace(/^#\s+/,''))+'</div>';
+    }else if(/^-\s+/.test(line)){
+      if(!inList){html+='<ul style="margin:4px 0;padding-left:18px;list-style:disc">';inList=true}
+      html+='<li style="font-size:.78rem;line-height:1.6">'+escInline(line.replace(/^-\s+/,''))+'</li>';
+    }else if(/^\s*$/.test(line)){
+      if(inList){html+='</ul>';inList=false}
+      html+='<div style="height:6px"></div>';
+    }else{
+      if(inList){html+='</ul>';inList=false}
+      html+='<div style="font-size:.78rem;line-height:1.6;margin:2px 0">'+escInline(line)+'</div>';
+    }
+  }
+  if(inList)html+='</ul>';
+  return html;
+}
+
+function mdFirstLine(src){
+  if(!src)return'';
+  var line=String(src).split(/\r?\n/)[0]||'';
+  return line.replace(/^#\s+/,'').replace(/^-\s+/,'').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/`([^`]+)`/g,'$1');
+}
 
 /* ========== TOAST ========== */
 let _tt=null;function toast(m,t){const c=document.getElementById('toastC')

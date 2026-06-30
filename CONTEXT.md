@@ -19,9 +19,11 @@
 | **个人资料** | 身高/性别/出生年份 | store key: `profile`，`app.js:35-36` |
 | **关卡** | 9 章 45 关 RPG 战斗，每关有 NPC（atk/def/hp），Boss 关带词缀 | `levels.js`，store key: `game`（cleared + current） |
 | **玩家属性** | 由 30 天训练量计算：atk=容量/20，def=有效时长/15，hp=容量/10+时长/3+周奖励 | `stats.js:66-74` calculateStats() |
-| **动作库** | 力量动作 + 有氧类型的统一管理，含 ratio/intensity/emoji/hasDist | store key: `exercises`，`app.js` getExercises/saveExercises |
-| **ratio** | 力量动作的容量比值(0~100%)，容量=weight×reps×(ratio/100) | `stats.js:8-15` sumVolume()，PR 不乘 ratio |
-| **活跃天数** | 统计周期内有训练记录的天数，≥4 天奖励 20，7 天奖励 50 | `stats.js:40-52` countActiveDays() |
+| **动作库** | 力量动作 + 有氧类型的统一管理，含 ratio/intensity/emoji/hasDist/description | store key: `exercises`，`app.js` getExercises/saveExercises |
+| **ratio** | 力量动作的容量比值(0~100%)，容量=weight×reps×(ratio/100) | `stats.js:13` sumVolume()，PR 不乘 ratio |
+| **动作描述** | 支持简易 markdown（加粗/标题/代码/列表），列表展开渲染 | `utils.js` renderMd()，`tab-settings.js` exCardHtml() |
+| **旬周期** | 每月分3旬(上旬1-10/中旬11-20/下旬21-末)，6天→+30攻防，容量达标→+60攻防 | `stats.js` getCurrentPeriod/calculatePeriodBonus |
+| **活跃天数** | 统计周期内有训练记录的天数 | `stats.js` countActiveDays() |
 | **Boss 词缀** | Boss 关随机附加的 5 种战斗机制（虚弱/荆棘/怒气/汲取/护盾） | `battle.js:5-26` BOSS_AFFIXES |
 | **永久惩罚** | 挑战失败累积的属性减益 | `stats.js:66` permPenAtk/permPenDef 参数 |
 | **云同步** | 手动推送到 Vercel Blob / 导出 JSON / 导入 JSON | `sync.js`，API 端 `api/data.mjs` |
@@ -62,20 +64,21 @@
 | `missed` | Object | `{ notes: { [date]: string } }` — date 为 "YYYY-MM-DD"，值为备注 |
 | `theme` | String | `'dark'` 或 `'light'` |
 | `cardioTypes` | Object | 旧版自定义有氧类型（v1.6 后只读兼容，已迁移到 exercises） |
-| `exercises` | Array | 动作库：`[{ id, name, type:'strength'\|'cardio', ratio, intensity, emoji, hasDist }]` |
+| `exercises` | Array | 动作库：`[{ id, name, type:'strength'\|'cardio', ratio, intensity, emoji, hasDist, description }]` |
 
 ### 同步数据格式（`sync.js:46-50`）
 
-导出的顶层对象：`{ version: 4, lastUpdated, entries, plans, missed, cardio, weight, cardioPlans, cardioTypes, game, exercises }`
+导出的顶层对象：`{ version: 4, lastUpdated(=store.getLastModTime()), entries, plans, missed, cardio, weight, cardioPlans, cardioTypes, game, exercises }`
+近7天导出额外含 `summary` 字段（统计摘要），不含 plans/game/prs/records/attrLog
 
 ## 模块边界
 
 ```
 page/
-├── store.js        → 数据层：localStorage 封装，K-V 读写 + onChange 通知
-├── utils.js        → 常量定义（强度等级）、工具函数、toast、主题、getAllCardioTypes
+├── store.js        → 数据层：localStorage 封装，K-V 读写 + onChange 通知 + getLastModTime
+├── utils.js        → 常量定义（强度等级）、工具函数、toast、主题、getAllCardioTypes、renderMd
 ├── app.js          → 数据 API（getStr/addStr/...）+ 事件委托 + 初始化 + Tab切换 + switchSub + 数据迁移
-├── stats.js        → 纯函数统计计算（ratio 加权容量/时长/活跃天数/玩家属性）
+├── stats.js        → 纯函数统计计算（ratio 加权容量/时长/活跃天数/玩家属性/旬周期奖励）
 ├── levels.js       → 关卡配置数据（9 章 45 关 NPC 属性）
 ├── battle.js       → 战斗引擎（纯逻辑，回合制 + Boss 词缀）
 ├── linechart.js    → Canvas 折线图组件

@@ -51,7 +51,7 @@ function getAllData(){
   var c=store.get('cardio')||{entries:[]};
   var w=store.get('weight')||{records:[]};
   return{
-    version:4,lastUpdated:Date.now(),
+    version:4,lastUpdated:store.getLastModTime()||Date.now(),
     entries:s.entries,plans:p.plans,missed:m.notes,
     cardio:c.entries,weight:w.records,profile:getProf(),game:getGame(),
     prs:store.get('prs'),records:store.get('records'),
@@ -109,10 +109,14 @@ function showSyncDialog(){
       return
     }
     var remoteSummary=dataSummary(remoteData)
+    var localModTime=store.getLastModTime()
     var isFirst=_lastSyncTime===0
     var hasLocal=localData.entries&&localData.entries.length>0
-    var localNewer=isFirst?false:(_lastSyncTime>0&&(!remoteData.lastUpdated||remoteData.lastUpdated<=_lastSyncTime))
-    var remoteNewer=isFirst?false:(remoteData.lastUpdated&&remoteData.lastUpdated>_lastSyncTime)
+    // Judge freshness by actual data modification time, not sync action time
+    var localNewer=isFirst?false:(localModTime>0&&(!remoteData.lastUpdated||remoteData.lastUpdated<=localModTime))
+    var remoteNewer=isFirst?false:(remoteData.lastUpdated&&remoteData.lastUpdated>localModTime)
+    // If both are empty, treat as equal
+    if(!hasLocal&&(!remoteData.entries||!remoteData.entries.length)){localNewer=false;remoteNewer=false}
     var localAge=isFirst?' (未同步)':localNewer?' (较新)':remoteNewer?' (较旧)':''
     var remoteAge=isFirst?' (未同步)':remoteNewer?' (较新)':localNewer?' (较旧)':''
 
@@ -232,8 +236,52 @@ function buildImportMap(data){
 
 /* ========== EXPORT / IMPORT ========== */
 function exportData(){
-  autoBackup()
-  toast('数据已导出 ✅','s')
+  var modal=document.createElement('div');modal.className='modal-overlay open'
+  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📤 导出数据</div>'
+    +'<div style="font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.6">选择导出范围：</div>'
+    +'<button class="sb-btn" id="exportFull" style="margin-bottom:8px">📦 全量数据（完整备份）</button>'
+    +'<button class="sb-btn" id="export7" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📅 最近7天（精简，适合发给AI）</button>'
+    +'<div class="modal-actions"><button class="m-btn-cancel" id="exportCancel">取消</button></div></div>'
+  document.body.appendChild(modal)
+  document.getElementById('exportFull').addEventListener('click',function(){
+    modal.remove();autoBackup();toast('全量数据已导出 ✅','s')
+  })
+  document.getElementById('export7').addEventListener('click',function(){
+    modal.remove();exportData7()
+  })
+  document.getElementById('exportCancel').addEventListener('click',function(){modal.remove()})
+  modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
+}
+
+function exportData7(){
+  var data=getAllData();
+  var cutoff=toDate(new Date(Date.now()-7*86400000));
+  var filtered={
+    version:data.version,lastUpdated:Date.now(),
+    entries:(data.entries||[]).filter(function(e){return e.date>=cutoff}),
+    cardio:(data.cardio||[]).filter(function(e){return e.date>=cutoff}),
+    weight:(data.weight||[]).filter(function(e){return e.date>=cutoff}),
+    profile:data.profile,exercises:data.exercises
+  };
+  // Stats summary for AI context
+  var exMap=getExerciseMap();
+  filtered.summary={
+    days:7,
+    strengthCount:filtered.entries.length,
+    cardioCount:filtered.cardio.length,
+    weightCount:filtered.weight.length,
+    totalVolume:Math.round(sumVolume(filtered.entries,exMap)),
+    totalCardioDuration:sumDuration(filtered.cardio),
+    period:getCurrentPeriod(new Date())
+  };
+  try{
+    var json=JSON.stringify(filtered,null,2)
+    var blob=new Blob([json],{type:'application/json'})
+    var url=URL.createObjectURL(blob)
+    var a=document.createElement('a');a.href=url;a.download='myhealth-7d-'+today()+'.json'
+    a.click();URL.revokeObjectURL(url)
+    toast('最近7天数据已导出 ✅','s')
+  }catch(e){toast('导出失败: '+e.message,'e')}
 }
 
 function importData(){

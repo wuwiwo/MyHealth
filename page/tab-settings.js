@@ -23,7 +23,7 @@ function renderExLibrary(){
     h+='<div class="ex-lib-list">';
     strength.forEach(function(ex){
       var ratioLabel=ex.ratio!=null?ex.ratio+'%':'100%';
-      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+ex.name+'<span class="ec-wt">💪 '+ratioLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div></div>';
+      h+=exCardHtml(ex,'💪 '+ratioLabel);
     });
     h+='</div>';
   }else{
@@ -36,7 +36,7 @@ function renderExLibrary(){
     cardio.forEach(function(ex){
       var intLabel=INTENSITY_LEVELS.find(function(l){return l.id===ex.intensity})||{name:'中',emoji:'🟡'};
       var distLabel=ex.hasDist?'📏':'—';
-      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+(ex.emoji||'🏃')+' '+ex.name+'<span class="ec-wt">'+intLabel.emoji+' '+distLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div></div>';
+      h+=exCardHtml(ex,intLabel.emoji+' '+distLabel,true);
     });
     h+='</div>';
   }else{
@@ -46,13 +46,32 @@ function renderExLibrary(){
   h+='<button class="add-btn" id="exNewBtn" style="margin-top:12px">＋ 新建动作</button>';
   h+='<div style="text-align:center;margin-top:6px;font-size:.7rem;color:var(--text3)">力量 ratio 影响容量计算（100%=满容量）</div>';
   el.innerHTML=h;
+  // Wire description toggle
+  el.querySelectorAll('[data-a="exToggle"]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var detail=this.parentNode.parentNode.querySelector('.ex-desc-full');
+      if(detail){detail.style.display=detail.style.display==='none'?'block':'none'}
+    });
+  });
+}
+
+function exCardHtml(ex,badge,isCardio){
+  var namePrefix=isCardio?(ex.emoji||'🏃')+' ':'';
+  var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
+  if(ex.description){
+    var first=mdFirstLine(ex.description);
+    h+='<div style="margin-top:6px;font-size:.72rem;color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span style="color:var(--text3);font-size:.65rem"> …展开</span></div>';
+    h+='<div class="ex-desc-full" style="display:none;margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:var(--rs);border:1px solid var(--bd)">'+renderMd(ex.description)+'</div>';
+  }
+  h+='</div>';
+  return h;
 }
 
 function showExEditor(editId){
   var list=getExercises();
   var ex=editId?list.find(function(x){return x.id===editId}):null;
   var isEdit=!!ex;
-  if(!ex)ex={id:'',name:'',type:'strength',ratio:100,intensity:2,emoji:'🏃',hasDist:false};
+  if(!ex)ex={id:'',name:'',type:'strength',ratio:100,intensity:2,emoji:'🏃',hasDist:false,description:''};
 
   var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='exModal';
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(isEdit?'✏️ 编辑动作':'＋ 新建动作')+'</div>';
@@ -65,6 +84,7 @@ function showExEditor(editId){
   h+='<div class="fg" id="exEmojiFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><label class="fl">图标 emoji</label><input class="fi" id="exEmoji" value="'+(ex.emoji||'🏃')+'" placeholder="🏃"></div>';
   h+='<div class="fg" id="exIntensityFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><label class="fl">默认强度</label><div class="car-types" id="exIntensitySel"></div></div>';
   h+='<div class="fg" id="exHasDistFg"'+(ex.type==='cardio'?'':' style="display:none"')+' style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="exHasDist"'+(ex.hasDist?' checked':'')+'><label class="fl" style="margin:0">有距离统计</label></div>';
+  h+='<div class="fg"><label class="fl">动作描述 <span style="font-weight:400;text-transform:none">（支持 **加粗** #标题 `代码` -列表）</span></label><textarea class="fi" id="exDesc" rows="4" style="resize:vertical;font-size:.78rem;line-height:1.6" placeholder="可选：记录动作要领、注意事项...">'+(ex.description||'').replace(/</g,'&lt;')+'</textarea></div>';
   h+='<div class="modal-actions"><button class="m-btn-cancel" id="exCancel">取消</button><button class="m-btn-save" id="exSave">💾 保存</button></div></div>';
   modal.innerHTML=h;document.body.appendChild(modal);
 
@@ -93,14 +113,15 @@ function showExEditor(editId){
   document.getElementById('exSave').addEventListener('click',function(){
     var name=document.getElementById('exName').value.trim();
     if(!name){toast('请输入名称','e');return}
+    var desc=document.getElementById('exDesc').value.trim();
     var list=getExercises();
     if(curType==='strength'){
       var ratio=parseInt(document.getElementById('exRatioVal').textContent);
-      var newEx={id:isEdit?editId:name,name:name,type:'strength',ratio:ratio,intensity:null,emoji:null,hasDist:false};
+      var newEx={id:isEdit?editId:name,name:name,type:'strength',ratio:ratio,intensity:null,emoji:null,hasDist:false,description:desc};
     }else{
       var emoji=document.getElementById('exEmoji').value.trim()||'🏃';
       var hasDist=document.getElementById('exHasDist').checked;
-      var newEx={id:isEdit?editId:(name),name:name,type:'cardio',ratio:null,intensity:curIntensity,emoji:emoji,hasDist:hasDist};
+      var newEx={id:isEdit?editId:(name),name:name,type:'cardio',ratio:null,intensity:curIntensity,emoji:emoji,hasDist:hasDist,description:desc};
     }
     if(isEdit){
       var idx=list.findIndex(function(x){return x.id===editId});
@@ -221,7 +242,8 @@ function onSettingsEvent(el,id,act){
 
 /* ========== ATTRIBUTE CALC INFO (moved from tab-game.js) ========== */
 function showAttrInfo(){
-  var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据',vol:0,dur:0,permPenAtk:0,permPenDef:0};
+  var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据',vol:0,dur:0,permPenAtk:0,permPenDef:0,period:{name:'—',volThreshold:2500}};
+  var p=info.period||{name:'—',volThreshold:2500};
   var modal=document.createElement('div');modal.className='modal-overlay open';
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
     +'<div style="font-size:.8rem;line-height:1.7;color:var(--text2);padding:4px 0">'
@@ -231,9 +253,10 @@ function showAttrInfo(){
     +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:.7rem;color:var(--text3)">'
     +'📊 近30天力量容量: '+info.vol+' kg (×动作ratio)<br>'
     +'🏃 近30天有氧时长: '+info.dur+' 分钟<br>'
-    +'📅 每周4天→+20攻防, 7天→+50攻防<br>'
+    +'📅 当前旬: '+p.name+' (容量目标 '+p.volThreshold+'kg)<br>'
+    +'💡 旬内6天→攻防各+30；容量达标→攻防各+60（可叠加）<br>'
     +'💡 每200kg容量=+1攻击, 每60分钟=+1防御<br>'
-    +((info.permPenAtk+info.permPenDef)>0?'⚠️ 上周训练不足, 永久惩罚 攻-'+info.permPenAtk+' 防-'+info.permPenDef+'<br>':'✅ 每周训练3天以上属性正常<br>')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>';
+    +((info.permPenAtk+info.permPenDef)>0?'⚠️ 上旬训练不足, 永久惩罚 攻-'+info.permPenAtk+' 防-'+info.permPenDef+'<br>':'✅ 旬内训练6天以上免惩罚<br>')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>';
   document.body.appendChild(modal);
   document.getElementById('attrClose').addEventListener('click',function(){modal.remove()});
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()});

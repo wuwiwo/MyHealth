@@ -15,7 +15,11 @@ function drawLineChart(canvas,opts){
     ctx.fillText(opts.emptyMsg||'至少需要 2 条记录才能显示趋势',140,90);return;
   }
   var rect=canvas.parentElement.getBoundingClientRect();
-  var W=Math.max(280,rect.width),H=190,pad=44;
+  var W=Math.max(280,rect.width||0),H=190,pad=44;
+  if(!rect.width){
+    var parent=canvas.parentElement;
+    W=Math.max(280,parent.clientWidth||parent.offsetWidth||280);
+  }
   canvas.width=W*2;canvas.height=H*2;canvas.style.width=W+'px';canvas.style.height=H+'px';
   var ctx=canvas.getContext('2d');ctx.scale(2,2);
 

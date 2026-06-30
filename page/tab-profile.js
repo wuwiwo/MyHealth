@@ -2,6 +2,8 @@
    MyHealth — Tab: Profile (Personal + Training)
    ============================================ */
 
+var _wtView='month'; // 'week' or 'month'
+
 function renderProf(){
   var pc=document.getElementById('profileCard')
   var prof=getProf()
@@ -15,6 +17,7 @@ function renderProf(){
   var recs=getWt();if(recs.length>0){var inp=document.getElementById('wtInput');if(inp)inp.value=recs[0].weight}
   renderWtList()
   renderChart()
+  renderWtNoteTags()
   renderPRs()
   renderStats()
   renderHeatmap()
@@ -31,9 +34,54 @@ function renderWtList(){
 }
 
 function renderChart(){
+  var wrap=document.getElementById('weightChart');if(!wrap)return
+  var toggleHtml='<div style="display:flex;gap:6px;margin-bottom:8px">'
+    +'<button class="car-type'+(_wtView==='week'?' selected':'')+'" id="wtViewWeek" style="padding:5px 14px;font-size:.72rem">📅 周</button>'
+    +'<button class="car-type'+(_wtView==='month'?' selected':'')+'" id="wtViewMonth" style="padding:5px 14px;font-size:.72rem">📅 月</button>'
+    +'</div>';
   var c=document.getElementById('weightCanvas');if(!c)return
-  var recs=getWt().slice(0,30).reverse()
+  var all=getWt().reverse(); // oldest first
+  var cutoff;
+  if(_wtView==='week'){
+    var w=new Date();w.setDate(w.getDate()-7);
+    cutoff=toDate(w);
+  }else{
+    var m=new Date();m.setDate(m.getDate()-30);
+    cutoff=toDate(m);
+  }
+  var recs=all.filter(function(r){return r.date>=cutoff});
+  // Ensure canvas re-renders by resetting size
+  wrap.style.display='block';
+  // Insert toggle before canvas if not present
+  var existingToggle=wrap.querySelector('[data-wt-toggle]');
+  if(!existingToggle){
+    var div=document.createElement('div');div.setAttribute('data-wt-toggle','1');div.innerHTML=toggleHtml;
+    wrap.insertBefore(div,wrap.querySelector('canvas'));
+  }else{
+    existingToggle.innerHTML=toggleHtml;
+  }
   drawLineChart(c,{labels:recs.map(function(r){return r.date.slice(5)}),values:recs.map(function(r){return r.weight}),color:'#F97316',suffix:'kg'})
+  var wBtn=document.getElementById('wtViewWeek'),mBtn=document.getElementById('wtViewMonth');
+  if(wBtn)wBtn.addEventListener('click',function(){_wtView='week';renderChart()});
+  if(mBtn)mBtn.addEventListener('click',function(){_wtView='month';renderChart()});
+}
+
+/* ========== WEIGHT NOTE TAGS (frequent notes from history) ========== */
+function renderWtNoteTags(){
+  var el=document.getElementById('wtNoteTags');if(!el)return
+  var recs=getWt();
+  var counts={};
+  recs.forEach(function(r){if(r.note){counts[r.note]=(counts[r.note]||0)+1}});
+  var top=Object.keys(counts).sort(function(a,b){return counts[b]-counts[a]}).slice(0,5);
+  if(!top.length){el.innerHTML='';return}
+  el.innerHTML='<div style="margin-bottom:4px;font-size:.62rem;color:var(--text3)">高频备注</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">'
+    +top.map(function(n){return'<button class="car-type" data-wtnote="'+n.replace(/"/g,'&quot;')+'" style="padding:3px 10px;font-size:.68rem">'+n+'</button>'}).join('')
+    +'</div>';
+  el.querySelectorAll('[data-wtnote]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var inp=document.getElementById('wtNote');if(inp)inp.value=b.dataset.wtnote;
+    });
+  });
 }
 
 /* ========== PERSONAL RECORDS ========== */
