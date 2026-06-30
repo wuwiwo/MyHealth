@@ -14,25 +14,33 @@ function renderGame(){
   var carEff=sumEffectiveDuration(carE,getCardioTypeMap())
   var baseAtk=10+Math.floor(strVol/20),baseDef=10+Math.floor(carEff/15)
   var baseHp=100+Math.floor(strVol/10)+Math.floor(carDur/3)
-  var atkInfo='攻击 = 10 + floor('+strVol+'/20) = '+baseAtk+(stats.periodAtkBonus>0?' + 旬奖励 +'+stats.periodAtkBonus:'')+(stats.permPenAtk>0?' - 永久惩罚 -'+stats.permPenAtk:'')+' = '+stats.atk
-  var defInfo='防御 = 10 + floor('+carEff+'/15) = '+baseDef+(stats.periodDefBonus>0?' + 旬奖励 +'+stats.periodDefBonus:'')+(stats.permPenDef>0?' - 永久惩罚 -'+stats.permPenDef:'')+' = '+stats.def
+  var atkInfo='攻击 = 10 + floor('+strVol+'/20) = '+baseAtk+(stats.periodEnabled&&stats.periodAtkBonus>0?' + 旬奖励 +'+stats.periodAtkBonus:'')+(stats.permPenAtk>0?' - 永久惩罚 -'+stats.permPenAtk:'')+' = '+stats.atk
+  var defInfo='防御 = 10 + floor('+carEff+'/15) = '+baseDef+(stats.periodEnabled&&stats.periodDefBonus>0?' + 旬奖励 +'+stats.periodDefBonus:'')+(stats.permPenDef>0?' - 永久惩罚 -'+stats.permPenDef:'')+' = '+stats.def
   var hpInfo='生命 = 100 + floor('+strVol+'/10) + floor('+carDur+'/3) = '+baseHp+((stats.periodAtkBonus+stats.periodDefBonus)>0?' + 旬奖励×3 +'+(stats.periodAtkBonus+stats.periodDefBonus)*3:'')+' = '+stats.hp
 
   var wkStatus='',wkColor='orange'
   var p=stats.period
-  if(stats.periodDays>=6&&stats.volMet){wkStatus='🎉 旬双达标！';wkColor='green'}
+  if(!stats.periodEnabled){
+    wkStatus='🗓️ 7月启用旬奖励';wkColor='text3'
+  }else if(stats.periodDays>=6&&stats.volMet){wkStatus='🎉 旬双达标！';wkColor='green'}
   else if(stats.periodDays>=6){wkStatus='✅ 天数达标，冲容量';wkColor='green'}
   else if(stats.volMet){wkStatus='📊 容量达标，冲天数';wkColor='green'}
   else if(stats.periodDays>=4){wkStatus='💪 还差'+(6-stats.periodDays)+'天达标';wkColor='yellow'}
   else if(stats.periodDays>=1){wkStatus='🔥 旬内仅'+stats.periodDays+'天';wkColor='orange'}
   else {wkStatus='😴 本旬还没动';wkColor='red'}
 
+  var periodItemHtml;
+  if(!stats.periodEnabled){
+    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v" style="color:var(--text3);font-size:.72rem">7月启用</div><div class="gs-l" style="font-size:.6rem">旬奖励待启用</div></div>';
+  }else{
+    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.periodDays+'<span style="font-size:.6rem">/6天</span>'+(stats.periodAtkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.periodAtkBonus+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:.6rem;color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:.6rem">'+p.name+' · '+wkStatus+'</div></div>';
+  }
   document.getElementById('gameStatsBar').innerHTML=
     '<div class="gs-item"><div class="gs-v orange">'+stats.atk+'</div><div class="gs-l">⚔️ 攻击</div></div>'+
     '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">🛡️ 防御</div></div>'+
     '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">❤️ 生命</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+getGame().cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
-    '<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.periodDays+'<span style="font-size:.6rem">/6天</span>'+(stats.periodAtkBonus>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.periodAtkBonus+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:.6rem;color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:.6rem">'+p.name+' · '+wkStatus+'</div></div>'+
+    periodItemHtml+
     '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'
   _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,lastPeriodDays:stats.lastPeriodDays,thisPeriodDays:stats.periodDays,period:p}
   trackStats(stats,{strVol:strVol,carDur:carDur,carEff:carEff})
@@ -40,7 +48,7 @@ function renderGame(){
 
   var warnKey='warn_'+p.start+'_miss'
   var warnDismissed=localStorage.getItem(warnKey)
-  if(stats.lastPeriodDays<6&&stats.lastPeriodDays>=0&&!warnDismissed){
+  if(stats.periodEnabled&&stats.lastPeriodDays<6&&stats.lastPeriodDays>=0&&!warnDismissed){
     var gameContent=document.getElementById('gameContent')
     if(gameContent&&!document.getElementById('penaltyBanner')){
       var banner=document.createElement('div');banner.id='penaltyBanner'
@@ -98,7 +106,9 @@ function getMonthDays(){
   return countActiveDays((store.get('strength')||{entries:[]}).entries,(store.get('cardio')||{entries:[]}).entries,ms)
 }
 
-/* ========== 旬周期 (10-day period) ========== */
+/* ========== 旬周期 (10-day period) — 2026-07-01 生效 ========== */
+var PERIOD_RULE_START='2026-07-01';
+
 function getPeriodDays(period){
   return countActiveDaysInRange(
     (store.get('strength')||{entries:[]}).entries,
@@ -118,33 +128,31 @@ function getGameStats(){
   var strVol=sumVolume(strE,getExerciseMap())
   var carDur=sumDuration(carE)
   var carEff=sumEffectiveDuration(carE,getCardioTypeMap())
+  var now=new Date();
+  var periodEnabled=today()>=PERIOD_RULE_START;
   // Current period (旬) stats
-  var curPeriod=getCurrentPeriod(new Date());
+  var curPeriod=getCurrentPeriod(now);
   var periodDays=getPeriodDays(curPeriod);
   var periodVol=getPeriodVolume(curPeriod);
   var bonus=calculatePeriodBonus(periodDays,periodVol,curPeriod.volThreshold);
   // Previous period penalty
-  var prevPeriod=getPreviousPeriod(new Date());
-  var lastPeriodDays=getPeriodDays(prevPeriod);
+  var prevPeriod=getPreviousPeriod(now);
+  var lastPeriodDays=periodEnabled?getPeriodDays(prevPeriod):-1;
   var pen=calculatePeriodPenalty(lastPeriodDays);
-  // Apply permanent penalty once per period transition
+  // Apply permanent penalty once per period transition (only after rule start)
   if(!getGame().permPen)getGame().permPen={atk:0,def:0}
   var penKey='pen_'+prevPeriod.start;
-  if(pen.missDays>0&&!getGame()[penKey]){
+  if(periodEnabled&&pen.missDays>0&&!getGame()[penKey]){
     getGame().permPen.atk+=pen.atkPen;getGame().permPen.def+=pen.defPen;
     getGame()[penKey]=true;setGame(getGame());
   }
-  // Reset penalty flag when entering a new period (mark all old pen keys)
-  Object.keys(getGame()).forEach(function(k){
-    if(k.indexOf('pen_')===0&&k!==penKey){
-      // keep flag set; no need to reset — penalty is cumulative permanent
-    }
-  });
-  var calc=calculateStats(strVol,carDur,carEff,bonus.atkBonus,bonus.defBonus,getGame().permPen.atk||0,getGame().permPen.def||0)
+  var periodAtkBonus=periodEnabled?bonus.atkBonus:0;
+  var periodDefBonus=periodEnabled?bonus.defBonus:0;
+  var calc=calculateStats(strVol,carDur,carEff,periodAtkBonus,periodDefBonus,getGame().permPen.atk||0,getGame().permPen.def||0)
   return{
     atk:calc.atk,def:calc.def,hp:calc.hp,
     period:curPeriod,periodDays:periodDays,periodVol:periodVol,volMet:bonus.volMet,
-    periodAtkBonus:bonus.atkBonus,periodDefBonus:bonus.defBonus,
+    periodAtkBonus:periodAtkBonus,periodDefBonus:periodDefBonus,periodEnabled:periodEnabled,
     lastPeriodDays:lastPeriodDays,lastPeriodName:prevPeriod.name,
     permPenAtk:getGame().permPen.atk||0,permPenDef:getGame().permPen.def||0,
     monthDays:getMonthDays()
