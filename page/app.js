@@ -79,6 +79,7 @@ function init(){
   migrateExercisesV17()
   migrateOldData()
   checkMonthlyReset()
+  backfillJunePermBonus()
 
   renderStr();renderCar();renderProf();renderGame();renderSettings()
 }
@@ -226,6 +227,43 @@ function checkMonthlyReset(){
     localStorage.setItem('dh-last-reset-month',thisMonth);
     toast('📅 新月新开始！挑战已重置，永久惩罚保留','s');
   }
+}
+
+/* ========== ONE-TIME: BACKFILL JUNE 2026 PERM BONUS ========== */
+function backfillJunePermBonus(){
+  if(localStorage.getItem('dh-june-bonus-backfilled'))return;
+  var g=getGame();
+  if(!g.permBonus)g.permBonus={atk:0,def:0};
+  var exMap=getExerciseMap();
+  var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>='2026-06-01'&&e.date<='2026-06-30'});
+  var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>='2026-06-01'&&e.date<='2026-06-30'});
+  var periods=[
+    {start:'2026-06-01',end:'2026-06-10',volThreshold:2500},
+    {start:'2026-06-11',end:'2026-06-20',volThreshold:2500},
+    {start:'2026-06-21',end:'2026-06-30',volThreshold:2500}
+  ];
+  var totalAtk=0,totalDef=0;
+  periods.forEach(function(p){
+    var pStr=strE.filter(function(e){return e.date>=p.start&&e.date<=p.end});
+    var pCar=carE.filter(function(e){return e.date>=p.start&&e.date<=p.end});
+    var days=new Set();
+    pStr.forEach(function(e){days.add(e.date)});
+    pCar.forEach(function(e){days.add(e.date)});
+    var vol=pStr.reduce(function(s,e){
+      var ratio=exMap[e.exercise]&&exMap[e.exercise].ratio!=null?exMap[e.exercise].ratio:100;
+      return s+e.weight*e.actualReps*(ratio/100);
+    },0);
+    var daysMet=days.size>=6;
+    var volMet=vol>=p.volThreshold;
+    totalAtk+=(daysMet?30:0)+(volMet?60:0);
+    totalDef+=(daysMet?30:0)+(volMet?60:0);
+  });
+  if(totalAtk>0){
+    g.permBonus.atk+=totalAtk;g.permBonus.def+=totalDef;
+    setGame(g);
+    toast('🏆 6月训练奖励已补发: 攻+'+totalAtk+' 防+'+totalDef,'s');
+  }
+  localStorage.setItem('dh-june-bonus-backfilled','1');
 }
 
 window.toggleTheme=toggleTheme
