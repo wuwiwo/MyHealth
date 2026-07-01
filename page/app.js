@@ -78,6 +78,7 @@ function init(){
   migrateExercises()
   migrateExercisesV17()
   migrateOldData()
+  checkMonthlyReset()
 
   renderStr();renderCar();renderProf();renderGame();renderSettings()
 }
@@ -206,6 +207,25 @@ function migrateOldData(){
       savePlans(dp.plans);console.log('Migrated '+dp.plans.length+' plans')
     }}
   }catch(e){console.log('Migration error:',e)}
+}
+
+/* ========== MONTHLY LEVEL RESET ========== */
+function checkMonthlyReset(){
+  var thisMonth=today().slice(0,7);
+  var lastReset=localStorage.getItem('dh-last-reset-month');
+  if(!lastReset){
+    localStorage.setItem('dh-last-reset-month',thisMonth);
+    return;
+  }
+  if(thisMonth>lastReset){
+    var g=getGame();
+    g.cleared=[];
+    g.current='1-1';
+    g.attempts={};
+    setGame(g);
+    localStorage.setItem('dh-last-reset-month',thisMonth);
+    toast('📅 新月新开始！挑战已重置，永久惩罚保留','s');
+  }
 }
 
 window.toggleTheme=toggleTheme
