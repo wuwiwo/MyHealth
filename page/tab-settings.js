@@ -242,7 +242,7 @@ function onSettingsEvent(el,id,act){
 
 /* ========== ATTRIBUTE CALC INFO (moved from tab-game.js) ========== */
 function showAttrInfo(){
-  var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据',vol:0,dur:0,permPenAtk:0,permPenDef:0,period:{name:'—',volThreshold:2500}};
+  var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据',vol:0,dur:0,permPenAtk:0,permPenDef:0,permBonusAtk:0,permBonusDef:0,period:{name:'—',volThreshold:2500}};
   var p=info.period||{name:'—',volThreshold:2500};
   var modal=document.createElement('div');modal.className='modal-overlay open';
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
@@ -254,9 +254,10 @@ function showAttrInfo(){
     +'📊 本月力量容量: '+info.vol+' kg (×动作ratio)<br>'
     +'🏃 本月有氧时长: '+info.dur+' 分钟<br>'
     +'📅 当前旬: '+p.name+' (容量目标 '+p.volThreshold+'kg)<br>'
-    +'💡 旬内6天→攻防各+30；容量达标→攻防各+60（可叠加）<br>'
-    +'💡 每200kg容量=+1攻击, 每60分钟=+1防御<br>'
-    +((info.permPenAtk+info.permPenDef)>0?'⚠️ 上旬训练不足, 永久惩罚 攻-'+info.permPenAtk+' 防-'+info.permPenDef+'<br>':'✅ 旬内训练6天以上免惩罚<br>')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>';
+    +'💡 旬内6天→攻防各+30；容量达标→攻防各+60（达标后永久保留）<br>'
+    +'💡 基础属性每月1号归零，累积奖励/惩罚永久保留<br>'
+    +((info.permBonusAtk+info.permBonusDef)>0?'🏆 累积奖励: 攻+'+info.permBonusAtk+' 防+'+info.permBonusDef+'<br>':'')
+    +((info.permPenAtk+info.permPenDef)>0?'⚠️ 累积惩罚: 攻-'+info.permPenAtk+' 防-'+info.permPenDef+'<br>':'')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>';
   document.body.appendChild(modal);
   document.getElementById('attrClose').addEventListener('click',function(){modal.remove()});
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()});
