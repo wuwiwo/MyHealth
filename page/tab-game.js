@@ -6,9 +6,9 @@ function renderGame(){
   const stats=getGameStats()
   const mNames=['','一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
   const n=new Date();const monthLabel=mNames[n.getMonth()+1]||''
-  var thirty=toDate(new Date(Date.now()-30*86400000))
-  var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
-  var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
+  var monthStart=toDate(new Date(n.getFullYear(),n.getMonth(),1))
+  var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=monthStart})
+  var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=monthStart})
   var strVol=sumVolume(strE,getExerciseMap())
   var carDur=sumDuration(carE)
   var carEff=sumEffectiveDuration(carE,getCardioTypeMap())
@@ -122,13 +122,14 @@ function getPeriodVolume(period){
 }
 
 function getGameStats(){
-  var thirty=toDate(new Date(Date.now()-30*86400000))
-  var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
-  var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=thirty})
+  // Base attributes use current month's training data (resets naturally on 1st)
+  var now=new Date();
+  var monthStart=toDate(new Date(now.getFullYear(),now.getMonth(),1));
+  var strE=((store.get('strength')||{entries:[]}).entries||[]).filter(function(e){return e.date>=monthStart})
+  var carE=((store.get('cardio')||{entries:[]}).entries||[]).filter(function(e){return e.date>=monthStart})
   var strVol=sumVolume(strE,getExerciseMap())
   var carDur=sumDuration(carE)
   var carEff=sumEffectiveDuration(carE,getCardioTypeMap())
-  var now=new Date();
   var periodEnabled=today()>=PERIOD_RULE_START;
   // Current period (旬) stats
   var curPeriod=getCurrentPeriod(now);
