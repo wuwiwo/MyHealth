@@ -119,9 +119,10 @@ function getPreviousPeriod(date) {
 function calculatePeriodBonus(periodDays, periodVol, volThreshold) {
   var daysMet = periodDays >= 6;
   var volMet = periodVol >= volThreshold;
+  var atkBonus = (daysMet ? 30 : 0) + (volMet ? 60 : 0);
   return {
-    atkBonus: (daysMet ? 30 : 0) + (volMet ? 60 : 0),
-    defBonus: (daysMet ? 30 : 0) + (volMet ? 60 : 0),
+    atkBonus: atkBonus,
+    defBonus: Math.round(atkBonus / 5),
     daysMet: daysMet,
     volMet: volMet
   };

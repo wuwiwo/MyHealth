@@ -80,6 +80,7 @@ function init(){
   migrateOldData()
   checkMonthlyReset()
   backfillJunePermBonus()
+  fixDefBonusRatio()
 
   renderStr();renderCar();renderProf();renderGame();renderSettings()
 }
@@ -255,8 +256,9 @@ function backfillJunePermBonus(){
     },0);
     var daysMet=days.size>=6;
     var volMet=vol>=p.volThreshold;
-    totalAtk+=(daysMet?30:0)+(volMet?60:0);
-    totalDef+=(daysMet?30:0)+(volMet?60:0);
+    var atkBonus=(daysMet?30:0)+(volMet?60:0);
+    totalAtk+=atkBonus;
+    totalDef+=Math.round(atkBonus/5);
   });
   if(totalAtk>0){
     g.permBonus.atk+=totalAtk;g.permBonus.def+=totalDef;
@@ -264,6 +266,22 @@ function backfillJunePermBonus(){
     toast('🏆 6月训练奖励已补发: 攻+'+totalAtk+' 防+'+totalDef,'s');
   }
   localStorage.setItem('dh-june-bonus-backfilled','1');
+}
+
+/* ========== ONE-TIME: FIX DEF BONUS 1/5 RATIO ========== */
+function fixDefBonusRatio(){
+  if(localStorage.getItem('dh-def-bonus-fixed'))return;
+  if(!localStorage.getItem('dh-june-bonus-backfilled')){localStorage.setItem('dh-def-bonus-fixed','1');return}
+  var g=getGame();
+  if(!g.permBonus){localStorage.setItem('dh-def-bonus-fixed','1');return}
+  // Old formula gave def=atk; new formula is def=atk/5. Correct the excess.
+  var excess=g.permBonus.def-Math.round(g.permBonus.atk/5);
+  if(excess>0){
+    g.permBonus.def-=excess;
+    setGame(g);
+    toast('🔧 防御奖励已修正（1/5比例）: 防-'+excess,'s');
+  }
+  localStorage.setItem('dh-def-bonus-fixed','1');
 }
 
 window.toggleTheme=toggleTheme

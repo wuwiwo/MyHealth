@@ -227,7 +227,7 @@ function showLevelPreview(id){
 }
 
 /* ========== BATTLE ========== */
-let _battleRunning=false,_battleSpeed=1,_battleTimer=null,_battle=null
+let _battleRunning=false,_battleSpeed=1,_battleTimer=null,_battle=null,_battleAuto=false
 var _attrCalcInfo={}
 
 function updateGameBar(){
@@ -249,6 +249,8 @@ function startBattle(id){
   var affix=lv.boss?pickBossAffix():null
   _battle=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp},{atk:lv.atk,def:lv.def,hp:lv.hp},{npc:lv.npc,boss:lv.boss},affix)
   _battleRunning=false;_battleSpeed=1;_battleTimer=null
+  var autoBtn=document.getElementById('battleAuto');
+  if(autoBtn){autoBtn.classList.toggle('active',_battleAuto);autoBtn.textContent=_battleAuto?'🔄 自动✓':'🔄 自动'}
   document.getElementById('battleLevel').textContent=id+' '+lv.npc+(affix?' 👑':'')+(affix?' ['+affix.name+']':'')
   document.getElementById('beName').textContent='👹 '+lv.npc+(affix?' 👑':'')
   document.getElementById('bpHP').style.width='100%'
@@ -274,11 +276,19 @@ function runBattle(){
     _battle.turn=result.turn
     result.events.forEach(function(ev){addBattleLog(ev.msg,ev.type)})
     renderBattleHP()
-    // Hit animation
+    // Attack & hit animations
     var pEl=document.getElementById('battlePlayer'),eEl=document.getElementById('battleEnemy')
     result.events.forEach(function(ev){
-      if(ev.type==='e'&&eEl){eEl.classList.remove('hit');void eEl.offsetWidth;eEl.classList.add('hit')}
-      if(ev.type==='dmg'&&pEl){pEl.classList.remove('hit');void pEl.offsetWidth;pEl.classList.add('hit')}
+      if(ev.type==='dmg'){
+        // Player takes damage — enemy attacks
+        if(eEl){eEl.classList.remove('attacking-enemy');void eEl.offsetWidth;eEl.classList.add('attacking-enemy')}
+        if(pEl){pEl.classList.remove('hit');void pEl.offsetWidth;pEl.classList.add('hit');showImpact(pEl,ev)}
+      }
+      if(ev.type==='e'){
+        // Enemy takes damage — player attacks
+        if(pEl){pEl.classList.remove('attacking');void pEl.offsetWidth;pEl.classList.add('attacking')}
+        if(eEl){eEl.classList.remove('hit');void eEl.offsetWidth;eEl.classList.add('hit');showImpact(eEl,ev)}
+      }
     })
     if(_battle.done){endBattle(_battle.winner);_battleRunning=false;return}
     _battleTimer=setTimeout(tick,600/_battleSpeed)
@@ -297,6 +307,17 @@ function addBattleLog(msg,type){
   const el=document.getElementById('battleLog')
   const div=document.createElement('div');div.className='bl-entry '+(type==='dmg'?'bl-dmg':type==='e'?'bl-def':'')
   div.textContent='▸ '+msg;el.appendChild(div);el.scrollTop=el.scrollHeight
+}
+
+function showImpact(targetEl,ev){
+  if(!targetEl||!ev.msg)return;
+  var num=ev.msg.replace(/[^0-9\-]/g,'');
+  if(!num)return;
+  var impact=document.createElement('div');impact.className='bc-impact';
+  impact.textContent=(ev.type==='dmg'?'💥':'✨')+num;
+  impact.style.left='50%';impact.style.top='30%';
+  targetEl.appendChild(impact);
+  setTimeout(function(){if(impact.parentNode)impact.remove()},600);
 }
 
 function endBattle(won){
@@ -324,7 +345,19 @@ function endBattle(won){
     trackLevel(g.current)
     el.innerHTML='<div class="be-result be-win">🏆 胜利！</div><div class="be-replay"><button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button></div>'
     celebrate()
+    if(_battleAuto&&nextId){
+      el.innerHTML+='<div style="font-size:.7rem;color:var(--text3);text-align:center;margin-top:6px">🔄 自动模式：2秒后进入下一关...</div>'
+      setTimeout(function(){
+        var ov=document.getElementById('battleOverlay');
+        if(ov&&ov.classList.contains('open')&&_battleAuto){
+          ov.classList.remove('open');
+          setTimeout(function(){if(_battleAuto&&getGame().current)startBattle(getGame().current)},200);
+        }
+      },2000);
+    }
   } else {
+    _battleAuto=false;
+    var autoBtn=document.getElementById('battleAuto');if(autoBtn){autoBtn.classList.remove('active');autoBtn.textContent='🔄 自动'}
     el.innerHTML='<div class="be-result be-lose">💀 战败</div><div class="be-replay"><button class="be-btn be-btn-retry" id="battleRetry">🔄 重新挑战</button></div>'
   }
   document.getElementById('battleNext')?.addEventListener('click',()=>{document.getElementById('battleOverlay').classList.remove('open');renderGame()})
@@ -466,8 +499,15 @@ function hideShare(){document.getElementById('shareOverlay').classList.remove('o
 /* ========== GAME EVENT HANDLER ========== */
 function onGameEvent(el,id,act){
   switch(id){
-    case 'battleClose':_battle.done=true;if(_battleTimer)clearTimeout(_battleTimer);_battleRunning=false
+    case 'battleClose':_battle.done=true;_battleAuto=false;if(_battleTimer)clearTimeout(_battleTimer);_battleRunning=false
       document.getElementById('battleOverlay').classList.remove('open');renderGame();return true;
+    case 'battleAuto':{
+      _battleAuto=!_battleAuto;
+      el.classList.toggle('active',_battleAuto);
+      el.textContent=_battleAuto?'🔄 自动✓':'🔄 自动';
+      if(_battleAuto){toast('自动模式已开启：胜利后自动挑战下一关','s')}
+      else{toast('自动模式已关闭','')}
+      return true}
     case 'shareClose':hideShare();return true;
     case 'shareSave':toast('长按或截图保存分享卡片 📸','s');return true;
   }
