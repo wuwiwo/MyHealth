@@ -58,6 +58,10 @@ function renderExLibrary(){
 function exCardHtml(ex,badge,isCardio){
   var namePrefix=isCardio?(ex.emoji||'🏃')+' ':'';
   var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
+  if(ex.eqWeight){
+    var unitLabel=ex.unit==='sec'?'秒':'次';
+    h+='<div style="margin-top:4px;font-size:.65rem;color:var(--text3)">⚖️ 等效'+ex.eqWeight+'kg/'+unitLabel+'</div>';
+  }
   if(ex.description){
     var first=mdFirstLine(ex.description);
     h+='<div style="margin-top:6px;font-size:.72rem;color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span style="color:var(--text3);font-size:.65rem"> …展开</span></div>';
@@ -71,7 +75,7 @@ function showExEditor(editId){
   var list=getExercises();
   var ex=editId?list.find(function(x){return x.id===editId}):null;
   var isEdit=!!ex;
-  if(!ex)ex={id:'',name:'',type:'strength',ratio:100,intensity:2,emoji:'🏃',hasDist:false,description:''};
+  if(!ex)ex={id:'',name:'',type:'strength',ratio:100,intensity:2,emoji:'🏃',hasDist:false,description:'',eqWeight:null,unit:'rep'};
 
   var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='exModal';
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(isEdit?'✏️ 编辑动作':'＋ 新建动作')+'</div>';
@@ -80,7 +84,12 @@ function showExEditor(editId){
   h+='<button class="car-type'+(ex.type==='cardio'?' selected':'')+'" data-extype="cardio">🏃 有氧</button>';
   h+='</div></div>';
   h+='<div class="fg"><label class="fl">名称</label><input class="fi" id="exName" value="'+ex.name+'" placeholder="如: 弯举"></div>';
-  h+='<div class="fg" id="exRatioFg"'+(ex.type==='strength'?'':' style="display:none"')+'><label class="fl">力量比值 (ratio %)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="exRatioD">−</button><span class="sp-val" id="exRatioVal">'+(ex.ratio!=null?ex.ratio:100)+'</span><button class="sp-btn" id="exRatioU">+</button></div></div>';
+  h+='<div class="fg" id="exRatioFg"'+(ex.type==='strength'?'':' style="display:none"')+'><label class="fl">力量比值 (ratio %) <span style="font-weight:400;text-transform:none">折算率10~100%</span></label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="exRatioD">−</button><span class="sp-val" id="exRatioVal">'+(ex.ratio!=null?ex.ratio:100)+'</span><button class="sp-btn" id="exRatioU">+</button></div></div>';
+  h+='<div class="fg" id="exEqWeightFg"'+(ex.type==='strength'?'':' style="display:none"')+'><label class="fl">等效重量 (kg/次) <span style="font-weight:400;text-transform:none">自重动作设此值，留空则用实际重量</span></label><input class="fi" id="exEqWeight" type="number" step="0.1" min="0" value="'+(ex.eqWeight!=null?ex.eqWeight:'')+'" placeholder="如: 0.5（留空=哑铃动作）"></div>';
+  h+='<div class="fg" id="exUnitFg"'+(ex.type==='strength'?'':' style="display:none"')+'><label class="fl">计量单位</label><div class="car-types" id="exUnitSel">';
+  h+='<button class="car-type'+(ex.unit!=='sec'?' selected':'')+'" data-exunit="rep">🔢 按次数</button>';
+  h+='<button class="car-type'+(ex.unit==='sec'?' selected':'')+'" data-exunit="sec">⏱️ 按秒数</button>';
+  h+='</div></div>';
   h+='<div class="fg" id="exEmojiFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><label class="fl">图标 emoji</label><input class="fi" id="exEmoji" value="'+(ex.emoji||'🏃')+'" placeholder="🏃"></div>';
   h+='<div class="fg" id="exIntensityFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><label class="fl">默认强度</label><div class="car-types" id="exIntensitySel"></div></div>';
   h+='<div class="fg" id="exHasDistFg"'+(ex.type==='cardio'?'':' style="display:none"')+' style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="exHasDist"'+(ex.hasDist?' checked':'')+'><label class="fl" style="margin:0">有距离统计</label></div>';
@@ -95,6 +104,8 @@ function showExEditor(editId){
       curType=b.dataset.extype;
       modal.querySelectorAll('#exTypeSel .car-type').forEach(function(x){x.classList.toggle('selected',x.dataset.extype===curType)});
       document.getElementById('exRatioFg').style.display=curType==='strength'?'':'none';
+      document.getElementById('exEqWeightFg').style.display=curType==='strength'?'':'none';
+      document.getElementById('exUnitFg').style.display=curType==='strength'?'':'none';
       document.getElementById('exEmojiFg').style.display=curType==='cardio'?'':'none';
       document.getElementById('exIntensityFg').style.display=curType==='cardio'?'':'none';
       document.getElementById('exHasDistFg').style.display=curType==='cardio'?'flex':'none';
@@ -107,8 +118,15 @@ function showExEditor(editId){
     b.addEventListener('click',function(){curIntensity=parseInt(b.dataset.exint);intEl.querySelectorAll('.car-type').forEach(function(x){x.classList.toggle('selected',parseInt(x.dataset.exint)===curIntensity)})});
     intEl.appendChild(b);
   });
-  document.getElementById('exRatioD').addEventListener('click',function(){var v=parseInt(document.getElementById('exRatioVal').textContent);document.getElementById('exRatioVal').textContent=Math.max(1,v-5)});
+  document.getElementById('exRatioD').addEventListener('click',function(){var v=parseInt(document.getElementById('exRatioVal').textContent);document.getElementById('exRatioVal').textContent=Math.max(10,v-5)});
   document.getElementById('exRatioU').addEventListener('click',function(){var v=parseInt(document.getElementById('exRatioVal').textContent);document.getElementById('exRatioVal').textContent=Math.min(100,v+5)});
+  var curUnit=ex.unit||'rep';
+  modal.querySelectorAll('[data-exunit]').forEach(function(b){
+    b.addEventListener('click',function(){
+      curUnit=b.dataset.exunit;
+      modal.querySelectorAll('#exUnitSel .car-type').forEach(function(x){x.classList.toggle('selected',x.dataset.exunit===curUnit)});
+    });
+  });
   document.getElementById('exCancel').addEventListener('click',function(){modal.remove()});
   document.getElementById('exSave').addEventListener('click',function(){
     var name=document.getElementById('exName').value.trim();
@@ -117,11 +135,13 @@ function showExEditor(editId){
     var list=getExercises();
     if(curType==='strength'){
       var ratio=parseInt(document.getElementById('exRatioVal').textContent);
-      var newEx={id:isEdit?editId:name,name:name,type:'strength',ratio:ratio,intensity:null,emoji:null,hasDist:false,description:desc};
+      var eqWeightRaw=document.getElementById('exEqWeight').value.trim();
+      var eqWeight=eqWeightRaw?parseFloat(eqWeightRaw):null;
+      var newEx={id:isEdit?editId:name,name:name,type:'strength',ratio:ratio,intensity:null,emoji:null,hasDist:false,description:desc,eqWeight:eqWeight,unit:curUnit};
     }else{
       var emoji=document.getElementById('exEmoji').value.trim()||'🏃';
       var hasDist=document.getElementById('exHasDist').checked;
-      var newEx={id:isEdit?editId:(name),name:name,type:'cardio',ratio:null,intensity:curIntensity,emoji:emoji,hasDist:hasDist,description:desc};
+      var newEx={id:isEdit?editId:(name),name:name,type:'cardio',ratio:null,intensity:curIntensity,emoji:emoji,hasDist:hasDist,description:desc,eqWeight:null,unit:'rep'};
     }
     if(isEdit){
       var idx=list.findIndex(function(x){return x.id===editId});

@@ -66,9 +66,10 @@
           <input class="fi" id="strExercise" list="strExList" placeholder="输入或选择...">
           <datalist id="strExList"></datalist>
         </div>
-        <div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="strWeight"></div></div>
-        <div class="fg">
-          <label class="fl">次数</label>
+        <div class="fg" id="strWeightFg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="strWeight"></div></div>
+        <div class="fg" id="strEqWeightInfo" style="display:none"><label class="fl">等效重量</label><div id="strEqWeightDisplay" style="font-size:.85rem;color:var(--text2);padding:8px 0">—</div></div>
+        <div class="fg" id="strRepsFg">
+          <label class="fl" id="strRepsLabel">次数</label>
           <div class="reps-row">
             <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-">−</button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+">+</button></div></div>
             <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-">−</button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+">+</button></div></div>

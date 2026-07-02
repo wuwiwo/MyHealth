@@ -64,7 +64,7 @@
 | `missed` | Object | `{ notes: { [date]: string } }` — date 为 "YYYY-MM-DD"，值为备注 |
 | `theme` | String | `'dark'` 或 `'light'` |
 | `cardioTypes` | Object | 旧版自定义有氧类型（v1.6 后只读兼容，已迁移到 exercises） |
-| `exercises` | Array | 动作库：`[{ id, name, type:'strength'\|'cardio', ratio, intensity, emoji, hasDist, description }]` |
+| `exercises` | Array | 动作库：`[{ id, name, type, ratio, intensity, emoji, hasDist, description, eqWeight, unit }]`。eqWeight=自重动作等效重量(null=哑铃动作)，unit='rep'|'sec' |
 
 ### 同步数据格式（`sync.js:46-50`）
 

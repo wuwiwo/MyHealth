@@ -11,9 +11,11 @@ function checkPR(e){
   var prs=store.get('prs')||{}
   var ex=prs[e.exercise]||{}
   var broken=[]
-  var vol=e.weight*e.actualReps
-  if(!ex.maxWeight||e.weight>ex.maxWeight){ex.maxWeight=e.weight;ex.weightDate=e.date;broken.push('重量 '+e.weight+'kg')}
-  if(!ex.maxReps||e.actualReps>ex.maxReps){ex.maxReps=e.actualReps;ex.repsDate=e.date;broken.push('次数 '+e.actualReps+'次')}
+  var w=e.eqWeight!=null?e.eqWeight:e.weight;
+  var n=e.actualReps||(e.duration?e.duration:0);
+  var vol=w*n
+  if(!ex.maxWeight||w>ex.maxWeight){ex.maxWeight=w;ex.weightDate=e.date;broken.push('重量 '+w+'kg')}
+  if(!ex.maxReps||n>ex.maxReps){ex.maxReps=n;ex.repsDate=e.date;broken.push('次数 '+n+'次')}
   if(!ex.maxVolume||vol>ex.maxVolume){ex.maxVolume=vol;ex.volDate=e.date;broken.push('容量 '+vol+'kg')}
   if(broken.length){prs[e.exercise]=ex;store.set('prs',prs);toast('🏆 '+e.exercise+' 新PR: '+broken.join(', '),'s')}
 }
@@ -63,7 +65,7 @@ function init(){
     sug.innerHTML='';
     getStrengthExercises().forEach(function(n){
       var b=document.createElement('button');b.textContent=n.name;
-      b.addEventListener('click',function(){document.getElementById('strExercise').value=n.name});sug.appendChild(b);
+      b.addEventListener('click',function(){document.getElementById('strExercise').value=n.name;adaptStrForm(n.name)});sug.appendChild(b);
     });
   }
   var dl=document.getElementById('strExList')
@@ -71,6 +73,8 @@ function init(){
     dl.innerHTML='';
     getStrengthExercises().forEach(function(n){var o=document.createElement('option');o.value=n.name;dl.appendChild(o)});
   }
+  var strInput=document.getElementById('strExercise');
+  if(strInput){strInput.addEventListener('change',function(){adaptStrForm(strInput.value.trim())});strInput.addEventListener('input',function(){adaptStrForm(strInput.value.trim())})}
 
   var ct=document.getElementById('carTypes')
   initCardioTypes()
@@ -160,7 +164,7 @@ function migrateExercises(){
   if(store.get('exercises'))return;
   var list=[];
   var seen={};
-  function add(ex){if(!ex||seen[ex.id])return;seen[ex.id]=true;if(ex.description==null)ex.description='';list.push(ex)}
+  function add(ex){if(!ex||seen[ex.id])return;seen[ex.id]=true;if(ex.description==null)ex.description='';if(ex.eqWeight==null)ex.eqWeight=null;if(!ex.unit)ex.unit='rep';list.push(ex)}
   // Seed strength exercises (built-in defaults, ratio=100)
   var seedStrength=['二头弯举','肩推','深蹲','卧推','划船','硬拉','侧平举','前平举','锤式弯举','俯身飞鸟','颈后臂屈伸','俯身臂屈伸','直立划船','推举','阿诺德推举','哑铃飞鸟','哑铃耸肩','弓步蹲','保加利亚深蹲','站姿提踵'];
   seedStrength.forEach(function(name){add({id:name,name:name,type:'strength',ratio:100,intensity:null,emoji:null,hasDist:false})});
@@ -194,8 +198,10 @@ function migrateExercisesV17(){
   var changed=false;
   for(var i=0;i<list.length;i++){
     if(list[i].description==null){list[i].description='';changed=true}
+    if(list[i].eqWeight==null){list[i].eqWeight=null;changed=true}
+    if(!list[i].unit){list[i].unit='rep';changed=true}
   }
-  if(changed){store.set('exercises',list);console.log('Backfilled description on '+list.length+' exercises')}
+  if(changed){store.set('exercises',list);console.log('Backfilled exercises fields on '+list.length+' items')}
 }
 
 function migrateOldData(){

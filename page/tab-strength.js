@@ -4,6 +4,28 @@
 
 let _strDate=today(),_strSelW=COMMON_W[4],_strForm=false;
 
+/* Adapt form based on selected exercise (eqWeight vs dumbbell) */
+function adaptStrForm(exName){
+  var exMap=getExerciseMap();
+  var ex=exMap[exName];
+  var wtFg=document.getElementById('strWeightFg');
+  var eqInfo=document.getElementById('strEqWeightInfo');
+  var eqDisp=document.getElementById('strEqWeightDisplay');
+  var repsLabel=document.getElementById('strRepsLabel');
+  if(!wtFg)return;
+  if(ex&&ex.eqWeight!=null&&ex.type==='strength'){
+    wtFg.style.display='none';
+    eqInfo.style.display='';
+    var unitLabel=ex.unit==='sec'?'秒':'次';
+    eqDisp.textContent='⚖️ '+ex.eqWeight+'kg/'+unitLabel+'（ratio '+(ex.ratio||100)+'%）';
+    if(repsLabel)repsLabel.textContent=ex.unit==='sec'?'秒数':'次数';
+  }else{
+    wtFg.style.display='';
+    eqInfo.style.display='none';
+    if(repsLabel)repsLabel.textContent='次数';
+  }
+}
+
 function renderStr(){
   const d=_strDate;const f=fmtDate(d)
   document.getElementById('strDateMain').textContent=f.main
@@ -19,7 +41,11 @@ function renderStr(){
       const d=r>=1,o=r>1;let sc='under',ac='under'
       if(o){sc='over';ac='over'}else if(r>=1){sc='done';ac='done'}
       const ts=e.createdAt?new Date(e.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''
-      return '<div class="ec '+(d?'done':'')+'" data-id="'+e.id+'"><div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">● '+e.weight+' kg</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span class="ec-tgt">目标 '+e.targetReps+' 次</span><span class="ec-actual '+ac+'">'+e.actualReps+' 次 '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+      var wtLabel;
+      if(e.eqWeight!=null){wtLabel='⚖️ '+e.eqWeight+'kg/'+(e.unit==='sec'?'秒':'次')}
+      else{wtLabel='● '+e.weight+' kg'}
+      var unitSuffix=e.unit==='sec'?'秒':'次'
+      return '<div class="ec '+(d?'done':'')+'" data-id="'+e.id+'"><div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span class="ec-tgt">目标 '+e.targetReps+' '+unitSuffix+'</span><span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
     }).join('')
   }
   renderStrStats()
@@ -254,9 +280,16 @@ function onStrengthEvent(el,id,act){
     case 'strSubmit':{
       var ex=document.getElementById('strExercise').value.trim()
       if(!ex){toast('请输入动作名称','e');return true}
+      var exDef=getStrengthExercises().find(function(e){return e.name===ex})||getExerciseMap()[ex];
       var tgt=parseInt(document.getElementById('strTgtVal').textContent,10)
       var ac=parseInt(document.getElementById('strActVal').textContent,10)
-      addStr({date:_strDate,exercise:ex,weight:_strSelW,targetReps:tgt,actualReps:ac})
+      var entry={date:_strDate,exercise:ex,targetReps:tgt,actualReps:ac}
+      if(exDef&&exDef.eqWeight!=null){
+        entry.weight=0;entry.eqWeight=exDef.eqWeight;entry.unit=exDef.unit||'rep'
+      }else{
+        entry.weight=_strSelW
+      }
+      addStr(entry)
       document.getElementById('strExercise').value='';document.getElementById('strTgtVal').textContent='12';document.getElementById('strActVal').textContent='12'
       _strSelW=COMMON_W[4];document.querySelectorAll('#strWeight .wt-btn').forEach(function(b){b.classList.toggle('selected',parseInt(b.dataset.w)===_strSelW)})
       document.getElementById('strAddCard').classList.remove('open');_strForm=false;document.getElementById('strAddBtn').textContent='＋ 新增一组'

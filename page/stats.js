@@ -13,7 +13,11 @@
 function sumVolume(entries, exerciseMap) {
   return entries.reduce(function(s, e) {
     var ratio = (exerciseMap && exerciseMap[e.exercise] && exerciseMap[e.exercise].ratio != null) ? exerciseMap[e.exercise].ratio : 100;
-    return s + e.weight * e.actualReps * (ratio / 100);
+    // eqWeight entries: use eqWeight × reps (or duration for sec-unit)
+    // regular entries: use weight × actualReps
+    var w = e.eqWeight != null ? e.eqWeight : (e.weight || 0);
+    var n = e.actualReps || (e.duration ? e.duration : 0);
+    return s + w * n * (ratio / 100);
   }, 0);
 }
 
