@@ -656,11 +656,12 @@ function doRefineBatch(count){
     if(r.msg)_refineLog.push({msg:r.msg,success:r.success});
   });
   if(_refineLog.length>50)_refineLog=_refineLog.slice(-50);
-  // Summary toast
+  // Summary toast — show requested vs actual for diagnostics
+  var debugTag=' [请求'+count+'次→执'+batch.pointsUsed+'次]';
   if(batch.successCount>0){
-    toast('炼化'+batch.pointsUsed+'次: ✅'+batch.successCount+' 成功 ❌'+batch.failCount+' 失败','s');
+    toast('炼化'+batch.pointsUsed+'次: ✅'+batch.successCount+' ❌'+batch.failCount+debugTag,'s');
   }else{
-    toast('炼化'+batch.pointsUsed+'次全部失败 😅','e');
+    toast('炼化'+batch.pointsUsed+'次全部失败'+debugTag,'e');
   }
   // Refresh dialog
   var modal=document.getElementById('refineModal');
