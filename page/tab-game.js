@@ -648,15 +648,16 @@ function doRefineBatch(count){
   if(actualCount<count){toast('点数不足，仅炼化'+actualCount+'次','');}
   if(actualCount<=0){var m2=document.getElementById('refineModal');if(m2)m2.remove();showRefineDialog();return}
   if(!refine.upgrades)refine.upgrades={};
-  // Inline batch to eliminate any function call issues
+  // Inline batch with per-iteration diagnostics
   var results=[],successes=0,fails=0;
-  for(var i=0;i<actualCount;i++){
-    var curGrade=getCurrentRefineGrade(refine.upgrades);
-    if(!curGrade){results.push('🎉 所有等级已满！');break}
+  var grade=null,breakReason='none',stop=false;
+  for(var i=0;i<actualCount && !stop;i++){
+    grade=getCurrentRefineGrade(refine.upgrades);
+    if(!grade){breakReason='getCurrentRefineGrade返回null';stop=true;break}
     var r=attemptRefine(refine.upgrades);
     results.push(r);
     if(r.success)successes++;else fails++;
-    if(r.allDone)break;
+    if(r.allDone){breakReason='allDone=true';stop=true;break}
   }
   var pointsUsed=results.length;
   refine.points=(refine.points||0)-pointsUsed;
@@ -666,8 +667,8 @@ function doRefineBatch(count){
     if(r&&r.msg)_refineLog.push({msg:r.msg,success:r.success});
   });
   if(_refineLog.length>50)_refineLog=_refineLog.slice(-50);
-  // Diagnostic toast
-  var d=' [请'+count+'次→执'+pointsUsed+'次, 成功'+successes+', 失败'+fails+']';
+  // Full diagnostic
+  var d=' [请'+count+'次→循'+i+'次, 成功'+successes+', 失败'+fails+', 中断:'+breakReason+', 等级:'+(grade||'无')+']';
   if(successes>0)toast('炼化'+pointsUsed+'次: ✅'+successes+' ❌'+fails+d,'s');
   else toast('炼化'+pointsUsed+'次全部失败'+d,'e');
   // Refresh dialog
