@@ -23,7 +23,7 @@
         <div class="header-right">
           <button class="header-btn" id="syncBtn" title="同步数据" style="font-size:.75rem">🔄</button>
           <button class="header-btn" id="themeToggle">🌙</button>
-          <div class="sync-dot" id="syncIndicator" title="同步状�?>🔄</div>
+          <div class="sync-dot" id="syncIndicator" title="同步状态">🔄</div>
         </div>
       </div>
     </div>
@@ -31,7 +31,7 @@
 
   <!-- Tab Bar -->
   <nav class="tab-bar">
-    <button class="tab-btn active" data-tab="training">🏋�?训练</button>
+    <button class="tab-btn active" data-tab="training">🏋️ 训练</button>
     <button class="tab-btn" data-tab="profile">📊 个人</button>
     <button class="tab-btn" data-tab="game">🎮 挑战</button>
     <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
@@ -50,15 +50,15 @@
       <div class="date-nav">
         <button class="dn-btn" id="strPrevDay">◀</button>
         <div class="dn-display">
-          <div class="dn-main" id="strDateMain">加载�?..</div>
+          <div class="dn-main" id="strDateMain">加载中...</div>
           <div class="dn-sub" id="strDateSub"></div>
         </div>
-        <button class="dn-btn" id="strNextDay">�?/button>
+        <button class="dn-btn" id="strNextDay">▶</button>
         <button class="dn-btn dn-today" id="strGoToday">今天</button>
       </div>
 
       <div class="section-hdr">今日训练</div>
-      <button class="add-btn" id="strAddBtn">�?新增一�?/button>
+      <button class="add-btn" id="strAddBtn">＋ 新增一组</button>
       <div class="add-card" id="strAddCard">
         <div class="fg">
           <label class="fl">动作</label>
@@ -67,15 +67,15 @@
           <datalist id="strExList"></datalist>
         </div>
         <div class="fg" id="strWeightFg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="strWeight"></div></div>
-        <div class="fg" id="strEqWeightInfo" style="display:none"><label class="fl">等效重量</label><div id="strEqWeightDisplay" style="font-size:.85rem;color:var(--text2);padding:8px 0">�?/div></div>
+        <div class="fg" id="strEqWeightInfo" style="display:none"><label class="fl">等效重量</label><div id="strEqWeightDisplay" style="font-size:.85rem;color:var(--text2);padding:8px 0">—</div></div>
         <div class="fg" id="strRepsFg">
           <label class="fl" id="strRepsLabel">次数</label>
           <div class="reps-row">
-            <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-">�?/button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+">+</button></div></div>
-            <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-">�?/button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+">+</button></div></div>
+            <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-">−</button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+">+</button></div></div>
+            <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-">−</button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+">+</button></div></div>
           </div>
         </div>
-        <button class="sb-btn" id="strSubmit">�?记录</button>
+        <button class="sb-btn" id="strSubmit">⚡ 记录</button>
       </div>
 
       <div id="strList"></div>
@@ -97,33 +97,33 @@
       <div class="date-nav">
         <button class="dn-btn" id="carPrevDay">◀</button>
         <div class="dn-display">
-          <div class="dn-main" id="carDateMain">加载�?..</div>
+          <div class="dn-main" id="carDateMain">加载中...</div>
           <div class="dn-sub" id="carDateSub"></div>
         </div>
-        <button class="dn-btn" id="carNextDay">�?/button>
+        <button class="dn-btn" id="carNextDay">▶</button>
         <button class="dn-btn dn-today" id="carGoToday">今天</button>
       </div>
 
       <div class="section-hdr">今日有氧</div>
-      <button class="add-btn" id="carAddBtn">�?新增记录</button>
+      <button class="add-btn" id="carAddBtn">＋ 新增记录</button>
       <div class="add-card" id="carAddCard">
         <div class="fg"><label class="fl">运动类型</label>
           <div class="car-types" id="carTypes"></div>
-          <button class="md-write" id="carCustomType" style="margin-top:4px;font-size:.7rem">�?自定义类�?/button>
+          <button class="md-write" id="carCustomType" style="margin-top:4px;font-size:.7rem">＋ 自定义类型</button>
         </div>
         <div class="fg"><label class="fl">强度</label>
           <div class="car-types" id="carIntensity"></div>
         </div>
         <div class="fg"><label class="fl">时长 (分钟)</label>
           <div class="stepper" style="max-width:200px">
-            <button class="sp-btn" id="carDurDown">�?/button>
+            <button class="sp-btn" id="carDurDown">−</button>
             <span class="sp-val" id="carDurVal">30</span>
             <button class="sp-btn" id="carDurUp">+</button>
           </div>
         </div>
-        <div class="fg"><label class="fl">距离 (km) <span class="fl-note" id="carDistLabel">可�?/span></label>
+        <div class="fg"><label class="fl">距离 (km) <span class="fl-note" id="carDistLabel">可选</span></label>
           <div class="stepper" style="max-width:200px">
-            <button class="sp-btn" id="carDistDown">�?/button>
+            <button class="sp-btn" id="carDistDown">−</button>
             <span class="sp-val" id="carDistVal">0</span>
             <button class="sp-btn" id="carDistUp">+</button>
           </div>
@@ -197,17 +197,17 @@
           <button class="speed-btn" data-speed="2">2×</button>
           <button class="speed-btn" data-speed="4">4×</button>
           <button class="speed-btn" data-speed="8">8×</button>
-          <button class="speed-btn" id="battleAuto" title="自动模式：胜利后自动下一�?>🔄 自动</button>
+          <button class="speed-btn" id="battleAuto" title="自动模式：胜利后自动下一关">🔄 自动</button>
         </div>
-        <button class="speed-btn" id="battleClose">�?/button>
+        <button class="speed-btn" id="battleClose">✕</button>
       </div>
       <div class="battle-arena" id="battleArena">
         <div class="battle-char" id="battlePlayer">
-          <div class="bc-name">🧑 �?/div>
+          <div class="bc-name">🧑 你</div>
           <div class="bc-hp-bar"><div class="bc-hp-fill" id="bpHP" style="width:100%"></div></div>
           <div class="bc-hp-text" id="bpHPText">HP: 100</div>
           <div class="bc-atk" id="bpAtk">⚔️ 1</div>
-          <div class="bc-def" id="bpDef">🛡�?1</div>
+          <div class="bc-def" id="bpDef">🛡️ 1</div>
           <div class="bc-soul" id="bpSoulAtk" style="font-size:.62rem;color:var(--purple)">👻 0</div>
           <div class="bc-soul" id="bpSoulDef" style="font-size:.62rem;color:var(--purple)">🔮 0</div>
         </div>
@@ -217,7 +217,7 @@
           <div class="bc-hp-bar"><div class="bc-hp-fill enemy" id="beHP" style="width:100%"></div></div>
           <div class="bc-hp-text" id="beHPText">HP: 100</div>
           <div class="bc-atk" id="beAtk">⚔️ 1</div>
-          <div class="bc-def" id="beDef">🛡�?1</div>
+          <div class="bc-def" id="beDef">🛡️ 1</div>
           <div class="bc-soul" id="beSoulAtk" style="font-size:.62rem;color:var(--purple)">👻 0</div>
           <div class="bc-soul" id="beSoulDef" style="font-size:.62rem;color:var(--purple)">🔮 0</div>
         </div>
@@ -229,7 +229,7 @@
     <!-- Share card modal -->
     <div class="share-overlay" id="shareOverlay">
       <div class="share-card" id="shareCard">
-        <div class="share-header">🏆 挑战胜利�?/div>
+        <div class="share-header">🏆 挑战胜利！</div>
         <div class="share-level" id="shareLevel">1-1 试炼之始</div>
         <div class="share-stats" id="shareStats"></div>
         <div class="share-vs" id="shareVS"></div>
@@ -246,7 +246,7 @@
   <!-- ===== TAB: SETTINGS ===== -->
   <section class="tab-content" id="tabSettings">
     <nav class="tab-bar sub-tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
-      <button class="tab-btn active" data-sub="library">🏋�?动作�?/button>
+      <button class="tab-btn active" data-sub="library">🏋️ 动作库</button>
       <button class="tab-btn" data-sub="plans">📋 计划</button>
       <button class="tab-btn" data-sub="game">🎮 挑战</button>
       <button class="tab-btn" data-sub="data">📂 数据</button>
@@ -275,4 +275,3 @@
 <script>init()</script>
 </body>
 </html>
-
