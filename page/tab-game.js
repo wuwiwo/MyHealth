@@ -545,7 +545,12 @@ function onGameEvent(el,id,act){
     case 'shareClose':hideShare();return true;
     case 'shareSave':toast('长按或截图保存分享卡片 📸','s');return true;
   }
-  if(act==='refineBatch'){doRefineBatch(parseInt(el.dataset.count)||1);return true}
+  if(act==='refineBatch'){
+    if(el.dataset.disabled){return true}
+    var count=parseInt(el.dataset.count)||1;
+    var ref=getRefine();
+    if((ref.points||0)<count){toast('炼化点数不足（需要'+count+'点，仅有'+(ref.points||0)+'点）','e');var m=document.getElementById('refineModal');if(m)m.remove();showRefineDialog();return true}
+    doRefineBatch(count);return true}
   return false
 }
 
@@ -608,9 +613,9 @@ function showRefineDialog(){
   // Batch buttons
   var points=refine.points||0;
   function batchBtn(count,label){
-    var disabled=points<count;
-    var style='flex:1;padding:12px;font-size:.85rem;'+(count>1?'background:var(--bg3);color:var(--text);border:1px solid var(--bd);':'')+(disabled?';opacity:.4;cursor:not-allowed':'');
-    return '<button class="sb-btn" data-a="refineBatch" data-count="'+count+'" style="'+style+'"'+(disabled?' disabled':'')+'>'+label+'</button>';
+    var dis=points<count;
+    var style='flex:1;padding:12px;font-size:.85rem;'+(count>1?'background:var(--bg3);color:var(--text);border:1px solid var(--bd);':'')+(dis?';opacity:.4;pointer-events:none':'');
+    return '<button class="sb-btn" data-a="refineBatch" data-count="'+count+'" style="'+style+'"'+(dis?' data-disabled="1"':'')+'>'+label+'</button>';
   }
   h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
   h+=batchBtn(1,'炼化 1次');
@@ -637,9 +642,12 @@ function showRefineDialog(){
 
 function doRefineBatch(count){
   var refine=getRefine();
-  if((refine.points||0)<=0){toast('炼化点数不足','e');return}
+  var actualPoints=refine.points||0;
+  if(actualPoints<=0){toast('炼化点数不足','e');var m1=document.getElementById('refineModal');if(m1)m1.remove();showRefineDialog();return}
+  var actualCount=Math.min(count,actualPoints);
+  if(actualCount<count){toast('点数不足，仅炼化'+actualCount+'次','');}
+  if(actualCount<=0){var m2=document.getElementById('refineModal');if(m2)m2.remove();showRefineDialog();return}
   if(!refine.upgrades)refine.upgrades={};
-  var actualCount=Math.min(count,refine.points);
   var batch=batchRefine(refine.upgrades,actualCount);
   refine.points=(refine.points||0)-batch.pointsUsed;
   saveRefine(refine);
