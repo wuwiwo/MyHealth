@@ -662,15 +662,12 @@ function doRefineBatch(count){
   var pointsUsed=results.length;
   refine.points=(refine.points||0)-pointsUsed;
   saveRefine(refine);
-  // Collect log
   results.forEach(function(r){
     if(r&&r.msg)_refineLog.push({msg:r.msg,success:r.success});
   });
   if(_refineLog.length>50)_refineLog=_refineLog.slice(-50);
-  // Full diagnostic
-  var d=' [请'+count+'次→循'+i+'次, 成功'+successes+', 失败'+fails+', 中断:'+breakReason+', 等级:'+(grade||'无')+']';
-  if(successes>0)toast('炼化'+pointsUsed+'次: ✅'+successes+' ❌'+fails+d,'s');
-  else toast('炼化'+pointsUsed+'次全部失败'+d,'e');
+  if(successes>0)toast('炼化'+pointsUsed+'次: ✅'+successes+' 成功 ❌'+fails+' 失败','s');
+  else toast('炼化'+pointsUsed+'次全部失败','e');
   // Refresh dialog
   var modal=document.getElementById('refineModal');
   if(modal){modal.remove();showRefineDialog()}

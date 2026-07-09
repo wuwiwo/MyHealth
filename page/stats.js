@@ -283,7 +283,7 @@ function attemptRefine(upgrades) {
     var msg = '✅ ' + grade + '级 ' + statName(stat) + ' +1 (Lv.' + u[stat] + '/' + g.maxLevel + ')';
     if (allMaxed && nextGrade) msg += ' → 升级至 ' + nextGrade + '级！';
     if (allMaxed && !nextGrade) msg += ' → 全部满级！';
-    return {success: true, stat: stat, grade: grade, msg: msg, advance: allMaxed, allDone: !nextGrade};
+    return {success: true, stat: stat, grade: grade, msg: msg, advance: allMaxed, allDone: allMaxed && !nextGrade};
   } else {
     return {success: false, stat: stat, grade: grade, msg: '❌ ' + grade + '级炼化失败（' + Math.round(g.successRate * 100) + '%）'};
   }
