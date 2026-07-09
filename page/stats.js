@@ -220,29 +220,97 @@ function calculateRefinePoints(monthVolume) {
 }
 
 /**
- * Attempt one refinement.
- * @param {object} upgrades - current upgrades data
- * @param {string} grade - selected grade (F/E/D/.../SSR)
- * @returns {{ success, stat, grade, msg }}
+ * Determine current refine grade — lowest grade that is not fully maxed.
+ * @param {object} upgrades
+ * @returns {string|null} grade key, or null if all grades maxed
  */
-function attemptRefine(upgrades, grade) {
+function getCurrentRefineGrade(upgrades) {
+  for (var i = 0; i < REFINE_GRADE_ORDER.length; i++) {
+    var grade = REFINE_GRADE_ORDER[i];
+    var g = REFINE_GRADES[grade];
+    var u = (upgrades && upgrades[grade]) || {};
+    var allMaxed = REFINE_STATS.every(function(stat) {
+      return (u[stat] || 0) >= g.maxLevel;
+    });
+    if (!allMaxed) return grade;
+  }
+  return null;
+}
+
+/**
+ * Get progress for a grade: total levels across 5 stats / max possible.
+ * @returns {{ total, max, percent }}
+ */
+function getRefineGradeProgress(upgrades, grade) {
   var g = REFINE_GRADES[grade];
-  if (!g) return {success: false, msg: '无效等级'};
+  if (!g) return {total:0, max:0, percent:0};
+  var u = (upgrades && upgrades[grade]) || {};
+  var total = 0;
+  REFINE_STATS.forEach(function(stat) { total += (u[stat] || 0); });
+  var max = g.maxLevel * 5;
+  return {total: total, max: max, percent: max > 0 ? Math.round(total / max * 100) : 0};
+}
+
+/**
+ * Attempt one refinement at the current grade.
+ * Auto-picks a non-maxed stat. If all maxed, advances to next grade.
+ * @param {object} upgrades
+ * @returns {{ success, stat, grade, msg, advance, allDone }}
+ */
+function attemptRefine(upgrades) {
+  var grade = getCurrentRefineGrade(upgrades);
+  if (!grade) return {success: false, msg: '🎉 所有等级已满！', allDone: true};
+  var g = REFINE_GRADES[grade];
   if (!upgrades[grade]) upgrades[grade] = {atk:0, def:0, hp:0, soulAtk:0, soulDef:0};
   var u = upgrades[grade];
-  // Randomly pick a stat
-  var stat = REFINE_STATS[Math.floor(Math.random() * REFINE_STATS.length)];
-  // Check if stat already at max
-  if (u[stat] >= g.maxLevel) {
-    return {success: false, stat: stat, grade: grade, msg: grade + '级 ' + statName(stat) + ' 已满级(' + g.maxLevel + ')，浪费一次'};
-  }
+  // Pick a random non-maxed stat
+  var available = REFINE_STATS.filter(function(stat) {
+    return (u[stat] || 0) < g.maxLevel;
+  });
+  var stat = available[Math.floor(Math.random() * available.length)];
   // Roll success
   if (Math.random() < g.successRate) {
     u[stat]++;
-    return {success: true, stat: stat, grade: grade, msg: '✅ ' + grade + '级炼化成功！' + statName(stat) + ' +1 (Lv.' + u[stat] + '/' + g.maxLevel + ')'};
+    // Check if all maxed now
+    var allMaxed = REFINE_STATS.every(function(s) {
+      return (u[s] || 0) >= g.maxLevel;
+    });
+    var nextGrade = allMaxed ? getNextGrade(grade) : null;
+    var msg = '✅ ' + grade + '级 ' + statName(stat) + ' +1 (Lv.' + u[stat] + '/' + g.maxLevel + ')';
+    if (allMaxed && nextGrade) msg += ' → 升级至 ' + nextGrade + '级！';
+    if (allMaxed && !nextGrade) msg += ' → 全部满级！';
+    return {success: true, stat: stat, grade: grade, msg: msg, advance: allMaxed, allDone: !nextGrade};
   } else {
-    return {success: false, stat: stat, grade: grade, msg: '❌ ' + grade + '级炼化失败（成功率' + Math.round(g.successRate * 100) + '%）'};
+    return {success: false, stat: stat, grade: grade, msg: '❌ ' + grade + '级炼化失败（' + Math.round(g.successRate * 100) + '%）'};
   }
+}
+
+function getNextGrade(grade) {
+  var idx = REFINE_GRADE_ORDER.indexOf(grade);
+  if (idx < 0 || idx >= REFINE_GRADE_ORDER.length - 1) return null;
+  return REFINE_GRADE_ORDER[idx + 1];
+}
+
+/**
+ * Batch refinement — run multiple attempts.
+ * @param {object} upgrades
+ * @param {number} count
+ * @returns {{ results, successCount, failCount, pointsUsed, advanceMsg }}
+ */
+function batchRefine(upgrades, count) {
+  var results = [];
+  var successCount = 0, failCount = 0;
+  var advanceMsg = '';
+  for (var i = 0; i < count; i++) {
+    var grade = getCurrentRefineGrade(upgrades);
+    if (!grade) { results.push({msg: '🎉 全部满级！'}); break; }
+    var r = attemptRefine(upgrades);
+    results.push(r);
+    if (r.success) successCount++;
+    else failCount++;
+    if (r.allDone) break;
+  }
+  return {results: results, successCount: successCount, failCount: failCount, pointsUsed: results.length};
 }
 
 function statName(s) {
