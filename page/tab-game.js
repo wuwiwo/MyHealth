@@ -648,21 +648,28 @@ function doRefineBatch(count){
   if(actualCount<count){toast('点数不足，仅炼化'+actualCount+'次','');}
   if(actualCount<=0){var m2=document.getElementById('refineModal');if(m2)m2.remove();showRefineDialog();return}
   if(!refine.upgrades)refine.upgrades={};
-  var batch=batchRefine(refine.upgrades,actualCount);
-  refine.points=(refine.points||0)-batch.pointsUsed;
+  // Inline batch to eliminate any function call issues
+  var results=[],successes=0,fails=0;
+  for(var i=0;i<actualCount;i++){
+    var curGrade=getCurrentRefineGrade(refine.upgrades);
+    if(!curGrade){results.push('🎉 所有等级已满！');break}
+    var r=attemptRefine(refine.upgrades);
+    results.push(r);
+    if(r.success)successes++;else fails++;
+    if(r.allDone)break;
+  }
+  var pointsUsed=results.length;
+  refine.points=(refine.points||0)-pointsUsed;
   saveRefine(refine);
   // Collect log
-  batch.results.forEach(function(r){
-    if(r.msg)_refineLog.push({msg:r.msg,success:r.success});
+  results.forEach(function(r){
+    if(r&&r.msg)_refineLog.push({msg:r.msg,success:r.success});
   });
   if(_refineLog.length>50)_refineLog=_refineLog.slice(-50);
-  // Summary toast — show requested vs actual for diagnostics
-  var debugTag=' [请求'+count+'次→执'+batch.pointsUsed+'次]';
-  if(batch.successCount>0){
-    toast('炼化'+batch.pointsUsed+'次: ✅'+batch.successCount+' ❌'+batch.failCount+debugTag,'s');
-  }else{
-    toast('炼化'+batch.pointsUsed+'次全部失败'+debugTag,'e');
-  }
+  // Diagnostic toast
+  var d=' [请'+count+'次→执'+pointsUsed+'次, 成功'+successes+', 失败'+fails+']';
+  if(successes>0)toast('炼化'+pointsUsed+'次: ✅'+successes+' ❌'+fails+d,'s');
+  else toast('炼化'+pointsUsed+'次全部失败'+d,'e');
   // Refresh dialog
   var modal=document.getElementById('refineModal');
   if(modal){modal.remove();showRefineDialog()}
