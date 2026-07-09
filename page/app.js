@@ -39,6 +39,8 @@ function setProf(p){store.set('profile',p)}
 
 function getGame(){return store.get('game')||{cleared:[],current:''}}
 function setGame(g){store.set('game',g)}
+function getRefine(){return store.get('refine')||{points:0,totalEarned:0,unlocked:false,upgrades:{}}}
+function saveRefine(r){store.set('refine',r||{})}
 
 /* ========== EXERCISE LIBRARY ========== */
 function getExercises(){return store.get('exercises')||[]}
@@ -231,8 +233,10 @@ function checkMonthlyReset(){
     g.current='1-1';
     g.attempts={};
     setGame(g);
+    // Reset soul refinement system monthly
+    saveRefine({points:0,totalEarned:0,unlocked:false,upgrades:{}});
     localStorage.setItem('dh-last-reset-month',thisMonth);
-    toast('📅 新月新开始！挑战已重置，永久惩罚保留','s');
+    toast('📅 新月新开始！挑战已重置，炼魂已清零','s');
   }
 }
 

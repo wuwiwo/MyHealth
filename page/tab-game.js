@@ -40,10 +40,13 @@ function renderGame(){
     '<div class="gs-item"><div class="gs-v orange">'+stats.atk+'</div><div class="gs-l">⚔️ 攻击</div></div>'+
     '<div class="gs-item"><div class="gs-v blue">'+stats.def+'</div><div class="gs-l">🛡️ 防御</div></div>'+
     '<div class="gs-item"><div class="gs-v green">'+stats.hp+'</div><div class="gs-l">❤️ 生命</div></div>'+
+    '<div class="gs-item"><div class="gs-v" style="color:var(--purple)">'+stats.soulAtk+'</div><div class="gs-l">👻 魂攻</div></div>'+
+    '<div class="gs-item"><div class="gs-v" style="color:var(--purple)">'+stats.soulDef+'</div><div class="gs-l">🔮 魂防</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+getGame().cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
     periodItemHtml+
-    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'
-  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,permBonusAtk:stats.permBonusAtk,permBonusDef:stats.permBonusDef,lastPeriodDays:stats.lastPeriodDays,thisPeriodDays:stats.periodDays,period:p}
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
+    (stats.refineUnlocked?'<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="refineBtn" title="炼魂系统" style="font-size:.75rem">🔮</button></div>':'')
+  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,permBonusAtk:stats.permBonusAtk,permBonusDef:stats.permBonusDef,lastPeriodDays:stats.lastPeriodDays,thisPeriodDays:stats.periodDays,period:p,soulAtk:stats.soulAtk,soulDef:stats.soulDef,refineUnlocked:stats.refineUnlocked,refinePoints:stats.refinePoints,refineBonus:stats.refineBonus}
   trackStats(stats,{strVol:strVol,carDur:carDur,carEff:carEff})
   renderRecords()
 
@@ -160,15 +163,34 @@ function getGameStats(){
   }
   var permBonusAtk=getGame().permBonus.atk||0;
   var permBonusDef=getGame().permBonus.def||0;
-  var calc=calculateStats(strVol,carDur,carEff,permBonusAtk,permBonusDef,getGame().permPen.atk||0,getGame().permPen.def||0)
+  // Soul refinement — check unlock and calculate points
+  var refine=getRefine();
+  var cleared96=getGame().cleared.includes('9-6');
+  if(cleared96&&!refine.unlocked){
+    refine.unlocked=true;saveRefine(refine);
+  }
+  // Update refine points from monthly volume
+  if(refine.unlocked){
+    var earnedPoints=calculateRefinePoints(strVol);
+    if(earnedPoints>(refine.totalEarned||0)){
+      var diff=earnedPoints-(refine.totalEarned||0);
+      refine.points=(refine.points||0)+diff;
+      refine.totalEarned=earnedPoints;
+      saveRefine(refine);
+    }
+  }
+  var refineBonus=calculateRefineBonus(refine.upgrades);
+  var calc=calculateStats(strVol,carDur,carEff,permBonusAtk,permBonusDef,getGame().permPen.atk||0,getGame().permPen.def||0,refineBonus)
   return{
-    atk:calc.atk,def:calc.def,hp:calc.hp,
+    atk:calc.atk,def:calc.def,hp:calc.hp,soulAtk:calc.soulAtk,soulDef:calc.soulDef,
     period:curPeriod,periodDays:periodDays,periodVol:periodVol,volMet:bonus.volMet,
     periodEnabled:periodEnabled,
     permBonusAtk:permBonusAtk,permBonusDef:permBonusDef,
     lastPeriodDays:lastPeriodDays,lastPeriodName:prevPeriod.name,
     permPenAtk:getGame().permPen.atk||0,permPenDef:getGame().permPen.def||0,
-    monthDays:getMonthDays()
+    monthDays:getMonthDays(),
+    refineUnlocked:refine.unlocked,refinePoints:refine.points||0,refineTotalEarned:refine.totalEarned||0,
+    refineBonus:refineBonus
   }
 }
 
@@ -180,7 +202,7 @@ function showLevelPreview(id){
   // Simulate 50 battles for accurate win rate
   var wins=0
   for(var s=0;s<50;s++){
-    var batt=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp},{atk:lv.atk,def:lv.def,hp:lv.hp},{npc:lv.npc,boss:lv.boss},lv.boss?pickBossAffix():null)
+    var batt=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp,soulAtk:stats.soulAtk,soulDef:stats.soulDef},{atk:lv.atk,def:lv.def,hp:lv.hp,soulAtk:lv.soulAtk||0,soulDef:lv.soulDef||0},{npc:lv.npc,boss:lv.boss},lv.boss?pickBossAffix():null)
     for(var t=0;t<100&&!batt.done;t++){battleTick(batt)}
     if(batt.winner)wins++
   }
@@ -196,6 +218,12 @@ function showLevelPreview(id){
     +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:var(--green)">❤️ '+lv.hp+'</div><div class="sc-l">生命</div></div>'
     +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:'+rateColor+'">'+rate+'%</div><div class="sc-l">胜率(50次模拟)</div></div>'
     +'</div>'
+  if((lv.soulAtk||0)>0||(lv.soulDef||0)>0){
+    h+='<div class="stats-grid" style="margin-bottom:12px">'
+      +'<div class="sc"><div class="sc-v" style="font-size:.9rem;color:var(--purple)">👻 '+(lv.soulAtk||0)+'</div><div class="sc-l">魂攻击</div></div>'
+      +'<div class="sc"><div class="sc-v" style="font-size:.9rem;color:var(--purple)">🔮 '+(lv.soulDef||0)+'</div><div class="sc-l">魂防御</div></div>'
+      +'</div>'
+  }
 
   // Boss affix info
   if(lv.boss){
@@ -207,7 +235,8 @@ function showLevelPreview(id){
   }
 
   // Player stats comparison
-  h+='<div style="font-size:.72rem;color:var(--text3);text-align:center;margin-bottom:4px">你的属性: ⚔️'+stats.atk+' 🛡️'+stats.def+' ❤️'+stats.hp+'</div>'
+  var soulStr=(stats.soulAtk>0||stats.soulDef>0)?' 👻'+stats.soulAtk+' 🔮'+stats.soulDef:'';
+  h+='<div style="font-size:.72rem;color:var(--text3);text-align:center;margin-bottom:4px">你的属性: ⚔️'+stats.atk+' 🛡️'+stats.def+' ❤️'+stats.hp+soulStr+'</div>'
 
   h+='<div class="modal-actions">'
     +'<button class="m-btn-cancel" id="lvCancel">关闭</button>'
@@ -247,7 +276,7 @@ function startBattle(id){
   if(!trainedToday&&attempts===0){toast('⚠️ 今天还没训练，属性较低','e')}
   var stats=getGameStats()
   var affix=lv.boss?pickBossAffix():null
-  _battle=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp},{atk:lv.atk,def:lv.def,hp:lv.hp},{npc:lv.npc,boss:lv.boss},affix)
+  _battle=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp,soulAtk:stats.soulAtk,soulDef:stats.soulDef},{atk:lv.atk,def:lv.def,hp:lv.hp,soulAtk:lv.soulAtk||0,soulDef:lv.soulDef||0},{npc:lv.npc,boss:lv.boss},affix)
   _battleRunning=false;_battleSpeed=1;_battleTimer=null
   var autoBtn=document.getElementById('battleAuto');
   if(autoBtn){autoBtn.classList.toggle('active',_battleAuto);autoBtn.textContent=_battleAuto?'🔄 自动✓':'🔄 自动'}
@@ -257,10 +286,14 @@ function startBattle(id){
   document.getElementById('bpHPText').textContent='❤️ '+stats.hp
   document.getElementById('bpAtk').textContent='⚔️ '+stats.atk
   document.getElementById('bpDef').textContent='🛡️ '+stats.def
+  document.getElementById('bpSoulAtk').textContent='👻 '+stats.soulAtk
+  document.getElementById('bpSoulDef').textContent='🔮 '+stats.soulDef
   document.getElementById('beHP').style.width='100%'
   document.getElementById('beHPText').textContent='❤️ '+lv.hp
   document.getElementById('beAtk').textContent='⚔️ '+lv.atk
   document.getElementById('beDef').textContent='🛡️ '+lv.def
+  document.getElementById('beSoulAtk').textContent='👻 '+(lv.soulAtk||0)
+  document.getElementById('beSoulDef').textContent='🔮 '+(lv.soulDef||0)
   document.getElementById('battleLog').innerHTML=''
   document.getElementById('battleEnd').innerHTML=''
   document.getElementById('battleOverlay').classList.add('open')
@@ -508,8 +541,72 @@ function onGameEvent(el,id,act){
       if(_battleAuto){toast('自动模式已开启：胜利后自动挑战下一关','s')}
       else{toast('自动模式已关闭','')}
       return true}
+    case 'refineBtn':showRefineDialog();return true;
     case 'shareClose':hideShare();return true;
     case 'shareSave':toast('长按或截图保存分享卡片 📸','s');return true;
   }
+  if(act==='refineAttempt'){doRefineAttempt(el.dataset.grade);return true}
   return false
+}
+
+/* ========== SOUL REFINEMENT DIALOG ========== */
+function showRefineDialog(){
+  var refine=getRefine();
+  var bonus=calculateRefineBonus(refine.upgrades);
+  var stats=getGameStats();
+  var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='refineModal';
+  var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🔮 炼魂系统</div>';
+  // Stats summary
+  h+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:12px;margin-bottom:12px">';
+  h+='<div style="font-size:.75rem;color:var(--text2);margin-bottom:8px">本月炼化点数: <b style="color:var(--orange)">'+(refine.points||0)+'</b> / 已获得 '+((refine.totalEarned||0))+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.7rem;color:var(--text2)">';
+  h+='<div>⚔️ 攻击加成: +'+Math.floor(bonus.atk)+'</div>';
+  h+='<div>🛡️ 防御加成: +'+Math.floor(bonus.def)+'</div>';
+  h+='<div>❤️ 生命加成: +'+Math.floor(bonus.hp)+'</div>';
+  h+='<div>👻 魂攻击: +'+Math.floor(bonus.soulAtk)+'</div>';
+  h+='<div>🔮 魂防御: +'+Math.floor(bonus.soulDef)+'</div>';
+  h+='</div></div>';
+  // Grade buttons
+  h+='<div style="font-size:.75rem;color:var(--text3);margin-bottom:8px">选择等级进行炼化（随机提升1项属性）：</div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
+  REFINE_GRADE_ORDER.forEach(function(grade){
+    var g=REFINE_GRADES[grade];
+    var u=(refine.upgrades&&refine.upgrades[grade])||{atk:0,def:0,hp:0,soulAtk:0,soulDef:0};
+    var totalLv=REFINE_STATS.reduce(function(s,st){return s+(u[st]||0)},0);
+    var maxTotal=g.maxLevel*5;
+    var color={F:'var(--text3)',E:'var(--text2)',D:'var(--green)',C:'var(--blue)',B:'var(--purple)',A:'var(--orange)',R:'var(--red)',SR:'#fbbf24',SSR:'#f0f'}[grade]||'var(--text)';
+    h+='<button class="car-type" data-a="refineAttempt" data-grade="'+grade+'" style="padding:8px 12px;border-color:'+color+';color:'+color+';font-weight:700;font-size:.78rem">'+grade+' <span style="font-size:.6rem;font-weight:400">'+Math.round(g.successRate*100)+'%</span></button>';
+  });
+  h+='</div>';
+  // Upgrade detail
+  h+='<div style="font-size:.7rem;color:var(--text3);margin-bottom:4px">当前强化详情：</div>';
+  h+='<div style="max-height:200px;overflow-y:auto;font-size:.68rem">';
+  REFINE_GRADE_ORDER.forEach(function(grade){
+    var g=REFINE_GRADES[grade];
+    var u=(refine.upgrades&&refine.upgrades[grade])||{atk:0,def:0,hp:0,soulAtk:0,soulDef:0};
+    var hasAny=REFINE_STATS.some(function(s){return (u[s]||0)>0});
+    if(!hasAny)return;
+    h+='<div style="padding:4px 0;border-bottom:1px solid var(--bd)"><b>'+grade+'</b>: ';
+    h+=REFINE_STATS.filter(function(s){return (u[s]||0)>0}).map(function(s){return statName(s)+' Lv.'+u[s]+'/'+g.maxLevel}).join(' · ');
+    h+='</div>';
+  });
+  h+='</div>';
+  h+='<div class="modal-actions"><button class="m-btn-cancel" id="refineClose">关闭</button></div></div>';
+  modal.innerHTML=h;document.body.appendChild(modal);
+  document.getElementById('refineClose').addEventListener('click',function(){modal.remove();renderGame()});
+  modal.addEventListener('click',function(e){if(e.target===e.currentTarget){modal.remove();renderGame()}});
+}
+
+function doRefineAttempt(grade){
+  var refine=getRefine();
+  if((refine.points||0)<=0){toast('炼化点数不足','e');return}
+  if(!refine.upgrades)refine.upgrades={};
+  var result=attemptRefine(refine.upgrades,grade);
+  refine.points=(refine.points||0)-1;
+  saveRefine(refine);
+  toast(result.msg,result.success?'s':'');
+  // Refresh dialog
+  var modal=document.getElementById('refineModal');
+  if(modal){modal.remove();showRefineDialog()}
+  else{renderGame()}
 }

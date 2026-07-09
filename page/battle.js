@@ -43,8 +43,8 @@ function rollDamage(atk,def,variance){
 
 function createBattle(playerStats,enemyStats,levelInfo,affix){
   return{
-    player:{atk:playerStats.atk,def:playerStats.def,hp:playerStats.hp,maxHP:playerStats.hp},
-    enemy:{atk:enemyStats.atk,def:enemyStats.def,hp:enemyStats.hp,maxHP:enemyStats.hp},
+    player:{atk:playerStats.atk,def:playerStats.def,hp:playerStats.hp,maxHP:playerStats.hp,soulAtk:playerStats.soulAtk||0,soulDef:playerStats.soulDef||0},
+    enemy:{atk:enemyStats.atk,def:enemyStats.def,hp:enemyStats.hp,maxHP:enemyStats.hp,soulAtk:enemyStats.soulAtk||0,soulDef:enemyStats.soulDef||0},
     level:levelInfo||{},
     affix:affix||null,
     enemyBaseAtk:enemyStats.atk,
@@ -85,11 +85,36 @@ function battleTick(b){
   // Enemy dead?
   if(b.enemy.hp<=0){b.enemy.hp=0;b.done=true;b.winner=true;return{turn:turn,events:events}}
 
+  // Soul attack phase — player soul attacks enemy
+  if(b.player.soulAtk>0){
+    var pSoulDmg;
+    if(b.enemy.soulDef>0){
+      pSoulDmg=rollDamage(b.player.soulAtk,b.enemy.soulDef,4)
+    }else{
+      pSoulDmg=b.player.soulAtk // full damage when no soul def
+    }
+    b.enemy.hp-=pSoulDmg
+    events.push({msg:'👻 魂攻击 → '+pSoulDmg+' 魂伤害',type:'dmg'})
+    if(b.enemy.hp<=0){b.enemy.hp=0;b.done=true;b.winner=true;return{turn:turn,events:events}}
+  }
+
   // Enemy attacks
   var eDmgBase=rollDamage(b.enemy.atk,b.player.def,3)
   var eDmg=b.affix&&b.affix.apply&&b.affix.index===0?b.affix.apply(eDmgBase,b.enemy.atk,false):eDmgBase
   b.player.hp-=eDmg
   events.push({msg:'👹 '+b.level.npc+' 攻击 → '+eDmg+' 伤害',type:'e'})
+
+  // Enemy soul attack
+  if(b.enemy.soulAtk>0){
+    var eSoulDmg;
+    if(b.player.soulDef>0){
+      eSoulDmg=rollDamage(b.enemy.soulAtk,b.player.soulDef,3)
+    }else{
+      eSoulDmg=b.enemy.soulAtk
+    }
+    b.player.hp-=eSoulDmg
+    events.push({msg:'👻 敌方魂攻击 → '+eSoulDmg+' 魂伤害',type:'e'})
+  }
 
   // Life steal heal
   if(b.affix&&b.affix.onAttack){b.affix.onAttack(eDmg,b.enemy)}

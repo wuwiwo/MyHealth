@@ -25,7 +25,9 @@
 | **旬周期** | 每月分3旬(上旬1-10/中旬11-20/下旬21-末)，6天→+30攻防，容量达标→+60攻防 | `stats.js` getCurrentPeriod/calculatePeriodBonus |
 | **活跃天数** | 统计周期内有训练记录的天数 | `stats.js` countActiveDays() |
 | **Boss 词缀** | Boss 关随机附加的 5 种战斗机制（虚弱/荆棘/怒气/汲取/护盾） | `battle.js:5-26` BOSS_AFFIXES |
-| **永久惩罚** | 挑战失败累积的属性减益 | `stats.js:66` permPenAtk/permPenDef 参数 |
+| **永久惩罚** | 挑战失败累积的属性减益 | `stats.js` calculatePeriodPenalty，game.permPen |
+| **炼魂系统** | 通关9-6后解锁，训练容量转为炼化点数，9级品质随机强化属性 | store key: `refine`，`stats.js` REFINE_GRADES |
+| **魂攻击/魂防御** | 独立于攻防的新属性，10章起敌方拥有，无魂防时魂攻全额伤害 | `battle.js` battleTick 魂攻击阶段 |
 | **云同步** | 手动推送到 Vercel Blob / 导出 JSON / 导入 JSON | `sync.js`，API 端 `api/data.mjs` |
 | **主题** | 深色/浅色切换，CSS Variables 实现 | `utils.js:48-51`，store key: `theme` |
 | **热量图** | 日历形式展示训练分布 | 各 tab 文件中渲染 |
@@ -65,6 +67,7 @@
 | `theme` | String | `'dark'` 或 `'light'` |
 | `cardioTypes` | Object | 旧版自定义有氧类型（v1.6 后只读兼容，已迁移到 exercises） |
 | `exercises` | Array | 动作库：`[{ id, name, type, ratio, intensity, emoji, hasDist, description, eqWeight, unit }]`。eqWeight=自重动作等效重量(null=哑铃动作)，unit='rep'|'sec' |
+| `refine` | Object | 炼魂系统：`{ points, totalEarned, unlocked, upgrades: { F:{atk,def,hp,soulAtk,soulDef}, ... } }`。每月重置 |
 
 ### 同步数据格式（`sync.js:46-50`）
 

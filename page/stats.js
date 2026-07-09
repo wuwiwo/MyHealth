@@ -161,13 +161,90 @@ function calculatePeriodPenalty(lastPeriodDays) {
  * @param {number} permPenDef  Accumulated permanent defense penalty
  * @returns {{ atk, def, hp }}
  */
-function calculateStats(strVol, carDur, carEff, periodAtkBonus, periodDefBonus, permPenAtk, permPenDef) {
+function calculateStats(strVol, carDur, carEff, periodAtkBonus, periodDefBonus, permPenAtk, permPenDef, refineBonus) {
   var baseAtk = 10 + Math.floor(strVol / 20);
   var baseDef = 10 + Math.floor(carEff / 15);
   var bonus = (periodAtkBonus || 0) + (periodDefBonus || 0);
+  var rb = refineBonus || {atk:0,def:0,hp:0,soulAtk:0,soulDef:0};
   return {
-    atk: Math.max(1, baseAtk + (periodAtkBonus || 0) - (permPenAtk || 0)),
-    def: Math.max(1, baseDef + (periodDefBonus || 0) - (permPenDef || 0)),
-    hp: 100 + Math.floor(strVol / 10) + Math.floor(carDur / 3) + bonus * 3
+    atk: Math.max(1, baseAtk + (periodAtkBonus || 0) - (permPenAtk || 0) + Math.floor(rb.atk)),
+    def: Math.max(1, baseDef + (periodDefBonus || 0) - (permPenDef || 0) + Math.floor(rb.def)),
+    hp: 100 + Math.floor(strVol / 10) + Math.floor(carDur / 3) + bonus * 3 + Math.floor(rb.hp),
+    soulAtk: Math.floor(rb.soulAtk),
+    soulDef: Math.floor(rb.soulDef)
   };
+}
+
+/* ========== SOUL REFINEMENT (炼魂) ========== */
+var REFINE_GRADES = {
+  F:  {atk:1, def:0.2, hp:4, soulAtk:1, soulDef:0.2, maxLevel:10, successRate:0.95},
+  E:  {atk:2, def:0.3, hp:6, soulAtk:2, soulDef:0.3, maxLevel:15, successRate:0.80},
+  D:  {atk:3, def:0.5, hp:8, soulAtk:3, soulDef:0.5, maxLevel:20, successRate:0.75},
+  C:  {atk:4, def:0.7, hp:10, soulAtk:4, soulDef:0.7, maxLevel:30, successRate:0.60},
+  B:  {atk:5, def:1, hp:12, soulAtk:5, soulDef:1, maxLevel:40, successRate:0.50},
+  A:  {atk:7, def:2, hp:15, soulAtk:7, soulDef:2, maxLevel:50, successRate:0.40},
+  R:  {atk:9, def:4, hp:20, soulAtk:9, soulDef:4, maxLevel:60, successRate:0.30},
+  SR: {atk:12, def:6, hp:30, soulAtk:12, soulDef:6, maxLevel:80, successRate:0.20},
+  SSR:{atk:15, def:9, hp:15, soulAtk:15, soulDef:9, maxLevel:100, successRate:0.10}
+};
+var REFINE_GRADE_ORDER = ['F','E','D','C','B','A','R','SR','SSR'];
+var REFINE_STATS = ['atk','def','hp','soulAtk','soulDef'];
+
+/**
+ * Calculate total refinement bonuses from upgrades data.
+ * @param {object} upgrades - { F:{atk:3,def:2,...}, E:{...}, ... }
+ * @returns {{ atk, def, hp, soulAtk, soulDef }}
+ */
+function calculateRefineBonus(upgrades) {
+  var total = {atk:0, def:0, hp:0, soulAtk:0, soulDef:0};
+  if (!upgrades) return total;
+  REFINE_GRADE_ORDER.forEach(function(grade) {
+    var g = REFINE_GRADES[grade];
+    var u = upgrades[grade];
+    if (!u) return;
+    REFINE_STATS.forEach(function(stat) {
+      total[stat] += (u[stat] || 0) * g[stat];
+    });
+  });
+  return total;
+}
+
+/**
+ * Calculate refinement points from monthly volume.
+ * Rule: floor(volume / 100) * 10 attempts.
+ * @param {number} monthVolume - effective volume (ratio-weighted) this month
+ * @returns {number} refinement points
+ */
+function calculateRefinePoints(monthVolume) {
+  return Math.floor((monthVolume || 0) / 100) * 10;
+}
+
+/**
+ * Attempt one refinement.
+ * @param {object} upgrades - current upgrades data
+ * @param {string} grade - selected grade (F/E/D/.../SSR)
+ * @returns {{ success, stat, grade, msg }}
+ */
+function attemptRefine(upgrades, grade) {
+  var g = REFINE_GRADES[grade];
+  if (!g) return {success: false, msg: '无效等级'};
+  if (!upgrades[grade]) upgrades[grade] = {atk:0, def:0, hp:0, soulAtk:0, soulDef:0};
+  var u = upgrades[grade];
+  // Randomly pick a stat
+  var stat = REFINE_STATS[Math.floor(Math.random() * REFINE_STATS.length)];
+  // Check if stat already at max
+  if (u[stat] >= g.maxLevel) {
+    return {success: false, stat: stat, grade: grade, msg: grade + '级 ' + statName(stat) + ' 已满级(' + g.maxLevel + ')，浪费一次'};
+  }
+  // Roll success
+  if (Math.random() < g.successRate) {
+    u[stat]++;
+    return {success: true, stat: stat, grade: grade, msg: '✅ ' + grade + '级炼化成功！' + statName(stat) + ' +1 (Lv.' + u[stat] + '/' + g.maxLevel + ')'};
+  } else {
+    return {success: false, stat: stat, grade: grade, msg: '❌ ' + grade + '级炼化失败（成功率' + Math.round(g.successRate * 100) + '%）'};
+  }
+}
+
+function statName(s) {
+  return {atk: '攻击', def: '防御', hp: '生命', soulAtk: '魂攻击', soulDef: '魂防御'}[s] || s;
 }

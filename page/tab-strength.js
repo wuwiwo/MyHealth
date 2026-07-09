@@ -250,11 +250,23 @@ function showWoSummary(){
 
 /* ========== STRENGTH EDIT MODAL ========== */
 function openStrEdit(entry){
+  var exMap=getExerciseMap();
+  var exDef=exMap[entry.exercise]||{};
+  var isEq=entry.eqWeight!=null||(exDef.eqWeight!=null&&exDef.type==='strength');
+  var unitLabel=(entry.unit||exDef.unit||'rep')==='sec'?'秒数':'次数';
+  var unitSuffix=(entry.unit||exDef.unit||'rep')==='sec'?'秒':'次';
   const modal=document.createElement('div');modal.className='modal-overlay open';modal.id='strEditModal'
-  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">✏️ 编辑记录</div><div class="fg"><label class="fl">动作</label><input class="fi" id="seEx" value="'+entry.exercise+'"></div><div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="seWeight"></div></div><div class="fg"><label class="fl">次数</label><div class="reps-row"><div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" id="seTD">−</button><span class="sp-val" id="seTV">'+entry.targetReps+'</span><button class="sp-btn" id="seTU">+</button></div></div><div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" id="seAD">−</button><span class="sp-val" id="seAV">'+entry.actualReps+'</span><button class="sp-btn" id="seAU">+</button></div></div></div></div><div class="modal-actions"><button class="m-btn-cancel" id="seCancel">取消</button><button class="m-btn-save" id="seSave">💾 保存</button></div></div>'
-  document.body.appendChild(modal)
-  let selW=entry.weight
-  buildWtGrid(modal.querySelector('#seWeight'),selW,w=>selW=w,true)
+  var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">✏️ 编辑记录</div><div class="fg"><label class="fl">动作</label><input class="fi" id="seEx" value="'+entry.exercise+'"></div>';
+  if(isEq){
+    var eqW=entry.eqWeight!=null?entry.eqWeight:exDef.eqWeight;
+    h+='<div class="fg"><label class="fl">等效重量</label><div style="font-size:.85rem;color:var(--text2);padding:8px 0">⚖️ '+eqW+'kg/'+unitSuffix+'</div></div>';
+  }else{
+    h+='<div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="seWeight"></div></div>';
+  }
+  h+='<div class="fg"><label class="fl">'+unitLabel+'</label><div class="reps-row"><div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" id="seTD">−</button><span class="sp-val" id="seTV">'+entry.targetReps+'</span><button class="sp-btn" id="seTU">+</button></div></div><div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" id="seAD">−</button><span class="sp-val" id="seAV">'+entry.actualReps+'</span><button class="sp-btn" id="seAU">+</button></div></div></div></div><div class="modal-actions"><button class="m-btn-cancel" id="seCancel">取消</button><button class="m-btn-save" id="seSave">💾 保存</button></div></div>';
+  modal.innerHTML=h;document.body.appendChild(modal)
+  var selW=entry.weight||0;
+  if(!isEq){buildWtGrid(modal.querySelector('#seWeight'),selW,w=>selW=w,true)}
   document.getElementById('seTD').addEventListener('click',()=>{const e=document.getElementById('seTV');let v=parseInt(e.textContent,10);e.textContent=Math.max(0,v-1)})
   document.getElementById('seTU').addEventListener('click',()=>{const e=document.getElementById('seTV');let v=parseInt(e.textContent,10);e.textContent=Math.min(999,v+1)})
   document.getElementById('seAD').addEventListener('click',()=>{const e=document.getElementById('seAV');let v=parseInt(e.textContent,10);e.textContent=Math.max(0,v-1)})
@@ -263,7 +275,10 @@ function openStrEdit(entry){
   document.getElementById('seSave').addEventListener('click',()=>{
     const ex=document.getElementById('seEx').value.trim()
     if(!ex){toast('请输入动作名称','e');return}
-    updateStr(entry.id,{exercise:ex,weight:selW,targetReps:parseInt(document.getElementById('seTV').textContent,10),actualReps:parseInt(document.getElementById('seAV').textContent,10)})
+    var data={exercise:ex,targetReps:parseInt(document.getElementById('seTV').textContent,10),actualReps:parseInt(document.getElementById('seAV').textContent,10)};
+    if(isEq){data.weight=0;data.eqWeight=entry.eqWeight!=null?entry.eqWeight:exDef.eqWeight;data.unit=entry.unit||exDef.unit||'rep'}
+    else{data.weight=selW}
+    updateStr(entry.id,data)
     modal.remove();toast('已更新','s');renderStr()
   })
   modal.addEventListener('click',e=>{if(e.target===e.currentTarget)modal.remove()})
@@ -276,7 +291,7 @@ function onStrengthEvent(el,id,act){
     case 'strNextDay':{var d=parseDate(_strDate);d.setDate(d.getDate()+1);_strDate=toDate(d);renderStr();return true}
     case 'strGoToday':_strDate=today();renderStr();return true;
     case 'strAddBtn':_strForm=!_strForm;el.textContent=_strForm?'✖ 收起':'＋ 新增一组'
-      document.getElementById('strAddCard').classList.toggle('open',_strForm);if(_strForm)document.getElementById('strExercise').focus();return true;
+      document.getElementById('strAddCard').classList.toggle('open',_strForm);if(_strForm){document.getElementById('strExercise').focus();adaptStrForm(document.getElementById('strExercise').value.trim())}return true;
     case 'strSubmit':{
       var ex=document.getElementById('strExercise').value.trim()
       if(!ex){toast('请输入动作名称','e');return true}
