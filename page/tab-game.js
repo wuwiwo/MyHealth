@@ -590,12 +590,14 @@ function showRefineDialog(){
   REFINE_STATS.forEach(function(stat){
     var lv=u[stat]||0;
     var maxed=lv>=g.maxLevel;
-    var bonusVal='+'+(g[stat]*lv);
+    var rawBonus=g[stat]*lv;
+    var bonusVal='+'+(Math.round(rawBonus*100)/100);
+    var perLevel=Math.round(g[stat]*100)/100;
     var unit=stat==='hp'?'Hp':'';
     h+='<div style="background:var(--bg);border:1px solid '+(maxed?'var(--green)':'var(--bd)')+';border-radius:var(--rs);padding:8px 10px">';
     h+='<div style="font-size:.7rem;color:var(--text2)">'+statIcons[stat]+' '+statName(stat)+'</div>';
     h+='<div style="font-size:.85rem;font-weight:700;color:'+(maxed?'var(--green)':'var(--text)')+'">Lv.'+lv+'/'+g.maxLevel+(maxed?' ✅':'')+'</div>';
-    h+='<div style="font-size:.6rem;color:var(--text3)">'+bonusVal+unit+' (每级'+g[stat]+unit+')</div>';
+    h+='<div style="font-size:.6rem;color:var(--text3)">'+bonusVal+unit+' (每级'+perLevel+unit+')</div>';
     h+='</div>';
   });
   h+='</div>';
@@ -605,10 +607,15 @@ function showRefineDialog(){
   h+='</div>';
   // Batch buttons
   var points=refine.points||0;
+  function batchBtn(count,label){
+    var disabled=points<count;
+    var style='flex:1;padding:12px;font-size:.85rem;'+(count>1?'background:var(--bg3);color:var(--text);border:1px solid var(--bd);':'')+(disabled?';opacity:.4;cursor:not-allowed':'');
+    return '<button class="sb-btn" data-a="refineBatch" data-count="'+count+'" style="'+style+'"'+(disabled?' disabled':'')+'>'+label+'</button>';
+  }
   h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
-  h+='<button class="sb-btn" data-a="refineBatch" data-count="1" style="flex:1;padding:12px;font-size:.85rem"'+(points<1?' disabled style="flex:1;padding:12px;opacity:.4;cursor:not-allowed"':'')+'>炼化 1次</button>';
-  h+='<button class="sb-btn" data-a="refineBatch" data-count="10" style="flex:1;padding:12px;font-size:.85rem;background:var(--bg3);color:var(--text);border:1px solid var(--bd)"'+(points<10?' disabled style="flex:1;padding:12px;opacity:.4;cursor:not-allowed"':'')+'>炼化 10次</button>';
-  h+='<button class="sb-btn" data-a="refineBatch" data-count="50" style="flex:1;padding:12px;font-size:.85rem;background:var(--bg3);color:var(--text);border:1px solid var(--bd)"'+(points<50?' disabled style="flex:1;padding:12px;opacity:.4;cursor:not-allowed"':'')+'>炼化 50次</button>';
+  h+=batchBtn(1,'炼化 1次');
+  h+=batchBtn(10,'炼化 10次');
+  h+=batchBtn(50,'炼化 50次');
   h+='</div>';
   // Results log
   if(_refineLog.length){

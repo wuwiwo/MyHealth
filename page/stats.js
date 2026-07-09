@@ -206,6 +206,10 @@ function calculateRefineBonus(upgrades) {
       total[stat] += (u[stat] || 0) * g[stat];
     });
   });
+  // Round to avoid floating point accumulation
+  REFINE_STATS.forEach(function(stat) {
+    total[stat] = Math.round(total[stat] * 1000) / 1000;
+  });
   return total;
 }
 
