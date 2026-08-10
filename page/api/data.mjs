@@ -30,7 +30,7 @@ async function cleanupOldBlobs() {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -59,6 +59,18 @@ export default async function handler(req, res) {
       // Fire-and-forget cleanup so the blob store doesn't grow unbounded
       cleanupOldBlobs();
       return res.status(200).json({ ok: true, url: result.url });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'DELETE') {
+    // TEMP: maintenance endpoint to delete specific test blobs
+    try {
+      const body = await parseBody(req);
+      const urls = Array.isArray(body.urls) ? body.urls : [];
+      if (urls.length) await del(urls);
+      return res.status(200).json({ ok: true, deleted: urls.length });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message });
     }
