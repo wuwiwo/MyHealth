@@ -4,6 +4,43 @@
 
 let _strDate=today(),_strSelW=COMMON_W[4],_strForm=false;
 
+/* ========== TODAY SNAPSHOT (weekly + period progress) ========== */
+function renderTodaySnapshot(){
+  var el=document.getElementById('todaySnapshot');if(!el)return
+  var strE=((store.get('strength')||{entries:[]}).entries)||[]
+  var carE=((store.get('cardio')||{entries:[]}).entries)||[]
+  // Week: Mon-start active days
+  var n=new Date(),d=n.getDay(),m=new Date(n)
+  m.setDate(n.getDate()+(d===0?-6:1-d))
+  var wkStart=toDate(m),wkDays=new Set()
+  strE.forEach(function(e){if(e.date>=wkStart)wkDays.add(e.date)})
+  carE.forEach(function(e){if(e.date>=wkStart)wkDays.add(e.date)})
+  var weekCount=wkDays.size
+  // 旬 period progress
+  var period=getCurrentPeriod(n)
+  var periodDays=countActiveDaysInRange(strE,carE,period.start,period.end)
+  var periodVol=sumVolume(strE.filter(function(e){return e.date>=period.start&&e.date<=period.end}),getExerciseMap())
+  var bonus=calculatePeriodBonus(periodDays,periodVol,period.volThreshold)
+  var trainedToday=strE.some(function(e){return e.date===today()})||carE.some(function(e){return e.date===today()})
+
+  var weekPct=Math.round(weekCount/7*100)
+  var dayPct=Math.round(periodDays/6*100)
+  var volPct=Math.min(100,Math.round(periodVol/period.volThreshold*100))
+  var volColor=volPct>=100?'var(--green)':volPct>=60?'var(--orange)':'var(--text3)'
+  var dayColor=periodDays>=6?'var(--green)':periodDays>=4?'var(--orange)':'var(--text3)'
+  var statusHtml=trainedToday
+    ?'<span style="color:var(--green)">✅ 今天已训练</span>'
+    :'<span style="color:var(--text2)">💤 今天还没动</span>'
+  var periodLabel=period.name+' ('+period.start.slice(5).replace('-','/')+'~'+period.end.slice(5).replace('-','/')+')'
+
+  el.innerHTML='<div class="snap-card">'
+    +'<div class="snap-row"><span class="snap-lbl">📅 本周</span><span class="snap-val">'+weekCount+'<span style="font-size:.6rem">/7天</span></span><div class="snap-bar"><div class="snap-fill wk" style="width:'+weekPct+'%"></div></div>'+(weekCount>=4?'<span style="color:var(--green);font-size:.65rem">🏅 达标</span>':'<span style="color:var(--text3);font-size:.65rem">还差'+(4-weekCount>0?4-weekCount:0)+'天</span>')+'</div>'
+    +'<div class="snap-row"><span class="snap-lbl">🗓️ '+periodLabel+'</span><span class="snap-val" style="color:'+dayColor+'">'+periodDays+'<span style="font-size:.6rem">/6天</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div>'+(periodDays>=6?'<span style="color:var(--green);font-size:.65rem">🎯 达标</span>':'<span style="color:var(--text3);font-size:.65rem">还差'+(6-periodDays)+'天</span>')+'</div>'
+    +'<div class="snap-row"><span class="snap-lbl">🏋️ 旬容量</span><span class="snap-val" style="color:'+volColor+'">'+Math.round(periodVol)+'<span style="font-size:.6rem">/'+period.volThreshold+'</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div>'+(volPct>=100?'<span style="color:var(--green);font-size:.65rem">💯 超额</span>':'<span style="color:var(--text3);font-size:.65rem">'+Math.max(0,Math.round(period.volThreshold-periodVol))+'kg</span>')+'</div>'
+    +'<div class="snap-foot">'+statusHtml+' <span style="color:var(--text3);font-size:.65rem">· 满4天获周奖励，满6天获旬奖励</span></div>'
+    +'</div>'
+}
+
 /* Adapt form based on selected exercise (eqWeight vs dumbbell) */
 function adaptStrForm(exName){
   var exMap=getExerciseMap();
@@ -28,6 +65,7 @@ function adaptStrForm(exName){
 
 function renderStr(){
   const d=_strDate;const f=fmtDate(d)
+  renderTodaySnapshot()
   document.getElementById('strDateMain').textContent=f.main
   document.getElementById('strDateSub').textContent=f.sub
   const entries=getStr(d)

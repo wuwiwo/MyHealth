@@ -146,10 +146,42 @@ function renderStats(){
   if(volumes.some(function(v){return v>0})){
     h+='<div class="chart-wrap"><div style="font-size:.7rem;color:var(--text3);padding:4px 8px 0">月度总容量趋势 (kg)</div><canvas id="statsCanvas"></canvas></div>'
   }
+  // Last 30 days: daily volume & cardio duration
+  var d30=buildLast30Days()
+  if(d30.days>0){
+    h+='<div class="chart-wrap" style="margin-top:10px"><div style="font-size:.7rem;color:var(--text3);padding:4px 8px 0">最近 30 天每日容量 (kg)</div><canvas id="stats30Canvas"></canvas></div>'
+    if(d30.carDays>0){
+      h+='<div class="chart-wrap" style="margin-top:10px"><div style="font-size:.7rem;color:var(--text3);padding:4px 8px 0">最近 30 天有氧时长 (分钟)</div><canvas id="stats30CarCanvas"></canvas></div>'
+    }
+  }
   document.getElementById('statsSection').innerHTML=h
 
   var canvas=document.getElementById('statsCanvas')
   if(canvas){drawLineChart(canvas,{labels:labels,values:volumes,color:'#22C55E',suffix:'kg'})}
+  var c30=document.getElementById('stats30Canvas')
+  if(c30){drawLineChart(c30,{labels:d30.labels,values:d30.vols,color:'#F97316',suffix:'kg'})}
+  var c30c=document.getElementById('stats30CarCanvas')
+  if(c30c){drawLineChart(c30c,{labels:d30.labels,values:d30.carMins,color:'#3B82F6',suffix:'分'})}
+}
+
+/* Build last-30-day daily series: labels (M/D), daily volume, daily cardio minutes */
+function buildLast30Days(){
+  var strEntries=(store.get('strength')||{entries:[]}).entries||[]
+  var carEntries=(store.get('cardio')||{entries:[]}).entries||[]
+  var labels=[],vols=[],carMins=[]
+  var todayD=new Date()
+  for(var i=29;i>=0;i--){
+    var d=new Date(todayD);d.setDate(d.getDate()-i)
+    var ds=toDate(d)
+    var vol=sumVolume(strEntries.filter(function(e){return e.date===ds}),getExerciseMap())
+    var cm=sumDuration(carEntries.filter(function(e){return e.date===ds}))
+    labels.push((d.getMonth()+1)+'/'+d.getDate())
+    vols.push(Math.round(vol))
+    carMins.push(Math.round(cm))
+  }
+  var days=vols.some(function(v){return v>0})?1:0
+  if(!days)days=carMins.some(function(v){return v>0})?1:0
+  return{labels:labels,vols:vols,carMins:carMins,days:days,carDays:carMins.some(function(v){return v>0})?1:0}
 }
 
 /* ========== HEATMAP ========== */

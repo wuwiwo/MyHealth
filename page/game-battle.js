@@ -115,7 +115,13 @@ function endBattle(won){
     else g.current=''
     setGame(g)
     trackLevel(g.current)
-    el.innerHTML='<div class="be-result be-win">🏆 胜利！</div><div class="be-replay"><button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button></div>'
+    // 🎁 Victory loot: random refine points (banked, spendable once soul refinement unlocked)
+    var loot=1+Math.floor(Math.random()*3)
+    var ref=getRefine()
+    ref.points=(ref.points||0)+loot
+    saveRefine(ref)
+    var lootLine='<div class="be-loot">🎁 战利品 +'+loot+' 炼化点'+(ref.unlocked?'':'（通关 9-6 解锁炼魂后可用）')+'</div>'
+    el.innerHTML='<div class="be-result be-win">🏆 胜利！</div>'+lootLine+'<div class="be-replay"><button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button></div>'
     celebrate()
     if(_battleAuto&&nextId){
       el.innerHTML+='<div style="font-size:.7rem;color:var(--text3);text-align:center;margin-top:6px">🔄 自动模式：2秒后进入下一关...</div>'

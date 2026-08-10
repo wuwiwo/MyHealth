@@ -2,6 +2,42 @@
    MyHealth — Tab: Game (Challenge, Battle, Share)
    ============================================ */
 
+/* ========== PERIOD GOAL CARD (旬目标进度条 + 结算预告) ========== */
+function renderPeriodCard(stats,strVol,carDur,carEff){
+  var card=document.getElementById('periodCard')
+  if(!card)return
+  if(!stats.periodEnabled){
+    card.innerHTML=''
+    return
+  }
+  var p=stats.period
+  var dayPct=Math.min(100,Math.round(stats.periodDays/6*100))
+  var volPct=Math.min(100,Math.round(stats.periodVol/p.volThreshold*100))
+  var dayColor=stats.periodDays>=6?'var(--green)':stats.periodDays>=4?'var(--orange)':'var(--text3)'
+  var volColor=volPct>=100?'var(--green)':volPct>=60?'var(--orange)':'var(--text3)'
+  var daysLeft=Math.max(0,6-stats.periodDays)
+  var volLeft=Math.max(0,Math.round(p.volThreshold-stats.periodVol))
+
+  // Settlement preview (if period ended today)
+  var curBonus=calculatePeriodBonus(stats.periodDays,stats.periodVol,p.volThreshold)
+  var prevPen=calculatePeriodPenalty(6-stats.periodDays)
+  var settle=''
+  var parts=[]
+  if(curBonus.daysMet)parts.push('天数达标 <b style="color:var(--green)">+30攻 +6防</b>')
+  if(curBonus.volMet)parts.push('容量达标 <b style="color:var(--green)">+60攻 +12防</b>')
+  if(!curBonus.daysMet)parts.push('天数还差'+daysLeft+'天 <b style="color:var(--red)">-'+prevPen.atkPen+'攻 -'+prevPen.defPen+'防</b>')
+  if(!curBonus.volMet&&volLeft>0)parts.push('容量还差'+volLeft+'kg')
+  if(parts.length)settle=parts.join(' · ')
+
+  var dateRange=p.start.slice(5).replace('-','/')+' ~ '+p.end.slice(5).replace('-','/')+' ('+p.days+'天)'
+  card.innerHTML='<div class="period-card">'
+    +'<div class="period-hdr"><span>🗓️ 本旬目标 · '+p.name+' <span style="font-size:.6rem;color:var(--text3)">'+dateRange+'</span></span><span class="period-stamp">结算预告</span></div>'
+    +'<div class="period-row"><span class="period-lbl">训练天数</span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div><span class="period-val" style="color:'+dayColor+'">'+stats.periodDays+'/6天</span></div>'
+    +'<div class="period-row"><span class="period-lbl">训练容量</span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div><span class="period-val" style="color:'+volColor+'">'+Math.round(stats.periodVol)+'/'+p.volThreshold+'kg</span></div>'
+    +'<div class="period-settle">⚖️ '+settle+'</div>'
+    +'</div>'
+}
+
 function renderGame(){
   const stats=getGameStats()
   const mNames=['','一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
@@ -46,7 +82,8 @@ function renderGame(){
     periodItemHtml+
     '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
     (stats.refineUnlocked?'<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="refineBtn" title="炼魂系统" style="font-size:.75rem">🔮</button></div>':'')
-  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,permBonusAtk:stats.permBonusAtk,permBonusDef:stats.permBonusDef,lastPeriodDays:stats.lastPeriodDays,thisPeriodDays:stats.periodDays,period:p,soulAtk:stats.soulAtk,soulDef:stats.soulDef,refineUnlocked:stats.refineUnlocked,refinePoints:stats.refinePoints,refineBonus:stats.refineBonus}
+  renderPeriodCard(stats,strVol,carDur,carEff)
+  _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,carEff:carEff,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,permBonusAtk:stats.permBonusAtk,permBonusDef:stats.permBonusDef,lastPeriodDays:stats.lastPeriodDays,thisPeriodDays:stats.periodDays,period:p,soulAtk:stats.soulAtk,soulDef:stats.soulDef,refineUnlocked:stats.refineUnlocked,refinePoints:stats.refinePoints,refineBonus:stats.refineBonus}
   trackStats(stats,{strVol:strVol,carDur:carDur,carEff:carEff})
   renderRecords()
 
@@ -70,7 +107,25 @@ function renderGame(){
     if(existing)existing.remove()
   }
 
-  const gc=document.getElementById('gameContent')
+  var gc=document.getElementById('gameContent')
+  // First-time game guide (dismissible, remembered) — dedupe across re-renders
+  var oldGuide=document.getElementById('gameGuide')
+  if(oldGuide)oldGuide.remove()
+  if(!localStorage.getItem('dh-game-guide-done')){
+    var guide=document.createElement('div');guide.id='gameGuide'
+    guide.style='background:var(--bg2);border:1px solid var(--orange-g);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;font-size:.72rem;line-height:1.7'
+    guide.innerHTML='<div style="font-weight:700;color:var(--orange);margin-bottom:6px">🎮 游戏规则</div>'
+      +'<div>💪 力量训练 → <b>攻击/生命</b> ｜ 🏃 有氧训练 → <b>防御/生命</b></div>'
+      +'<div>🗓️ 每旬（10天）练满 6 天且容量达标 → 永久属性奖励</div>'
+      +'<div>⚠️ 上旬未达标 → 永久扣除属性（下旬生效）</div>'
+      +'<div>⚔️ 挑战关卡击败 Boss 可推进章节，每日失败限 3 次</div>'
+      +'<div style="margin-top:8px;text-align:right"><button class="speed-btn" id="guideOk" style="padding:4px 14px;border-color:var(--orange);color:var(--orange)">开始挑战</button></div>'
+    gc.parentNode.insertBefore(guide,gc)
+    setTimeout(function(){
+      var btn=document.getElementById('guideOk')
+      if(btn)btn.addEventListener('click',function(){localStorage.setItem('dh-game-guide-done','1');guide.remove()})
+    },100)
+  }
   let h=''
   Object.entries(LEVELS).forEach(([k,ch])=>{
     h+='<div class="chapter-hdr">📖 '+ch.name+'</div><div class="lv-grid">'

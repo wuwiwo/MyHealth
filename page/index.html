@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -43,6 +43,9 @@
       <button class="tab-btn active" data-sub="strength">💪 力量</button>
       <button class="tab-btn" data-sub="cardio">🏃 有氧</button>
     </nav>
+
+    <!-- Today snapshot: weekly + period progress -->
+    <div id="todaySnapshot"></div>
 
     <!-- Sub-tab: Strength -->
     <div class="sub-tab active" id="subStrength">
@@ -183,6 +186,7 @@
   <section class="tab-content" id="tabGame">
     <!-- Stats panel -->
     <div class="game-stats-bar" id="gameStatsBar"></div>
+    <div id="periodCard"></div>
     <div id="recordsCard"></div>
 
     <!-- Level select or battle -->
@@ -259,23 +263,23 @@
   </section>
 </div>
 
-<script src="store.js?v3"></script>
-<script src="utils.js?v3"></script>
-<script src="levels.js?v3"></script>
-<script src="stats.js?v3"></script>
-<script src="battle.js?v3"></script>
-<script src="linechart.js?v3"></script>
-<script src="app.js?v3"></script>
-<script src="sync.js?v3"></script>
-<script src="tab-strength.js?v3"></script>
-<script src="tab-cardio.js?v3"></script>
-<script src="tab-profile.js?v3"></script>
-<script src="game-render.js?v3"></script>
-<script src="game-battle.js?v3"></script>
-<script src="game-records.js?v3"></script>
-<script src="game-refine.js?v3"></script>
-<script src="tab-game.js?v3"></script>
-<script src="tab-settings.js?v3"></script>
+<script src="store.js?v4"></script>
+<script src="utils.js?v4"></script>
+<script src="levels.js?v4"></script>
+<script src="stats.js?v4"></script>
+<script src="battle.js?v4"></script>
+<script src="linechart.js?v4"></script>
+<script src="app.js?v4"></script>
+<script src="sync.js?v4"></script>
+<script src="tab-strength.js?v4"></script>
+<script src="tab-cardio.js?v4"></script>
+<script src="tab-profile.js?v4"></script>
+<script src="game-render.js?v4"></script>
+<script src="game-battle.js?v4"></script>
+<script src="game-records.js?v4"></script>
+<script src="game-refine.js?v4"></script>
+<script src="tab-game.js?v4"></script>
+<script src="tab-settings.js?v4"></script>
 <script>init()</script>
 </body>
 </html>

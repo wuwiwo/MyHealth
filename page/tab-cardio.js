@@ -7,6 +7,7 @@ let _carSelType='run',_carDur=30,_carDist=0,_carIntensity=2;
 
 function renderCar(){
   const d=_carDate;const f=fmtDate(d)
+  renderTodaySnapshot()
   document.getElementById('carDateMain').textContent=f.main
   document.getElementById('carDateSub').textContent=f.sub
   var entries=getCar(d)
