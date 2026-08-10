@@ -166,7 +166,7 @@ function renderStrPlans(){
   const c=document.getElementById('strPlansList')
   const plans=getPlans()
   if(!plans.length){
-    c.innerHTML='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有训练计划</div><div class="empty-s">点下方按钮创建</div></div>'
+    c.innerHTML='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有训练计划</div><div class="empty-s">创建一个计划，快速按计划训练</div></div><button class="add-btn" id="strNewPlan" style="margin-top:8px">＋ 新建计划</button>'
     return
   }
   c.innerHTML=plans.map(p=>{
@@ -343,10 +343,9 @@ function onStrengthEvent(el,id,act){
         entry.weight=_strSelW
       }
       addStr(entry)
-      document.getElementById('strExercise').value='';document.getElementById('strTgtVal').textContent='12';document.getElementById('strActVal').textContent='12'
-      _strSelW=COMMON_W[4];document.querySelectorAll('#strWeight .wt-btn').forEach(function(b){b.classList.toggle('selected',parseInt(b.dataset.w)===_strSelW)})
-      document.getElementById('strAddCard').classList.remove('open');_strForm=false;document.getElementById('strAddBtn').textContent='＋ 新增一组'
-      toast('记录成功！','s')
+      // 保留动作/重量/目标，只重置实际次数回目标值，方便连记同动作
+      document.getElementById('strActVal').textContent=String(tgt)
+      toast('✅ 记录成功！继续下一组或 ✖ 收起','s')
       var te=getStr(_strDate);if(te.length&&te.every(function(e){return e.actualReps>=e.targetReps}))setTimeout(celebrate,300)
       renderStr();return true}
     case 'strNewPlan':openPlanEditor(null);return true;

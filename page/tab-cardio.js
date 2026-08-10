@@ -49,10 +49,9 @@ function onCardioEvent(el,id,act){
     case 'carSubmit':{
       var note=document.getElementById('carNote').value.trim()
       addCar({date:_carDate,type:_carSelType,duration:_carDur,distance:_carDist,note:note,intensity:_carIntensity})
-      document.getElementById('carNote').value='';_carDur=30;_carDist=0
-      document.getElementById('carDurVal').textContent='30';document.getElementById('carDistVal').textContent='0'
-      document.getElementById('carAddCard').classList.remove('open');_carForm=false;document.getElementById('carAddBtn').textContent='＋ 新增记录'
-      toast('有氧记录已保存 🏃','s');renderCar();return true}
+      document.getElementById('carNote').value=''
+      toast('✅ 有氧记录已保存！继续记录或 ✖ 收起','s')
+      renderCar();return true}
     case 'carCustomType':{
       showCustomCardioDialog();return true}
   }
@@ -206,8 +205,7 @@ function renderCardioPlans(){
   var c=document.getElementById('carPlansList')
   var plans=getCardioPlans()
   if(!plans.length){
-    c.innerHTML='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有有氧计划</div><div class="empty-s">点下方按钮创建</div></div>'
-    c.innerHTML+='<button class="add-btn" id="carNewPlan" style="margin-top:8px">＋ 新建有氧计划</button>'
+    c.innerHTML='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有有氧计划</div><div class="empty-s">创建一个计划，按计划跑步</div></div><button class="add-btn" id="carNewPlan" style="margin-top:8px">＋ 新建有氧计划</button>'
     return
   }
   c.innerHTML=plans.map(function(p){
