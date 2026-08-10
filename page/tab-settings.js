@@ -1,4 +1,4 @@
-/* ============================================
+﻿/* ============================================
    MyHealth — Tab: Settings (Library/Plans/Game/Data)
    ============================================ */
 
@@ -77,7 +77,7 @@ function showExEditor(editId){
   var isEdit=!!ex;
   if(!ex)ex={id:'',name:'',type:'strength',ratio:100,intensity:2,emoji:'🏃',hasDist:false,description:'',eqWeight:null,unit:'rep'};
 
-  var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='exModal';
+  var modal=openModal(null,'exModal')
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(isEdit?'✏️ 编辑动作':'＋ 新建动作')+'</div>';
   h+='<div class="fg"><label class="fl">类型</label><div class="car-types" id="exTypeSel">';
   h+='<button class="car-type'+(ex.type==='strength'?' selected':'')+'" data-extype="strength">💪 力量</button>';
@@ -95,7 +95,7 @@ function showExEditor(editId){
   h+='<div class="fg" id="exHasDistFg"'+(ex.type==='cardio'?'':' style="display:none"')+' style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="exHasDist"'+(ex.hasDist?' checked':'')+'><label class="fl" style="margin:0">有距离统计</label></div>';
   h+='<div class="fg"><label class="fl">动作描述 <span style="font-weight:400;text-transform:none">（支持 **加粗** #标题 `代码` -列表）</span></label><textarea class="fi" id="exDesc" rows="4" style="resize:vertical;font-size:.78rem;line-height:1.6" placeholder="可选：记录动作要领、注意事项...">'+(ex.description||'').replace(/</g,'&lt;')+'</textarea></div>';
   h+='<div class="modal-actions"><button class="m-btn-cancel" id="exCancel">取消</button><button class="m-btn-save" id="exSave">💾 保存</button></div></div>';
-  modal.innerHTML=h;document.body.appendChild(modal);
+  modal.innerHTML=h;void modal;
 
   var curType=ex.type;
   var curIntensity=ex.intensity||2;
@@ -264,7 +264,7 @@ function onSettingsEvent(el,id,act){
 function showAttrInfo(){
   var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据',vol:0,dur:0,permPenAtk:0,permPenDef:0,permBonusAtk:0,permBonusDef:0,period:{name:'—',volThreshold:2500}};
   var p=info.period||{name:'—',volThreshold:2500};
-  var modal=document.createElement('div');modal.className='modal-overlay open';
+  var modal=openModal();
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
     +'<div style="font-size:.8rem;line-height:1.7;color:var(--text2);padding:4px 0">'
     +'<div style="color:var(--orange);font-weight:700;margin-bottom:4px">⚔️ '+info.atk+'</div>'
@@ -278,7 +278,7 @@ function showAttrInfo(){
     +'💡 基础属性每月1号归零，累积奖励/惩罚永久保留<br>'
     +((info.permBonusAtk+info.permBonusDef)>0?'🏆 累积奖励: 攻+'+info.permBonusAtk+' 防+'+info.permBonusDef+'<br>':'')
     +((info.permPenAtk+info.permPenDef)>0?'⚠️ 累积惩罚: 攻-'+info.permPenAtk+' 防-'+info.permPenDef+'<br>':'')+'</div></div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>';
-  document.body.appendChild(modal);
+  void modal;
   document.getElementById('attrClose').addEventListener('click',function(){modal.remove()});
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()});
 }

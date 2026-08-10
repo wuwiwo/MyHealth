@@ -1,4 +1,4 @@
-/* ============================================
+﻿/* ============================================
    MyHealth — Tab: Strength
    ============================================ */
 
@@ -94,7 +94,7 @@ function renderMissed(){
 function openMakeupDialog(dateStr){
   var plans=getPlans()
   if(!plans.length){toast('没有训练计划，请先创建','e');return}
-  var modal=document.createElement('div');modal.className='modal-overlay open'
+  var modal=openModal()
   var h='<div class="modal-sheet"><div class="modal-handle"></div>'
     +'<div class="modal-title">📋 选择计划补签 '+dateStr+'</div>'
     +'<div style="margin-bottom:12px">'
@@ -103,7 +103,7 @@ function openMakeupDialog(dateStr){
     h+='<div class="ec" style="cursor:pointer;margin-bottom:8px" data-pick="'+p.id+'"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><span style="font-size:.7rem;color:var(--text3)">'+p.exercises.length+' 组</span></div></div><div class="ec-prog"><div style="font-size:.7rem;color:var(--text2)">'+tags+'</div></div></div>'
   })
   h+='</div><div class="modal-actions"><button class="m-btn-cancel" id="muCancel">取消</button></div></div>'
-  modal.innerHTML=h;document.body.appendChild(modal)
+  modal.innerHTML=h;void modal
   modal.querySelectorAll('[data-pick]').forEach(function(el){
     el.addEventListener('click',function(){doMakeup(dateStr,el.dataset.pick);modal.remove()})
   })
@@ -145,9 +145,9 @@ function openPlanEditor(editId){
   _peEditId=editId
   var plan=editId?getPlans().find(function(p){return p.id===editId}):null
   _peEditing=plan?JSON.parse(JSON.stringify(plan)):{exercises:[]}
-  var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='peModal'
+  var modal=openModal(null,'peModal')
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(editId?'✏️ 编辑计划':'📋 新建计划')+'</div><div class="fg"><label class="fl">计划名称</label><input class="fi" id="peName" value="'+(plan?plan.name:'')+'" placeholder="计划名称"></div><div class="fg"><label class="fl">动作列表</label><div id="peExList"></div><button class="add-btn" id="peAddEx" style="margin-top:4px;padding:10px">＋ 添加动作</button></div><div class="modal-actions"><button class="m-btn-cancel" id="peCancel">取消</button><button class="m-btn-save" id="peSave">保存</button></div></div>'
-  document.body.appendChild(modal)
+  void modal
   renderPeList()
 }
 
@@ -255,7 +255,7 @@ function openStrEdit(entry){
   var isEq=entry.eqWeight!=null||(exDef.eqWeight!=null&&exDef.type==='strength');
   var unitLabel=(entry.unit||exDef.unit||'rep')==='sec'?'秒数':'次数';
   var unitSuffix=(entry.unit||exDef.unit||'rep')==='sec'?'秒':'次';
-  const modal=document.createElement('div');modal.className='modal-overlay open';modal.id='strEditModal'
+  const modal=openModal(null,'strEditModal')
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">✏️ 编辑记录</div><div class="fg"><label class="fl">动作</label><input class="fi" id="seEx" value="'+entry.exercise+'"></div>';
   if(isEq){
     var eqW=entry.eqWeight!=null?entry.eqWeight:exDef.eqWeight;
@@ -264,7 +264,7 @@ function openStrEdit(entry){
     h+='<div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="seWeight"></div></div>';
   }
   h+='<div class="fg"><label class="fl">'+unitLabel+'</label><div class="reps-row"><div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" id="seTD">−</button><span class="sp-val" id="seTV">'+entry.targetReps+'</span><button class="sp-btn" id="seTU">+</button></div></div><div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" id="seAD">−</button><span class="sp-val" id="seAV">'+entry.actualReps+'</span><button class="sp-btn" id="seAU">+</button></div></div></div></div><div class="modal-actions"><button class="m-btn-cancel" id="seCancel">取消</button><button class="m-btn-save" id="seSave">💾 保存</button></div></div>';
-  modal.innerHTML=h;document.body.appendChild(modal)
+  modal.innerHTML=h;void modal
   var selW=entry.weight||0;
   if(!isEq){buildWtGrid(modal.querySelector('#seWeight'),selW,w=>selW=w,true)}
   document.getElementById('seTD').addEventListener('click',()=>{const e=document.getElementById('seTV');let v=parseInt(e.textContent,10);e.textContent=Math.max(0,v-1)})

@@ -1,4 +1,4 @@
-/* ============================================
+﻿/* ============================================
    MyHealth — Cloud Sync (Manual) & Export/Import
    ============================================ */
 
@@ -14,18 +14,35 @@ else if(s==='syncing'){e.classList.add('syncing');e.textContent='↻'}
 else if(s==='error'){e.classList.add('error');e.textContent='⚠'}
 else e.textContent='🔄'}
 
-/* Network layer */
-function apiPut(data,cb){var x=new XMLHttpRequest()
+/* Network layer — with automatic retry (exponential backoff) */
+var MAX_RETRY=2
+function apiPut(data,cb,attempt){attempt=attempt||0
+var x=new XMLHttpRequest()
 x.open('PUT','/api/data',true)
 x.setRequestHeader('Content-Type','application/json')
-x.onload=function(){cb(x.status===200)}
-x.onerror=function(){cb(false)}
+x.onload=function(){
+  if(x.status===200){cb(true)}
+  else if(attempt<MAX_RETRY){setTimeout(function(){apiPut(data,cb,attempt+1)},400*Math.pow(2,attempt))}
+  else{cb(false)}
+}
+x.onerror=function(){
+  if(attempt<MAX_RETRY){setTimeout(function(){apiPut(data,cb,attempt+1)},400*Math.pow(2,attempt))}
+  else{cb(false)}
+}
 x.send(JSON.stringify(data))}
 
-function apiGet(cb){var x=new XMLHttpRequest()
+function apiGet(cb,attempt){attempt=attempt||0
+var x=new XMLHttpRequest()
 x.open('GET','/api/data',true)
-x.onload=function(){if(x.status===200&&x.responseText){try{cb(null,JSON.parse(x.responseText));return}catch(e){}}cb(true,null)}
-x.onerror=function(){cb(true,null)};x.send()}
+x.onload=function(){
+  if(x.status===200&&x.responseText){try{cb(null,JSON.parse(x.responseText));return}catch(e){}}
+  if(attempt<MAX_RETRY){setTimeout(function(){apiGet(cb,attempt+1)},400*Math.pow(2,attempt))}
+  else{cb(true,null)}
+}
+x.onerror=function(){
+  if(attempt<MAX_RETRY){setTimeout(function(){apiGet(cb,attempt+1)},400*Math.pow(2,attempt))}
+  else{cb(true,null)}
+};x.send()}
 
 /* Data summary for display */
 function dataSummary(d){
@@ -121,7 +138,7 @@ function showSyncDialog(){
     var localAge=isFirst?' (未同步)':localNewer?' (较新)':remoteNewer?' (较旧)':''
     var remoteAge=isFirst?' (未同步)':remoteNewer?' (较新)':localNewer?' (较旧)':''
 
-    var modal=document.createElement('div');modal.className='modal-overlay open'
+    var modal=openModal()
     var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🔄 同步数据</div>'
     
     // Local card
@@ -181,7 +198,7 @@ function showSyncDialog(){
       +'<button class="be-btn" id="syncPull" style="flex:1;min-width:80px;background:var(--blue);color:white">☁️ 拉取云端</button>'
       +'<button class="be-btn" id="syncPush" style="flex:1;min-width:80px;background:var(--orange);color:white">📤 推送本地</button>'
       +'</div></div>'
-    modal.innerHTML=h;document.body.appendChild(modal)
+    modal.innerHTML=h;void modal
 
     document.getElementById('syncCancel').addEventListener('click',function(){modal.remove();setSync('synced')})
     document.getElementById('syncPull').addEventListener('click',function(){
@@ -238,13 +255,13 @@ function buildImportMap(data){
 
 /* ========== EXPORT / IMPORT ========== */
 function exportData(){
-  var modal=document.createElement('div');modal.className='modal-overlay open'
+  var modal=openModal()
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📤 导出数据</div>'
     +'<div style="font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.6">选择导出范围：</div>'
     +'<button class="sb-btn" id="exportFull" style="margin-bottom:8px">📦 全量数据（完整备份）</button>'
     +'<button class="sb-btn" id="export7" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📅 最近7天（精简，适合发给AI）</button>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="exportCancel">取消</button></div></div>'
-  document.body.appendChild(modal)
+  void modal
   document.getElementById('exportFull').addEventListener('click',function(){
     modal.remove();autoBackup();toast('全量数据已导出 ✅','s')
   })

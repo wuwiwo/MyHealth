@@ -63,6 +63,18 @@ if(!c)return;const o=document.createElement('div');o.className='toast'+(t?' toas
 o.textContent=(t==='s'?'✅':t==='e'?'😅':'💪')+' '+m;c.appendChild(o)
 clearTimeout(_tt);_tt=setTimeout(()=>c.innerHTML='',2200)}
 
+/* ========== MODAL ========== */
+/* Create an overlay modal, append to body, return the element.
+   Overlay click (on the backdrop itself) dismisses it. */
+function openModal(html,id){
+  const modal=document.createElement('div');modal.className='modal-overlay open'
+  if(id)modal.id=id
+  if(html!=null)modal.innerHTML=html
+  document.body.appendChild(modal)
+  modal.addEventListener('click',e=>{if(e.target===e.currentTarget)modal.remove()})
+  return modal
+}
+
 /* ========== CELEBRATE ========== */
 function celebrate(){const o=document.createElement('div');o.style='position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden'
 const cs=['#F97316','#22C55E','#3B82F6','#A855F7','#EAB308','#EF4444']

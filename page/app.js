@@ -92,6 +92,13 @@ function init(){
 }
 
 /* ========== EVENT DELEGATION ========== */
+/* Tab event handlers register here — each returns true if handled.
+   Dispatch is wrapped in try/catch so one module's bug never
+   blocks the others (or the default handler).
+   NOTE: resolved lazily — tab-*.js load after app.js, so direct
+   references at load time would be undefined. */
+function getTabHandlers(){return[onStrengthEvent,onCardioEvent,onProfileEvent,onGameEvent,onSettingsEvent]}
+
 document.addEventListener('click',function(e){
   const el=e.target.closest('button,[id],[data-a],[data-s],[data-date]')
   if(!el)return
@@ -118,11 +125,14 @@ document.addEventListener('click',function(e){
     n=dir==='+'?Math.min(n+1,999):Math.max(n-1,0);v.textContent=n;return
   }
 
-  if(onStrengthEvent(el,id,act))return
-  if(onCardioEvent(el,id,act))return
-  if(onProfileEvent(el,id,act))return
-  if(onGameEvent(el,id,act))return
-  if(onSettingsEvent(el,id,act))return
+  const handlers=getTabHandlers()
+  for(let i=0;i<handlers.length;i++){
+    try{
+      if(handlers[i](el,id,act))return
+    }catch(err){
+      console.error('[handler]',err)
+    }
+  }
 })
 
 /* ========== TAB SWITCHING ========== */

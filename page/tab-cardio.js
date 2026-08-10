@@ -1,4 +1,4 @@
-/* ============================================
+﻿/* ============================================
    MyHealth — Tab: Cardio
    ============================================ */
 
@@ -131,14 +131,14 @@ function initCardioTypes(){
 }
 
 function showCustomCardioDialog(){
-  var modal=document.createElement('div');modal.className='modal-overlay open'
+  var modal=openModal()
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">＋ 自定义运动类型</div>'
     +'<div class="fg"><label class="fl">名称</label><input class="fi" id="ccName" placeholder="如: 瑜伽"></div>'
     +'<div class="fg"><label class="fl">图标</label><input class="fi" id="ccEmoji" placeholder="如: 🧘"></div>'
     +'<div class="fg"><label class="fl">默认强度</label><div class="car-types" id="ccIntensity"></div></div>'
     +'<div class="fg" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ccHasDist"><label class="fl" style="margin:0">有距离统计</label></div>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="ccCancel">取消</button><button class="m-btn-save" id="ccSave">💾 保存</button></div></div>'
-  document.body.appendChild(modal)
+  void modal
   var ccInt=2
   var ccIntEl=document.getElementById('ccIntensity')
   INTENSITY_LEVELS.forEach(function(lv){
@@ -167,7 +167,7 @@ function showCustomCardioDialog(){
 
 function showCardioSegForm(idx){
   var seg=idx!==null?_cpEditing.segments[idx]:{type:'run',duration:30,intensity:2,restSeconds:60}
-  var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='cpSegModal'
+  var modal=openModal(null,'cpSegModal')
   var ctOpts=getAllCardioTypes().map(function(t){return'<option value="'+t.id+'"'+(t.id===seg.type?' selected':'')+'>'+t.emoji+' '+t.name+'</option>'}).join('')
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(idx!==null?'编辑训练段':'添加训练段')+'</div>'
     +'<div class="fg"><label class="fl">运动类型</label><select class="fi" id="cpSegType">'+ctOpts+'</select></div>'
@@ -175,7 +175,7 @@ function showCardioSegForm(idx){
     +'<div class="fg"><label class="fl">强度</label><div class="car-types" id="cpSegInt"></div></div>'
     +'<div class="fg"><label class="fl">休息 (秒)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="cpSegRDown">−</button><span class="sp-val" id="cpSegRest">'+seg.restSeconds+'</span><button class="sp-btn" id="cpSegRUp">+</button></div></div>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="cpSegCancel">取消</button><button class="m-btn-save" id="cpSegConfirm">✅ 确定</button></div></div>'
-  document.body.appendChild(modal)
+  void modal
   var csInt=seg.intensity||2
   var csIntEl=document.getElementById('cpSegInt')
   INTENSITY_LEVELS.forEach(function(lv){
@@ -223,9 +223,9 @@ function openCardioPlanEditor(editId){
   _cpEditId=editId
   var plan=editId?getCardioPlans().find(function(p){return p.id===editId}):null
   _cpEditing=plan?JSON.parse(JSON.stringify(plan)):{segments:[]}
-  var modal=document.createElement('div');modal.className='modal-overlay open';modal.id='cpModal'
+  var modal=openModal(null,'cpModal')
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(editId?'✏️ 编辑有氧计划':'📋 新建有氧计划')+'</div><div class="fg"><label class="fl">计划名称</label><input class="fi" id="cpName" value="'+(plan?plan.name:'')+'" placeholder="如: 晨跑"></div><div class="fg"><label class="fl">训练段</label><div id="cpSegList"></div><button class="add-btn" id="cpAddSeg" style="margin-top:4px;padding:10px">＋ 添加训练段</button></div><div class="modal-actions"><button class="m-btn-cancel" id="cpCancel">取消</button><button class="m-btn-save" id="cpSave">保存</button></div></div>'
-  document.body.appendChild(modal)
+  void modal
   renderCpSegList()
 }
 

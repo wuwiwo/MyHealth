@@ -1,7 +1,12 @@
 /* ============================================
-   MyHealth — Store Module v1.1
+   MyHealth — Store Module v1.2
    Generalized K-V interface over localStorage
    with global onChange notification.
+
+   v1.2: schema validation — known keys are
+   shape-checked on read; corrupted values are
+   dropped (returned as null) instead of crashing
+   every consumer. mergeAll/setAll also filter.
    ============================================ */
 (function() {
   'use strict';
@@ -11,6 +16,48 @@
   var _cache = {};
   var _listeners = [];
   var _modKey = P + 'mod-time';
+
+  /* ========== SCHEMA VALIDATION ========== */
+  // Known key shapes. 'array' | 'object' | 'string' | 'number' | {key:shape}
+  var SHAPES = {
+    strength:   { entries: 'array' },
+    cardio:     { entries: 'array' },
+    weight:     { records: 'array' },
+    plans:      { plans: 'array' },
+    cardioPlans:{ plans: 'array' },
+    missed:     { notes: 'object' },
+    game:       { cleared: 'array', current: 'string' },
+    refine:     { points: 'number', upgrades: 'object' },
+    attrLog:    'array',
+    records:    'object',
+    prs:        'object',
+    exercises:  'array',
+    cardioTypes:'array',
+    profile:    'object',
+    theme:      'string'
+  };
+
+  function isShape(v, shape) {
+    if (shape === 'array')  return Array.isArray(v);
+    if (shape === 'object') return v != null && typeof v === 'object' && !Array.isArray(v);
+    if (shape === 'string') return typeof v === 'string';
+    if (shape === 'number') return typeof v === 'number' && !isNaN(v);
+    if (shape && typeof shape === 'object') {
+      if (v == null || typeof v !== 'object' || Array.isArray(v)) return false;
+      for (var k in shape) {
+        if (!shape.hasOwnProperty(k)) continue;
+        if (v[k] !== undefined && !isShape(v[k], shape[k])) return false;
+      }
+      return true;
+    }
+    return true; // unknown shape → accept
+  }
+
+  function validValue(name, v) {
+    var shape = SHAPES[name];
+    if (!shape) return true; // unknown key → accept as-is
+    return isShape(v, shape);
+  }
 
   function fullKey(name) { return P + name + S; }
 
@@ -25,18 +72,32 @@
     if (k && k.indexOf(P) === 0) {
       try {
         var short = k.slice(P.length, k.lastIndexOf(S) > -1 ? k.lastIndexOf(S) : undefined);
-        _cache[short] = JSON.parse(localStorage.getItem(k));
+        var parsed = JSON.parse(localStorage.getItem(k));
+        if (validValue(short, parsed)) {
+          _cache[short] = parsed;
+        } else {
+          // Corrupted value — drop it so consumers fall back to defaults
+          localStorage.removeItem(k);
+        }
       } catch(e) {}
     }
+  }
+
+  /* ========== QUOTA GUARD ========== */
+  function notifyQuota() {
+    try {
+      if (window.toast) toast('存储空间不足，请导出备份后清理旧数据','e');
+    } catch(e) {}
   }
 
   window.store = {
     /**
      * @param {string} name  Short key (e.g. 'strength', 'cardio')
-     * @returns {*}  Parsed value, or null
+     * @returns {*}  Parsed value (schema-checked), or null
      */
     get: function(name) {
-      return _cache.hasOwnProperty(name) ? _cache[name] : null;
+      var v = _cache.hasOwnProperty(name) ? _cache[name] : null;
+      return validValue(name, v) ? v : null;
     },
 
     /**
@@ -45,7 +106,11 @@
      */
     set: function(name, value) {
       _cache[name] = value;
-      localStorage.setItem(fullKey(name), JSON.stringify(value));
+      try {
+        localStorage.setItem(fullKey(name), JSON.stringify(value));
+      } catch(e) {
+        notifyQuota();
+      }
       touchModTime();
       for (var i = 0; i < _listeners.length; i++) {
         _listeners[i](name, value);
@@ -67,7 +132,7 @@
     getAll: function() {
       var out = {};
       for (var k in _cache) {
-        if (_cache.hasOwnProperty(k)) {
+        if (_cache.hasOwnProperty(k) && validValue(k, _cache[k])) {
           out[k] = JSON.parse(JSON.stringify(_cache[k]));
         }
       }
@@ -76,19 +141,27 @@
 
     /**
      * Bulk-import data (from sync pull or file import).
-     * Only overwrites keys that have meaningful content.
+     * Only overwrites keys that pass schema validation.
      * @param {object} data  { strength: {...}, cardio: {...}, ... }
      */
     mergeAll: function(data) {
       if (!data) return;
+      var changed = false;
       for (var k in data) {
         if (!data.hasOwnProperty(k)) continue;
         var v = data[k];
-        if (v != null && typeof v === 'object') {
+        if (v == null) continue;
+        if (typeof v === 'object' && validValue(k, v)) {
           _cache[k] = v;
-          localStorage.setItem(fullKey(k), JSON.stringify(v));
+          try {
+            localStorage.setItem(fullKey(k), JSON.stringify(v));
+            changed = true;
+          } catch(e) {
+            notifyQuota();
+          }
         }
       }
+      if (!changed) return;
       touchModTime();
       for (var i = 0; i < _listeners.length; i++) {
         _listeners[i]('*', _cache);
@@ -96,16 +169,25 @@
     },
 
     /**
-     * Overwrite all keys (import).
+     * Overwrite all keys (import). Filters invalid shapes.
      * @param {object} data
      */
     setAll: function(data) {
       if (!data) return;
+      var changed = false;
       for (var k in data) {
         if (!data.hasOwnProperty(k)) continue;
-        _cache[k] = data[k];
-        localStorage.setItem(fullKey(k), JSON.stringify(data[k]));
+        if (validValue(k, data[k])) {
+          _cache[k] = data[k];
+          try {
+            localStorage.setItem(fullKey(k), JSON.stringify(data[k]));
+            changed = true;
+          } catch(e) {
+            notifyQuota();
+          }
+        }
       }
+      if (!changed) return;
       touchModTime();
       for (var i = 0; i < _listeners.length; i++) {
         _listeners[i]('*', _cache);
