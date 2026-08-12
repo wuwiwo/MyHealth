@@ -86,5 +86,60 @@
 | v1.7.4 | 13 | 421 行 tab-game.js | 补发6月旬奖励+180攻防 |
 | v1.7.5 | 13 | 500 行 tab-game.js | 防御奖励1/5/自动模式/打击动画 |
 | v1.7.6 | 13 | 480 行 tab-game.js | 等效重量/计时动作/折算率10~100% |
+## v1.8.3
+
+### 修复
+- 🩹 炼化批次调试增强：doRefineBatch 添加三重防御（删除重复 batchRefine 调用、points 显式检查、pointer-events + data-disabled）
+- 🩹 恢复 index.html UTF-8 编码（PowerShell Set-Content 损坏文件后修复）
+- 🩹 cache-busting 验证：所有 `<script>` 标签统一添加 `?v2` 参数
+
+## v1.8.4
+
+### 修复
+- 🩹 恢复 index.html UTF-8 编码（上一轮 PowerShell Set-Content 用错误编码导致 emoji 乱码）
+
+## v1.8.5
+
+### 修复
+- 🩹 doRefineBatch 内联循环替代 batchRefine 调用，添加逐次诊断输出
+
+## v1.8.6
+
+### 修复
+- 🩹 doRefineBatch 逐次记录 getCurrentRefineGrade 返回值与中断原因，控制循环次数输出
+
+## v1.8.7
+
+### 修复
+- 🩹 修复 `allDone` 判断：只有当 `allMaxed && !nextGrade` 才算全满，原逻辑 `!nextGrade` 会误判最后一关完成
+
+---
+
+### 架构演化
+
+| 版本 | JS文件数 | 最大文件 | 备注 |
+|------|----------|----------|------|
+| v1.0 | 1 | 1155 行 index.js | 单文件巨石 |
+| v1.1 | 10 | 308 行 tab-strength.js | Store模块 + 文件拆分 |
+| v1.2 | 13 | 388 行 tab-game.js | PR/统计/有氧计划/记录 |
+| v1.3 | 13 | 442 行 tab-game.js | 关卡预览/强度系统/子Tab |
+| v1.4 | 14 | 460 行 tab-game.js | 属性日志增量/UI美化 |
+| v1.5.0 | 15 | 434 行 tab-game.js | 新关卡/手动同步 |
+| v1.5.1 | 15 | 434 行 tab-game.js | 全量同步/关卡配置独立 |
+| v1.6 | 13 | 406 行 tab-game.js | 动作库驱动/页面重构/设置Tab |
+| v1.6.1 | 13 | 406 行 tab-game.js | PR显示ratio有效值tag |
+| v1.7 | 13 | 421 行 tab-game.js | 动作描述/旬周期/体重图/同步修复 |
+| v1.7.1 | 13 | 421 行 tab-game.js | 每月自动重置关卡/旬规则7月生效 |
+| v1.7.2 | 13 | 421 行 tab-game.js | 基础属性改为本月窗口 |
+| v1.7.3 | 13 | 421 行 tab-game.js | 旬奖励永久累积(permBonus) |
+| v1.7.4 | 13 | 421 行 tab-game.js | 补发6月旬奖励+180攻防 |
+| v1.7.5 | 13 | 500 行 tab-game.js | 防御奖励1/5/自动模式/打击动画 |
+| v1.7.6 | 13 | 480 行 tab-game.js | 等效重量/计时动作/折算率10~100% |
 | v1.8 | 13 | 575 行 tab-game.js | 10-15章/炼魂系统/魂攻防/秒数bug修复 |
 | v1.8.1 | 13 | 575 行 tab-game.js | 炼化顺序升级/批量1-10-50次 |
+| v1.8.2 | 13 | 575 行 tab-game.js | 浮点显示修复/batch按钮disabled修复 |
+| v1.8.3 | 13 | 575 行 tab-game.js | 炼化三重防御/编码修复/cache-busting v2 |
+| v1.8.4 | 13 | 575 行 tab-game.js | index.html UTF-8 编码修复 |
+| v1.8.5 | 13 | 575 行 tab-game.js | doRefineBatch 内联循环+诊断 |
+| v1.8.6 | 13 | 575 行 tab-game.js | 循环诊断+中断原因输出 |
+| v1.8.7 | 13 | 575 行 tab-game.js | allDone 判断修复(allMaxed && !nextGrade) |

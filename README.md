@@ -1,8 +1,11 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.8.2
+> Personal Health Manager — 个人健身健康管理应用 v1.9.0
 
-一个**纯前端单页应用**，帮助记录和追踪个人健身数据，通过**游戏化 RPG 挑战系统**将训练量转化为角色属性进行对战。
+🟢 **线上体验**：<https://my-health-six.vercel.app/>
+📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
+
+一个**纯前端单页应用**，帮助记录和追踪个人健身数据，通过**游戏化 RPG 挑战系统**将训练量转化为角色属性进行对战。手机 / 电脑跨设备云同步，深 / 浅主题切换，移动端优先响应式设计。
 
 ---
 
@@ -10,23 +13,32 @@
 
 | 模块 | 功能 |
 |------|------|
-| 🏋️ 训练 | 力量（记录/计划/断签/周统计）+ 有氧（记录/计划/统计）子 Tab |
-| 📊 个人 | 基本信息、体重记录与趋势图、PR 个人最佳、训练统计与热力图 |
-| 🎮 挑战 | 9 章 45 关 RPG 战斗、关卡预览与胜率模拟、属性变更日志、历史最佳记录 |
-| ⚙️ 设置 | 动作库管理（CRUD + ratio）、计划管理、挑战管理、数据管理（导出/导入/同步） |
+| 🏋️ 训练 | 力量（记录/计划/断签/周统计）+ 有氧（记录/计划/统计）子 Tab，顶部「今日速览」概览本周与本旬进度 |
+| 📊 个人 | 基本信息、体重记录与趋势图、PR 个人最佳、训练统计、30 天每日趋势、热力图 |
+| 🎮 挑战 | 15 章 90 关 RPG 战斗、关卡预览与胜率模拟、**旬目标进度条 + 结算预告**、战利品掉落、炼魂系统（9 级品质）、属性变更日志、历史最佳、分享卡片、首次规则引导 |
+| ⚙️ 设置 | 动作库管理（CRUD + ratio + 等效重量）、计划管理、挑战管理、数据管理（导出 / 导入 / 云同步） |
 
 ---
 
 ## 技术架构
 
 ```
-浏览器 (localStorage) ←→ Vercel 静态站点 ←→ Vercel Blob 云存储
+浏览器 (localStorage)
+    ↑↓  事件委托 + onChange 通知
+纯前端 SPA (原生 JS, 无框架)
+    ↑↓  手动同步 / API FETCH
+Vercel 静态站点
+    ↑↓  Blob 写入 / 列取 / 旧文件清理
+Vercel Blob Storage (public)
 ```
 
-- **前端**: 原生 JS + HTML + CSS（CSS Variables 深/浅主题切换）
-- **后端**: Vercel Serverless Function（`api/data.mjs`）
-- **云存储**: Vercel Blob Storage
-- **图表**: Canvas 2D API 自绘平滑曲线图
+- **前端**: 原生 JS + HTML + CSS（CSS Variables 深/浅主题切换，移动优先）
+- **数据层**: `store.js` v1.2 — K-V 接口 + schema 校验白名单 + localStorage 配额守护
+- **后端**: Vercel Serverless Function（`api/data.mjs`），Blob 旧文件自动清理（保留最新 20 份）
+- **云同步**: `sync.js` 手动推送/拉取，网络层自动重试（指数退避）
+- **图表**: Canvas 2D API 自绘平滑曲线图（linechart.js，可复用）
+- **事件路由**: `app.js` 注册表 + try/catch 隔离 — 单模块异常不阻断其他模块
+- **Modal**: `utils.js` 通用 `openModal()` helper，统一 backdrop 点击关闭
 
 ---
 
@@ -34,38 +46,43 @@
 
 ```
 page/
-├── store.js           数据 Store（K-V 接口 + onChange 通知）
-├── utils.js           常量、工具函数、toast、主题
-├── levels.js          关卡配置（9章45关）
-├── stats.js           纯函数统计计算（含 ratio 加权容量）
-├── battle.js          战斗引擎（纯逻辑）
-├── linechart.js       Canvas 折线图（可复用）
-├── sync.js            云同步 + 导出/导入
-├── app.js             数据层 + 事件委托 + 初始化 + 迁移 + Tab切换
-├── tab-strength.js    力量训练子 Tab
-├── tab-cardio.js      有氧运动子 Tab
-├── tab-profile.js     个人 Tab（2 个子 Tab）
-├── tab-game.js        挑战 Tab
-├── tab-settings.js    设置 Tab（动作库/计划/挑战/数据 4 个子 Tab）
-├── index.html         页面骨架
-├── index.css          样式表
+├── store.js            数据 Store v1.2（K-V 接口 + schema 校验 + onChange 通知 + 配额守护）
+├── utils.js            常量、工具函数、toast、主题、openModal helper
+├── levels.js           关卡配置（15 章 90 关）
+├── stats.js            纯函数统计计算（容量加权 / 旬周期 / 炼魂升级概率）
+├── battle.js           战斗引擎（纯逻辑 + 魂攻击阶段 + Boss 词缀）
+├── linechart.js        Canvas 折线图（可复用）
+├── sync.js             云同步 + 导出 / 导入（网络重试 + 时间戳冲突比对）
+├── app.js              数据层 + 事件委托注册表 + 初始化 + 迁移 + Tab 切换
+├── tab-strength.js     力量训练子 Tab + 今日速览卡片
+├── tab-cardio.js       有氧运动子 Tab
+├── tab-profile.js      个人 Tab（个人数据 / 训练数据 子 Tab，30 天趋势图）
+├── game-render.js      挑战 Tab 渲染（关卡 + 属性条 + 旬目标卡 + 引导）
+├── game-battle.js      挑战 Tab 战斗 UI + 战利品 + 分享卡片
+├── game-records.js     挑战 Tab 历史记录 + 属性变更日志
+├── game-refine.js      挑战 Tab 炼魂系统弹窗 + 批量炼化
+├── tab-game.js         挑战 Tab 事件入口（onGameEvent）
+├── tab-settings.js     设置 Tab（动作库 / 计划 / 挑战 / 数据 4 个子 Tab）
+├── index.html          页面骨架
+├── index.css           样式表
 ├── api/
-│   └── data.mjs       Vercel Serverless 同步接口
+│   └── data.mjs        Vercel Serverless 同步接口 + Blob 清理
 ├── package.json
 └── vercel.json
 doc/
-├── README-v1.0.md
+├── README-v1.0.md       版本说明 v1.0
 ├── project-analysis-v1.0.md
 ├── code-review-v1.0.md
+├── code-review-v1.5.md
 ├── roadmap-v1.1.md
-├── roadmap-v1.1.md
+├── roadmap-v1.6.md
 ├── changelog-v1.3.md
 ├── changelog-v1.4.md
 ├── changelog-v1.5.md
 ├── changelog-v1.6.md
 ├── changelog-v1.7.md
 ├── changelog-v1.8.md
-└── roadmap-v1.6.md
+└── changelog-v1.9.md  ← 最新版本日志
 ```
 
 ---
@@ -79,16 +96,41 @@ npx serve .
 python -m http.server 8080
 ```
 
+本地运行无需后端，训练数据自动存入浏览器 `localStorage`。云同步功能只在 Vercel 部署时可用（依赖 Blob 环境变量）。
+
 ---
 
 ## 部署
+
+### Vercel（推荐）
 
 ```bash
 cd page
 vercel --prod
 ```
 
-需要 `BLOB_READ_WRITE_TOKEN` 环境变量。
+Vercel 项目设置：
+- **Root Directory**: `page/`
+- **Environment Variables**:
+  - `BLOB_READ_WRITE_TOKEN` — Vercel Blob 读写令牌
+  - `BLOB_STORE_ID` — Blob Store ID
+
+### GitHub 自动部署
+
+仓库 `wuwiwo/MyHealth` 接入 Vercel 自动部署，`git push origin main` 会触发重新构建。
+部署后访问：<https://my-health-six.vercel.app/>
+
+---
+
+## 数据同步
+
+同步是**手动**触发（右上角 🔄 按钮），避免自动写入覆盖用户数据：
+
+1. **推送**：本地数据 → Vercel Blob（新建一份带时间戳的快照）
+2. **拉取**：Vercel 取最新快照 → 本地（拉取前自动全量备份本地数据为 JSON 文件）
+3. **冲突检测**：本地修改时间 vs 云端 `lastUpdated`，给出明确建议
+
+新数据只追加 Blob 快照，旧快照由 API 异步清理（保留最近 20 份），避免免费额度被历史快照吃光。
 
 ---
 
@@ -115,5 +157,11 @@ vercel --prod
 | v1.8 | 2026-07-09 | 10-15章新关卡、炼魂系统（魂攻防+9级炼化）、秒数bug修复 | `doc/changelog-v1.8.md` |
 | v1.8.1 | 2026-07-09 | 炼化改为顺序升级（F→SSR）、批量1/10/50次 | `doc/changelog-v1.8.md` |
 | v1.8.2 | 2026-07-09 | 修复浮点精度显示、修复批量按钮disabled失效 | `doc/changelog-v1.8.md` |
+| v1.8.3 | 2026-08-09 | 炼化批次三重防御、cache-busting v2 | `doc/changelog-v1.8.md` |
+| v1.8.4 | 2026-08-09 | 恢复 index.html UTF-8 编码 | `doc/changelog-v1.8.md` |
+| v1.8.5 | 2026-08-09 | doRefineBatch 内联循环 + 详细诊断 | `doc/changelog-v1.8.md` |
+| v1.8.6 | 2026-08-09 | 逐次诊断 getCurrentRefineGrade 返回值 + 中断原因 | `doc/changelog-v1.8.md` |
+| v1.8.7 | 2026-08-10 | allDone 判断修复（allMaxed && !nextGrade） | `doc/changelog-v1.8.md` |
+| **v1.9.0** | **2026-08-12** | **架构重构（store v1.2/sync重试/Blob清理/tab-game拆5模块/事件路由注册表/openModal）+ 产品功能（今日速览/旬目标卡+结算预告/战利品/游戏引导/30天趋势图）+ UX动线优化** | `doc/changelog-v1.9.md` |
 
-> 当前版本：**v1.8.2**
+> 当前版本：**v1.9.0**
