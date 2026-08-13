@@ -66,6 +66,7 @@ function adaptStrForm(exName){
 function renderStr(){
   const d=_strDate;const f=fmtDate(d)
   renderTodaySnapshot()
+  renderSummonPanel()
   document.getElementById('strDateMain').textContent=f.main
   document.getElementById('strDateSub').textContent=f.sub
   const entries=getStr(d)

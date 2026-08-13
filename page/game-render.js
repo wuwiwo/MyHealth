@@ -239,7 +239,8 @@ function getGameStats(){
     }
   }
   var refineBonus=calculateRefineBonus(refine.upgrades);
-  var calc=calculateStats(strVol,carDur,carEff,permBonusAtk,permBonusDef,g.permPen.atk||0,g.permPen.def||0,refineBonus)
+  var challengeBonus=getChallengeBonus();
+  var calc=calculateStats(strVol,carDur,carEff,permBonusAtk+(challengeBonus.atk||0),permBonusDef+(challengeBonus.def||0),g.permPen.atk||0,g.permPen.def||0,refineBonus,challengeBonus.hp||0)
   return{
     atk:calc.atk,def:calc.def,hp:calc.hp,soulAtk:calc.soulAtk,soulDef:calc.soulDef,
     period:curPeriod,periodDays:periodDays,periodVol:periodVol,volMet:bonus.volMet,

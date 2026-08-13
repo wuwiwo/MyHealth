@@ -377,3 +377,44 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 /* ========== BATTLE LOOT ========== */
 .be-loot{text-align:center;font-size:.75rem;color:var(--yellow);margin:8px 0 4px;animation:lootPop .5s cubic-bezier(.34,1.56,.64,1)}
 @keyframes lootPop{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* ========== SUMMON PANEL ========== */
+.summon-card{background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(249,115,22,.06));border:1px solid rgba(168,85,247,.25);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.summon-card.done{opacity:.6;border:1px solid var(--bd)}
+.summon-title{font-size:.85rem;font-weight:700;color:var(--purple);margin-bottom:4px}
+.summon-info{font-size:.72rem;color:var(--text2);margin-bottom:8px}
+.summon-rate-wrap{margin-bottom:8px}
+.summon-rate-bar{height:8px;background:var(--bg3);border-radius:var(--rp);overflow:hidden}
+.summon-rate-fill{height:100%;border-radius:var(--rp);transition:width .4s cubic-bezier(.34,1.56,.64,1)}
+.summon-btn{width:100%;padding:14px;border:2px solid var(--purple);border-radius:var(--r);background:rgba(168,85,247,.1);color:var(--purple);font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+.summon-btn:hover{background:rgba(168,85,247,.2);transform:scale(1.02)}
+.summon-btn:active{transform:scale(.98)}
+.summon-bonus{font-size:.65rem;color:var(--text2);margin-top:6px;cursor:default}
+
+/* ========== HIDDEN CHALLENGE MINIGAME ========== */
+.modal-sheet{max-width:100%}
+.ch-timer-wrap{text-align:center;margin-bottom:12px}
+.ch-timer{font-size:2rem;font-weight:900;color:var(--orange);font-variant-numeric:tabular-nums}
+.ch-timer-bar-wrap{height:6px;background:var(--bg3);border-radius:var(--rp);overflow:hidden;margin-top:4px}
+.ch-timer-bar{height:100%;background:linear-gradient(90deg,var(--orange),var(--green));border-radius:var(--rp);transition:width 1s linear}
+.ch-timer-bar.urgent{background:linear-gradient(90deg,var(--red),var(--orange))}
+.ch-stats{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:10px;font-size:.72rem;color:var(--text2)}
+.ch-stat{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rs);padding:6px 10px;display:flex;justify-content:space-between}
+.ch-stat b{color:var(--text);font-weight:700}
+.ch-damage-display{font-size:3rem;font-weight:900;color:var(--orange);text-align:center;font-variant-numeric:tabular-nums;margin:8px 0;min-height:48px;line-height:1}
+.ch-info{text-align:center;font-size:.85rem;min-height:24px;margin-bottom:10px}
+.ch-attack-btn{width:100%;padding:28px;border:2px solid var(--red);border-radius:var(--r);background:linear-gradient(135deg,rgba(239,68,68,.12),rgba(249,115,22,.08));color:var(--red);font-size:1.3rem;font-weight:900;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;user-select:none;transition:all .1s}
+.ch-attack-btn:active{transform:scale(.95);background:rgba(239,68,68,.2)}
+.ch-attack-btn.pulse{animation:chPulse .3s ease}
+.ch-attack-btn:disabled{opacity:.5;pointer-events:none}
+@keyframes chPulse{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+.ch-hits{max-height:100px;overflow-y:auto;font-size:.65rem;margin-top:8px}
+.ch-hit{padding:2px 0;color:var(--text2)}
+.ch-hit.crit{color:var(--yellow);font-weight:700}
+.ch-result{padding:8px 0}
+.ch-result-title{font-size:1rem;font-weight:700;color:var(--green);text-align:center;margin-bottom:12px}
+.ch-result-stats{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rs);padding:10px 12px;margin-bottom:10px;font-size:.75rem;color:var(--text2);line-height:1.8}
+.ch-result-stats b{color:var(--text);font-weight:700}
+.ch-reward{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:var(--rs);padding:10px 12px;text-align:center}
+.ch-reward-info{font-size:.85rem;font-weight:700;display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.ch-cumulative{font-size:.68rem;color:var(--text3);text-align:center}

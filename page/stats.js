@@ -161,15 +161,16 @@ function calculatePeriodPenalty(lastPeriodDays) {
  * @param {number} permPenDef  Accumulated permanent defense penalty
  * @returns {{ atk, def, hp }}
  */
-function calculateStats(strVol, carDur, carEff, periodAtkBonus, periodDefBonus, permPenAtk, permPenDef, refineBonus) {
+function calculateStats(strVol, carDur, carEff, periodAtkBonus, periodDefBonus, permPenAtk, permPenDef, refineBonus, challengeHp) {
   var baseAtk = 10 + Math.floor(strVol / 20);
   var baseDef = 10 + Math.floor(carEff / 15);
   var bonus = (periodAtkBonus || 0) + (periodDefBonus || 0);
   var rb = refineBonus || {atk:0,def:0,hp:0,soulAtk:0,soulDef:0};
+  var cHp = challengeHp || 0;
   return {
     atk: Math.max(1, baseAtk + (periodAtkBonus || 0) - (permPenAtk || 0) + Math.floor(rb.atk)),
     def: Math.max(1, baseDef + (periodDefBonus || 0) - (permPenDef || 0) + Math.floor(rb.def)),
-    hp: 100 + Math.floor(strVol / 10) + Math.floor(carDur / 3) + bonus * 3 + Math.floor(rb.hp),
+    hp: 100 + Math.floor(strVol / 10) + Math.floor(carDur / 3) + bonus * 3 + Math.floor(rb.hp) + cHp,
     soulAtk: Math.floor(rb.soulAtk),
     soulDef: Math.floor(rb.soulDef)
   };

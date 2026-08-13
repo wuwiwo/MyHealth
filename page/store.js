@@ -34,7 +34,8 @@
     exercises:  'array',
     cardioTypes:'array',
     profile:    'object',
-    theme:      'string'
+    theme:      'string',
+    challenge:  'object'
   };
 
   function isShape(v, shape) {

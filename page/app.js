@@ -65,7 +65,13 @@ function init(){
   var sug=document.getElementById('strSuggest')
   if(sug){
     sug.innerHTML='';
-    getStrengthExercises().forEach(function(n){
+    var strEntries=((store.get('strength')||{entries:[]}).entries)||[];
+    var freq={};
+    strEntries.forEach(function(e){if(e.exercise)freq[e.exercise]=(freq[e.exercise]||0)+1});
+    var sorted=getStrengthExercises().slice().sort(function(a,b){
+      return(freq[b.name]||0)-(freq[a.name]||0)
+    });
+    sorted.forEach(function(n){
       var b=document.createElement('button');b.textContent=n.name;
       b.addEventListener('click',function(){document.getElementById('strExercise').value=n.name;adaptStrForm(n.name)});sug.appendChild(b);
     });
@@ -88,7 +94,7 @@ function init(){
   backfillJunePermBonus()
   fixDefBonusRatio()
 
-  renderStr();renderCar();renderProf();renderGame();renderSettings()
+  renderStr();renderCar();renderProf();renderGame();renderSettings();renderSummonPanel()
 }
 
 /* ========== EVENT DELEGATION ========== */
@@ -245,6 +251,8 @@ function checkMonthlyReset(){
     setGame(g);
     // Reset soul refinement system monthly
     saveRefine({points:0,totalEarned:0,unlocked:false,upgrades:{}});
+    // Reset hidden challenge season bonus monthly
+    resetChallengeSeason();
     localStorage.setItem('dh-last-reset-month',thisMonth);
     toast('📅 新月新开始！挑战已重置，炼魂已清零','s');
   }

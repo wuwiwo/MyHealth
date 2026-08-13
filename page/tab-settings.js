@@ -60,7 +60,7 @@ function exCardHtml(ex,badge,isCardio){
   var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
   if(ex.eqWeight){
     var unitLabel=ex.unit==='sec'?'秒':'次';
-    h+='<div style="margin-top:4px;font-size:.65rem;color:var(--text3)">⚖️ 等效'+ex.eqWeight+'kg/'+unitLabel+'</div>';
+    h+='<div style="margin-top:4px;font-size:.68rem;color:var(--orange)">⚖️ 等效 '+ex.eqWeight+'kg/'+unitLabel+'（不计弯鿖重量）</div>';
   }
   if(ex.description){
     var first=mdFirstLine(ex.description);

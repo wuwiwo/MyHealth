@@ -73,7 +73,7 @@ function getAllData(){
     cardio:c.entries,weight:w.records,profile:getProf(),game:getGame(),
     prs:store.get('prs'),records:store.get('records'),
     attrLog:store.get('attrLog'),cardioTypes:store.get('cardioTypes'),
-    exercises:store.get('exercises'),refine:store.get('refine')
+    exercises:store.get('exercises'),refine:store.get('refine'),challenge:store.get('challenge')
   }
 }
 
@@ -100,6 +100,7 @@ function mergeServerData(d){
   if(d.cardioTypes&&Array.isArray(d.cardioTypes)){merge.cardioTypes=d.cardioTypes}
   if(d.exercises&&Array.isArray(d.exercises)){merge.exercises=d.exercises}
   if(d.refine&&typeof d.refine==='object'){merge.refine=d.refine}
+  if(d.challenge&&typeof d.challenge==='object'){merge.challenge=d.challenge}
   store.mergeAll(merge)
   return true
 }
@@ -250,6 +251,7 @@ function buildImportMap(data){
   if(data.cardioTypes&&Array.isArray(data.cardioTypes)){map.cardioTypes=data.cardioTypes}
   if(data.exercises&&Array.isArray(data.exercises)){map.exercises=data.exercises}
   if(data.refine&&typeof data.refine==='object'){map.refine=data.refine}
+  if(data.challenge&&typeof data.challenge==='object'){map.challenge=data.challenge}
   return map
 }
 
