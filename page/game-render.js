@@ -250,7 +250,8 @@ function getGameStats(){
     permPenAtk:g.permPen.atk||0,permPenDef:g.permPen.def||0,
     monthDays:getMonthDays(),
     refineUnlocked:refine.unlocked,refinePoints:refine.points||0,refineTotalEarned:refine.totalEarned||0,
-    refineBonus:refineBonus
+    refineBonus:refineBonus,
+    challengeAtk:challengeBonus.atk||0,challengeDef:challengeBonus.def||0,challengeHp:challengeBonus.hp||0
   }
 }
 

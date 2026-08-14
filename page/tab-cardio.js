@@ -11,6 +11,7 @@ function renderCar(){
   renderSummonPanel()
   document.getElementById('carDateMain').textContent=f.main
   document.getElementById('carDateSub').textContent=f.sub
+  renderCarDayVol(d)
   var entries=getCar(d)
   var el=document.getElementById('carList')
   if(!entries.length){

@@ -63,12 +63,29 @@ function adaptStrForm(exName){
   }
 }
 
+/* 当日总容量（力量：等效容量合计 + 组数；有氧：时长合计） */
+function renderStrDayVol(d){
+  const el=document.getElementById('strDayVol');if(!el)return
+  const entries=getStr(d)
+  const vol=Math.round(sumVolume(entries,getExerciseMap()))
+  const total=entries.reduce((s,e)=>s+e.actualReps,0)
+  el.innerHTML='<span>🏋️ 当日力量：<b>'+vol+'</b> kg</span><span>· '+entries.length+' 组 / '+total+' 次</span>'
+}
+function renderCarDayVol(d){
+  const el=document.getElementById('carDayVol');if(!el)return
+  const entries=getCar(d)
+  const mins=Math.round(sumDuration(entries))
+  const eff=Math.round(sumEffectiveDuration(entries,getCardioTypeMap()))
+  el.innerHTML='<span>🏃 当日有氧：<b>'+mins+'</b> 分钟</span><span>· 有效 '+eff+' 分</span>'
+}
+
 function renderStr(){
   const d=_strDate;const f=fmtDate(d)
   renderTodaySnapshot()
   renderSummonPanel()
   document.getElementById('strDateMain').textContent=f.main
   document.getElementById('strDateSub').textContent=f.sub
+  renderStrDayVol(d)
   const entries=getStr(d)
   renderStrPlans()
   const el=document.getElementById('strList')

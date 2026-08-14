@@ -182,6 +182,7 @@
 | v1.9.0 | 17 | 397 行 tab-strength.js | tab-game拆5模块/store v1.2校验/sync重试/Blob清理/今日速览/旬目标卡/战利品/引导/30天图/UX动线/openModal/事件路由注册表 |
 | v1.9.1 | 18 | 397 行 tab-strength.js | 隐藏挑战召唤+小游戏/伤害转月度属性奖励/常用动作频次排序/等效重量突出 |
 | v1.9.2 | 18 | 397 行 tab-strength.js | 召唤每100kg叠加次数与几率/预览确认界面/热血buff(周4天解锁)/训练记录等效容量与倍率 |
+| v1.9.3 | 18 | 397 行 tab-strength.js | 当日总容量显示/导出3-5天+剪贴板/图表tooltip+移动端/热力图双模式/属性日志完善/同步保护 |
 
 ---
 
@@ -308,6 +309,78 @@
   - 每 2250 伤害 → +1 防御（原 750）
   - 每 450 伤害 → +3 生命（原 150）
   - 防止隐藏挑战成为属性成长主导引擎，回归"补充奖励"定位
+
+---
+
+## v1.9.3
+
+**Date:** 2026-08-14
+
+### 新增功能
+
+- 🏋️ **训练页显示当日总容量**
+  - 力量子 Tab 日期导航下新增：当日力量等效容量合计（kg）+ 组数 + 总次数
+  - 有氧子 Tab 新增：当日有氧时长合计（分钟）+ 有效时长（强度加权）
+  - 随日期切换实时刷新
+
+- 📋 **导出数据增强**
+  - 新增「最近 3 天」「最近 5 天」导出选项（原仅 7 天）
+  - 新增「复制最近 7 天到剪贴板」：生成人类可读训练报告 + JSON 明细
+    - 个人基础信息（身高/性别/出生年）
+    - 最近 5 条体重记录
+    - 断签理由（窗口内）
+    - 挑战进度 + 隐藏挑战奖励
+    - 训练统计摘要（容量/有氧时长/旬周期）
+  - 剪贴板 API 不可用时自动降级到 execCommand
+
+- 📈 **图表点击显示数值（linechart v2）**
+  - 点击 / 触摸图表任意位置，显示最近数据点的日期与数值 tooltip
+  - 命中检测半径 30px，高亮数据点
+  - 触摸抬起后 1.8s 自动隐藏
+
+### UI 调整
+
+- 📅 **热力图切换显示模式**
+  - 新增模式切换按钮：🔢 总次数 ↔ 🏋️ 容量（kg）
+  - 容量模式 = 力量等效容量 + 有氧有效时长（强度加权）
+  - 悬浮/长按显示每日具体数值（title）
+
+- 📱 **图表移动端适配**
+  - 宽度自适应父容器，上限 540px（不再溢出）
+  - 触摸事件支持（touchstart/touchend）
+  - 修复 min===max 时坐标计算除零问题
+
+### 修复
+
+- 🩹 **属性日志不完整**
+  - 原因拆分为：容量 / 有效有氧 / 旬奖励 / 隐藏挑战 / 惩罚 / 总变化
+  - 隐藏挑战奖励（攻/防/血）单独记录，不再混入"累积奖励"
+  - 同一天多次属性变化也能记录（训练 + 挑战叠加场景）
+  - 每条日志增加时间戳（HH:MM）
+  - 日志上限 60 → 100 条
+
+- 🔄 **同步适配新系统**
+  - challenge 字段加入同步（已有），新增"按月保护"：
+  - seasonBonus 每月重置，同步时校验 lastSeasonMonth，避免旧月份云端奖励覆盖新月份本地
+  - resetChallengeSeason 写入 lastSeasonMonth 标记
+
+### 数据层变更
+
+- `challenge` 新增 `lastSeasonMonth`（同步保护的月份标记）
+- `attrLog` 条目新增 `time`（HH:MM）、`challengeAtk`/`challengeDef` 字段
+
+### 修改文件
+
+- `page/tab-strength.js`（renderStrDayVol 当日容量）
+- `page/tab-cardio.js`（renderCarDayVol 当日有氧）
+- `page/tab-profile.js`（热力图双模式 _hmMode）
+- `page/linechart.js`（tooltip + 移动端 v2）
+- `page/sync.js`（导出 3/5 天 + 剪贴板 + 详细内容 + challenge 同步保护）
+- `page/challenge.js`（lastSeasonMonth 标记）
+- `page/game-render.js`（getGameStats 暴露 challengeAtk/Def/Hp）
+- `page/game-records.js`（trackStats 日志完善 + showAttrLog 时间戳）
+- `page/index.html`（strDayVol/carDayVol 容器 + cache-busting v8→v9）
+- `page/index.css`（day-vol 样式）
 
 ### 数据层变更
 

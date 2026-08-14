@@ -100,7 +100,12 @@ function mergeServerData(d){
   if(d.cardioTypes&&Array.isArray(d.cardioTypes)){merge.cardioTypes=d.cardioTypes}
   if(d.exercises&&Array.isArray(d.exercises)){merge.exercises=d.exercises}
   if(d.refine&&typeof d.refine==='object'){merge.refine=d.refine}
-  if(d.challenge&&typeof d.challenge==='object'){merge.challenge=d.challenge}
+  // challenge 同步保护：seasonBonus 按月重置，仅当本地无数据或云端月份不旧于本地时合并
+  if(d.challenge&&typeof d.challenge==='object'){
+    var localCh=store.get('challenge')
+    var remoteMonth=(d.challenge.lastSeasonMonth||'')+'',localMonth=(localCh&&localCh.lastSeasonMonth)||''
+    if(!localCh||remoteMonth>=localMonth)merge.challenge=d.challenge
+  }
   store.mergeAll(merge)
   return true
 }
@@ -262,32 +267,64 @@ function exportData(){
     +'<div style="font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.6">选择导出范围：</div>'
     +'<button class="sb-btn" id="exportFull" style="margin-bottom:8px">📦 全量数据（完整备份）</button>'
     +'<button class="sb-btn" id="export7" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📅 最近7天（精简，适合发给AI）</button>'
+    +'<button class="sb-btn" id="export5" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📅 最近5天</button>'
+    +'<button class="sb-btn" id="export3" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📅 最近3天</button>'
+    +'<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--bd)">'
+    +'<button class="sb-btn" id="exportCopy" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📋 复制最近7天到剪贴板</button>'
+    +'</div>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="exportCancel">取消</button></div></div>'
   void modal
   document.getElementById('exportFull').addEventListener('click',function(){
     modal.remove();autoBackup();toast('全量数据已导出 ✅','s')
   })
   document.getElementById('export7').addEventListener('click',function(){
-    modal.remove();exportData7()
+    modal.remove();exportRecent(7)
+  })
+  document.getElementById('export5').addEventListener('click',function(){
+    modal.remove();exportRecent(5)
+  })
+  document.getElementById('export3').addEventListener('click',function(){
+    modal.remove();exportRecent(3)
+  })
+  document.getElementById('exportCopy').addEventListener('click',function(){
+    modal.remove();copyRecentToClipboard()
   })
   document.getElementById('exportCancel').addEventListener('click',function(){modal.remove()})
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
 }
 
-function exportData7(){
+/* 导出最近 N 天：含基础信息、最近体重、断签理由、统计摘要 */
+function buildRecentData(days){
   var data=getAllData();
-  var cutoff=toDate(new Date(Date.now()-7*86400000));
+  var cutoff=toDate(new Date(Date.now()-days*86400000));
   var filtered={
     version:data.version,lastUpdated:Date.now(),
+    days:days,
     entries:(data.entries||[]).filter(function(e){return e.date>=cutoff}),
     cardio:(data.cardio||[]).filter(function(e){return e.date>=cutoff}),
     weight:(data.weight||[]).filter(function(e){return e.date>=cutoff}),
     profile:data.profile,exercises:data.exercises
   };
+  // 个人基础信息
+  var prof=data.profile||{};
+  filtered.userInfo={
+    height:prof.height||'—',gender:prof.gender||'—',birthYear:prof.birthYear||'—'
+  };
+  // 最近体重（最多5条）
+  var wts=(data.weight||[]).slice().sort(function(a,b){return a.date<b.date?1:-1}).slice(0,5);
+  filtered.recentWeight=wts;
+  // 断签理由（窗口内）
+  var missed=data.missed||{};
+  var missFiltered={};
+  Object.keys(missed).forEach(function(k){if(k>=cutoff)missFiltered[k]=missed[k]});
+  filtered.missed=missFiltered;
+  // 挑战与属性
+  filtered.game=data.game;
+  filtered.challenge=data.challenge;
   // Stats summary for AI context
   var exMap=getExerciseMap();
   filtered.summary={
-    days:7,
+    days:days,
     strengthCount:filtered.entries.length,
     cardioCount:filtered.cardio.length,
     weightCount:filtered.weight.length,
@@ -295,14 +332,53 @@ function exportData7(){
     totalCardioDuration:sumDuration(filtered.cardio),
     period:getCurrentPeriod(new Date())
   };
+  return filtered;
+}
+
+function exportRecent(days){
   try{
+    var filtered=buildRecentData(days);
     var json=JSON.stringify(filtered,null,2)
     var blob=new Blob([json],{type:'application/json'})
     var url=URL.createObjectURL(blob)
-    var a=document.createElement('a');a.href=url;a.download='myhealth-7d-'+today()+'.json'
+    var a=document.createElement('a');a.href=url;a.download='myhealth-'+days+'d-'+today()+'.json'
     a.click();URL.revokeObjectURL(url)
-    toast('最近7天数据已导出 ✅','s')
+    toast('最近'+days+'天数据已导出 ✅','s')
   }catch(e){toast('导出失败: '+e.message,'e')}
+}
+
+/* 复制最近7天到剪贴板（含可读摘要） */
+function copyRecentToClipboard(){
+  try{
+    var d=buildRecentData(7);
+    var exMap=getExerciseMap();
+    // 人类可读摘要
+    var lines=[];
+    lines.push('💪 MyHealth 最近7天训练报告 ('+today()+')');
+    lines.push('个人: 身高'+d.userInfo.height+'cm · '+d.userInfo.gender+' · '+d.userInfo.birthYear+'年');
+    lines.push('力量: '+d.entries.length+'组 / 容量 '+d.summary.totalVolume+'kg');
+    lines.push('有氧: '+d.cardio.length+'次 / '+d.summary.totalCardioDuration+'分钟');
+    if(d.recentWeight&&d.recentWeight.length){lines.push('体重: '+d.recentWeight.map(function(w){return w.date+' '+w.weight+'kg'}).join(' / '))}
+    if(Object.keys(d.missed||{}).length){lines.push('断签说明: '+Object.keys(d.missed).map(function(k){return k+':'+d.missed[k]}).join('；'))}
+    lines.push('');
+    lines.push('JSON 明细:');
+    lines.push(JSON.stringify(d,null,2));
+    var text=lines.join('\n');
+    var done=function(){toast('已复制到剪贴板 📋','s')};
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(function(){fallbackCopy(text);done()});
+    }else{
+      fallbackCopy(text);done();
+    }
+  }catch(e){toast('复制失败: '+e.message,'e')}
+}
+
+function fallbackCopy(text){
+  var ta=document.createElement('textarea');
+  ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy')}catch(e){}
+  document.body.removeChild(ta);
 }
 
 function importData(){

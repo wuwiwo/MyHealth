@@ -364,6 +364,7 @@ function startHiddenChallenge(hotBuff){
 function resetChallengeSeason(){
   var c=getChallenge()
   c.seasonBonus={atk:0,def:0,hp:0}
+  c.lastSeasonMonth=today().slice(0,7)
   saveChallenge(c)
   toast('🔬 隐藏挑战奖励已重置','s')
 }

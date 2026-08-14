@@ -185,7 +185,7 @@ function buildLast30Days(){
 }
 
 /* ========== HEATMAP ========== */
-var _hmY=new Date().getFullYear(),_hmM=new Date().getMonth()
+var _hmY=new Date().getFullYear(),_hmM=new Date().getMonth(),_hmMode='count'
 function renderHeatmap(){
   var c=document.getElementById('profileHeatmap');if(!c)return
   var n=new Date(_hmY,_hmM);var y=n.getFullYear(),m=n.getMonth()
@@ -196,17 +196,20 @@ function renderHeatmap(){
   for(var d=1;d<=dim;d++){
     var s=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')
     var strE=getStr(s)||[],carE=getCar(s)||[]
-    var score=strE.reduce(function(a,e){return a+e.actualReps},0)+carE.reduce(function(a,e){return a+e.duration},0)
-    dd[d]={score:score,date:s}
+    var counts=strE.reduce(function(a,e){return a+e.actualReps},0)+carE.reduce(function(a,e){return a+e.duration},0)
+    var vol=sumVolume(strE,getExerciseMap())+sumEffectiveDuration(carE,getCardioTypeMap())
+    dd[d]={score:_hmMode==='vol'?vol:counts,date:s,counts:counts,vol:vol}
   }
   var max=1;for(var k in dd){if(dd[k].score>max)max=dd[k].score}
   function lv(r){if(r===0)return 0;var ra=r/max;if(ra<=.1)return 1;if(ra<=.3)return 2;if(ra<=.5)return 3;if(ra<=.75)return 4;return 5}
-  var h='<div class="section-hdr">📅 训练热力图</div><div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav"><button class="hm-nav-btn" data-n="hmP">◀</button><button class="hm-nav-btn" data-n="hmT">📍</button><button class="hm-nav-btn" data-n="hmN">▶</button></div></div><div class="hm-grid">'
+  var modeBtn=_hmMode==='vol'?'<button class="hm-nav-btn" data-n="hmMode" style="color:var(--orange)">🏋️ 容量</button>':'<button class="hm-nav-btn" data-n="hmMode" style="color:var(--blue)">🔢 次数</button>'
+  var h='<div class="section-hdr">📅 训练热力图 <span style="font-size:.65rem;font-weight:400;margin-left:6px">('+(_hmMode==='vol'?'容量 kg':'总次数')+')</span></div><div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav">'+modeBtn+'<button class="hm-nav-btn" data-n="hmP">◀</button><button class="hm-nav-btn" data-n="hmT">📍</button><button class="hm-nav-btn" data-n="hmN">▶</button></div></div><div class="hm-grid">'
   wd.forEach(function(d){h+='<div class="hm-dh">'+d+'</div>'})
   for(var i=0;i<so;i++)h+='<div class="hm-cell"></div>'
-  for(var d=1;d<=dim;d++){var da=dd[d],ll=lv(da.score),t=da.date===today();h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+ll+'" data-date="'+da.date+'">'+d+'</div>'}
+  for(var d=1;d<=dim;d++){var da=dd[d],ll=lv(da.score),t=da.date===today();var tip=_hmMode==='vol'?(da.vol>0?Math.round(da.vol)+'kg':''):(da.counts>0?da.counts:'') ;h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+ll+'" data-date="'+da.date+'" title="'+da.date+(tip?' · '+tip:'')+'">'+d+'</div>'}
   h+='</div><div class="hm-leg">少 <div class="l0"></div><div class="l1"></div><div class="l3"></div><div class="l5"></div> 多</div></div>'
   c.innerHTML=h
+  c.querySelectorAll('[data-n="hmMode"]').forEach(function(b){b.addEventListener('click',function(){_hmMode=_hmMode==='vol'?'count':'vol';renderHeatmap()})})
   c.querySelectorAll('[data-n="hmP"]').forEach(function(b){b.addEventListener('click',function(){_hmM--;if(_hmM<0){_hmM=11;_hmY--;if(_hmY<2020){_hmY=2020;_hmM=0}}renderHeatmap()})})
   c.querySelectorAll('[data-n="hmN"]').forEach(function(b){b.addEventListener('click',function(){_hmM++;if(_hmM>11){_hmM=0;_hmY++;var maxY=new Date().getFullYear()+1;if(_hmY>maxY){_hmY=maxY;_hmM=11}}renderHeatmap()})})
   c.querySelectorAll('[data-n="hmT"]').forEach(function(b){b.addEventListener('click',function(){var n=new Date();_hmY=n.getFullYear();_hmM=n.getMonth();renderHeatmap()})})

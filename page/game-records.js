@@ -21,26 +21,31 @@ function trackStats(stats,detail){
   var monthKey=now.slice(0,7)
   var log=store.get('attrLog')||[]
   var last=log.length?log[log.length-1]:null
+  // 完整记录：只要属性或来源变化就记（同一天多次变化也记，如训练后挑战又加属性）
   var changed=!last||last.atk!==stats.atk||last.def!==stats.def||last.hp!==stats.hp
-  if(changed&&(last?last.date!==now:true)){
+  var srcChanged=last&&(last.challengeAtk!==(stats.challengeAtk||0)||last.challengeDef!==(stats.challengeDef||0))
+  if(changed||srcChanged){
     var atkDiff=last?stats.atk-last.atk:0
     var defDiff=last?stats.def-last.def:0
     var hpDiff=last?stats.hp-last.hp:0
     var strVolDiff=last&&last.strVol?detail.strVol-last.strVol:detail.strVol
     var carEffDiff=last&&last.carEff?detail.carEff-last.carEff:detail.carEff
     var reason=[]
-    if(strVolDiff)reason.push('容量'+(strVolDiff>0?'+':'')+strVolDiff+'kg→攻'+(atkDiff>0?'+':'')+atkDiff)
+    if(strVolDiff)reason.push('容量'+(strVolDiff>0?'+':'')+strVolDiff+'kg')
     if(carEffDiff)reason.push('有效有氧'+(carEffDiff>0?'+':'')+carEffDiff+'min')
-    if(stats.permBonusAtk>0)reason.push('累积奖励攻+'+stats.permBonusAtk+'防+'+stats.permBonusDef)
+    if(stats.permBonusAtk>0)reason.push('旬奖励攻+'+stats.permBonusAtk+'防+'+stats.permBonusDef)
+    if((stats.challengeAtk||0)>0||(stats.challengeDef||0)>0)reason.push('隐藏挑战⚔️+'+stats.challengeAtk+'🛡️+'+stats.challengeDef+'❤️+'+stats.challengeHp)
     if(stats.permPenAtk||stats.permPenDef)reason.push('惩罚攻-'+stats.permPenAtk+'防-'+stats.permPenDef)
+    if(atkDiff||defDiff||hpDiff)reason.push('总变化攻'+(atkDiff>0?'+':'')+atkDiff+'防'+(defDiff>0?'+':'')+defDiff+'血'+(hpDiff>0?'+':'')+hpDiff)
     log.push({
-      date:now,atk:stats.atk,def:stats.def,hp:stats.hp,
+      date:now,time:new Date().toTimeString().slice(0,5),atk:stats.atk,def:stats.def,hp:stats.hp,
       atkDiff:atkDiff,defDiff:defDiff,hpDiff:hpDiff,
       reason:reason.join(' · ')||'属性变化',
       wkDays:stats.periodDays,
-      strVol:detail.strVol,carEff:detail.carEff
+      strVol:detail.strVol,carEff:detail.carEff,
+      challengeAtk:stats.challengeAtk||0,challengeDef:stats.challengeDef||0
     })
-    if(log.length>60)log=log.slice(-60)
+    if(log.length>100)log=log.slice(-100)
     store.set('attrLog',log)
   }
   var recs=store.get('records')||{}
@@ -103,7 +108,7 @@ function showAttrLog(){
     var dlAtk=dl(l.atkDiff),dlDef=dl(l.defDiff),dlHp=dl(l.hpDiff)
     var attrs='⚔️ <b>'+l.atk+'</b>'+dlAtk+' 🛡️ <b>'+l.def+'</b>'+dlDef+' ❤️ <b>'+l.hp+'</b>'+dlHp
     h+='<div style="padding:10px 0;border-bottom:1px solid var(--bd)">'
-      +'<div style="font-weight:700;font-size:.8rem">'+l.date+'</div>'
+      +'<div style="font-weight:700;font-size:.8rem">'+l.date+(l.time?' <span style="font-weight:400;color:var(--text3);font-size:.65rem">'+l.time+'</span>':'')+'</div>'
       +'<div style="font-size:.85rem;margin:2px 0">'+attrs+'</div>'
       +'<div style="color:var(--text2);margin-bottom:2px">'+l.reason+'</div>'
       +'<div style="color:var(--text3);font-size:.65rem">训练'+l.wkDays+'天</div>'
