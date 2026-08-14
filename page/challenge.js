@@ -130,7 +130,7 @@ function renderHotBuffHint(c){
   var days=c.weekDays?c.weekDays.length:0
   if(c.hotBuffUsed)return''
   if(days>=4){
-    return'<div class="summon-hot ready">🔥 热血 buff 已就绪！本次挑战随机获得：暴击率+40% / 暴击伤害+150% / 倒计时+80%</div>'
+    return'<div class="summon-hot ready">🔥 热血 buff 已就绪！本次挑战随机获得：暴击率+40%·暴击伤害+20% / 暴击伤害+200%·暴击率+15% / 倒计时+80%·基础时间80~100%</div>'
   }
   if(days>=1){
     return'<div class="summon-hot">🔥 本周已连续挑战 '+days+' 天，连续 4 天解锁热血 buff！</div>'
@@ -146,7 +146,7 @@ function pickHotBuff(){
   return buffs[Math.floor(Math.random()*buffs.length)]
 }
 function hotBuffLabel(kind){
-  return kind==='critRate'?'🔥 暴击率 +40%':kind==='critDmg'?'🔥 暴击伤害 +150%':'🔥 倒计时 +80%'
+  return kind==='critRate'?'🔥 暴击率+40% · 暴击伤害+20%':kind==='critDmg'?'🔥 暴击伤害+200% · 暴击率+15%':'🔥 倒计时+80% · 基础时间80~100%'
 }
 
 /* Step 1: summon success → show challenge preview, wait for user to press 开始挑战 */
@@ -193,11 +193,16 @@ function showChallengePreview(){
 function startHiddenChallenge(hotBuff){
   var stats=getGameStats()
   var baseDur=8+Math.floor(Math.random()*5) // 8-12 seconds
-  var duration=hotBuff==='timeBonus'?Math.round(baseDur*1.8):baseDur // 倒计时+80%
+  var duration=baseDur
   var critRate=0.20
   var critMult=1
-  if(hotBuff==='critRate')critRate=0.60 // 暴击率+40% (20%→60%)
-  if(hotBuff==='critDmg')critMult=2.5   // 暴击伤害+150%
+  if(hotBuff==='critRate'){critRate=0.60;critMult=1.2}  // 暴击率+40% 且 暴击伤害+20%
+  if(hotBuff==='critDmg'){critRate=0.35;critMult=3.0}   // 暴击伤害+200% 且 暴击率+15%
+  if(hotBuff==='timeBonus'){
+    // 倒计时+80%：基础时间锁定 80%~100% 高值区间 (11.2~12s) 再 ×1.8
+    baseDur=8+4*(0.8+Math.random()*0.2)
+    duration=Math.round(baseDur*1.8)
+  }
   var state={
     timeLeft:duration,
     duration:duration,
