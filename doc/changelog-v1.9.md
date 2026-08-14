@@ -181,6 +181,7 @@
 | v1.8.7 | 13 | 575 行 tab-game.js | allDone 判断修复(allMaxed && !nextGrade) |
 | v1.9.0 | 17 | 397 行 tab-strength.js | tab-game拆5模块/store v1.2校验/sync重试/Blob清理/今日速览/旬目标卡/战利品/引导/30天图/UX动线/openModal/事件路由注册表 |
 | v1.9.1 | 18 | 397 行 tab-strength.js | 隐藏挑战召唤+小游戏/伤害转月度属性奖励/常用动作频次排序/等效重量突出 |
+| v1.9.2 | 18 | 397 行 tab-strength.js | 召唤每100kg叠加次数与几率/预览确认界面/热血buff(周4天解锁)/训练记录等效容量与倍率 |
 
 ---
 
@@ -256,3 +257,47 @@
 - `page/store.js`（challenge schema）
 - `page/index.html`（#summonPanel 容器 + challenge.js script + cache-busting v6→v7）
 - `page/index.css`（summon-card / 挑战小游戏样式）
+
+---
+
+## v1.9.2
+
+**Date:** 2026-08-14
+
+### 改版（隐藏挑战）
+
+- ⚡ **召唤规则改为每 100kg 叠加**
+  - 召唤次数 = ⌊当日容量 / 100⌋（每 100kg +1 次）
+  - 第 i 次尝试成功率 = 15% + 10%×(i-1)（第 1 次 15%，第 2 次 25%，第 3 次 35%...）
+  - 替代旧的"固定 15% + 失败 +10%"规则
+  - 面板显示：剩余次数 X/N、本次成功率（第 i 次）、逐次+10% 提示
+
+- 🔘 **召唤成功后需要按"开始挑战"才正式倒计时**
+  - 新增加预览确认界面：显示召唤成功、倒计时说明、当前属性四维、伤害公式提示
+  - 「⚔️ 开始挑战」按钮才开始 8-12s 倒计时，「稍后再说」可退出（当日仍标记已完成）
+  - 避免误触直接进入紧张的倒计时游戏
+
+- 🔥 **热血 buff（每周）**
+  - 本周内成功开启挑战累计 4 天（连续 3 天 + 今天的第 4 次）时触发
+  - 随机三选一：暴击率 +40% / 暴击伤害 +30% / 倒计时延长 30%
+  - 每周最多触发 1 次（hotBuffUsed 标记，每周一重置）
+  - 触发时预览界面和游戏界面都会显示 buff 高亮横幅
+
+- ⚡ **训练记录显示等效容量与倍率**
+  - 每条力量记录新增 `⚡ 等效 Xkg` 标签（重量×实际次数×ratio/100）
+  - ratio ≠ 100% 时显示倍率（如 ×0.5 与倍率 50%）
+  - 等效重量动作（eqWeight）与普通哑铃动作都适用
+
+### 数据层变更
+
+- store key `challenge` 字段更新：
+  - `todayFailCount`/`failDate` → `todayUsed`/`useDate`（当日已用召唤次数）
+  - 新增 `weekDays`（本周成功开启日期数组）、`weekKey`（周一起始日期）、`hotBuffUsed`（本周热血 buff 是否已用）
+
+### 修改文件
+
+- `page/challenge.js`（召唤规则/预览确认/热血 buff）
+- `page/tab-strength.js`（训练条目等效容量与倍率标签）
+- `page/index.css`（summon-hot / ch-hotbuff / ch-preview 样式）
+- `page/utils.js`（APP_VERSION 1.9.1 → 1.9.2）
+- `page/index.html`（cache-busting v7 → v8）

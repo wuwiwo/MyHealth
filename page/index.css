@@ -418,3 +418,13 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 .ch-reward{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:var(--rs);padding:10px 12px;text-align:center}
 .ch-reward-info{font-size:.85rem;font-weight:700;display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
 .ch-cumulative{font-size:.68rem;color:var(--text3);text-align:center}
+
+/* ========== ENTRY VOLUME TAG ========== */
+.ec-vol{font-size:.62rem;color:var(--text2);background:rgba(249,115,22,.06);border:1px dashed rgba(249,115,22,.25);border-radius:6px;padding:2px 8px;margin-bottom:6px;display:inline-block}
+
+/* ========== HOT BUFF & PREVIEW ========== */
+.summon-hot{font-size:.65rem;color:var(--yellow);background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:var(--rs);padding:6px 10px;margin-bottom:8px;text-align:center}
+.summon-hot.ready{color:#fbbf24;font-weight:700;border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.1);animation:hotPulse 1.5s ease-in-out infinite}
+@keyframes hotPulse{0%,100%{opacity:1}50%{opacity:.6}}
+.ch-hotbuff{text-align:center;font-size:.8rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.4);border-radius:var(--rs);padding:8px;margin-bottom:10px;animation:hotPulse 1.2s ease-in-out infinite}
+.ch-preview-title{font-size:1rem;font-weight:800;color:var(--green);text-align:center;margin-bottom:6px}

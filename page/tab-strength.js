@@ -84,7 +84,14 @@ function renderStr(){
       if(e.eqWeight!=null){wtLabel='⚖️ '+e.eqWeight+'kg/'+(e.unit==='sec'?'秒':'次')}
       else{wtLabel='● '+e.weight+' kg'}
       var unitSuffix=e.unit==='sec'?'秒':'次'
-      return '<div class="ec '+(d?'done':'')+'" data-id="'+e.id+'"><div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span class="ec-tgt">目标 '+e.targetReps+' '+unitSuffix+'</span><span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+      // 等效容量与倍率：重量(或等效重量)×实际次数×ratio/100
+      var exDef=getExerciseMap()[e.exercise]
+      var ratio=(exDef&&exDef.ratio!=null)?exDef.ratio:100
+      var effW=(e.eqWeight!=null?e.eqWeight:(e.weight||0))
+      var effVol=Math.round(effW*e.actualReps*(ratio/100))
+      var ratioTxt=ratio!==100?('<span style="color:var(--text3)">×'+ratio/100+'</span>'):''
+      var volTag=effVol>0?'<div class="ec-vol">⚡ 等效 '+effVol+'kg '+ratioTxt+(ratio!==100?'（倍率 '+ratio+'%）':'')+'</div>':''
+      return '<div class="ec '+(d?'done':'')+'">'+volTag+'<div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span class="ec-tgt">目标 '+e.targetReps+' '+unitSuffix+'</span><span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
     }).join('')
   }
   renderStrStats()

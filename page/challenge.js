@@ -7,21 +7,31 @@ function getChallenge(){
   return store.get('challenge')||{
     summonedDate:'',   // last successful summon date (YYYY-MM-DD)
     seasonBonus:{atk:0,def:0,hp:0},  // monthly-reset bonus from challenge
-    todayFailCount:0,  // today's summon failures since last success
-    failDate:''        // date of todayFailCount (reset on new day)
+    todayUsed:0,       // summon attempts used today
+    useDate:'',        // date of todayUsed (reset on new day)
+    weekDays:[],       // this week's dates successfully played (for 热血 buff)
+    weekKey:'',        // week key (Mon date) for 热血 buff
+    hotBuffUsed:false  // whether 热血 buff already triggered this week
   }
 }
 function saveChallenge(c){store.set('challenge',c||{})}
 
-/* Daily reset: if it's a new day, reset fail count */
+/* Daily reset: new day resets todayUsed */
 function checkChallengeDailyReset(){
   var c=getChallenge()
   var t=today()
-  if(c.failDate!==t){
-    c.failDate=t
-    c.todayFailCount=0
+  if(c.useDate!==t){
+    c.useDate=t
+    c.todayUsed=0
     saveChallenge(c)
   }
+}
+
+/* Week key = Monday's date of current week */
+function getWeekKey(){
+  var n=new Date(),d=n.getDay()
+  var m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d))
+  return toDate(m)
 }
 
 /* Today's volume from strength entries */
@@ -31,16 +41,17 @@ function getTodayVolume(){
   return sumVolume(filtered,getExerciseMap())
 }
 
-/* Can summon? */
+/* Can summon? Each 100kg grants 1 attempt; attempt i has rate 15%+10%*(i-1) */
 function canSummon(){
   checkChallengeDailyReset()
   var c=getChallenge()
-  if(c.summonedDate===today())return{can:false,reason:'今日已召唤成功，等待结束结算'}
+  if(c.summonedDate===today())return{can:false,reason:'今日已召唤成功，挑战完成'}
   var vol=getTodayVolume()
-  if(vol<100)return{can:false,reason:'今日训练容量 '+Math.round(vol)+'kg，需 ≥100kg 才能召唤'}
-  var fail=c.todayFailCount
-  var rate=Math.min(100,15+fail*10)
-  return{can:true,rate:rate,failCount:fail,vol:vol}
+  var total=Math.floor(vol/100)
+  if(total<1)return{can:false,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
+  if(c.todayUsed>=total)return{can:false,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
+  var rate=Math.min(100,15+c.todayUsed*10)
+  return{can:true,rate:rate,total:total,used:c.todayUsed,vol:vol}
 }
 
 /* Attempt summon */
@@ -50,18 +61,22 @@ function attemptSummon(){
   var c=getChallenge()
   var roll=Math.random()*100
   if(roll<info.rate){
-    // Success!
+    // Success! Mark summoned today, then show challenge preview
     c.summonedDate=today()
-    c.todayFailCount=0
+    c.todayUsed=info.used+1
+    // Track week days for 热血 buff
+    var wk=getWeekKey()
+    if(c.weekKey!==wk){c.weekKey=wk;c.weekDays=[];c.hotBuffUsed=false}
+    if(c.weekDays.indexOf(today())<0)c.weekDays.push(today())
     saveChallenge(c)
     toast('🔮 召唤成功！进入隐藏挑战！','s')
-    startHiddenChallenge()
+    showChallengePreview()
   }else{
-    // Failure
-    c.todayFailCount++
+    // Failure — attempt used, rate climbs for next try
+    c.todayUsed=info.used+1
     saveChallenge(c)
-    var newRate=Math.min(100,15+c.todayFailCount*10)
-    toast('❌ 召唤失败！下次成功率 '+newRate+'%','e')
+    var newRate=Math.min(100,15+c.todayUsed*10)
+    toast('❌ 召唤失败！下次成功率 '+newRate+'%（剩 '+(info.total-info.used-1)+' 次）','e')
     renderSummonPanel()
   }
 }
@@ -90,28 +105,99 @@ function renderSummonPanel(){
   
   var rate=info.rate||(15+0)
   var rateColor=rate>=80?'var(--green)':rate>=50?'var(--orange)':'var(--yellow)'
+  var remain=info.total-info.used
+  var hotHtml=renderHotBuffHint(c)
   el.innerHTML='<div class="summon-card">'
     +'<div class="summon-title">🔮 隐藏挑战</div>'
-    +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 '+triggers+'次</div>'
+    +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+info.total+'</b> 次（每 100kg +1 次，几率逐次+10%）</div>'
     +'<div class="summon-rate-wrap">'
-    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">召唤成功率</div>'
+    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(info.used+1)+' 次）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'
     +  '<div style="text-align:center;font-weight:700;color:'+rateColor+';font-size:1rem;margin-top:4px">'+rate+'%</div>'
     +'</div>'
+    +hotHtml
     +'<button class="summon-btn" id="summonBtn">🔮 召唤</button>'
-    +'<div style="font-size:.6rem;color:var(--text3);text-align:center;margin-top:6px">每天最多成功召唤1次 · 失败后概率+10%</div>'
+    +'<div style="font-size:.6rem;color:var(--text3);text-align:center;margin-top:6px">每天最多成功召唤1次 · 每 100kg 叠加次数与几率</div>'
     +'</div>'
   var btn=document.getElementById('summonBtn')
   if(btn)btn.addEventListener('click',attemptSummon)
 }
 
+/* 热血 buff hint — 本周连续 3 天开启后，第 4 次开启附加热血 buff */
+function renderHotBuffHint(c){
+  var wk=getWeekKey()
+  if(c.weekKey!==wk){c.weekKey=wk;c.weekDays=[];c.hotBuffUsed=false}
+  var days=c.weekDays?c.weekDays.length:0
+  if(c.hotBuffUsed)return''
+  if(days>=4){
+    return'<div class="summon-hot ready">🔥 热血 buff 已就绪！本次挑战随机获得：暴击率+40% / 暴击伤害+30% / 倒计时+30%</div>'
+  }
+  if(days>=1){
+    return'<div class="summon-hot">🔥 本周已连续挑战 '+days+' 天，连续 4 天解锁热血 buff！</div>'
+  }
+  return''
+}
+
 /* ========== HIDDEN CHALLENGE MINIGAME ========== */
-function startHiddenChallenge(){
-  // Remove any stale challenge modal first
-  var old=document.getElementById('challengeModal');
+
+/* Pick a random 热血 buff (weekly, once per week after 4 consecutive days) */
+function pickHotBuff(){
+  var buffs=['critRate','critDmg','timeBonus']
+  return buffs[Math.floor(Math.random()*buffs.length)]
+}
+function hotBuffLabel(kind){
+  return kind==='critRate'?'🔥 暴击率 +40%':kind==='critDmg'?'🔥 暴击伤害 +30%':'🔥 倒计时 +30%'
+}
+
+/* Step 1: summon success → show challenge preview, wait for user to press 开始挑战 */
+function showChallengePreview(){
+  var old=document.getElementById('challengeModal')
   if(old)old.remove()
   var stats=getGameStats()
-  var duration=8+Math.floor(Math.random()*5) // 8-12 seconds
+  var c=getChallenge()
+  // 热血 buff: week has >=4 played days (3 previous + today's 4th) and not used this week
+  var hotBuff=null
+  if(c.weekDays&&c.weekDays.length>=4&&!c.hotBuffUsed){
+    hotBuff=pickHotBuff()
+    c.hotBuffUsed=true
+    saveChallenge(c)
+  }
+  var modal=openModal(null,'challengeModal')
+  var h='<div class="modal-sheet">'
+    +'<div class="modal-handle"></div>'
+    +'<div class="modal-title">🔬 隐藏挑战</div>'
+    +'<div class="ch-preview">'
+    +  '<div class="ch-preview-title">召唤成功！</div>'
+    +  '<div style="font-size:.72rem;color:var(--text3);margin-bottom:8px">倒计时 8-12 秒，疯狂点击攻击按钮造成伤害，伤害将转化为本月属性奖励。</div>'
+    +  '<div class="ch-stats" style="grid-template-columns:1fr 1fr 1fr 1fr">'
+    +    '<div class="ch-stat">⚔️ <b>'+stats.atk+'</b></div>'
+    +    '<div class="ch-stat">👻 <b>'+(stats.soulAtk||0)+'</b></div>'
+    +    '<div class="ch-stat">🛡️ <b>'+stats.def+'</b></div>'
+    +    '<div class="ch-stat">🔮 <b>'+(stats.soulDef||0)+'</b></div>'
+    +  '</div>'
+    +(hotBuff?'<div class="ch-hotbuff">'+hotBuffLabel(hotBuff)+'</div>':'')
+    +  '<div style="font-size:.68rem;color:var(--text3);text-align:center;margin:8px 0">伤害 = (攻击+魂攻)×10%×(随机0.5~1.5) · 20%暴击附加(防御+魂防)</div>'
+    +'</div>'
+    +'<div class="modal-actions">'
+    +  '<button class="m-btn-cancel" id="chLater">稍后再说</button>'
+    +  '<button class="m-btn-save" id="chStart" style="flex:2">⚔️ 开始挑战</button>'
+    +'</div>'
+    +'</div>'
+  modal.innerHTML=h
+  document.getElementById('chLater').addEventListener('click',function(){modal.remove();renderSummonPanel();renderGame()})
+  document.getElementById('chStart').addEventListener('click',function(){modal.remove();startHiddenChallenge(hotBuff)})
+  modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
+}
+
+/* Step 2: actual minigame — countdown + tap attack */
+function startHiddenChallenge(hotBuff){
+  var stats=getGameStats()
+  var baseDur=8+Math.floor(Math.random()*5) // 8-12 seconds
+  var duration=hotBuff==='timeBonus'?Math.round(baseDur*1.3):baseDur // 倒计时+30%
+  var critRate=0.20
+  var critMult=1
+  if(hotBuff==='critRate')critRate=0.60 // 暴击率+40% (20%→60%)
+  if(hotBuff==='critDmg')critMult=1.3   // 暴击伤害+30%
   var state={
     timeLeft:duration,
     duration:duration,
@@ -121,6 +207,9 @@ function startHiddenChallenge(){
     maxHit:0,
     timer:null,
     ticking:false,
+    critRate:critRate,
+    critMult:critMult,
+    hotBuff:hotBuff,
     playerAtk:stats.atk,
     playerSoulAtk:stats.soulAtk||0,
     playerDef:stats.def,
@@ -131,6 +220,7 @@ function startHiddenChallenge(){
   var h='<div class="modal-sheet">'
     +'<div class="modal-handle"></div>'
     +'<div class="modal-title">🔬 隐藏挑战</div>'
+    +(hotBuff?'<div class="ch-hotbuff">'+hotBuffLabel(hotBuff)+'</div>':'')
     +'<div class="ch-timer-wrap">'
     +  '<div class="ch-timer" id="chTimer">'+duration+'s</div>'
     +  '<div class="ch-timer-bar-wrap"><div class="ch-timer-bar" id="chTimerBar" style="width:100%"></div></div>'
@@ -163,11 +253,11 @@ function startHiddenChallenge(){
     var rand=Math.random()*1+0.5 // 0.5~1.5
     var dmg=Math.round(base*0.10*rand)
     var crit=false
-    // 20% crit chance, crit adds (def + soulDef) damage
-    if(Math.random()<0.20){
+    // crit chance (may be boosted by 热血 buff), crit adds (def + soulDef) × critMult
+    if(Math.random()<state.critRate){
       crit=true
       state.critCount++
-      dmg+=state.playerDef+state.playerSoulDef
+      dmg+=Math.round((state.playerDef+state.playerSoulDef)*state.critMult)
     }
     state.totalDamage+=dmg
     if(dmg>state.maxHit)state.maxHit=dmg
@@ -203,8 +293,6 @@ function startHiddenChallenge(){
     if(attackBtn)attackBtn.disabled=true
     // Calculate bonus: total damage → reward
     var dmg=state.totalDamage
-    // Reward formula: scale damage to stat bonus
-    // Every 500 damage → +1 atk, +1 def, +3 hp
     var bonusAtk=Math.floor(dmg/500)
     var bonusDef=Math.floor(dmg/750)
     var bonusHp=Math.floor(dmg/150)*3
@@ -254,13 +342,13 @@ function startHiddenChallenge(){
     state.timeLeft--
     if(timerEl)timerEl.textContent=state.timeLeft+'s'
     if(timerBar)timerBar.style.width=(state.timeLeft/state.duration*100)+'%'
+    if(timerBar&&state.timeLeft<=3)timerBar.classList.add('urgent')
     if(state.timeLeft<=0){
       endChallenge()
     }
   },1000)
   
   // Overlay click: no close during game (prevent accidental exit)
-  // After game ends, allow close
   modal.addEventListener('click',function(e){
     if(e.target===e.currentTarget&&state.ticking===false)modal.remove()
   })
