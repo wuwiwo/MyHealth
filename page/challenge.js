@@ -130,7 +130,7 @@ function renderHotBuffHint(c){
   var days=c.weekDays?c.weekDays.length:0
   if(c.hotBuffUsed)return''
   if(days>=4){
-    return'<div class="summon-hot ready">🔥 热血 buff 已就绪！本次挑战随机获得：暴击率+50%·暴伤+20% / 暴伤+200%·暴击率+10% / 倒计时+100%·每5s伤害+10%</div>'
+    return'<div class="summon-hot ready">🔥 热血 buff 已就绪！本次挑战随机获得：暴击率+55%·暴伤+35% / 暴伤+120%·暴击率+15% / 倒计时+40%·基础时间70~100%</div>'
   }
   if(days>=1){
     return'<div class="summon-hot">🔥 本周已连续挑战 '+days+' 天，连续 4 天解锁热血 buff！</div>'
@@ -146,7 +146,7 @@ function pickHotBuff(){
   return buffs[Math.floor(Math.random()*buffs.length)]
 }
 function hotBuffLabel(kind){
-  return kind==='critRate'?'🔥 暴击率+50% · 暴击伤害+20%':kind==='critDmg'?'🔥 暴击伤害+200% · 暴击率+10%':'🔥 倒计时+100% · 每5s伤害+10%'
+  return kind==='critRate'?'🔥 暴击率+55% · 暴击伤害+35%':kind==='critDmg'?'🔥 暴击伤害+120% · 暴击率+15%':'🔥 倒计时+40% · 基础时间70~100%'
 }
 
 /* Step 1: summon success → show challenge preview, wait for user to press 开始挑战 */
@@ -195,13 +195,13 @@ function startHiddenChallenge(hotBuff){
   var baseDur=8+Math.floor(Math.random()*5) // 8-12 seconds
   var duration=baseDur
   var critRate=0.20
-  var critMult=1
-  if(hotBuff==='critRate'){critRate=0.70;critMult=1.2}  // 暴击率+50% 且 暴击伤害+20%
-  if(hotBuff==='critDmg'){critRate=0.30;critMult=3.0}   // 暴击伤害+200% 且 暴击率+10%
+  var critDmg=1.5   // 暴击伤害倍率制：基础 150%
+  if(hotBuff==='critRate'){critRate=0.75;critDmg=1.85}  // 暴击率+55% 且 暴击伤害+35%
+  if(hotBuff==='critDmg'){critRate=0.35;critDmg=2.7}   // 暴击伤害+120% 且 暴击率+15%
   if(hotBuff==='timeBonus'){
-    // 倒计时+100%：基础时间锁定 80%~100% 高值区间 (11.2~12s) 再 ×2
-    baseDur=8+4*(0.8+Math.random()*0.2)
-    duration=Math.round(baseDur*2)
+    // 倒计时+40%：基础时间锁定 70%~100% 高值区间 (10.8~12s) 再 ×1.4
+    baseDur=8+4*(0.7+Math.random()*0.3)
+    duration=Math.round(baseDur*1.4)
   }
   var state={
     timeLeft:duration,
@@ -213,7 +213,7 @@ function startHiddenChallenge(hotBuff){
     timer:null,
     ticking:false,
     critRate:critRate,
-    critMult:critMult,
+    critDmg:critDmg,
     hotBuff:hotBuff,
     playerAtk:stats.atk,
     playerSoulAtk:stats.soulAtk||0,
@@ -237,7 +237,7 @@ function startHiddenChallenge(hotBuff){
     +  '<div class="ch-stat">🔮 魂防 <b>'+state.playerSoulDef+'</b></div>'
     +'</div>'
     +'<div class="ch-damage-display" id="chDamage">0</div>'
-    +'<div class="ch-info" id="chInfo">'+(hotBuff==='timeBonus'?'每 5s 伤害 +10%（可叠加）':'点击攻击造成伤害！')+'</div>'
+    +'<div class="ch-info" id="chInfo">'+(hotBuff==='timeBonus'?'倒计时延长 40%，坚持就是胜利！':'点击攻击造成伤害！')+'</div>'
     +'<button class="ch-attack-btn" id="chAttackBtn">⚔️ 攻击</button>'
     +'<div class="ch-hits" id="chHits"></div>'
     +'</div>'
@@ -253,22 +253,16 @@ function startHiddenChallenge(hotBuff){
   function doAttack(){
     if(state.ticking===false)return // game ended
     state.hitCount++
-    // 倒计时 buff: 每经过 5s，本次伤害 +10%（可叠加）
-    var ramp=1
-    if(state.hotBuff==='timeBonus'){
-      var elapsed=state.duration-state.timeLeft
-      ramp=1+0.1*Math.floor(elapsed/5)
-    }
-    // Damage = (atk + soulAtk) × random(0.5~1.5) × 10% × ramp
-    var base=state.playerAtk+state.playerSoulAtk
+    // 新公式: 基础伤害 = 攻×50% + 魂攻×150% + 防×100% + 魂防×100%，乘 random(0.5~1.5)
+    var baseConst=state.playerAtk*0.5+state.playerSoulAtk*1.5+state.playerDef*1.0+state.playerSoulDef*1.0
     var rand=Math.random()*1+0.5 // 0.5~1.5
-    var dmg=Math.round(base*0.10*rand*ramp)
+    var dmg=Math.round(baseConst*rand)
     var crit=false
-    // crit chance (may be boosted by 热血 buff), crit adds (def + soulDef) × critMult × ramp
+    // 暴击倍率制: 基础率20%，暴击时伤害 × 暴击倍率
     if(Math.random()<state.critRate){
       crit=true
       state.critCount++
-      dmg+=Math.round((state.playerDef+state.playerSoulDef)*state.critMult*ramp)
+      dmg=Math.round(dmg*state.critDmg)
     }
     state.totalDamage+=dmg
     if(dmg>state.maxHit)state.maxHit=dmg
@@ -304,9 +298,9 @@ function startHiddenChallenge(hotBuff){
     if(attackBtn)attackBtn.disabled=true
     // Calculate bonus: total damage → reward
     var dmg=state.totalDamage
-    var bonusAtk=Math.floor(dmg/500)
-    var bonusDef=Math.floor(dmg/750)
-    var bonusHp=Math.floor(dmg/150)*3
+    var bonusAtk=Math.floor(dmg/1500)
+    var bonusDef=Math.floor(dmg/2250)
+    var bonusHp=Math.floor(dmg/450)*3
     var c=getChallenge()
     c.seasonBonus.atk=(c.seasonBonus.atk||0)+bonusAtk
     c.seasonBonus.def=(c.seasonBonus.def||0)+bonusDef
