@@ -183,6 +183,9 @@
 | v1.9.1 | 18 | 397 行 tab-strength.js | 隐藏挑战召唤+小游戏/伤害转月度属性奖励/常用动作频次排序/等效重量突出 |
 | v1.9.2 | 18 | 397 行 tab-strength.js | 召唤每100kg叠加次数与几率/预览确认界面/热血buff(周4天解锁)/训练记录等效容量与倍率 |
 | v1.9.3 | 18 | 397 行 tab-strength.js | 当日总容量显示/导出3-5天+剪贴板/图表tooltip+移动端/热力图双模式/属性日志完善/同步保护 |
+| v1.9.4 | 18 | 443 行 challenge.js | pendingChallenge状态机(稍后再说不吞次数)/noBackdrop防误关/结算页每秒点击柱状图 |
+| v1.9.5 | 18 | 443 行 challenge.js | 结算时才写summonedDate(中途退出不锁死)/lastRewardDate/旧锁恢复入口 |
+| v1.9.6 | 18 | 443 行 challenge.js | 奖励阈值+50%(2250/3375/675)/热血buff改周累计5次/全屏金色闪光特效 |
 
 ---
 
@@ -382,16 +385,100 @@
 - `page/index.html`（strDayVol/carDayVol 容器 + cache-busting v8→v9）
 - `page/index.css`（day-vol 样式）
 
-### 数据层变更
+---
 
-- store key `challenge` 字段更新：
-  - `todayFailCount`/`failDate` → `todayUsed`/`useDate`（当日已用召唤次数）
-  - 新增 `weekDays`（本周成功开启日期数组）、`weekKey`（周一起始日期）、`hotBuffUsed`（本周热血 buff 是否已用）
+## v1.9.4
+
+**Date:** 2026-08-16
+
+### 修复
+
+- 🩹 **修复"稍后再说"吞掉今日挑战次数**
+  - 召唤成功后不再立即写死 `summonedDate`（之前点"稍后再说"或刷新后当天被锁，显示"今日已完成"）
+  - 新增 `pendingChallenge` 状态：召唤成功 → 预览待开始 → 点「开始挑战」才真正进入
+  - 点"稍后再说"/刷新后，面板显示「🔮 已召唤成功！⚔️ 开始挑战」可随时恢复
+  - 跨天也可继续（昨天召唤成功今天打开不受容量限制）
+
+- 🩹 **修复挑战结算页被误关**
+  - `openModal` 新增 `noBackdrop` 选项：挑战进行中点击背景不再误关
+  - 挑战 modal 使用 noBackdrop，结算后才允许背景点击关闭
+
+- 🩹 **热血 buff 判定时机修复**
+  - 之前预览弹出时就消耗 `hotBuffUsed`；改为点「开始挑战」时判定（预览/稍后不消耗）
+
+### 新增功能
+
+- 📊 **结算页增强：每秒点击次数记录与曲线**
+  - 挑战中记录每秒点击数（`perSecHits`）
+  - 结算页展示：总伤害 / 命中次数 / 平均次每秒 / 暴击次数 / 最强一击
+  - 新增「⏱️ 每秒点击次数」柱状图（每列 = 每秒点击数，峰值橙色高亮）
+  - 柱状图纯 div 实现，移动端友好，悬浮显示"第 N 秒: X 次"
 
 ### 修改文件
 
-- `page/challenge.js`（召唤规则/预览确认/热血 buff）
-- `page/tab-strength.js`（训练条目等效容量与倍率标签）
-- `page/index.css`（summon-hot / ch-hotbuff / ch-preview 样式）
-- `page/utils.js`（APP_VERSION 1.9.1 → 1.9.2）
-- `page/index.html`（cache-busting v7 → v8）
+- `page/challenge.js`（pendingChallenge 状态机 / noBackdrop / perSecHits / 结算增强）
+- `page/utils.js`（openModal 支持 noBackdrop 参数）
+- `page/index.css`（ch-sec-chart 样式）
+- `page/utils.js`（APP_VERSION 1.9.3 → 1.9.4）
+- `page/index.html`（cache-busting v9 → v10）
+
+---
+
+## v1.9.5
+
+**Date:** 2026-08-16
+
+### 修复
+
+- 🩹 **修复挑战中途退出/刷新导致当天锁死**
+  - 之前点「开始挑战」时立即写 `summonedDate=today()`，若中途退出/刷新/崩溃，当天被锁但未结算奖励
+  - 改为 `summonedDate` + `lastRewardDate` 仅在 `endChallenge` 结算时才写入
+  - `pendingChallenge` 保留至结算，中途退出后可重新开始
+
+- 🩹 **旧 bug 受害者恢复入口**
+  - `summonedDate===today` 但 `lastRewardDate!==today`（被旧版锁死）时，"已完成"卡片显示「↩️ 今日未完成？恢复挑战」按钮
+  - 点击解锁当天，恢复召唤资格
+
+### 数据层变更
+
+- `challenge` 新增 `lastRewardDate`（最近结算日期，用于区分"真完成"与"被锁死"）
+
+### 修改文件
+
+- `page/challenge.js`（结算时才写状态 / lastRewardDate / 恢复按钮）
+- `page/utils.js`（APP_VERSION 1.9.4 → 1.9.5）
+- `page/index.html`（cache-busting v10 → v11）
+
+---
+
+## v1.9.6
+
+**Date:** 2026-08-16
+
+### 平衡调整
+
+- ⚖️ **奖励阈值提高 50%（只影响后续结算）**
+  - +1 攻击：1500 → 2250 伤害
+  - +1 防御：2250 → 3375 伤害
+  - +3 生命：450 → 675 伤害
+  - 防止隐藏挑战成为属性成长主导引擎（玩家实战 38454 伤对照：旧 +25攻/+17防/+255血 → 新 +17攻/+11防/+171血）
+  - 已入账的 seasonBonus 不受影响
+
+- 🔥 **热血 buff 触发条件改为本周累计 5 次**
+  - 原：连续 4 天（周一~周四）
+  - 新：本周累计 5 次挑战（如周一~周四挑战 4 次，周五/六/日召唤成功时即有 buff）
+  - 每周仍最多触发 1 次（hotBuffUsed 标记，周一重置）
+  - 面板文案改为「🔥 本周已挑战 X 次，累计 5 次解锁热血 buff！」
+
+### UI 调整
+
+- ✨ **热血 buff 触发特效**
+  - 触发瞬间全屏金色径向光晕闪烁（hotFlash 动画，1.2s）
+  - 配合原有金色脉冲横幅，突出"本周欧皇时刻"
+
+### 修改文件
+
+- `page/challenge.js`（奖励阈值 ×1.5 / weekDays>=5 / 全屏闪光）
+- `page/index.css`（hotFlash 关键帧）
+- `page/utils.js`（APP_VERSION 1.9.5 → 1.9.6）
+- `page/index.html`（cache-busting v11 → v12）
