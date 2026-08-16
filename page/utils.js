@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '1.9.3';
+const APP_VERSION = '1.9.4';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -65,13 +65,16 @@ clearTimeout(_tt);_tt=setTimeout(()=>c.innerHTML='',2200)}
 
 /* ========== MODAL ========== */
 /* Create an overlay modal, append to body, return the element.
-   Overlay click (on the backdrop itself) dismisses it. */
-function openModal(html,id){
+   Overlay click (on the backdrop itself) dismisses it, unless
+   opts.noBackdrop is set (caller manages closing manually). */
+function openModal(html,id,opts){
   const modal=document.createElement('div');modal.className='modal-overlay open'
   if(id)modal.id=id
   if(html!=null)modal.innerHTML=html
   document.body.appendChild(modal)
-  modal.addEventListener('click',e=>{if(e.target===e.currentTarget)modal.remove()})
+  if(!(opts&&opts.noBackdrop)){
+    modal.addEventListener('click',e=>{if(e.target===e.currentTarget)modal.remove()})
+  }
   return modal
 }
 

@@ -11,7 +11,8 @@ function getChallenge(){
     useDate:'',        // date of todayUsed (reset on new day)
     weekDays:[],       // this week's dates successfully played (for 热血 buff)
     weekKey:'',        // week key (Mon date) for 热血 buff
-    hotBuffUsed:false  // whether 热血 buff already triggered this week
+    hotBuffUsed:false, // whether 热血 buff already triggered this week
+    pendingChallenge:false  // summon succeeded but challenge not started yet
   }
 }
 function saveChallenge(c){store.set('challenge',c||{})}
@@ -45,6 +46,8 @@ function getTodayVolume(){
 function canSummon(){
   checkChallengeDailyReset()
   var c=getChallenge()
+  // 已召唤成功但还没开始（稍后再说/刷新后恢复）
+  if(c.pendingChallenge)return{can:true,pending:true,reason:'已召唤成功，等待开始挑战'}
   if(c.summonedDate===today())return{can:false,reason:'今日已召唤成功，挑战完成'}
   var vol=getTodayVolume()
   var total=Math.floor(vol/100)
@@ -61,15 +64,11 @@ function attemptSummon(){
   var c=getChallenge()
   var roll=Math.random()*100
   if(roll<info.rate){
-    // Success! Mark summoned today, then show challenge preview
-    c.summonedDate=today()
+    // Success! Mark pending, show challenge preview (NOT started yet)
+    c.pendingChallenge=true
     c.todayUsed=info.used+1
-    // Track week days for 热血 buff
-    var wk=getWeekKey()
-    if(c.weekKey!==wk){c.weekKey=wk;c.weekDays=[];c.hotBuffUsed=false}
-    if(c.weekDays.indexOf(today())<0)c.weekDays.push(today())
     saveChallenge(c)
-    toast('🔮 召唤成功！进入隐藏挑战！','s')
+    toast('🔮 召唤成功！点击开始挑战！','s')
     showChallengePreview()
   }else{
     // Failure — attempt used, rate climbs for next try
@@ -88,8 +87,9 @@ function renderSummonPanel(){
   var info=canSummon()
   var strVol=getTodayVolume()
   var triggers=Math.floor(strVol/100)
-  // Hidden until 100kg reached today
-  if(strVol<100){el.innerHTML='';return}
+  var c0=getChallenge()
+  // pending 挑战不受当日容量限制（可能昨天召唤成功今天才打开）
+  if(strVol<100&&!c0.pendingChallenge){el.innerHTML='';return}
   
   var c=getChallenge()
   if(c.summonedDate===today()){
@@ -100,6 +100,17 @@ function renderSummonPanel(){
       +'<div class="summon-info">明日继续，每月 1 号重置奖励</div>'
       +(bonus.atk+bonus.def+bonus.hp>0?'<div class="summon-bonus">本月已获得: ⚔️+'+bonus.atk+' 🛡️+'+bonus.def+' ❤️+'+bonus.hp+'</div>':'')
       +'</div>'
+    return
+  }
+  // 已召唤成功但没开始（稍后再说/刷新后）→ 恢复预览
+  if(c.pendingChallenge){
+    el.innerHTML='<div class="summon-card">'
+      +'<div class="summon-title">🔮 已召唤成功！</div>'
+      +'<div class="summon-info">挑战尚未开始，随时可以继续</div>'
+      +'<button class="summon-btn" id="summonBtn">⚔️ 开始挑战</button>'
+      +'</div>'
+    var b2=document.getElementById('summonBtn')
+    if(b2)b2.addEventListener('click',function(){showChallengePreview()})
     return
   }
   
@@ -154,15 +165,7 @@ function showChallengePreview(){
   var old=document.getElementById('challengeModal')
   if(old)old.remove()
   var stats=getGameStats()
-  var c=getChallenge()
-  // 热血 buff: week has >=4 played days (3 previous + today's 4th) and not used this week
-  var hotBuff=null
-  if(c.weekDays&&c.weekDays.length>=4&&!c.hotBuffUsed){
-    hotBuff=pickHotBuff()
-    c.hotBuffUsed=true
-    saveChallenge(c)
-  }
-  var modal=openModal(null,'challengeModal')
+  var modal=openModal(null,'challengeModal',{noBackdrop:true})
   var h='<div class="modal-sheet">'
     +'<div class="modal-handle"></div>'
     +'<div class="modal-title">🔬 隐藏挑战</div>'
@@ -175,8 +178,7 @@ function showChallengePreview(){
     +    '<div class="ch-stat">🛡️ <b>'+stats.def+'</b></div>'
     +    '<div class="ch-stat">🔮 <b>'+(stats.soulDef||0)+'</b></div>'
     +  '</div>'
-    +(hotBuff?'<div class="ch-hotbuff">'+hotBuffLabel(hotBuff)+'</div>':'')
-    +  '<div style="font-size:.68rem;color:var(--text3);text-align:center;margin:8px 0">伤害 = (攻击+魂攻)×10%×(随机0.5~1.5) · 20%暴击附加(防御+魂防)</div>'
+    +  '<div style="font-size:.68rem;color:var(--text3);text-align:center;margin:8px 0">基础伤害 = 攻×50% + 魂攻×150% + 防×100% + 魂防×100%，暴击 20%×1.5 倍</div>'
     +'</div>'
     +'<div class="modal-actions">'
     +  '<button class="m-btn-cancel" id="chLater">稍后再说</button>'
@@ -185,7 +187,23 @@ function showChallengePreview(){
     +'</div>'
   modal.innerHTML=h
   document.getElementById('chLater').addEventListener('click',function(){modal.remove();renderSummonPanel();renderGame()})
-  document.getElementById('chStart').addEventListener('click',function(){modal.remove();startHiddenChallenge(hotBuff)})
+  document.getElementById('chStart').addEventListener('click',function(){
+    // 真正开始：消耗 pending，记录日期/周天数，判定热血 buff
+    var c=getChallenge()
+    c.pendingChallenge=false
+    c.summonedDate=today()
+    var wk=getWeekKey()
+    if(c.weekKey!==wk){c.weekKey=wk;c.weekDays=[];c.hotBuffUsed=false}
+    if(c.weekDays.indexOf(today())<0)c.weekDays.push(today())
+    var hotBuff=null
+    if(c.weekDays.length>=4&&!c.hotBuffUsed){
+      hotBuff=pickHotBuff()
+      c.hotBuffUsed=true
+    }
+    saveChallenge(c)
+    modal.remove()
+    startHiddenChallenge(hotBuff)
+  })
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
 }
 
@@ -215,13 +233,14 @@ function startHiddenChallenge(hotBuff){
     critRate:critRate,
     critDmg:critDmg,
     hotBuff:hotBuff,
+    perSecHits:[],     // hits per second (for result chart)
     playerAtk:stats.atk,
     playerSoulAtk:stats.soulAtk||0,
     playerDef:stats.def,
     playerSoulDef:stats.soulDef||0
   }
   
-  var modal=openModal(null,'challengeModal')
+  var modal=openModal(null,'challengeModal',{noBackdrop:true})
   var h='<div class="modal-sheet">'
     +'<div class="modal-handle"></div>'
     +'<div class="modal-title">🔬 隐藏挑战</div>'
@@ -253,6 +272,9 @@ function startHiddenChallenge(hotBuff){
   function doAttack(){
     if(state.ticking===false)return // game ended
     state.hitCount++
+    // 记录当前秒点击数（用于结算曲线）
+    var secIdx=state.duration-state.timeLeft
+    if(secIdx>=0)state.perSecHits[secIdx]=(state.perSecHits[secIdx]||0)+1
     // 新公式: 基础伤害 = 攻×50% + 魂攻×150% + 防×100% + 魂防×100%，乘 random(0.5~1.5)
     var baseConst=state.playerAtk*0.5+state.playerSoulAtk*1.5+state.playerDef*1.0+state.playerSoulDef*1.0
     var rand=Math.random()*1+0.5 // 0.5~1.5
@@ -307,12 +329,13 @@ function startHiddenChallenge(hotBuff){
     c.seasonBonus.hp=(c.seasonBonus.hp||0)+bonusHp
     saveChallenge(c)
     
-    // Show result
+    // Show result (enhanced: reward detail + per-second tap chart)
+    var avgRate=state.duration>0?(state.hitCount/state.duration).toFixed(1):'0'
     var h2='<div class="ch-result">'
       +'<div class="ch-result-title">🏆 挑战结束</div>'
       +'<div class="ch-result-stats">'
       +  '<div>⚔️ 总伤害: <b>'+dmg+'</b></div>'
-      +  '<div>🎯 命中: <b>'+state.hitCount+'</b> 次</div>'
+      +  '<div>🎯 命中: <b>'+state.hitCount+'</b> 次 · 平均 <b>'+avgRate+'</b> 次/秒</div>'
       +  '<div>💥 暴击: <b>'+state.critCount+'</b> 次</div>'
       +  '<div>🥇 最强一击: <b>'+state.maxHit+'</b></div>'
       +'</div>'
@@ -325,12 +348,16 @@ function startHiddenChallenge(hotBuff){
       +(bonusAtk+bonusDef+bonusHp===0?'  <span style="color:var(--text3)">伤害不足，未获得奖励</span>':'')
       +  '</div>'
       +'</div>'
+      +'<div class="ch-sec-chart" id="chSecChart"></div>'
       +'<div class="ch-cumulative" id="chCumulative"></div>'
       +'<div class="modal-actions"><button class="m-btn-cancel" id="chClose">关闭</button></div>'
       +'</div>'
     var sheet=modal.querySelector('.modal-sheet')
     if(sheet){
       sheet.innerHTML=h2
+      // 每秒点击次数柱状图
+      var chartEl=document.getElementById('chSecChart')
+      if(chartEl)renderPerSecChart(chartEl,state.perSecHits,state.duration)
       var cumEl=document.getElementById('chCumulative')
       if(cumEl){
         var cum=c.seasonBonus
@@ -338,7 +365,25 @@ function startHiddenChallenge(hotBuff){
       }
       var closeBtn=document.getElementById('chClose')
       if(closeBtn)closeBtn.addEventListener('click',function(){modal.remove();renderSummonPanel();renderGame()})
+      // 结算后可点背景关闭（游戏中 noBackdrop）
+      modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
     }
+  }
+
+  /* 每秒点击次数柱状图（纯 div，移动端友好） */
+  function renderPerSecChart(container,perSec,duration){
+    var n=perSec&&perSec.length?perSec.length:duration
+    var maxHits=1
+    for(var i=0;i<n;i++){if((perSec[i]||0)>maxHits)maxHits=perSec[i]}
+    var h='<div style="font-size:.68rem;color:var(--text3);margin:8px 0 4px">⏱️ 每秒点击次数</div><div style="display:flex;align-items:flex-end;gap:3px;height:64px;padding:0 2px">'
+    for(var i=0;i<n;i++){
+      var v=perSec[i]||0
+      var bh=Math.max(2,Math.round(v/maxHits*56))
+      var c=v>=maxHits&&maxHits>1?'var(--orange)':'var(--blue)'
+      h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px" title="第'+(i+1)+'秒: '+v+'次"><div style="height:'+bh+'px;background:'+c+';border-radius:3px 3px 0 0;width:100%;min-width:4px"></div><span style="font-size:.55rem;color:var(--text3)">'+(i+1)+'</span></div>'
+    }
+    h+='</div>'
+    container.innerHTML=h
   }
   
   // Start countdown

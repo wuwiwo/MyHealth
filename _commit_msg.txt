@@ -1,0 +1,11 @@
+fix: v1.9.4 — challenge pending state, result screen, per-sec chart
+
+- BUGFIX: summon success now sets pendingChallenge instead of consumed
+  summonedDate; 稍后再说/refresh no longer burns today's attempt,
+  panel shows 开始挑战 to resume anytime (even next day)
+- BUGFIX: challenge modal uses noBackdrop so result screen is not
+  closed by stray taps during/after game; backdrop closes after end
+- ENHANCE: result screen shows reward + avg taps/sec + per-second
+  tap bar chart (max highlight orange)
+- hot buff rolls on actual start, not on preview
+- bump v1.9.4 + cache v10
