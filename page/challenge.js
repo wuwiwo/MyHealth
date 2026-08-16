@@ -12,7 +12,8 @@ function getChallenge(){
     weekDays:[],       // this week's dates successfully played (for 热血 buff)
     weekKey:'',        // week key (Mon date) for 热血 buff
     hotBuffUsed:false, // whether 热血 buff already triggered this week
-    pendingChallenge:false  // summon succeeded but challenge not started yet
+    pendingChallenge:false,  // summon succeeded but challenge not started yet
+    lastRewardDate:''        // date of last settled reward (for stale-lock recovery)
   }
 }
 function saveChallenge(c){store.set('challenge',c||{})}
@@ -95,11 +96,23 @@ function renderSummonPanel(){
   if(c.summonedDate===today()){
     // Already played today
     var bonus=c.seasonBonus||{atk:0,def:0,hp:0};
+    var rewarded=c.lastRewardDate===today()
     el.innerHTML='<div class="summon-card done">'
       +'<div class="summon-title">⚡ 今日隐藏挑战已完成</div>'
       +'<div class="summon-info">明日继续，每月 1 号重置奖励</div>'
       +(bonus.atk+bonus.def+bonus.hp>0?'<div class="summon-bonus">本月已获得: ⚔️+'+bonus.atk+' 🛡️+'+bonus.def+' ❤️+'+bonus.hp+'</div>':'')
+      +(!rewarded?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);padding:10px;font-size:.8rem">↩️ 今日未完成？恢复挑战</button>':'')
       +'</div>'
+    var br=document.getElementById('summonBtn')
+    if(br)br.addEventListener('click',function(){
+      // 旧 bug 锁死恢复：今天被标记完成但从未结算奖励 → 解锁并回到召唤
+      var c2=getChallenge()
+      c2.summonedDate=''
+      c2.pendingChallenge=false
+      saveChallenge(c2)
+      toast('已恢复今日挑战资格，重新召唤吧 🔮','s')
+      renderSummonPanel()
+    })
     return
   }
   // 已召唤成功但没开始（稍后再说/刷新后）→ 恢复预览
@@ -188,10 +201,8 @@ function showChallengePreview(){
   modal.innerHTML=h
   document.getElementById('chLater').addEventListener('click',function(){modal.remove();renderSummonPanel();renderGame()})
   document.getElementById('chStart').addEventListener('click',function(){
-    // 真正开始：消耗 pending，记录日期/周天数，判定热血 buff
+    // 真正开始：保留 pending 资格（未结算前可重开），记录周天数，判定热血 buff
     var c=getChallenge()
-    c.pendingChallenge=false
-    c.summonedDate=today()
     var wk=getWeekKey()
     if(c.weekKey!==wk){c.weekKey=wk;c.weekDays=[];c.hotBuffUsed=false}
     if(c.weekDays.indexOf(today())<0)c.weekDays.push(today())
@@ -327,6 +338,10 @@ function startHiddenChallenge(hotBuff){
     c.seasonBonus.atk=(c.seasonBonus.atk||0)+bonusAtk
     c.seasonBonus.def=(c.seasonBonus.def||0)+bonusDef
     c.seasonBonus.hp=(c.seasonBonus.hp||0)+bonusHp
+    // 结算成功：清除 pending 资格，标记今日已完成（中途退出/刷新则不会走到这里）
+    c.pendingChallenge=false
+    c.summonedDate=today()
+    c.lastRewardDate=today()
     saveChallenge(c)
     
     // Show result (enhanced: reward detail + per-second tap chart)

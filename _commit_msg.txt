@@ -1,0 +1,12 @@
+fix: v1.9.5 — challenge lockout fix, settle-time state write, stale recovery
+
+- BUGFIX: summonedDate was written on 开始挑战 click, so mid-game exit/
+  refresh/crash locked the day without settling rewards. Now summonedDate
+  + lastRewardDate are written ONLY at settlement (endChallenge).
+- pendingChallenge stays true until settled, so refresh/exit keeps the
+  challenge resumable ("已召唤成功！开始挑战" panel).
+- Stale-lock recovery: if summonedDate==today but lastRewardDate!=today
+  (old bug victims / interrupted game), the done card shows
+  "↩️ 今日未完成？恢复挑战" which unlocks and restores summon eligibility.
+- getChallenge default gains lastRewardDate field.
+- bump v1.9.5 + cache v11
