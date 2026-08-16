@@ -436,3 +436,6 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 /* ========== PER-SEC CHART ========== */
 .ch-sec-chart{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rs);padding:8px 10px;margin:10px 0}
 .ch-sec-chart div[style]{transition:height .3s cubic-bezier(.34,1.56,.64,1)}
+
+/* ========== HOT BUFF FLASH ========== */
+@keyframes hotFlash{0%{opacity:1}100%{opacity:0}}

@@ -153,11 +153,11 @@ function renderHotBuffHint(c){
   if(c.weekKey!==wk){c.weekKey=wk;c.weekDays=[];c.hotBuffUsed=false}
   var days=c.weekDays?c.weekDays.length:0
   if(c.hotBuffUsed)return''
-  if(days>=4){
+  if(days>=5){
     return'<div class="summon-hot ready">🔥 热血 buff 已就绪！本次挑战随机获得：暴击率+55%·暴伤+35% / 暴伤+120%·暴击率+15% / 倒计时+40%·基础时间70~100%</div>'
   }
   if(days>=1){
-    return'<div class="summon-hot">🔥 本周已连续挑战 '+days+' 天，连续 4 天解锁热血 buff！</div>'
+    return'<div class="summon-hot">🔥 本周已挑战 '+days+' 次，累计 5 次解锁热血 buff！</div>'
   }
   return''
 }
@@ -207,7 +207,7 @@ function showChallengePreview(){
     if(c.weekKey!==wk){c.weekKey=wk;c.weekDays=[];c.hotBuffUsed=false}
     if(c.weekDays.indexOf(today())<0)c.weekDays.push(today())
     var hotBuff=null
-    if(c.weekDays.length>=4&&!c.hotBuffUsed){
+    if(c.weekDays.length>=5&&!c.hotBuffUsed){
       hotBuff=pickHotBuff()
       c.hotBuffUsed=true
     }
@@ -231,6 +231,13 @@ function startHiddenChallenge(hotBuff){
     // 倒计时+40%：基础时间锁定 70%~100% 高值区间 (10.8~12s) 再 ×1.4
     baseDur=8+4*(0.7+Math.random()*0.3)
     duration=Math.round(baseDur*1.4)
+  }
+  // 热血 buff 触发：全屏金色闪光（特殊惊艳标识）
+  if(hotBuff){
+    var flash=document.createElement('div')
+    flash.style='position:fixed;inset:0;z-index:70;pointer-events:none;background:radial-gradient(circle,rgba(251,191,36,.35),transparent 70%);animation:hotFlash 1.2s ease-out forwards'
+    document.body.appendChild(flash)
+    setTimeout(function(){if(flash.parentNode)flash.remove()},1300)
   }
   var state={
     timeLeft:duration,
@@ -331,9 +338,9 @@ function startHiddenChallenge(hotBuff){
     if(attackBtn)attackBtn.disabled=true
     // Calculate bonus: total damage → reward
     var dmg=state.totalDamage
-    var bonusAtk=Math.floor(dmg/1500)
-    var bonusDef=Math.floor(dmg/2250)
-    var bonusHp=Math.floor(dmg/450)*3
+    var bonusAtk=Math.floor(dmg/2250)
+    var bonusDef=Math.floor(dmg/3375)
+    var bonusHp=Math.floor(dmg/675)*3
     var c=getChallenge()
     c.seasonBonus.atk=(c.seasonBonus.atk||0)+bonusAtk
     c.seasonBonus.def=(c.seasonBonus.def||0)+bonusDef
