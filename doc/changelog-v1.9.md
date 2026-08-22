@@ -1,4 +1,4 @@
-# MyHealth v1.9 Release Notes / 变更日志
+﻿# MyHealth v1.9 Release Notes / 变更日志
 
 **Date:** 2026-08-12
 
@@ -188,6 +188,7 @@
 | v1.9.6 | 18 | 443 行 challenge.js | 奖励阈值+50%(2250/3375/675)/热血buff改周累计5次/全屏金色闪光特效 |
 | v1.9.7 | 18 | 455 行 challenge.js | 修复召唤NaN污染永远失败/getChallenge字段归一化/数值运算isFinite防护 |
 | v1.9.8 | 18 | 488 行 challenge.js | 修复?/?显示(次数用完时canSummon补字段+面板can检查)/临时屏幕debug面板 |
+| v1.9.9 | 18 | 552 行 challenge.js | 历史召唤成绩(含buff)/debug面板全分支常驻开关/召唤率新规则(前4次15%第5次起25%) |
 
 ---
 
@@ -530,4 +531,34 @@
 
 - `page/challenge.js`（canSummon can:false 补字段 / renderSummonPanel 添加 !info.can 分支 / chDebugHtml 临时面板）
 - `page/utils.js`（APP_VERSION 1.9.7 → 1.9.8）
-- `page/index.html`（cache-busting v13 → v14）
+- `page/index.html`（cache-busting v13 → v14）---\
+\
+## v1.9.9\
+\
+**Date:** 2026-08-22\
+\
+### 新增功能\
+\
+- 📜 **历史召唤成绩查看（含 buff）**\
+  - 每次挑战结算自动记录：日期 / 总伤害 / 命中次数 / 平均每秒 / 暴击数 / 最强一击 / 奖励（攻防血）/ 使用的热血 buff\
+  - 召唤面板（任意状态）显示「📜 历史召唤成绩」按钮，弹窗列表倒序查看\
+  - 最多保留 50 条，随 challenge 数据同步\
+\
+- 🔍 **屏幕 debug 面板永久保留**\
+  - 之前只在正常召唤分支可用，且需点标题 3 次太隐蔽，本次重构：所有分支（容量不足/已完成/待开始/次数用完/正常）统一挂载\
+  - 常驻「🔍 debug」开关按钮，一键显示/隐藏\
+  - 数据充足：分支名 / today / strVol / canSummon 全量 / total+used+rate / 今日每条训练明细（动作/重量/等效/次数/ratio/容量贡献）/ challenge 全量 JSON\
+\
+### 平衡调整\
+\
+- 🎲 **召唤成功率新规则**\
+  - 第 1~4 次：成功率 15%（原逐次 +10% 递增到 55% 的规则废除）\
+  - 第 5 次起：成功率固定 25%（不再递增）\
+  - 面板文案同步：基础 15% / 保底 25% / 第 5 次起成功率 25%\
+\
+### 修改文件\
+\
+- \page/challenge.js\（新概率规则 / chDebugBlock+mountSummonExtras 重构 / showChallengeHistory / history 记录与归一化）\
+- \page/utils.js\（APP_VERSION 1.9.8 → 1.9.9）\
+- \page/index.html\（cache-busting v14 → v15）\
+

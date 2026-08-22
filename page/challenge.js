@@ -20,6 +20,7 @@ function getChallenge(){
   c.hotBuffUsed=!!c.hotBuffUsed
   c.pendingChallenge=!!c.pendingChallenge
   c.lastRewardDate=str(c.lastRewardDate,'')
+  c.history=Array.isArray(c.history)?c.history:[]
   return c
 }
 function saveChallenge(c){store.set('challenge',c||{})}
@@ -62,7 +63,8 @@ function canSummon(){
   var total=Math.floor(vol/100)
   if(total<1)return{can:false,total:total,used:0,rate:15,vol:vol,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
   if(c.todayUsed>=total)return{can:false,total:total,used:c.todayUsed,rate:15,vol:vol,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
-  var rate=Math.min(100,15+c.todayUsed*10)
+  // 新规则: 第 1~4 次成功率 15%，第 5 次起每次 25%
+  var rate=(c.todayUsed>=4)?25:15
   return{can:true,rate:rate,total:total,used:c.todayUsed,vol:vol}
 }
 
@@ -84,7 +86,7 @@ function attemptSummon(){
     // Failure — attempt used, rate climbs for next try
     c.todayUsed=isFinite(info.used)?info.used+1:1
     saveChallenge(c)
-    var newRate=Math.min(100,15+c.todayUsed*10)
+    var newRate=(c.todayUsed>=4)?25:15
     var remain=isFinite(info.total)&&isFinite(info.used)?info.total-info.used-1:'?'
     toast('❌ 召唤失败！下次成功率 '+newRate+'%（剩 '+remain+' 次）','e')
     renderSummonPanel()
@@ -92,22 +94,40 @@ function attemptSummon(){
 }
 
 /* ========== SUMMON PANEL UI ========== */
-/* Debug: 屏幕诊断信息（点击标题 3 次切换显示/隐藏，临时用，确认后移除） */
+/* Debug: 屏幕诊断面板 — 常驻 🔍 按钮切换（永久保留，便于手机端排障） */
 var _chDebugOn=false
 function toggleChDebug(){_chDebugOn=!_chDebugOn;renderSummonPanel()}
-function chDebugHtml(info,strVol,c){
-  if(!_chDebugOn)return''
-  var entries=((store.get('strength')||{entries:[]}).entries)||[]
-  var todayE=entries.filter(function(e){return e.date===today()})
-  var detail=todayE.map(function(e){return e.exercise+':'+(e.eqWeight!=null?('eq'+e.eqWeight):('w'+e.weight))+'x'+e.actualReps+(e.duration?('d'+e.duration):'')}).join(', ')
-  return'<div style="margin-top:8px;padding:8px;background:#1a1a1a;border:1px dashed #ef4444;border-radius:8px;font-size:.6rem;color:#94a3b8;line-height:1.7;white-space:pre-wrap">'
-    +'[DEBUG]\n'
-    +'canSummon: '+JSON.stringify(info)+'\n'
-    +'strVol='+strVol+' total='+Math.floor(strVol/100)+'\n'
-    +'today entries='+todayE.length+'\n'
-    +'  '+detail+'\n'
-    +'challenge='+JSON.stringify(c).slice(0,200)+'\n'
-    +'</div>'
+/* 组装充足诊断数据 */
+function chDebugBlock(info,strVol,c,branch){
+  var out='<div style="margin-top:8px;text-align:right"><button class="speed-btn" id="chDbgBtn" style="padding:2px 10px;font-size:.65rem;border-color:var(--text3);color:var(--text3)">'+( _chDebugOn?'🔍 隐藏debug':'🔍 debug')+'</button></div>'
+  if(_chDebugOn){
+    var entries=((store.get('strength')||{entries:[]}).entries)||[]
+    var todayE=entries.filter(function(e){return e.date===today()})
+    var exMap=getExerciseMap()
+    var lines=['[branch: '+branch+']','today='+today()]
+    lines.push('strVol='+strVol)
+    lines.push('canSummon='+JSON.stringify(info))
+    lines.push('total='+Math.floor(strVol/100)+' used='+(info&&isFinite(info.used)?info.used:'?')+' rate='+(info&&isFinite(info.rate)?info.rate:'?'))
+    lines.push('todayEntries='+todayE.length)
+    todayE.forEach(function(e,i){
+      var ex=exMap[e.exercise]||{}
+      var w=e.eqWeight!=null?e.eqWeight:(e.weight||0)
+      var n=e.actualReps||(e.duration?e.duration:0)
+      var r=(ex.ratio!=null?ex.ratio:100)
+      var vol=Math.round(w*n*(r/100))
+      lines.push('  ['+i+'] '+e.exercise+' w='+w+' eq='+(e.eqWeight!=null?e.eqWeight:'-')+' n='+n+' ratio='+r+' vol='+vol)
+    })
+    lines.push('challenge='+JSON.stringify(c))
+    out+='<div style="margin-top:4px;padding:8px;background:#1a1a1a;border:1px dashed #ef4444;border-radius:8px;font-size:.6rem;color:#94a3b8;line-height:1.6;white-space:pre-wrap;word-break:break-all">'+lines.join('\n')+'</div>'
+  }
+  return out
+}
+/* 挂载调试块 + 绑定开关（每个分支统一调用） */
+function mountSummonExtras(el,info,strVol,c,branch){
+  var dbg=document.getElementById('chDbgBtn')
+  if(dbg)dbg.addEventListener('click',toggleChDebug)
+  var hb=document.getElementById('chHistoryBtn')
+  if(hb)hb.addEventListener('click',function(){showChallengeHistory()})
 }
 function renderSummonPanel(){
   var el=document.getElementById('summonPanel')
@@ -117,7 +137,11 @@ function renderSummonPanel(){
   var triggers=Math.floor(strVol/100)
   var c0=getChallenge()
   // pending 挑战不受当日容量限制（可能昨天召唤成功今天才打开）
-  if(strVol<100&&!c0.pendingChallenge){el.innerHTML='';return}
+  if(strVol<100&&!c0.pendingChallenge){
+    el.innerHTML=chDebugBlock(info,strVol,c0,'vol100')
+    mountSummonExtras(el,info,strVol,c0,'vol100')
+    return
+  }
   
   var c=getChallenge()
   if(c.summonedDate===today()){
@@ -129,7 +153,10 @@ function renderSummonPanel(){
       +'<div class="summon-info">明日继续，每月 1 号重置奖励</div>'
       +(bonus.atk+bonus.def+bonus.hp>0?'<div class="summon-bonus">本月已获得: ⚔️+'+bonus.atk+' 🛡️+'+bonus.def+' ❤️+'+bonus.hp+'</div>':'')
       +(!rewarded?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);padding:10px;font-size:.8rem">↩️ 今日未完成？恢复挑战</button>':'')
+      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
       +'</div>'
+      +chDebugBlock(info,strVol,c,'done')
+    mountSummonExtras(el,info,strVol,c,'done')
     var br=document.getElementById('summonBtn')
     if(br)br.addEventListener('click',function(){
       // 旧 bug 锁死恢复：今天被标记完成但从未结算奖励 → 解锁并回到召唤
@@ -149,6 +176,8 @@ function renderSummonPanel(){
       +'<div class="summon-info">挑战尚未开始，随时可以继续</div>'
       +'<button class="summon-btn" id="summonBtn">⚔️ 开始挑战</button>'
       +'</div>'
+      +chDebugBlock(info,strVol,c,'pending')
+    mountSummonExtras(el,info,strVol,c,'pending')
     var b2=document.getElementById('summonBtn')
     if(b2)b2.addEventListener('click',function(){showChallengePreview()})
     return
@@ -159,37 +188,36 @@ function renderSummonPanel(){
       +'<div class="summon-title">🔮 隐藏挑战</div>'
       +'<div class="summon-info">'+(info.reason||'今日不可召唤')+'</div>'
       +(isFinite(info.total)?'<div class="summon-info" style="font-size:.65rem;color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+(isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
+      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
       +'</div>'
+      +chDebugBlock(info,strVol,c,'cannot')
+    mountSummonExtras(el,info,strVol,c,'cannot')
     return
   }
   
   var rate=info.rate||(15+0)
-  var rateColor=rate>=80?'var(--green)':rate>=50?'var(--orange)':'var(--yellow)'
+  var rateColor=rate>=50?'var(--green)':rate>=30?'var(--orange)':'var(--yellow)'
   var totalN=isFinite(info.total)?info.total:'?'
   var usedN=isFinite(info.used)?info.used:0
   var remain=isFinite(info.total)&&isFinite(info.used)?info.total-info.used:'?'
   var hotHtml=renderHotBuffHint(c)
   el.innerHTML='<div class="summon-card">'
     +'<div class="summon-title">🔮 隐藏挑战</div>'
-    +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次，几率逐次+10%）</div>'
+    +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次）</div>'
     +'<div class="summon-rate-wrap">'
-    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次）</div>'
+    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=4?' · 保底 25%':' · 基础 15%')+'）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'
     +  '<div style="text-align:center;font-weight:700;color:'+rateColor+';font-size:1rem;margin-top:4px">'+rate+'%</div>'
     +'</div>'
     +hotHtml
     +'<button class="summon-btn" id="summonBtn">🔮 召唤</button>'
-    +'<div style="font-size:.6rem;color:var(--text3);text-align:center;margin-top:6px">每天最多成功召唤1次 · 每 100kg 叠加次数与几率</div>'
+    +'<div style="font-size:.6rem;color:var(--text3);text-align:center;margin-top:6px">第 5 次起成功率 25% · 每天最多成功召唤1次</div>'
     +'</div>'
-    +chDebugHtml(info,strVol,c)
+    +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
+    +chDebugBlock(info,strVol,c,'normal')
   var btn=document.getElementById('summonBtn')
   if(btn)btn.addEventListener('click',attemptSummon)
-  // 标题点击 3 次切换 debug
-  var tt=el.querySelector('.summon-title')
-  if(tt){
-    var clk=0
-    tt.addEventListener('click',function(){clk++;if(clk>=3){clk=0;toggleChDebug()}})
-  }
+  mountSummonExtras(el,info,strVol,c,'normal')
 }
 
 /* 热血 buff hint — 本周连续 3 天开启后，第 4 次开启附加热血 buff */
@@ -394,6 +422,16 @@ function startHiddenChallenge(hotBuff){
     c.pendingChallenge=false
     c.summonedDate=today()
     c.lastRewardDate=today()
+    // 记录历史成绩（含 buff）
+    c.history=c.history||[]
+    c.history.push({
+      date:today(),dmg:dmg,hits:state.hitCount,
+      avgRate:state.duration>0?Math.round(state.hitCount/state.duration*10)/10:0,
+      crits:state.critCount,maxHit:state.maxHit,
+      atk:bonusAtk,def:bonusDef,hp:bonusHp,
+      buff:state.hotBuff||null
+    })
+    if(c.history.length>50)c.history=c.history.slice(-50)
     saveChallenge(c)
     
     // Show result (enhanced: reward detail + per-second tap chart)
@@ -469,6 +507,32 @@ function startHiddenChallenge(hotBuff){
   modal.addEventListener('click',function(e){
     if(e.target===e.currentTarget&&state.ticking===false)modal.remove()
   })
+}
+
+/* ========== CHALLENGE HISTORY ========== */
+function showChallengeHistory(){
+  var c=getChallenge()
+  var h=c.history||[]
+  var modal=openModal(null,'chHistoryModal')
+  var html='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📜 历史召唤成绩</div>'
+  if(!h.length){
+    html+='<div class="empty"><span class="empty-e">📜</span><div class="empty-t">暂无挑战记录</div><div class="empty-s">完成隐藏挑战后自动记录</div></div>'
+  }else{
+    var rows=h.slice().reverse().map(function(r,i){
+      var buffLabel=r.buff?hotBuffLabel(r.buff):'无 buff'
+      return'<div class="ec" style="margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+r.date+'</div><div class="ec-actions"><span style="font-size:.65rem;color:var(--text3)">#'+(h.length-i)+'</span></div></div>'
+        +'<div style="font-size:.7rem;color:var(--text2);line-height:1.7;padding:2px 0">'
+        +'⚔️ '+r.dmg+' 伤害 · 🎯 '+r.hits+' 次 ('+r.avgRate+'/秒) · 💥 '+r.crits+' 暴击<br>'
+        +'🥇 最强 '+r.maxHit+' · 🎁 ⚔️+'+r.atk+' 🛡️+'+r.def+' ❤️+'+r.hp
+        +(r.buff?'<br><span style="color:#fbbf24">'+buffLabel+'</span>':'')
+        +'</div></div>'
+    }).join('')
+    html+='<div style="max-height:55vh;overflow-y:auto">'+rows+'</div>'
+  }
+  html+='<div class="modal-actions"><button class="m-btn-cancel" id="chHistClose">关闭</button></div></div>'
+  modal.innerHTML=html
+  document.getElementById('chHistClose').addEventListener('click',function(){modal.remove()})
+  modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
 }
 
 /* ========== INTEGRATION ========== */
