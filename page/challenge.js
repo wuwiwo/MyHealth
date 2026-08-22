@@ -21,6 +21,9 @@ function getChallenge(){
   c.pendingChallenge=!!c.pendingChallenge
   c.lastRewardDate=str(c.lastRewardDate,'')
   c.history=Array.isArray(c.history)?c.history:[]
+  // 清理 v1.9.1 时代遗留字段（已无使用）
+  if(c.todayFailCount!==undefined){delete c.todayFailCount}
+  if(c.failDate!==undefined){delete c.failDate}
   return c
 }
 function saveChallenge(c){store.set('challenge',c||{})}
@@ -34,6 +37,9 @@ function checkChallengeDailyReset(){
   // 结构修复：todayUsed 非有限数 → 0
   if(typeof c.todayUsed!=='number'||!isFinite(c.todayUsed)){c.todayUsed=0;dirty=true}
   if(typeof c.seasonBonus!=='object'||!c.seasonBonus){c.seasonBonus={atk:0,def:0,hp:0};dirty=true}
+  // 清理 v1.9.1 遗留字段（todayFailCount/failDate）
+  if(c.todayFailCount!==undefined){delete c.todayFailCount;dirty=true}
+  if(c.failDate!==undefined){delete c.failDate;dirty=true}
   if(dirty)saveChallenge(c)
 }
 
