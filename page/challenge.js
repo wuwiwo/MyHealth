@@ -60,8 +60,8 @@ function canSummon(){
   var vol=getTodayVolume()
   if(typeof vol!=='number'||!isFinite(vol))vol=0
   var total=Math.floor(vol/100)
-  if(total<1)return{can:false,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
-  if(c.todayUsed>=total)return{can:false,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
+  if(total<1)return{can:false,total:total,used:0,rate:15,vol:vol,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
+  if(c.todayUsed>=total)return{can:false,total:total,used:c.todayUsed,rate:15,vol:vol,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
   var rate=Math.min(100,15+c.todayUsed*10)
   return{can:true,rate:rate,total:total,used:c.todayUsed,vol:vol}
 }
@@ -92,6 +92,23 @@ function attemptSummon(){
 }
 
 /* ========== SUMMON PANEL UI ========== */
+/* Debug: 屏幕诊断信息（点击标题 3 次切换显示/隐藏，临时用，确认后移除） */
+var _chDebugOn=false
+function toggleChDebug(){_chDebugOn=!_chDebugOn;renderSummonPanel()}
+function chDebugHtml(info,strVol,c){
+  if(!_chDebugOn)return''
+  var entries=((store.get('strength')||{entries:[]}).entries)||[]
+  var todayE=entries.filter(function(e){return e.date===today()})
+  var detail=todayE.map(function(e){return e.exercise+':'+(e.eqWeight!=null?('eq'+e.eqWeight):('w'+e.weight))+'x'+e.actualReps+(e.duration?('d'+e.duration):'')}).join(', ')
+  return'<div style="margin-top:8px;padding:8px;background:#1a1a1a;border:1px dashed #ef4444;border-radius:8px;font-size:.6rem;color:#94a3b8;line-height:1.7;white-space:pre-wrap">'
+    +'[DEBUG]\n'
+    +'canSummon: '+JSON.stringify(info)+'\n'
+    +'strVol='+strVol+' total='+Math.floor(strVol/100)+'\n'
+    +'today entries='+todayE.length+'\n'
+    +'  '+detail+'\n'
+    +'challenge='+JSON.stringify(c).slice(0,200)+'\n'
+    +'</div>'
+}
 function renderSummonPanel(){
   var el=document.getElementById('summonPanel')
   if(!el)return
@@ -136,6 +153,15 @@ function renderSummonPanel(){
     if(b2)b2.addEventListener('click',function(){showChallengePreview()})
     return
   }
+  // 不可召唤（次数用完/其他）→ 显示原因卡片而非可召唤面板
+  if(!info.can){
+    el.innerHTML='<div class="summon-card done">'
+      +'<div class="summon-title">🔮 隐藏挑战</div>'
+      +'<div class="summon-info">'+(info.reason||'今日不可召唤')+'</div>'
+      +(isFinite(info.total)?'<div class="summon-info" style="font-size:.65rem;color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+(isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
+      +'</div>'
+    return
+  }
   
   var rate=info.rate||(15+0)
   var rateColor=rate>=80?'var(--green)':rate>=50?'var(--orange)':'var(--yellow)'
@@ -155,8 +181,15 @@ function renderSummonPanel(){
     +'<button class="summon-btn" id="summonBtn">🔮 召唤</button>'
     +'<div style="font-size:.6rem;color:var(--text3);text-align:center;margin-top:6px">每天最多成功召唤1次 · 每 100kg 叠加次数与几率</div>'
     +'</div>'
+    +chDebugHtml(info,strVol,c)
   var btn=document.getElementById('summonBtn')
   if(btn)btn.addEventListener('click',attemptSummon)
+  // 标题点击 3 次切换 debug
+  var tt=el.querySelector('.summon-title')
+  if(tt){
+    var clk=0
+    tt.addEventListener('click',function(){clk++;if(clk>=3){clk=0;toggleChDebug()}})
+  }
 }
 
 /* 热血 buff hint — 本周连续 3 天开启后，第 4 次开启附加热血 buff */

@@ -1,6 +1,6 @@
 ﻿# MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.9.7
+> Personal Health Manager — 个人健身健康管理应用 v1.9.8
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -171,5 +171,6 @@ Vercel 项目设置：
 | **v1.9.5** | **2026-08-16** | **修复：挑战中途退出锁死当天（结算时才写状态）+ 旧 bug 恢复入口（lastRewardDate）** | `doc/changelog-v1.9.md` |
 | **v1.9.6** | **2026-08-16** | **平衡：奖励阈值 +50%（2250/3375/675）+ 热血 buff 改本周累计 5 次 + 全屏金色闪光特效** | `doc/changelog-v1.9.md` |
 | **v1.9.7** | **2026-08-22** | **修复：召唤 NaN 污染导致永远失败（getChallenge 字段归一化 + isFinite 防护，含自重动作场景）** | `doc/changelog-v1.9.md` |
+| **v1.9.8** | **2026-08-22** | **修复：召唤面板 ?/? 显示（次数用尽时 canSummon 补字段 + 面板 can 检查）+ 临时屏幕 debug 面板** | `doc/changelog-v1.9.md` |
 
-> 当前版本：**v1.9.7**
+> 当前版本：**v1.9.8**

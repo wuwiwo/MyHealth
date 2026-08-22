@@ -187,6 +187,7 @@
 | v1.9.5 | 18 | 443 行 challenge.js | 结算时才写summonedDate(中途退出不锁死)/lastRewardDate/旧锁恢复入口 |
 | v1.9.6 | 18 | 443 行 challenge.js | 奖励阈值+50%(2250/3375/675)/热血buff改周累计5次/全屏金色闪光特效 |
 | v1.9.7 | 18 | 455 行 challenge.js | 修复召唤NaN污染永远失败/getChallenge字段归一化/数值运算isFinite防护 |
+| v1.9.8 | 18 | 488 行 challenge.js | 修复?/?显示(次数用完时canSummon补字段+面板can检查)/临时屏幕debug面板 |
 
 ---
 
@@ -505,3 +506,28 @@
 - `page/challenge.js`（getChallenge 归一化 / checkChallengeDailyReset 修复写回 / canSummon+attemptSummon+renderSummonPanel 数值防御）
 - `page/utils.js`（APP_VERSION 1.9.6 → 1.9.7）
 - `page/index.html`（cache-busting v12 → v13）
+
+---
+
+## v1.9.8
+
+**Date:** 2026-08-22
+
+### 修复
+
+- 🩹 **修复「召唤机会 ?/? 次」「第 1 次」显示且无法召唤**
+  - 症状：今日容量正常显示（如 600kg），但面板显示 `?/?`、`第 1 次`、成功率 15%，点击召唤一直失败
+  - 根因：`canSummon()` 在「今日次数已用完」（todayUsed>=total）或「容量不足」时返回 `{can:false}` 但不带 total/used 字段，而 `renderSummonPanel()` 未检查 `info.can`，直接渲染成可召唤面板 → `info.total` 为 undefined → 显示 `?/?`；点击召唤时 `attemptSummon` toast「次数已用完」→ 表现为"一直失败"
+  - 修复：① `canSummon()` 的 can:false 分支也附带 total/used/rate/vol 字段；② `renderSummonPanel()` 新增 `!info.can` 分支，显示原因卡片（`今日召唤次数已用完（X次）` + 今日容量 + 可用次数），不再渲染可召唤面板
+
+### UI 调整
+
+- 🔧 **临时屏幕 debug 面板**（本次排障用，确认后移除）
+  - 点击召唤卡片标题 3 次切换显示/隐藏
+  - 显示：canSummon 返回对象 / 今日容量 / 今天训练条目明细（动作、eqWeight、次数）/ challenge 对象
+
+### 修改文件
+
+- `page/challenge.js`（canSummon can:false 补字段 / renderSummonPanel 添加 !info.can 分支 / chDebugHtml 临时面板）
+- `page/utils.js`（APP_VERSION 1.9.7 → 1.9.8）
+- `page/index.html`（cache-busting v13 → v14）
