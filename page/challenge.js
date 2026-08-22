@@ -4,29 +4,36 @@
 
 /* ========== SUMMON LOGIC ========== */
 function getChallenge(){
-  return store.get('challenge')||{
-    summonedDate:'',   // last successful summon date (YYYY-MM-DD)
-    seasonBonus:{atk:0,def:0,hp:0},  // monthly-reset bonus from challenge
-    todayUsed:0,       // summon attempts used today
-    useDate:'',        // date of todayUsed (reset on new day)
-    weekDays:[],       // this week's dates successfully played (for 热血 buff)
-    weekKey:'',        // week key (Mon date) for 热血 buff
-    hotBuffUsed:false, // whether 热血 buff already triggered this week
-    pendingChallenge:false,  // summon succeeded but challenge not started yet
-    lastRewardDate:''        // date of last settled reward (for stale-lock recovery)
-  }
+  var c=store.get('challenge')||{}
+  // 字段归一化：兼容旧数据/缺字段/NaN污染，防止 undefined+1=NaN 传播
+  var num=function(v,d){return(typeof v==='number'&&isFinite(v))?v:d}
+  var str=function(v,d){return(typeof v==='string')?v:d}
+  c.summonedDate=str(c.summonedDate,'')
+  c.seasonBonus=(c.seasonBonus&&typeof c.seasonBonus==='object'&&!Array.isArray(c.seasonBonus))?c.seasonBonus:{atk:0,def:0,hp:0}
+  c.seasonBonus.atk=num(c.seasonBonus.atk,0)
+  c.seasonBonus.def=num(c.seasonBonus.def,0)
+  c.seasonBonus.hp=num(c.seasonBonus.hp,0)
+  c.todayUsed=num(c.todayUsed,0)
+  c.useDate=str(c.useDate,'')
+  c.weekDays=Array.isArray(c.weekDays)?c.weekDays:[]
+  c.weekKey=str(c.weekKey,'')
+  c.hotBuffUsed=!!c.hotBuffUsed
+  c.pendingChallenge=!!c.pendingChallenge
+  c.lastRewardDate=str(c.lastRewardDate,'')
+  return c
 }
 function saveChallenge(c){store.set('challenge',c||{})}
 
-/* Daily reset: new day resets todayUsed */
+/* Daily reset: new day resets todayUsed （同时兜底修复 NaN 污染） */
 function checkChallengeDailyReset(){
   var c=getChallenge()
   var t=today()
-  if(c.useDate!==t){
-    c.useDate=t
-    c.todayUsed=0
-    saveChallenge(c)
-  }
+  var dirty=false
+  if(c.useDate!==t){c.useDate=t;c.todayUsed=0;dirty=true}
+  // 结构修复：todayUsed 非有限数 → 0
+  if(typeof c.todayUsed!=='number'||!isFinite(c.todayUsed)){c.todayUsed=0;dirty=true}
+  if(typeof c.seasonBonus!=='object'||!c.seasonBonus){c.seasonBonus={atk:0,def:0,hp:0};dirty=true}
+  if(dirty)saveChallenge(c)
 }
 
 /* Week key = Monday's date of current week */
@@ -51,6 +58,7 @@ function canSummon(){
   if(c.pendingChallenge)return{can:true,pending:true,reason:'已召唤成功，等待开始挑战'}
   if(c.summonedDate===today())return{can:false,reason:'今日已召唤成功，挑战完成'}
   var vol=getTodayVolume()
+  if(typeof vol!=='number'||!isFinite(vol))vol=0
   var total=Math.floor(vol/100)
   if(total<1)return{can:false,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
   if(c.todayUsed>=total)return{can:false,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
@@ -63,20 +71,22 @@ function attemptSummon(){
   var info=canSummon()
   if(!info.can){toast(info.reason,'e');return}
   var c=getChallenge()
+  var rate=isFinite(info.rate)?info.rate:15
   var roll=Math.random()*100
-  if(roll<info.rate){
+  if(roll<rate){
     // Success! Mark pending, show challenge preview (NOT started yet)
     c.pendingChallenge=true
-    c.todayUsed=info.used+1
+    c.todayUsed=isFinite(info.used)?info.used+1:1
     saveChallenge(c)
     toast('🔮 召唤成功！点击开始挑战！','s')
     showChallengePreview()
   }else{
     // Failure — attempt used, rate climbs for next try
-    c.todayUsed=info.used+1
+    c.todayUsed=isFinite(info.used)?info.used+1:1
     saveChallenge(c)
     var newRate=Math.min(100,15+c.todayUsed*10)
-    toast('❌ 召唤失败！下次成功率 '+newRate+'%（剩 '+(info.total-info.used-1)+' 次）','e')
+    var remain=isFinite(info.total)&&isFinite(info.used)?info.total-info.used-1:'?'
+    toast('❌ 召唤失败！下次成功率 '+newRate+'%（剩 '+remain+' 次）','e')
     renderSummonPanel()
   }
 }
@@ -129,13 +139,15 @@ function renderSummonPanel(){
   
   var rate=info.rate||(15+0)
   var rateColor=rate>=80?'var(--green)':rate>=50?'var(--orange)':'var(--yellow)'
-  var remain=info.total-info.used
+  var totalN=isFinite(info.total)?info.total:'?'
+  var usedN=isFinite(info.used)?info.used:0
+  var remain=isFinite(info.total)&&isFinite(info.used)?info.total-info.used:'?'
   var hotHtml=renderHotBuffHint(c)
   el.innerHTML='<div class="summon-card">'
     +'<div class="summon-title">🔮 隐藏挑战</div>'
-    +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+info.total+'</b> 次（每 100kg +1 次，几率逐次+10%）</div>'
+    +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次，几率逐次+10%）</div>'
     +'<div class="summon-rate-wrap">'
-    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(info.used+1)+' 次）</div>'
+    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'
     +  '<div style="text-align:center;font-weight:700;color:'+rateColor+';font-size:1rem;margin-top:4px">'+rate+'%</div>'
     +'</div>'

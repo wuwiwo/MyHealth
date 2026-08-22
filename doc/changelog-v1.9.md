@@ -186,6 +186,7 @@
 | v1.9.4 | 18 | 443 行 challenge.js | pendingChallenge状态机(稍后再说不吞次数)/noBackdrop防误关/结算页每秒点击柱状图 |
 | v1.9.5 | 18 | 443 行 challenge.js | 结算时才写summonedDate(中途退出不锁死)/lastRewardDate/旧锁恢复入口 |
 | v1.9.6 | 18 | 443 行 challenge.js | 奖励阈值+50%(2250/3375/675)/热血buff改周累计5次/全屏金色闪光特效 |
+| v1.9.7 | 18 | 455 行 challenge.js | 修复召唤NaN污染永远失败/getChallenge字段归一化/数值运算isFinite防护 |
 
 ---
 
@@ -482,3 +483,25 @@
 - `page/index.css`（hotFlash 关键帧）
 - `page/utils.js`（APP_VERSION 1.9.5 → 1.9.6）
 - `page/index.html`（cache-busting v11 → v12）
+
+---
+
+## v1.9.7
+
+**Date:** 2026-08-22
+
+### 修复
+
+- 🩹 **修复召唤 NaN 污染导致永远失败**
+  - 症状：面板显示「召唤机会 NaN/undefined 次」「第 NaN 次」，且召唤一直失败；用户添加自重项目（引体向上 eqWeight=30）后触发
+  - 根因：旧数据/同步时 challenge 对象缺 todayUsed 字段 → `undefined+1=NaN` 写回 → `rate=15+NaN*10=NaN` → `roll<NaN` 永远 false → 永远失败
+  - 修复：`getChallenge()` 增加字段归一化（NaN/undefined/缺字段自动恢复默认值，todayUsed/seasonBonus/weekDays 等全部校验）
+  - `checkChallengeDailyReset()` 主动修复：todayUsed 非有限数 → 0 并写回
+  - `attemptSummon()` / `renderSummonPanel()` 数值运算全加 isFinite 防护（rate/used/total）
+  - 已污染数据在页面刷新/打开训练页时自动修复，无需手动操作
+
+### 修改文件
+
+- `page/challenge.js`（getChallenge 归一化 / checkChallengeDailyReset 修复写回 / canSummon+attemptSummon+renderSummonPanel 数值防御）
+- `page/utils.js`（APP_VERSION 1.9.6 → 1.9.7）
+- `page/index.html`（cache-busting v12 → v13）
