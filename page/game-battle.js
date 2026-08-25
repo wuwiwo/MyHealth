@@ -52,7 +52,17 @@ function runBattle(){
   _battleRunning=true
   const tick=()=>{
     if(_battle.done){_battleRunning=false;return}
-    var result=battleTick(_battle)
+    var result
+    try{
+      result=battleTick(_battle)
+    }catch(err){
+      // 引擎异常兜底：判玩家胜（敌方 HP 已扣减的部分有效），避免战斗永久卡死
+      console.error('battleTick error:',err)
+      _battle.enemy.hp=Math.min(_battle.enemy.hp,0)
+      _battle.done=true;_battle.winner=true;_battleRunning=false
+      endBattle(true)
+      return
+    }
     _battle.turn=result.turn
     result.events.forEach(function(ev){addBattleLog(ev.msg,ev.type)})
     renderBattleHP()

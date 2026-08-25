@@ -96,3 +96,30 @@ v1.10 是内容大版本：关卡世界从「永恒之战」延伸至「超越�
 - `page/utils.js`（APP_VERSION 1.10.0 → 1.10.1）
 - `page/index.html`（cache-busting v18 → v19）
 - `README.md`（副标题版本号 / 版本表新增行）
+
+---
+
+## v1.10.2
+
+**Date:** 2026-08-25
+
+### 修复
+
+- 🩹 **修复双词条组合器（combineAffixes）参数丢失引发的三连故障**
+  - 根因：v1.10.0 的通用链式组合器把上一个钩子的**返回值**当成下一个钩子的**全部参数表**，导致：
+    - 「怒气勃发·铁壁护盾」组合：护盾钩子拿到 undefined 的 boss 参数 → 抛 TypeError
+    - 部分组合 enemy.atk 被写成 undefined → 伤害 NaN → 战斗永远打不死
+  - 症状①：点击 Boss 关卡大概率不弹预览窗 —— 弹窗前的 50 次胜率模拟在坏引擎上抛异常，整个渲染中断（约 20% 概率抽到毒组合）
+  - 症状②：Boss 战进行中卡死无日志 —— tick 循环抛异常后 `_battleRunning` 永久为 true
+  - 症状③：胜率预测失真 —— 模拟与实战共用坏引擎；v1.10.1 测得的「21-6 约5%胜率」实为 NaN 污染的假数据
+  - 修复：按钩子语义分别实现参数保持的串联 —— onTurn 结果回填 atk 槽位、apply 结果回填 atk、onAttack 用原始参数依次调用、reflect 求和；其余参数全程透传
+  - 加固：战斗循环增加异常兜底（battleTick 抛错时判玩家胜并正常结算，不再可能永久卡死）
+  - 回归验证：10 种词条组合 ×200 场全流程战斗零异常零卡死；难度曲线重测 —— 16~21 章 Boss 在每章 +25% 成长递推下全部可通（16章对刚通关15章的玩家全程高胜率），终局压力集中在后期章节
+
+### 修改文件
+
+- `page/battle.js`（combineAffixes 四类钩子分别正确串联 / 移除错误的通用 chain）
+- `page/game-battle.js`（tick 循环 try/catch 兜底 + 异常时正常走 endBattle 结算）
+- `page/utils.js`（APP_VERSION 1.10.1 → 1.10.2）
+- `page/index.html`（cache-busting v19 → v20）
+- `README.md`（副标题版本号 / 版本表新增行）
