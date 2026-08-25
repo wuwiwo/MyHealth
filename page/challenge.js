@@ -66,16 +66,24 @@ function getTodayVolume(){
   return sumVolume(filtered,getExerciseMap())
 }
 
-/* Can summon? Each 100kg grants 1 attempt; attempt i has rate 15%+10%*(i-1) */
+/* Can summon? Each 100kg grants 1 attempt; ladder 10/25/40/55/80/100 via summonRate().
+   容量实时对齐：训练记录被删除导致总次数缩水时，撤销未开始的召唤资格并封顶已用次数 */
 function canSummon(){
   checkChallengeDailyReset()
   var c=getChallenge()
-  // 已召唤成功但还没开始（稍后再说/刷新后恢复）
-  if(c.pendingChallenge)return{can:true,pending:true,reason:'已召唤成功，等待开始挑战'}
-  if(c.summonedDate===today())return{can:false,reason:'今日已召唤成功，挑战完成'}
   var vol=getTodayVolume()
   if(typeof vol!=='number'||!isFinite(vol))vol=0
   var total=Math.floor(vol/100)
+  // 容量回撤守卫：pending 资格所依赖的训练记录被删除（total < 已用数，含成功那一次）→ 同步撤销
+  if(c.pendingChallenge&&c.summonedDate!==today()&&total<c.todayUsed){
+    c.pendingChallenge=false
+    c.todayUsed=Math.max(0,Math.min(c.todayUsed,total))
+    saveChallenge(c)
+    toast('⚠️ 检测到训练记录被删除，今日召唤资格已同步撤销','e')
+  }
+  // 已召唤成功但还没开始（稍后再说/刷新后恢复）
+  if(c.pendingChallenge)return{can:true,pending:true,reason:'已召唤成功，等待开始挑战'}
+  if(c.summonedDate===today())return{can:false,reason:'今日已召唤成功，挑战完成'}
   if(total<1)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
   if(c.todayUsed>=total)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
   // 新规则: 10% 起每次失败 +15%，第5次80%，第6次起100%
@@ -202,7 +210,7 @@ function renderSummonPanel(){
     el.innerHTML='<div class="summon-card done">'
       +'<div class="summon-title">🔮 隐藏挑战</div>'
       +'<div class="summon-info">'+(info.reason||'今日不可召唤')+'</div>'
-      +(isFinite(info.total)?'<div class="summon-info" style="font-size:.65rem;color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+(isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
+      +(isFinite(info.total)?'<div class="summon-info" style="font-size:.65rem;color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+Math.max(0,isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
       +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
       +'</div>'
       +chDebugBlock(info,strVol,c,'cannot')
