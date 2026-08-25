@@ -32,7 +32,7 @@ const LEVELS = {
     {id:'5-3',npc:'刺客大师',atk:130,def:30,hp:500,soulAtk:0,soulDef:0},
     {id:'5-4',npc:'战争使徒',atk:110,def:60,hp:700,soulAtk:0,soulDef:0},
     {id:'5-5',npc:'毁灭者',atk:140,def:40,hp:600,soulAtk:0,soulDef:0},
-    {id:'5-6',npc:'大魔导师',atk:120,def:70,hp:750,soulAtk:0,soulDef:0}
+    {id:'5-6',npc:'BOSS 大魔导师',atk:120,def:70,hp:750,soulAtk:0,soulDef:0,boss:true}
   ]},
   chap6:{name:'终极试炼',levels:[
     {id:'6-1',npc:'深渊守卫',atk:120,def:60,hp:850,soulAtk:0,soulDef:0},
