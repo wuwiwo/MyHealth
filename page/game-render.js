@@ -263,7 +263,7 @@ function showLevelPreview(id){
   // Simulate 50 battles for accurate win rate
   var wins=0
   for(var s=0;s<50;s++){
-    var batt=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp,soulAtk:stats.soulAtk,soulDef:stats.soulDef},{atk:lv.atk,def:lv.def,hp:lv.hp,soulAtk:lv.soulAtk||0,soulDef:lv.soulDef||0},{npc:lv.npc,boss:lv.boss},lv.boss?pickBossAffix():null)
+    var batt=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp,soulAtk:stats.soulAtk,soulDef:stats.soulDef},{atk:lv.atk,def:lv.def,hp:lv.hp,soulAtk:lv.soulAtk||0,soulDef:lv.soulDef||0},{npc:lv.npc,boss:lv.boss},lv.boss?rollBossAffixFor(lv):null)
     for(var t=0;t<100&&!batt.done;t++){battleTick(batt)}
     if(batt.winner)wins++
   }
@@ -290,8 +290,9 @@ function showLevelPreview(id){
   if(lv.boss){
     var affixes=BOSS_AFFIXES.map(function(a){return a.name+': '+a.desc})
     h+='<div style="background:rgba(249,115,22,.08);border:1px solid var(--orange-g);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:.72rem;color:var(--text2)">'
-      +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">👑 Boss 词缀 (随机1种)</div>'
+      +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">👑 Boss 词缀'+(lv.dualAffix?' (随机2种·机制叠加)':' (随机1种)')+'</div>'
       +affixes.map(function(a){return'<div style="padding:2px 0">• '+a+'</div>'}).join('')
+      +(lv.dualAffix?'<div style="margin-top:4px;color:var(--yellow)">⚠️ 本 BOSS 同时携带 2 条词条，效果叠加</div>':'')
       +'</div>'
   }
 
