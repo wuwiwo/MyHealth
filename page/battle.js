@@ -25,9 +25,65 @@ var BOSS_AFFIXES=[
     }}
 ]
 
-function pickBossAffix(){
-  var idx=Math.floor(Math.random()*BOSS_AFFIXES.length)
-  return{index:idx,...BOSS_AFFIXES[idx]}
+/* 抽取 N 条不重复词条（默认 1 条）；dualAffix 关卡（16章起 BOSS）抽 2 条 */
+function pickBossAffix(count){
+  var n=count||1
+  if(n<=1){
+    var idx=Math.floor(Math.random()*BOSS_AFFIXES.length)
+    return{index:idx,...BOSS_AFFIXES[idx]}
+  }
+  var pool=BOSS_AFFIXES.map(function(a,i){return i})
+  var picked=[]
+  while(picked.length<n&&pool.length){
+    var k=Math.floor(Math.random()*pool.length)
+    picked.push({index:pool[k],...BOSS_AFFIXES[pool[k]]})
+    pool.splice(k,1)
+  }
+  // 按 index 排序保证组合顺序稳定（如含「虚弱诅咒」时其 index 必为组合最小值）
+  var parts=picked.sort(function(a,b){return a.index-b.index})
+  return{
+    index:parts[0].index,
+    name:parts.map(function(a){return a.name}).join('·'),
+    desc:parts.map(function(a){return a.desc}).join('；'),
+    multi:true,
+    parts:parts
+  }
+}
+
+/* 把多条词条合成为单个复合词条供战斗引擎使用（同类型钩子链式依次执行） */
+function combineAffixes(affixes){
+  if(!affixes||!affixes.length)return null
+  if(affixes.length===1)return affixes[0]
+  function chain(fns){
+    if(!fns.length)return null
+    if(fns.length===1)return fns[0]
+    return function(){
+      var r=arguments
+      for(var i=0;i<fns.length;i++)r=[fns[i].apply(null,r)]
+      return r[0]
+    }
+  }
+  function hook(key){
+    var fns=[]
+    for(var i=0;i<affixes.length;i++)if(affixes[i][key])fns.push(affixes[i][key])
+    return chain(fns)
+  }
+  return{
+    index:Math.min.apply(null,affixes.map(function(a){return a.index})),
+    name:affixes.map(function(a){return a.name}).join('·'),
+    desc:affixes.map(function(a){return a.desc}).join('；'),
+    multi:true,
+    apply:hook('apply'),
+    onTurn:hook('onTurn'),
+    onAttack:hook('onAttack'),
+    reflect:hook('reflect')
+  }
+}
+
+/* 按关卡配置抽取词条（普通 Boss 单条，dualAffix Boss 复合双条） */
+function rollBossAffixFor(level){
+  var p=pickBossAffix(level&&level.dualAffix?2:1)
+  return p.multi?combineAffixes(p.parts):p
 }
 
 function findLevel(id){

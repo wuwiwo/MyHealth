@@ -113,5 +113,53 @@ const LEVELS = {
     {id:'15-4',npc:'永恒刺客',atk:1050,def:420,hp:6600,soulAtk:520,soulDef:170},
     {id:'15-5',npc:'永恒天神',atk:1020,def:450,hp:7200,soulAtk:500,soulDef:190},
     {id:'15-6',npc:'BOSS 永恒之主',atk:950,def:480,hp:9000,soulAtk:450,soulDef:350,boss:true}
+  ]},
+  chap16:{name:'破晓远征',levels:[
+    {id:'16-1',npc:'破晓先锋',atk:1000,def:460,hp:7800,soulAtk:440,soulDef:180},
+    {id:'16-2',npc:'破晓游侠',atk:1090,def:430,hp:7600,soulAtk:530,soulDef:170},
+    {id:'16-3',npc:'破晓巨兽',atk:910,def:550,hp:9100,soulAtk:400,soulDef:330},
+    {id:'16-4',npc:'破晓猎影',atk:1160,def:460,hp:7300,soulAtk:570,soulDef:190},
+    {id:'16-5',npc:'破晓圣裁',atk:1130,def:500,hp:8000,soulAtk:550,soulDef:210},
+    {id:'16-6',npc:'BOSS 破晓之神',atk:1050,def:530,hp:10000,soulAtk:500,soulDef:385,boss:true,dualAffix:true}
+  ]},
+  chap17:{name:'星陨之海',levels:[
+    {id:'17-1',npc:'星陨水母',atk:1120,def:520,hp:8600,soulAtk:490,soulDef:200},
+    {id:'17-2',npc:'潮汐领主',atk:1220,def:480,hp:8400,soulAtk:590,soulDef:185},
+    {id:'17-3',npc:'深海古神',atk:1020,def:610,hp:10100,soulAtk:450,soulDef:370},
+    {id:'17-4',npc:'星陨猎手',atk:1300,def:510,hp:8100,soulAtk:630,soulDef:210},
+    {id:'17-5',npc:'涡流使者',atk:1270,def:560,hp:8900,soulAtk:610,soulDef:235},
+    {id:'17-6',npc:'BOSS 星辰深渊之主',atk:1170,def:590,hp:11100,soulAtk:555,soulDef:430,boss:true,dualAffix:true}
+  ]},
+  chap18:{name:'时空回廊',levels:[
+    {id:'18-1',npc:'时序守卫',atk:1240,def:580,hp:9500,soulAtk:545,soulDef:220},
+    {id:'18-2',npc:'回廊行者',atk:1350,def:530,hp:9300,soulAtk:650,soulDef:205},
+    {id:'18-3',npc:'光阴巨像',atk:1130,def:680,hp:11200,soulAtk:500,soulDef:410},
+    {id:'18-4',npc:'岁月刺客',atk:1440,def:570,hp:9000,soulAtk:700,soulDef:230},
+    {id:'18-5',npc:'轮回法师',atk:1400,def:620,hp:9900,soulAtk:675,soulDef:260},
+    {id:'18-6',npc:'BOSS 时空主宰',atk:1290,def:650,hp:12300,soulAtk:615,soulDef:475,boss:true,dualAffix:true}
+  ]},
+  chap19:{name:'创世余烬',levels:[
+    {id:'19-1',npc:'余烬守望者',atk:1370,def:640,hp:10500,soulAtk:600,soulDef:245},
+    {id:'19-2',npc:'灰烬凤凰',atk:1490,def:590,hp:10300,soulAtk:720,soulDef:225},
+    {id:'19-3',npc:'创世残响',atk:1250,def:750,hp:12400,soulAtk:550,soulDef:455},
+    {id:'19-4',npc:'燎原魔灵',atk:1590,def:630,hp:10000,soulAtk:775,soulDef:255},
+    {id:'19-5',npc:'焚天炎尊',atk:1550,def:685,hp:11000,soulAtk:745,soulDef:290},
+    {id:'19-6',npc:'BOSS 创世火灵',atk:1430,def:720,hp:13600,soulAtk:680,soulDef:525,boss:true,dualAffix:true}
+  ]},
+  chap20:{name:'万象归无',levels:[
+    {id:'20-1',npc:'归无行者',atk:1510,def:710,hp:11600,soulAtk:665,soulDef:270},
+    {id:'20-2',npc:'寂灭之影',atk:1650,def:650,hp:11400,soulAtk:795,soulDef:250},
+    {id:'20-3',npc:'虚无巨神',atk:1380,def:830,hp:13700,soulAtk:610,soulDef:505},
+    {id:'20-4',npc:'归零魔导',atk:1750,def:700,hp:11100,soulAtk:855,soulDef:280},
+    {id:'20-5',npc:'无相天灾',atk:1710,def:760,hp:12200,soulAtk:825,soulDef:320},
+    {id:'20-6',npc:'BOSS 归无之渊',atk:1580,def:800,hp:15000,soulAtk:750,soulDef:580,boss:true,dualAffix:true}
+  ]},
+  chap21:{name:'超越极限',levels:[
+    {id:'21-1',npc:'超越战士',atk:1680,def:790,hp:13000,soulAtk:740,soulDef:300},
+    {id:'21-2',npc:'超越法皇',atk:1840,def:725,hp:12700,soulAtk:885,soulDef:280},
+    {id:'21-3',npc:'极限壁垒',atk:1540,def:925,hp:15300,soulAtk:680,soulDef:560},
+    {id:'21-4',npc:'无界剑圣',atk:1950,def:780,hp:12400,soulAtk:955,soulDef:315},
+    {id:'21-5',npc:'究极形态',atk:1900,def:845,hp:13600,soulAtk:920,soulDef:355},
+    {id:'21-6',npc:'BOSS 超越·无限',atk:1760,def:890,hp:16700,soulAtk:835,soulDef:645,boss:true,dualAffix:true}
   ]}
 };

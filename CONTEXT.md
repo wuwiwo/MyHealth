@@ -17,7 +17,7 @@
 | **补签** | 对历史日期补充完成标记 | store key: `missed`，`app.js:23-24` |
 | **体重记录** | 用户体重时间序列 | store key: `weight`，`app.js:32-33` |
 | **个人资料** | 身高/性别/出生年份 | store key: `profile`，`app.js:35-36` |
-| **关卡** | 9 章 45 关 RPG 战斗，每关有 NPC（atk/def/hp），Boss 关带词缀 | `levels.js`，store key: `game`（cleared + current） |
+| **关卡** | 21 章 117 关 RPG 战斗，每关有 NPC（atk/def/hp），Boss 关带词缀（16 章起 Boss 为双词缀） | `levels.js`，store key: `game`（cleared + current） |
 | **玩家属性** | 由 30 天训练量计算：atk=容量/20，def=有效时长/15，hp=容量/10+时长/3+周奖励 | `stats.js:66-74` calculateStats() |
 | **动作库** | 力量动作 + 有氧类型的统一管理，含 ratio/intensity/emoji/hasDist/description | store key: `exercises`，`app.js` getExercises/saveExercises |
 | **ratio** | 力量动作的容量比值(0~100%)，容量=weight×reps×(ratio/100) | `stats.js:13` sumVolume()，PR 不乘 ratio |
