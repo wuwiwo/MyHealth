@@ -50,34 +50,53 @@ function pickBossAffix(count){
   }
 }
 
-/* 把多条词条合成为单个复合词条供战斗引擎使用（同类型钩子链式依次执行） */
+/* 把多条词条合成为单个复合词条供战斗引擎使用。
+   各钩子按各自语义串联：结果只回填到对应的参数槽位，其余参数原样透传
+   （onTurn 的结果是新 atk → 回填第2槽；apply 的结果是新 atk → 回填第1槽；
+   onAttack 是副作用钩子 → 用原始参数依次调用） */
 function combineAffixes(affixes){
   if(!affixes||!affixes.length)return null
   if(affixes.length===1)return affixes[0]
-  function chain(fns){
-    if(!fns.length)return null
-    if(fns.length===1)return fns[0]
-    return function(){
-      var r=arguments
-      for(var i=0;i<fns.length;i++)r=[fns[i].apply(null,r)]
-      return r[0]
-    }
-  }
-  function hook(key){
+  function collect(key){
     var fns=[]
     for(var i=0;i<affixes.length;i++)if(affixes[i][key])fns.push(affixes[i][key])
-    return chain(fns)
+    return fns
   }
-  return{
+  var comp={
     index:Math.min.apply(null,affixes.map(function(a){return a.index})),
     name:affixes.map(function(a){return a.name}).join('·'),
     desc:affixes.map(function(a){return a.desc}).join('；'),
     multi:true,
-    apply:hook('apply'),
-    onTurn:hook('onTurn'),
-    onAttack:hook('onAttack'),
-    reflect:hook('reflect')
+    parts:affixes
   }
+  var applies=collect('apply')
+  if(applies.length===1)comp.apply=applies[0]
+  else if(applies.length>1)comp.apply=function(atk,def,isPlayer){
+    for(var i=0;i<applies.length;i++)atk=applies[i](atk,def,isPlayer)
+    return atk
+  }
+  var turns=collect('onTurn')
+  if(turns.length===1)comp.onTurn=turns[0]
+  else if(turns.length>1)comp.onTurn=function(turn,enemyAtk,baseAtk,boss){
+    for(var i=0;i<turns.length;i++)enemyAtk=turns[i](turn,enemyAtk,baseAtk,boss)
+    return enemyAtk
+  }
+  var attacks=collect('onAttack')
+  if(attacks.length===1)comp.onAttack=attacks[0]
+  else if(attacks.length>1)comp.onAttack=function(dmg,boss){
+    for(var i=0;i<attacks.length;i++)attacks[i](dmg,boss)
+    return dmg
+  }
+  var reflects=collect('reflect')
+  if(reflects.length===1)comp.reflect=reflects[0]
+  else if(reflects.length>1){
+    comp.reflect=function(dmg,atkDef){
+      var total=0
+      for(var i=0;i<reflects.length;i++)total+=reflects[i](dmg,atkDef)
+      return total
+    }
+  }
+  return comp
 }
 
 /* 按关卡配置抽取词条（普通 Boss 单条，dualAffix Boss 复合双条） */
