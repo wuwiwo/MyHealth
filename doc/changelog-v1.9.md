@@ -532,33 +532,82 @@
 - `page/challenge.js`（canSummon can:false 补字段 / renderSummonPanel 添加 !info.can 分支 / chDebugHtml 临时面板）
 - `page/utils.js`（APP_VERSION 1.9.7 → 1.9.8）
 - `page/index.html`（cache-busting v13 → v14）---\
-\
-## v1.9.9\
-\
-**Date:** 2026-08-22\
-\
-### 新增功能\
-\
-- 📜 **历史召唤成绩查看（含 buff）**\
-  - 每次挑战结算自动记录：日期 / 总伤害 / 命中次数 / 平均每秒 / 暴击数 / 最强一击 / 奖励（攻防血）/ 使用的热血 buff\
-  - 召唤面板（任意状态）显示「📜 历史召唤成绩」按钮，弹窗列表倒序查看\
-  - 最多保留 50 条，随 challenge 数据同步\
-\
-- 🔍 **屏幕 debug 面板永久保留**\
-  - 之前只在正常召唤分支可用，且需点标题 3 次太隐蔽，本次重构：所有分支（容量不足/已完成/待开始/次数用完/正常）统一挂载\
-  - 常驻「🔍 debug」开关按钮，一键显示/隐藏\
-  - 数据充足：分支名 / today / strVol / canSummon 全量 / total+used+rate / 今日每条训练明细（动作/重量/等效/次数/ratio/容量贡献）/ challenge 全量 JSON\
-\
-### 平衡调整\
-\
-- 🎲 **召唤成功率新规则**\
-  - 第 1~4 次：成功率 15%（原逐次 +10% 递增到 55% 的规则废除）\
-  - 第 5 次起：成功率固定 25%（不再递增）\
-  - 面板文案同步：基础 15% / 保底 25% / 第 5 次起成功率 25%\
-\
-### 修改文件\
-\
-- \page/challenge.js\（新概率规则 / chDebugBlock+mountSummonExtras 重构 / showChallengeHistory / history 记录与归一化）\
-- \page/utils.js\（APP_VERSION 1.9.8 → 1.9.9）\
-- \page/index.html\（cache-busting v14 → v15）\
 
+---
+
+## v1.9.9
+
+**Date:** 2026-08-22
+
+### 新增功能
+
+- 📜 **历史召唤成绩查看（含 buff）**
+  - 每次挑战结算自动记录：日期 / 总伤害 / 命中次数 / 平均每秒 / 暴击数 / 最强一击 / 奖励（攻防血）/ 使用的热血 buff
+  - 召唤面板（任意状态）显示「📜 历史召唤成绩」按钮，弹窗列表倒序查看
+  - 最多保留 50 条，随 challenge 数据同步
+
+- 🔍 **屏幕 debug 面板永久保留**
+  - 所有分支（容量不足/已完成/待开始/次数用完/正常）统一挂载
+  - 常驻「🔍 debug」开关按钮，一键显示/隐藏
+  - 数据充足：分支名 / today / strVol / canSummon 全量 / total+used+rate / 今日每条训练明细（动作/重量/等效/次数/ratio/容量贡献）/ challenge 全量 JSON
+
+### 平衡调整
+
+- 🎲 **召唤成功率新规则**
+  - 第 1~4 次：成功率 15%（原逐次 +10% 递增到 55% 的规则废除）
+  - 第 5 次起：成功率固定 25%（不再递增）
+  - 面板文案同步：基础 15% / 保底 25% / 第 5 次起成功率 25%
+
+### 修改文件
+
+- `page/challenge.js`（新概率规则 / chDebugBlock+mountSummonExtras 重构 / showChallengeHistory / history 记录与归一化）
+- `page/utils.js`（APP_VERSION 1.9.8 → 1.9.9）
+- `page/index.html`（cache-busting v14 → v15）
+
+---
+
+## v1.9.10
+
+**Date:** 2026-08-25
+
+### 平衡调整
+
+- 🎲 **召唤成功率阶梯重做**
+  - 新阶梯：第 1 次 10%，每失败一次 +15%（10% / 25% / 40% / 55%），第 5 次保底 80%，第 6 次起必成 100%
+  - 废除 v1.9.9 的「前 4 次固定 15%，第 5 次起 25%」规则
+  - 抽取 `summonRate(used)` 纯函数统一计算，`canSummon()` / `attemptSummon()` 共用，消除硬编码分散隐患
+  - 失败 toast 同步显示下一档成功率；容量不足 / 次数用完分支的 rate 字段同步走新阶梯
+
+### UI 调整
+
+- ✨ 召唤面板成功率进度条沿用既有配色阈值（<30% 黄 / <50% 橙 / ≥50% 绿），高阶档位自然变绿
+
+### 修复
+
+- 🩹 修复本文档 v1.9.9 小节格式损坏（行尾杂散反斜杠、文件名代码标记丢失），整段重写恢复
+
+### 架构演化
+
+> 注：v1.7 ~ v1.9.9 各 changelog 未按规范附架构演化表且原始数据已不可考，现补全已知部分。
+
+| 版本 | JS文件数 | 最大文件 | 备注 |
+|------|----------|----------|------|
+| v1.0 | 1 | 1155 行 index.js | 单文件巨石 |
+| v1.1 | 10 | 308 行 tab-strength.js | Store模块 + 文件拆分 |
+| v1.2 | 13 | 388 行 tab-game.js | PR/统计/有氧计划/记录 |
+| v1.3 | 13 | 442 行 tab-game.js | 关卡预览/强度系统/子Tab |
+| v1.4 | 14 | 460 行 tab-game.js | 属性日志增量/UI美化 |
+| v1.5.0 | 15 | 434 行 tab-game.js | 新关卡/手动同步 |
+| v1.5.1 | 15 | 434 行 tab-game.js | 全量同步/关卡配置独立 |
+| v1.6 | 13 | 406 行 tab-game.js | 动作库驱动/页面重构/设置Tab |
+| v1.6.1 | 13 | 406 行 tab-game.js | PR显示ratio有效值tag |
+| v1.7 ~ v1.9.9 | — | — | 未存档 |
+| v1.9.10 | 18 | 566 行 challenge.js | 召唤率阶梯函数化 |
+
+### 修改文件
+
+- `page/challenge.js`（summonRate 阶梯函数 / attemptSummon+canSummon 接入 / 文案更新）
+- `page/utils.js`（APP_VERSION 1.9.9 → 1.9.10）
+- `page/index.html`（cache-busting v15 → v16）
+- `README.md`（副标题版本号 / 版本表新增 v1.9.10 行）
+- `doc/changelog-v1.9.md`（新增本小节 / 修复 v1.9.9 格式 / 补全架构演化表）

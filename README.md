@@ -1,6 +1,6 @@
 ﻿# MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.9.9
+> Personal Health Manager — 个人健身健康管理应用 v1.9.10
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -173,5 +173,6 @@ Vercel 项目设置：
 | **v1.9.7** | **2026-08-22** | **修复：召唤 NaN 污染导致永远失败（getChallenge 字段归一化 + isFinite 防护，含自重动作场景）** | `doc/changelog-v1.9.md` |
 | **v1.9.8** | **2026-08-22** | **修复：召唤面板 ?/? 显示（次数用尽时 canSummon 补字段 + 面板 can 检查）+ 临时屏幕 debug 面板** | `doc/changelog-v1.9.md` |
 | **v1.9.9** | **2026-08-22** | **历史召唤成绩查看（含 buff）+ debug 面板全分支常驻开关 + 召唤率新规则（前4次15%，第5次起25%）** | `doc/changelog-v1.9.md` |
+| **v1.9.10** | **2026-08-25** | **召唤概率阶梯重做：10% 起每次失败 +15%（10/25/40/55），第5次 80%、第6次起必成** | `doc/changelog-v1.9.md` |
 
-> 当前版本：**v1.9.9**
+> 当前版本：**v1.9.10**

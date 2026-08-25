@@ -28,6 +28,15 @@ function getChallenge(){
 }
 function saveChallenge(c){store.set('challenge',c||{})}
 
+/* 召唤成功率阶梯：used=今日已失败次数。
+   第1次10%，每失败一次+15%（10/25/40/55），第5次起保底80%，第6次起必成 */
+function summonRate(used){
+  var u=(typeof used==='number'&&isFinite(used))?Math.max(0,used):0
+  if(u>=5)return 100
+  if(u===4)return 80
+  return Math.min(100,10+u*15)
+}
+
 /* Daily reset: new day resets todayUsed （同时兜底修复 NaN 污染） */
 function checkChallengeDailyReset(){
   var c=getChallenge()
@@ -67,10 +76,10 @@ function canSummon(){
   var vol=getTodayVolume()
   if(typeof vol!=='number'||!isFinite(vol))vol=0
   var total=Math.floor(vol/100)
-  if(total<1)return{can:false,total:total,used:0,rate:15,vol:vol,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
-  if(c.todayUsed>=total)return{can:false,total:total,used:c.todayUsed,rate:15,vol:vol,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
-  // 新规则: 第 1~4 次成功率 15%，第 5 次起每次 25%
-  var rate=(c.todayUsed>=4)?25:15
+  if(total<1)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
+  if(c.todayUsed>=total)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
+  // 新规则: 10% 起每次失败 +15%，第5次80%，第6次起100%
+  var rate=summonRate(c.todayUsed)
   return{can:true,rate:rate,total:total,used:c.todayUsed,vol:vol}
 }
 
@@ -79,7 +88,7 @@ function attemptSummon(){
   var info=canSummon()
   if(!info.can){toast(info.reason,'e');return}
   var c=getChallenge()
-  var rate=isFinite(info.rate)?info.rate:15
+  var rate=isFinite(info.rate)?info.rate:10
   var roll=Math.random()*100
   if(roll<rate){
     // Success! Mark pending, show challenge preview (NOT started yet)
@@ -92,7 +101,7 @@ function attemptSummon(){
     // Failure — attempt used, rate climbs for next try
     c.todayUsed=isFinite(info.used)?info.used+1:1
     saveChallenge(c)
-    var newRate=(c.todayUsed>=4)?25:15
+    var newRate=summonRate(c.todayUsed)
     var remain=isFinite(info.total)&&isFinite(info.used)?info.total-info.used-1:'?'
     toast('❌ 召唤失败！下次成功率 '+newRate+'%（剩 '+remain+' 次）','e')
     renderSummonPanel()
