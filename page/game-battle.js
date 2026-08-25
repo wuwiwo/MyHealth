@@ -120,6 +120,8 @@ function endBattle(won){
     setGame(g)
   }
   if(won){
+    // 🎁 先取"被击败的关卡"再推进 current，否则战利品会错按下一关类型结算
+    var beatenLv=findLevel(g.current)||{}
     if(!g.cleared.includes(g.current))g.cleared.push(g.current)
     let nextId='';let found=false
     for(const ch of Object.values(LEVELS)){
@@ -134,7 +136,7 @@ function endBattle(won){
     setGame(g)
     trackLevel(g.current)
     // 🎁 Victory loot: refine points (banked, spendable once soul refinement unlocked)
-    var lv=findLevel(g.current)||{}
+    var lv=beatenLv
     var loot=rollLoot(lv.boss?lv:{boss:false})
     var ref=getRefine()
     ref.points=(ref.points||0)+loot.points
