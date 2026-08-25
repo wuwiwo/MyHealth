@@ -4,6 +4,14 @@
    ============================================ */
 /* ========== BATTLE ========== */
 let _battleRunning=false,_battleSpeed=1,_battleTimer=null,_battle=null,_battleAuto=false
+
+/* 🎁 通关炼化点奖励：基础 1~2 点，普通关 ×2，BOSS 关 ×10 */
+function rollLoot(levelInfo){
+  var base=1+Math.floor(Math.random()*2)
+  var mult=levelInfo&&levelInfo.boss?10:2
+  return{points:base*mult,mult:mult,base:base}
+}
+
 function startBattle(id){
   const lv=findLevel(id);if(!lv)return
   if(!getGame().attempts)getGame().attempts={}
@@ -115,12 +123,13 @@ function endBattle(won){
     else g.current=''
     setGame(g)
     trackLevel(g.current)
-    // 🎁 Victory loot: random refine points (banked, spendable once soul refinement unlocked)
-    var loot=1+Math.floor(Math.random()*3)
+    // 🎁 Victory loot: refine points (banked, spendable once soul refinement unlocked)
+    var lv=findLevel(g.current)||{}
+    var loot=rollLoot(lv.boss?lv:{boss:false})
     var ref=getRefine()
-    ref.points=(ref.points||0)+loot
+    ref.points=(ref.points||0)+loot.points
     saveRefine(ref)
-    var lootLine='<div class="be-loot">🎁 战利品 +'+loot+' 炼化点'+(ref.unlocked?'':'（通关 9-6 解锁炼魂后可用）')+'</div>'
+    var lootLine='<div class="be-loot">🎁 战利品 +'+loot.points+' 炼化点'+(loot.mult>2?'（BOSS ×10）': '')+(ref.unlocked?'':'（通关 9-6 解锁炼魂后可用）')+'</div>'
     el.innerHTML='<div class="be-result be-win">🏆 胜利！</div>'+lootLine+'<div class="be-replay"><button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button></div>'
     celebrate()
     if(_battleAuto&&nextId){
