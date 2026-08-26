@@ -34,6 +34,20 @@
 - 文件数 = `page/` 下 `*.js` 文件数量
 - 最大文件 = 行数最多的 `page/*.js` 文件名 + 行数
 
+### Commit discipline
+
+每次修改**都必须提交**（不能留 pending 改动），但按阶段区分处理：
+
+| 阶段 | 判定 | 提交要求 | 版本发布三项同步 |
+|------|------|----------|------------------|
+| **施工阶段** | 改动 `page/*.js` 代码、动 `APP_VERSION` 或影响线上功能 | 每次修改提交，提交信息按功能/修复描述 | **触发**（bump 版本 + README/changelog/架构表） |
+| **设计阶段** | 仅改动设计文档（如 `doc/design-v2.0.md`、README/CONTEXT 的文档性说明） | 每次修改提交，`docs:` 前缀 | **不触发**（不 bump 版本、不生成 changelog） |
+
+- 设计阶段只动文档、不碰代码/版本号 → 提交，但**不**更新「版本」章节与架构演化表
+- 施工阶段任何代码改动 → 提交，并**必须**同步完成上述版本发布三项
+- 设计→施工切换：只有真正落代码（`APP_VERSION` ≥ 上版本）才开始走版本纪律
+- 提交信息约定：施工用 fix:/feat: 等，设计用 `docs:` 前缀
+
 ### Issue tracker
 
 GitHub Issues — `gh issue` CLI 操作 `wuwiwo/MyHealth` 仓库。详见 `docs/agents/issue-tracker.md`。
