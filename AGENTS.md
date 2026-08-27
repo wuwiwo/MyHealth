@@ -59,3 +59,11 @@ GitHub Issues — `gh issue` CLI 操作 `wuwiwo/MyHealth` 仓库。详见 `docs/
 ### Domain docs
 
 单上下文 — 根目录 `CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
+
+### Sub-agent 调用约定（lead-planner / 总指挥）
+
+调用 `lead-planner` 子代理（.commandcode/agents/lead-planner.md）时：
+
+- **边界**：prompt 给任务目标 + 相关文件路径；**可附少量关键上下文补充**（已拍板的决策要点、背景一句话），但**大段文档内容**（设计文档全文、代码边界描述）由 agent 自己 `read_file` / `grep` 读取，以文件原文为唯一事实来源。
+- **理由**：大段 prompt 导致 token 膨胀 → 响应慢 → 流式传输断连（本项目已多次因此卡死，如 2026-08-27 动作数据集规划 286K tokens 断连事件）。
+- 例：`让 lead-planner 读 doc/design-v2.0.md 与 doc/plans/plan-20260827-m2a-kickoff.md，规划 XXX（补充：已拍板路线B/仅中文瘦身）`，而非粘贴文档全文。
