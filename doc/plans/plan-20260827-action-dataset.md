@@ -26,10 +26,10 @@
 |---|---|---|---|---|---|
 | **P0** | 本计划落盘 + CONTEXT 标注 | 本文档 | 无 | `docs:` | 不动版本 |
 | **P1** | 数据瘦身打包 + 媒体下载脚本 | `scripts/build-dataset.js`、`scripts/fetch-media.js`、`data/exercises-dataset.js`、`data/action-map.json`、`page/media/**` | P0 | `chore:` | **不动版本**（新增文件未被 index.html 引用，运行时零影响） |
-| **P2** | 关联机制：数据集加载 + 匹配算法 + `dsId` 字段 + 编辑 modal 关联区块 | `page/config.js`(新)、`page/ex-dataset.js`(新)、`page/utils.js`、`page/tab-settings.js`、`page/app.js`、`index.html` | P1 | `feat:` | **bump v1.11.0** + 三项同步 |
-| **P3** | 动作百科 UI：入口 + 面板 + 搜索/筛选/分页/详情/GIF | `page/tab-settings.js`、`page/ex-dataset.js`、`index.html` | P2 | `feat:` | v1.11.1 |
+| **P2** | 关联机制：数据集加载 + 匹配算法 + `dsId` 字段 + 编辑 modal 关联区块 | `page/config.js`(新)、`page/ex-dataset.js`(新)、`page/utils.js`、`page/tab-settings.js`、`page/app.js`、`index.html` | P1 | `feat:` | bump（随 v2.0 节奏，见 §十一）+ 三项同步 |
+| **P3** | 动作百科 UI：入口 + 面板 + 搜索/筛选/分页/详情/GIF | `page/tab-settings.js`、`page/ex-dataset.js`、`index.html` | P2 | `feat:` | bump（同上）|
 
-**版本纪律判定理由**：P1 只新增 `scripts/`、`data/`、`page/media/` 文件，不改 `page/*.js` 与 index.html → 纯资产/工具产出不动版本；P2 首次让数据集进入运行时（改 page/*.js + index.html），触发 bump → **v1.10.3 → v1.11.0**。
+**版本纪律判定理由**：P1 只新增 `scripts/`、`data/`、`page/media/` 文件，不改 `page/*.js` 与 index.html → 纯资产/工具产出不动版本；P2/P3 改 page/*.js 触发施工纪律——但本功能属 **v2.0 准备开发内容**，版本号不单独走 v1.11.x，随 v2.0 发布节奏统一递增（§十一 裁决 1）。
 
 ---
 
@@ -138,7 +138,7 @@ matchCandidates(actionName, limit=5):
 
 ### B. 百科面板
 - **入口**：subLibrary 顶部「📖 动作百科」按钮 + 每个动作卡片右上角关联标记徽标（✓）
-- **视图切换**：点击按钮 → **替换 subLibrary 内容为百科视图 + 返回键**（不用 overlay 全屏 sheet——列表→筛选→详情三级导航替换式贴合移动端，避免 modal 嵌套层级滚动 bug）
+- **视图切换**：点击按钮 → **overlay 全屏 sheet 盖在动作库上，关闭即返回**（✅裁决 5，否决替换式；复用现有 modal-overlay 样式做全屏变体）
 - **分页**：首屏渲染 50 条，底部哨兵 + IntersectionObserver 触底追加 50；**不做虚拟滚动**（过度设计）；JS 内 filter/search 全量无压力，瓶颈只在 DOM 数量
 - **筛选**：部位 chips（10 类）+ 器械 chips（12 类），单选+「全部」，横向滚动条样式复用 car-types/chip
 
@@ -230,10 +230,14 @@ P3(依赖P2):
 
 ---
 
-## 十一、待裁决（施工前需作者确认）
+## 十一、裁决记录（2026-08-27 作者拍板）
 
-1. **P2/P3 合并为单次 v1.11.0 还是分开 1.11.0+1.11.1**（leader 倾向分开便于回滚）
-2. **data/raw/ 原始 1.4MB 是否入库 git**（leader 倾向入库保可复现；介意体积则 gitignore+脚本重拉）
-3. 详情页 GIF **点击播放**（倾向）还是 autoplay
-4. MEDIA_BASE 图床具体地址（本地先留空）
-5. 百科面板「替换 subLibrary+返回键」（倾向）还是 overlay 全屏 sheet
+| # | 议题 | 裁决 |
+|---|------|------|
+| 1 | **版本节奏** | **本功能不单独发 v1.11.x**——属 v2.0 准备开发内容，与 M2a 等其他 v2.0 项目**并列**，版本号随 v2.0 发布节奏统一走（施工提交仍每次 bump，具体版本号在开工时按当时的 APP_VERSION 基线递增） |
+| 2 | data/raw/ 原始数据 | **入库 git**（保打包管线可复现，仓库 +~1.4MB 可接受） |
+| 3 | 详情页 GIF | **点击播放**（静态 jpg 盖 ▶ 浮层，点按才加载 GIF） |
+| 4 | MEDIA_BASE | 本地先留空（用 page/media/ 相对路径），作者上图床后一行配置切换 |
+| 5 | 百科面板形态 | **overlay 全屏 sheet**（否决了 leader 推荐的替换式——采用全屏覆盖，关闭即返回动作库） |
+
+> 裁决 1 影响原分期表的版本纪律列：P2/P3 的「bump v1.11.0/v1.11.1」改为「随 v2.0 统一发布节奏，施工时按当时基线 bump」，其余（三项同步、docs:/chore:/feat: 判定）不变。
