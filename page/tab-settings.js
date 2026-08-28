@@ -44,8 +44,11 @@ function renderExLibrary(){
   }
 
   h+='<button class="add-btn" id="exNewBtn" style="margin-top:12px">＋ 新建动作</button>';
+  h+='<button class="add-btn" id="exWikiBtn" style="margin-top:8px;background:var(--bg);color:var(--text);border:1px solid var(--bd)">📖 动作百科'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
   h+='<div style="text-align:center;margin-top:6px;font-size:.7rem;color:var(--text3)">力量 ratio 影响容量计算（100%=满容量）</div>';
   el.innerHTML=h;
+  var wikiBtn=document.getElementById('exWikiBtn');
+  if(wikiBtn)wikiBtn.addEventListener('click',function(){openDsPicker(null)});
   // Wire description toggle
   el.querySelectorAll('[data-a="exToggle"]').forEach(function(b){
     b.addEventListener('click',function(){
@@ -57,7 +60,15 @@ function renderExLibrary(){
 
 function exCardHtml(ex,badge,isCardio){
   var namePrefix=isCardio?(ex.emoji||'🏃')+' ':'';
-  var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
+  var linked=ex.dsId&&EXD.ready()?EXD.get(ex.dsId):null;
+  var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+(linked?' <span title="已关联动作百科" style="font-size:.7rem">📖</span>':'')+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
+  if(linked){
+    var m=EXD.mediaUrls(linked.img);
+    h+='<div style="display:flex;gap:8px;margin-top:6px;align-items:center">'
+      +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;background:var(--bg2)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:.72rem;color:var(--text1)">'+linked.zh+'</div>'
+      +'<div style="font-size:.62rem;color:var(--text3)">'+linked.cat+' · '+linked.eq+' · '+linked.target+'</div></div></div>';
+  }
   if(ex.eqWeight){
     var unitLabel=ex.unit==='sec'?'秒':'次';
     h+='<div style="margin-top:4px;font-size:.68rem;color:var(--orange)">⚖️ 等效 '+ex.eqWeight+'kg/'+unitLabel+'（不计弯鿖重量）</div>';
@@ -94,8 +105,48 @@ function showExEditor(editId){
   h+='<div class="fg" id="exIntensityFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><label class="fl">默认强度</label><div class="car-types" id="exIntensitySel"></div></div>';
   h+='<div class="fg" id="exHasDistFg"'+(ex.type==='cardio'?'':' style="display:none"')+' style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="exHasDist"'+(ex.hasDist?' checked':'')+'><label class="fl" style="margin:0">有距离统计</label></div>';
   h+='<div class="fg"><label class="fl">动作描述 <span style="font-weight:400;text-transform:none">（支持 **加粗** #标题 `代码` -列表）</span></label><textarea class="fi" id="exDesc" rows="4" style="resize:vertical;font-size:.78rem;line-height:1.6" placeholder="可选：记录动作要领、注意事项...">'+(ex.description||'').replace(/</g,'&lt;')+'</textarea></div>';
+  h+='<div class="fg" id="exLinkFg"><label class="fl">📚 关联动作百科 <span style="font-weight:400;text-transform:none">（可选，提供说明与动图）</span></label><div id="exLinkArea"></div></div>';
   h+='<div class="modal-actions"><button class="m-btn-cancel" id="exCancel">取消</button><button class="m-btn-save" id="exSave">💾 保存</button></div></div>';
   modal.innerHTML=h;void modal;
+
+  var curDsId=ex.dsId||null;
+
+  function renderLinkArea(){
+    var area=document.getElementById('exLinkArea');if(!area)return;
+    if(curDsId){
+      var it=EXD.get(curDsId);
+      if(it){
+        var m=EXD.mediaUrls(it.img);
+        area.innerHTML='<div class="ec" style="margin-top:2px"><div style="display:flex;gap:10px;align-items:center">'
+          +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--bg2)">'
+          +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.8rem">'+it.zh+'</div>'
+          +'<div style="font-size:.65rem;color:var(--text3)">'+it.name+'</div>'
+          +'<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap"><span style="font-size:.6rem;background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+it.cat+'</span><span style="font-size:.6rem;background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+it.eq+'</span><span style="font-size:.6rem;background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+it.target+'</span></div></div>'
+          +'<button class="ec-act" id="exLinkClear" title="解除关联">✕</button></div></div>';
+        document.getElementById('exLinkClear').addEventListener('click',function(){curDsId=null;renderLinkArea()});
+        return;
+      }
+    }
+    // 未关联: 候选建议 + 手动选择按钮
+    var cands=EXD.ready()?EXD.matchCandidates(ex.name||document.getElementById('exName').value||'',4):[];
+    var ch=cands.length?'<div style="margin-top:4px;font-size:.68rem;color:var(--text3)">按名称匹配的候选:</div>':'';
+    cands.forEach(function(c){
+      var m=EXD.mediaUrls(c.item.img);
+      ch+='<button type="button" data-dsid="'+c.item.id+'" class="ec" style="display:flex;width:100%;text-align:left;gap:10px;margin-top:6px;padding:8px;align-items:center;cursor:pointer">'
+        +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:44px;height:44px;border-radius:9px;object-fit:cover;background:var(--bg2)">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:.76rem;font-weight:600">'+c.item.zh+'</div>'
+        +'<div style="font-size:.62rem;color:var(--text3)">'+c.item.name+' · '+c.item.cat+' · '+c.item.eq+'</div></div>'
+        +'<span style="font-size:.58rem;color:var(--purple);border:1px solid var(--purple);border-radius:var(--rp);padding:1px 6px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
+    });
+    ch+='<button type="button" id="exLinkPick" class="add-btn" style="margin-top:8px;font-size:.78rem;padding:8px">🔍 从数据集选择'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
+    area.innerHTML=ch;
+    area.querySelectorAll('[data-dsid]').forEach(function(b){
+      b.addEventListener('click',function(){curDsId=b.dataset.dsid;renderLinkArea()});
+    });
+    var pick=document.getElementById('exLinkPick');
+    if(pick)pick.addEventListener('click',function(){openDsPicker(function(id){if(id){curDsId=id;renderLinkArea();}})});
+  }
+  renderLinkArea();
 
   var curType=ex.type;
   var curIntensity=ex.intensity||2;
@@ -143,6 +194,7 @@ function showExEditor(editId){
       var hasDist=document.getElementById('exHasDist').checked;
       var newEx={id:isEdit?editId:(name),name:name,type:'cardio',ratio:null,intensity:curIntensity,emoji:emoji,hasDist:hasDist,description:desc,eqWeight:null,unit:'rep'};
     }
+    if(curDsId)newEx.dsId=curDsId;
     if(isEdit){
       var idx=list.findIndex(function(x){return x.id===editId});
       if(idx>-1)list[idx]=newEx;
@@ -165,6 +217,115 @@ function delExercise(id){
   renderExLibrary();
   if(typeof initCardioTypes==='function')initCardioTypes();
   toast('已删除','s');
+}
+
+/* ========== DATASET PICKER / ENCYCLOPEDIA OVERLAY ==========
+   全屏 overlay 动作百科（裁决 5）。mode='pick' 时点条目回调 dsId 并关闭；
+   mode='browse' 纯浏览。分页 50 条 + 触底加载；GIF 点击才播放。 */
+var _exdPage=50,_exdShown=50;
+
+function openDsPicker(onPick){
+  var ov=document.createElement('div');ov.className='modal-overlay open';ov.id='dsPicker';
+  var h='<div class="modal-sheet" style="height:92vh;max-height:92vh;display:flex;flex-direction:column">'
+    +'<div class="modal-handle"></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;padding:10px 14px 0"><div class="modal-title" style="flex:1">'+(onPick?'🔗 关联动作':'📖 动作百科')+'</div><button class="ec-act" id="dsClose">✕</button></div>'
+    +'<div style="padding:8px 14px"><input class="fi" id="dsKw" placeholder="搜索：中文名 / 英文 / 肌群 / 器械" style="width:100%"></div>'
+    +'<div class="car-types" id="dsCatRow" style="padding:0 14px;overflow-x:auto"></div>'
+    +'<div class="car-types" id="dsEqRow" style="padding:6px 14px 4px;overflow-x:auto"></div>'
+    +'<div id="dsList" style="flex:1;overflow-y:auto;padding:8px 14px 20px;-webkit-overflow-scrolling:touch"></div>'
+    +'<div id="dsDetail" style="display:none"></div>'
+    +(EXD.ready()?'':'<div style="padding:20px;text-align:center;color:var(--text3);font-size:.75rem">数据集未加载</div>')
+    +'</div>';
+  ov.innerHTML=h;
+  document.body.appendChild(ov);
+  if(!(EXD&&EXD.ready()))return;
+
+  var curCat='',curEq='',rows=[];
+  function chipHtml(label,val,sel){ return '<button class="car-type'+(sel?' selected':'')+'" data-v="'+val+'">'+label+'</button>'; }
+
+  function renderChips(){
+    var cr=document.getElementById('dsCatRow'),er=document.getElementById('dsEqRow');
+    cr.innerHTML=chipHtml('全部部位','',!curCat)+EXD.cats().map(function(c){return chipHtml(c,c,c===curCat)}).join('');
+    er.innerHTML=chipHtml('全部器械','',!curEq)+EXD.eqs().map(function(e2){return chipHtml(e2,e2,e2===curEq)}).join('');
+    cr.querySelectorAll('.car-type').forEach(function(b){b.addEventListener('click',function(){curCat=b.dataset.v;renderChips();renderList(true)})});
+    er.querySelectorAll('.car-type').forEach(function(b){b.addEventListener('click',function(){curEq=b.dataset.v;renderChips();renderList(true)})});
+  }
+
+  function cardHtml(it){
+    var m=EXD.mediaUrls(it.img);
+    return '<button type="button" class="ec" data-id="'+it.id+'" style="display:flex;width:100%;text-align:left;gap:10px;padding:8px;margin-bottom:6px;align-items:center;cursor:pointer">'
+      +'<img loading="lazy" src="'+m.primary+'" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--bg2)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:.78rem;font-weight:600">'+it.zh+'</div>'
+      +'<div style="font-size:.62rem;color:var(--text3)">'+it.name+'</div>'
+      +'<div style="font-size:.6rem;color:var(--text2);margin-top:2px">'+it.cat+' · '+it.eq+' · 🎯'+it.target+'</div></div></button>';
+  }
+
+  function renderList(reset){
+    var box=document.getElementById('dsList');
+    if(reset){rows=EXD.search(document.getElementById('dsKw').value.trim(),{cat:curCat,eq:curEq});_exdShown=_exdPage;box.innerHTML='';}
+    var slice=rows.slice(_exdShown-_exdPage,_exdShown);
+    var frag='';
+    slice.forEach(function(r){frag+=cardHtml(EXD.row(r))});
+    if(!rows.length&&!reset)frag='<div style="text-align:center;color:var(--text3);font-size:.72rem;padding:12px">没有更多了</div>';
+    else if(!rows.length&&reset)frag='<div class="empty"><span class="empty-e">🔍</span><div class="empty-t">无匹配动作</div></div>';
+    box.insertAdjacentHTML('beforeend',frag);
+    box.querySelectorAll('[data-id]:not([data-wired])').forEach(function(b){
+      b.dataset.wired='1';
+      b.addEventListener('click',function(){
+        if(onPick){onPick(b.dataset.id);ov.remove();}
+        else showDsDetail(b.dataset.id);
+      });
+    });
+    // 触底加载哨兵
+    var oldSent=box.querySelector('#dsSentinel');if(oldSent)oldSent.remove();
+    if(_exdShown<rows.length){
+      var sent=document.createElement('div');sent.id='dsSentinel';sent.style.height='8px';box.appendChild(sent);
+      _dsIo&&_dsIo.disconnect();
+      _dsIo=new IntersectionObserver(function(es){
+        if(es[0].isIntersecting){_exdShown+=_exdPage;renderList(false);}
+      },{root:box,rootMargin:'120px'});
+      _dsIo.observe(sent);
+    }
+  }
+  var kwTimer=null;
+  document.getElementById('dsKw').addEventListener('input',function(){clearTimeout(kwTimer);kwTimer=setTimeout(function(){renderList(true)},180)});
+  document.getElementById('dsClose').addEventListener('click',function(){_dsIo&&_dsIo.disconnect();ov.remove()});
+  ov.addEventListener('click',function(e){if(e.target===ov){_dsIo&&_dsIo.disconnect();ov.remove()}});
+  renderChips();renderList(true);
+}
+var _dsIo=null;
+
+/* 百科详情视图（browse 模式）：中文说明+分步+肌群+GIF 点击播放 */
+function showDsDetail(id){
+  var it=EXD.get(id);if(!it)return;
+  var list=document.getElementById('dsList'),det=document.getElementById('dsDetail');
+  var mi=EXD.mediaUrls(it.img),mg=EXD.mediaUrls(it.gif);
+  var secTags=(it.sec||[]).map(function(s){return '<span style="font-size:.6rem;background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+s+'</span>'}).join(' ');
+  var steps=(it.steps||[]).map(function(s,i){return '<li style="font-size:.74rem;line-height:1.65;margin-bottom:5px">'+s+'</li>'}).join('');
+  det.innerHTML='<div style="position:absolute;inset:0;background:var(--bg);z-index:2;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column">'
+    +'<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg)"><button class="ec-act" id="dsBack">◀</button><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.9rem">'+it.zh+'</div><div style="font-size:.62rem;color:var(--text3)">'+it.name+'</div></div></div>'
+    +'<div style="flex:1;padding:14px">'
+    +'<div id="dsMediaWrap" style="position:relative;width:200px;height:200px;margin:0 auto 12px;background:var(--bg2);border-radius:14px;overflow:hidden;cursor:pointer">'
+    +'<img id="dsImg" loading="lazy" src="'+mi.primary+'" onerror="'+(mi.fallback?"this.onerror=null;this.src='"+mi.fallback+"'":"this.style.visibility='hidden'")+'" style="width:100%;height:100%;object-fit:cover">'
+    +(it.gif?'<div id="dsPlayOv" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25)"><span style="background:rgba(0,0,0,.55);color:#fff;font-size:.7rem;padding:6px 12px;border-radius:99px">▶ 播放动画</span></div>':'')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span style="font-size:.64rem;background:var(--purple);color:#fff;padding:2px 9px;border-radius:var(--rp)">'+it.cat+'</span><span style="font-size:.64rem;background:var(--blue);color:#fff;padding:2px 9px;border-radius:var(--rp)">'+it.eq+'</span><span style="font-size:.64rem;background:var(--green);color:#fff;padding:2px 9px;border-radius:var(--rp)">🎯 '+it.target+'</span></div>'
+    +(it.mg?'<div style="margin-bottom:10px"><div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">协同肌群</div>'+secTags+'</div>':'')
+    +(it.ins?'<div style="font-size:.78rem;line-height:1.7;color:var(--text1);white-space:normal;margin-bottom:12px">'+it.ins+'</div>':'')
+    +(steps?'<div><div style="font-size:.68rem;color:var(--text3);margin-bottom:6px">分步说明</div><ol style="padding-left:18px;margin:0">'+steps+'</ol></div>':'')
+    +'</div></div>';
+  list.style.display='none';det.style.display='block';
+  document.getElementById('dsBack').addEventListener('click',function(){det.style.display='none';list.style.display=''});
+  var wrap=document.getElementById('dsMediaWrap');
+  if(wrap&&it.gif){
+    wrap.addEventListener('click',function playOnce(){
+      var mi2=EXD.mediaUrls(it.gif);
+      document.getElementById('dsImg').src=mg.primary;
+      document.getElementById('dsImg').onerror=function(){if(mg.fallback)this.src=mg.fallback;};
+      var ovEl=document.getElementById('dsPlayOv');if(ovEl)ovEl.remove();
+      wrap.removeEventListener('click',playOnce);
+    });
+  }
 }
 
 /* ========== SUB-TAB: PLANS ========== */

@@ -98,6 +98,10 @@ function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
 /* getExercises/saveExercises/getExerciseMap/getStrengthExercises/getCardioExercises
    are defined in app.js (loaded after utils.js). */
 
+/* ========== EXERCISE MEDIA URL HELPER ========== */
+/* rel 如 'images/0001-x.jpg'；图床优先(MEDIA_BASE)，onerror 回退本地 */
+function exMediaUrl(rel){ return EXD ? EXD.mediaUrls(rel) : { primary: 'media/' + rel, fallback: null }; }
+
 /* ========== CARDIO TYPES (read from exercises library) ========== */
 function getAllCardioTypes(){
   var fromLib=getCardioExercises();
