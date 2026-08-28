@@ -117,12 +117,22 @@ function attemptSummon(){
 }
 
 /* ========== SUMMON PANEL UI ========== */
-/* Debug: 屏幕诊断面板 — 常驻 🔍 按钮切换（永久保留，便于手机端排障） */
+/* Debug: 屏幕诊断 — 悬浮 FAB 切换（不占版面，默认半透明可点） */
 var _chDebugOn=false
-function toggleChDebug(){_chDebugOn=!_chDebugOn;renderSummonPanel()}
+function toggleChDebug(){_chDebugOn=!_chDebugOn;renderDebugFab();renderSummonPanel()}
+function renderDebugFab(){
+  var fab=document.getElementById('debugFab')
+  if(!fab){
+    fab=document.createElement('button');fab.id='debugFab';fab.className='debug-fab';fab.title='debug'
+    fab.textContent='🔍'
+    fab.addEventListener('click',toggleChDebug)
+    document.body.appendChild(fab)
+  }
+  fab.classList.toggle('on',_chDebugOn)
+}
 /* 组装充足诊断数据 */
 function chDebugBlock(info,strVol,c,branch){
-  var out='<div style="margin-top:8px;text-align:right"><button class="speed-btn" id="chDbgBtn" style="padding:2px 10px;font-size:.65rem;border-color:var(--text3);color:var(--text3)">'+( _chDebugOn?'🔍 隐藏debug':'🔍 debug')+'</button></div>'
+  var out=''
   if(_chDebugOn){
     var entries=((store.get('strength')||{entries:[]}).entries)||[]
     var todayE=entries.filter(function(e){return e.date===today()})
@@ -147,8 +157,7 @@ function chDebugBlock(info,strVol,c,branch){
 }
 /* 挂载调试块 + 绑定开关（每个分支统一调用） */
 function mountSummonExtras(el,info,strVol,c,branch){
-  var dbg=document.getElementById('chDbgBtn')
-  if(dbg)dbg.addEventListener('click',toggleChDebug)
+  renderDebugFab()
   var hb=document.getElementById('chHistoryBtn')
   if(hb)hb.addEventListener('click',function(){showChallengeHistory()})
 }

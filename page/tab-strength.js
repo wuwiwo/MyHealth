@@ -138,11 +138,13 @@ function renderMissed(){
   if(!missed.length){c.innerHTML='<div style="font-size:.75rem;color:var(--text3);padding:8px 0">✅ 最近 7 天全勤！</div>';return}
   c.innerHTML=missed.map(dd=>{
     const note=getMissed()[dd]||''
-    return '<div class="md-item"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button><button class="md-write" data-date="'+dd+'" data-makeup="1" style="color:var(--green)">➕ 补签</button></div><div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(note||'')+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
+    const isRest=note.indexOf('🛌')===0
+    return '<div class="md-item'+(isRest?' rest':'')+'"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button>'+(isRest?'':'<button class="md-write" data-date="'+dd+'" data-rest="1" style="color:var(--green)">🛌 休息日</button>')+'<button class="md-write" data-date="'+dd+'" data-makeup="1" style="color:var(--green)">➕ 补签</button></div>'+(isRest?'<span class="md-rest-badge">🛌 休息日</span>':'')+'<div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(isRest?'':note)+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
   }).join('')
   c.querySelectorAll('.md-write').forEach(b=>b.addEventListener('click',()=>{
     const dd=b.dataset.date
     if(b.dataset.makeup){_strDate=dd;openMakeupDialog(dd);return}
+    if(b.dataset.rest){var ms=getMissed();ms[dd]='🛌 休息日';saveMissed(ms);renderMissed();toast('已标记休息日 🛌','s');return}
     const show=b.closest('.md-item').querySelector('.md-edit, #me_'+dd)
     if(show)show.style.display=show.style.display==='none'?'block':'none'
   }))

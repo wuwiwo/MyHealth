@@ -10,8 +10,8 @@
   --text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;
   --r:14px;--rs:10px;--rp:999px;--mw:500px;
   --font:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
-  --shadow:0 1px 3px rgba(0,0,0,.3),0 1px 2px rgba(0,0,0,.2);
-  --shadow-lg:0 4px 16px rgba(0,0,0,.4);
+  --shadow:0 1px 2px rgba(0,0,0,.14);
+  --shadow-lg:0 4px 14px rgba(0,0,0,.2);
 }
 [data-theme="light"] {
   --bg:#fafaf9;--bg2:#ffffff;--bg3:#f5f5f4;
@@ -165,10 +165,10 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 
 /* Heatmap */
 .hm{background:var(--bg2);border-radius:var(--r);border:1px solid var(--bd);padding:10px;margin-bottom:4px;box-shadow:var(--shadow)}
+.hm-nav-btn{width:34px;height:34px;border:1px solid var(--bd);border-radius:8px;background:transparent;cursor:pointer;font-size:.72rem;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all .15s;-webkit-tap-highlight-color:transparent;font-family:inherit}
 .hm-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .hm-label{font-size:.82rem;font-weight:700}
 .hm-nav{display:flex;gap:4px}
-.hm-nav-btn{width:30px;height:30px;border:1px solid var(--bd);border-radius:8px;background:transparent;cursor:pointer;font-size:.7rem;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all .15s;-webkit-tap-highlight-color:transparent;font-family:inherit}
 .hm-nav-btn:hover{background:var(--bg3);border-color:var(--bd-l);color:var(--text)}
 .hm-nav-btn:active{background:var(--bd);border-color:var(--orange)}
 .hm-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
@@ -356,7 +356,7 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 }
 
 /* ========== TODAY SNAPSHOT ========== */
-.snap-card{background:linear-gradient(135deg,rgba(249,115,22,.08),rgba(59,130,246,.06));border:1px solid var(--bd-l);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.snap-card{background:linear-gradient(135deg,rgba(249,115,22,.08),rgba(59,130,246,.06));border:1px solid var(--bd-l);border-radius:var(--r);padding:12px 14px;margin:14px 0 14px;box-shadow:var(--shadow)}
 .snap-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.72rem}
 .snap-lbl{flex:0 0 auto;color:var(--text2);min-width:88px;white-space:nowrap}
 .snap-val{flex:0 0 auto;font-weight:700;min-width:52px;text-align:right}
@@ -436,6 +436,15 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 /* ========== PER-SEC CHART ========== */
 .ch-sec-chart{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rs);padding:8px 10px;margin:10px 0}
 .ch-sec-chart div[style]{transition:height .3s cubic-bezier(.34,1.56,.64,1)}
+
+/* Debug FAB (悬浮诊断按钮) */
+.debug-fab{position:fixed;right:12px;bottom:calc(74px + env(safe-area-inset-bottom,0));z-index:55;width:40px;height:40px;border-radius:50%;border:1px solid var(--bd);background:var(--bg2);color:var(--text2);font-size:.9rem;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-lg);cursor:pointer;-webkit-tap-highlight-color:transparent;opacity:.55;transition:all .15s}
+.debug-fab:active{transform:scale(.9);opacity:1}
+.debug-fab.on{color:var(--red);border-color:var(--red);opacity:1}
+
+/* 断签-休息日 */
+.md-item.rest{border-left:3px solid var(--green)}
+.md-rest-badge{display:inline-block;font-size:.62rem;font-weight:600;color:var(--green);background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:var(--rp);padding:2px 10px;margin-top:6px}
 
 /* ========== HOT BUFF FLASH ========== */
 @keyframes hotFlash{0%{opacity:1}100%{opacity:0}}
