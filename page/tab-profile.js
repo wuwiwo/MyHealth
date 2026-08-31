@@ -3,6 +3,10 @@
    ============================================ */
 
 var _wtView='month'; // 'week' or 'month'
+var _wtOpen={};       // P4: 月分组展开状态 {monthKey:true}
+var _wtOpenInit=false;
+/* P3: 体重统一格式化 — 最多 2 位小数，去尾零 */
+function fmtW(w){var n=Number(w);if(isNaN(n))return w;return String(Math.round(n*100)/100)}
 
 function renderProf(){
   var pc=document.getElementById('profileCard')
@@ -14,7 +18,7 @@ function renderProf(){
     prof.birthYear=parseInt(document.getElementById('pfBirth').value)||1990
     setProf(prof);toast('资料已保存','s')
   })
-  var recs=getWt();if(recs.length>0){var inp=document.getElementById('wtInput');if(inp)inp.value=recs[0].weight}
+  var recs=getWt();if(recs.length>0){var inp=document.getElementById('wtInput');if(inp)inp.value=fmtW(recs[0].weight)}
   renderWtList()
   renderChart()
   renderWtNoteTags()
@@ -23,11 +27,33 @@ function renderProf(){
   renderHeatmap()
 }
 
+/* P4: 体重列表按月分组 — 默认仅展开最近月，其余点击展开 */
 function renderWtList(){
   var el=document.getElementById('weightList')
   var recs=getWt()
   if(!recs.length){el.innerHTML='<div class="empty"><span class="empty-e">⚖️</span><div class="empty-t">还没有体重记录</div><div class="empty-s">输入体重并点击记录</div></div>';return}
-  el.innerHTML=recs.map(function(r){return'<div class="wt-entry"><div><span class="wt-val">'+r.weight+'</span> <span class="wt-date">kg · '+r.date+'</span>'+(r.note?'<br><span class="wt-note">💬 '+r.note+'</span>':'')+'</div><button class="ec-act" data-a="wtDel" data-id="'+r.id+'">🗑️</button></div>'}).join('')
+  if(!_wtOpenInit&&recs[0]){ _wtOpen={};_wtOpen[recs[0].date.slice(0,7)]=true;_wtOpenInit=true }
+  var months=[]
+  var byM={}
+  recs.forEach(function(r){var k=r.date.slice(0,7);if(!byM[k]){byM[k]=[];months.push(k)}byM[k].push(r)})
+  var h=''
+  months.forEach(function(mk){
+    var open=!!_wtOpen[mk]
+    var list=byM[mk]
+    var latest=Number(list[0].weight),earliest=Number(list[list.length-1].weight)
+    var delta=list.length>1?(latest-earliest):0
+    var dLabel=list.length>1?' <span style="font-size:.62rem;color:'+(delta<=0?'var(--green)':'var(--orange)')+'">'+(delta>0?'+':'')+(Math.round(delta*100)/100)+'</span>':''
+    h+='<div data-wtm="'+mk+'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);cursor:pointer;box-shadow:var(--shadow)">'
+      +'<span style="font-size:.8rem;font-weight:700">'+mk.replace('-','年 ')+'月</span>'
+      +'<span style="font-size:.68rem;color:var(--text3)">'+list.length+' 条 · 最新 <b style="color:var(--text)">'+fmtW(latest)+'</b>kg'+dLabel+' <span style="display:inline-block;transition:transform .2s;transform:rotate('+(open?90:0)+'deg)">▸</span></span></div>'
+    if(open){
+      h+=list.map(function(r){return'<div class="wt-entry" style="margin-left:12px"><div><span class="wt-val">'+fmtW(r.weight)+'</span> <span class="wt-date">kg · '+r.date+'</span>'+(r.note?'<br><span class="wt-note">💬 '+r.note+'</span>':'')+'</div><button class="ec-act" data-a="wtDel" data-id="'+r.id+'">🗑️</button></div>'}).join('')
+    }
+  })
+  el.innerHTML=h
+  el.querySelectorAll('[data-wtm]').forEach(function(b){b.addEventListener('click',function(){
+    var mk=b.dataset.wtm;_wtOpen[mk]=!_wtOpen[mk];renderWtList()
+  })})
   el.querySelectorAll('[data-a="wtDel"]').forEach(function(b){b.addEventListener('click',function(){
     var wt=store.get('weight')||{records:[]};wt.records=wt.records.filter(function(r){return r.id!==b.dataset.id});store.set('weight',wt);renderWtList();renderChart()
   })})
@@ -202,18 +228,41 @@ function renderHeatmap(){
   }
   var max=1;for(var k in dd){if(dd[k].score>max)max=dd[k].score}
   function lv(r){if(r===0)return 0;var ra=r/max;if(ra<=.1)return 1;if(ra<=.3)return 2;if(ra<=.5)return 3;if(ra<=.75)return 4;return 5}
-  var modeBtn=_hmMode==='vol'?'<button class="hm-nav-btn" data-n="hmMode" style="color:var(--orange)">🏋️ 容量</button>':'<button class="hm-nav-btn" data-n="hmMode" style="color:var(--blue)">🔢 次数</button>'
+  var modeBtn='<button class="hm-nav-btn" data-n="hmMode" style="color:'+( _hmMode==='vol'?'var(--orange)':'var(--blue)')+'" title="切换容量/次数">'+( _hmMode==='vol'?'🏋️':'🔢')+'</button>'
   var h='<div class="section-hdr">📅 训练热力图 <span style="font-size:.65rem;font-weight:400;margin-left:6px">('+(_hmMode==='vol'?'容量 kg':'总次数')+')</span></div><div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav">'+modeBtn+'<button class="hm-nav-btn" data-n="hmP">◀</button><button class="hm-nav-btn" data-n="hmT">📍</button><button class="hm-nav-btn" data-n="hmN">▶</button></div></div><div class="hm-grid">'
   wd.forEach(function(d){h+='<div class="hm-dh">'+d+'</div>'})
   for(var i=0;i<so;i++)h+='<div class="hm-cell"></div>'
-  for(var d=1;d<=dim;d++){var da=dd[d],ll=lv(da.score),t=da.date===today();var tip=_hmMode==='vol'?(da.vol>0?Math.round(da.vol)+'kg':''):(da.counts>0?da.counts:'') ;h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+ll+'" data-date="'+da.date+'" title="'+da.date+(tip?' · '+tip:'')+'">'+d+'</div>'}
+  for(var d=1;d<=dim;d++){var da=dd[d],ll=lv(da.score),t=da.date===today();var tip=_hmMode==='vol'?(da.vol>0?Math.round(da.vol)+'kg':''):(da.counts>0?da.counts:'') ;h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+ll+'" data-date="'+da.date+'" data-vol="'+Math.round(da.vol)+'" data-cnt="'+da.counts+'" title="'+da.date+(tip?' · '+tip:'')+'">'+d+'</div>'}
   h+='</div><div class="hm-leg">少 <div class="l0"></div><div class="l1"></div><div class="l3"></div><div class="l5"></div> 多</div></div>'
   c.innerHTML=h
-  c.querySelectorAll('[data-n="hmMode"]').forEach(function(b){b.addEventListener('click',function(){_hmMode=_hmMode==='vol'?'count':'vol';renderHeatmap()})})
+  c.querySelectorAll('[data-n="hmMode"]').forEach(function(b){b.addEventListener('click',function(){_hmMode=_hmMode==='vol'?'count':'vol';renderHeatmap();toast(_hmMode==='vol'?'已切换：按容量 🏋️':'已切换：按次数 🔢','s')})})
   c.querySelectorAll('[data-n="hmP"]').forEach(function(b){b.addEventListener('click',function(){_hmM--;if(_hmM<0){_hmM=11;_hmY--;if(_hmY<2020){_hmY=2020;_hmM=0}}renderHeatmap()})})
   c.querySelectorAll('[data-n="hmN"]').forEach(function(b){b.addEventListener('click',function(){_hmM++;if(_hmM>11){_hmM=0;_hmY++;var maxY=new Date().getFullYear()+1;if(_hmY>maxY){_hmY=maxY;_hmM=11}}renderHeatmap()})})
   c.querySelectorAll('[data-n="hmT"]').forEach(function(b){b.addEventListener('click',function(){var n=new Date();_hmY=n.getFullYear();_hmM=n.getMonth();renderHeatmap()})})
-  c.querySelectorAll('.hm-cell[data-date]').forEach(function(b){b.addEventListener('click',function(){_strDate=b.dataset.date;renderStr();switchTab('training');switchSub('training','strength')})})
+  /* P7: 长按(450ms)显示当日数据 toast；单击仍跳转训练日 */
+  var lpTimer=null,_lpFired=false
+  c.querySelectorAll('.hm-cell[data-date]').forEach(function(b){
+    var startLp=function(){
+      _lpFired=false
+      lpTimer=setTimeout(function(){
+        _lpFired=true
+        var v=Number(b.dataset.vol),n=Number(b.dataset.cnt)
+        var parts=[]
+        if(v>0)parts.push('容量 '+fmtW(v)+'kg')
+        if(n>0)parts.push('次数 '+n)
+        toast('📅 '+b.dataset.date+(parts.length?' · '+parts.join(' · '):' · 无训练'))
+      },450)
+    }
+    var cancelLp=function(){clearTimeout(lpTimer)}
+    b.addEventListener('touchstart',startLp,{passive:true})
+    b.addEventListener('touchmove',cancelLp,{passive:true})
+    b.addEventListener('touchend',cancelLp)
+    b.addEventListener('touchcancel',cancelLp)
+    b.addEventListener('click',function(){
+      if(_lpFired){_lpFired=false;return}
+      _strDate=b.dataset.date;renderStr();switchTab('training');switchSub('training','strength')
+    })
+  })
 }
 
 /* ========== PROFILE EVENT HANDLER ========== */
