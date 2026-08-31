@@ -136,6 +136,10 @@ function battleTick(b){
   var turn=b.turn+1
   var events=[]
 
+  // M2a S1-E: 五段式 hook 时机点（默认 b.hooks 不存在 → 零行为变化）
+  // 时机点：onTurnStart → 行动结算 → onAfterAction → onTurnEnd
+  if(b.hooks&&b.hooks.onTurnStart){var hs=b.hooks.onTurnStart(b,turn);if(hs&&hs.events)events=events.concat(hs.events);if(hs&&hs.skip)return{turn:turn,events:events}}
+
   // Rage / Shield affix (onTurn)
   if(b.affix&&b.affix.onTurn){
     var prevAtk=b.enemy.atk
@@ -202,6 +206,9 @@ function battleTick(b){
 
   // Player dead?
   if(b.player.hp<=0){b.player.hp=0;b.done=true;b.winner=false}
+
+  // onTurnEnd hook（状态 tick 等）
+  if(b.hooks&&b.hooks.onTurnEnd){var he=b.hooks.onTurnEnd(b,turn);if(he&&he.events)events=events.concat(he.events)}
 
   return{turn:turn,events:events}
 }
