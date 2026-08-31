@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.10.5
+> Personal Health Manager — 个人健身健康管理应用 v1.11.0
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -84,7 +84,7 @@ doc/
 ├── changelog-v1.7.md
 ├── changelog-v1.8.md
 ├── changelog-v1.9.md
-├── changelog-v1.10.md  ← 最新版本日志
+├── changelog-v1.11.md  ← 最新版本日志
 ├── design-v2.0.md       v2.0 设计文档（技能/宠物/宝珠）
 ├── design-uiux-adjustments.md  v2.0 UI/UX 调整设计
 ├── plan-v2.0-implementation.md v2.0 实施计划
@@ -189,5 +189,6 @@ Vercel 项目设置：
 | **v1.10.3** | **2026-08-25** | **修复战利品按"下一关"类型结算（Boss 胜利此前只发×2）** | `doc/changelog-v1.10.md` |
 | **v1.10.4** | **2026-08-27** | **修复召唤面板概率文案与阶梯不一致（误导决策）+ 补齐引导弹窗双词条说明（v1.10.0 遗漏项）** | `doc/changelog-v1.10.md` |
 | **v1.10.5** | **2026-08-27** | **架构重构（零行为变化）：词条组合器钩子表化去重 + pickBossAffix 数组化 + buildBattleSides 抽取共用** | `doc/changelog-v1.10.md` |
+| **v1.11.0** | **2026-09-01** | **动作百科（1324 动作）+ 动作关联机制 + MEDIA_BASE 图床覆盖 + store schema 注册表 + 时间工具（M2a S0/S1-B）+ 训练/个人/挑战/设置 UI 优化** | `doc/changelog-v1.11.md` |
 
-> 当前版本：**v1.10.5**
+> 当前版本：**v1.11.0**
