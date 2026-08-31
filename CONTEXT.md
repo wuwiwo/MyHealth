@@ -69,16 +69,19 @@
 | `exercises` | Array | 动作库：`[{ id, name, type, ratio, intensity, emoji, hasDist, description, eqWeight, unit }]`。eqWeight=自重动作等效重量(null=哑铃动作)，unit='rep'|'sec' |
 | `refine` | Object | 炼魂系统：`{ points, totalEarned, unlocked, upgrades: { F:{atk,def,hp,soulAtk,soulDef}, ... } }`。每月重置 |
 
+> **新增（feat/v2-m2a 分支，未合 main）**：`store.js` 已升级 schema 注册表（`registerSchema`/`migrate`/`validate`），见「模块边界」的 store.js 说明。动作数据集（`feat/action-dataset` 分支）新增 `data/exercises-dataset.js`（全局 `window.EX_DATASET`，1324 条只读百科）+ `page/ex-dataset.js` 查询层 + 动作对象 `dsId` 字段（可选关联，老存档免迁移）。
+
 ### 同步数据格式（`sync.js:46-50`）
 
 导出的顶层对象：`{ version: 4, lastUpdated(=store.getLastModTime()), entries, plans, missed, cardio, weight, cardioPlans, cardioTypes, game, exercises }`
 近7天导出额外含 `summary` 字段（统计摘要），不含 plans/game/prs/records/attrLog
+> sync version 仍为 4（动作数据集关联用 `dsId` 单字段，向后兼容，无需 bump）。
 
 ## 模块边界
 
 ```
 page/
-├── store.js        → 数据层：localStorage 封装，K-V 读写 + onChange 通知 + getLastModTime
+├── store.js        → 数据层：localStorage 封装 + **schema 注册表**（registerSchema({key,version,defaultValue,validate,migrate})，读时逐级 migrate→validate，失败保留 raw+corrupted 标记不丢进度）；K-V 读写 + onChange + getLastModTime
 ├── utils.js        → 常量定义（强度等级）、工具函数、toast、主题、getAllCardioTypes、renderMd
 ├── app.js          → 数据 API（getStr/addStr/...）+ 事件委托 + 初始化 + Tab切换 + switchSub + 数据迁移
 ├── stats.js        → 纯函数统计计算（ratio 加权容量/时长/活跃天数/玩家属性/旬周期奖励）
@@ -86,11 +89,15 @@ page/
 ├── battle.js       → 战斗引擎（纯逻辑，回合制 + Boss 词缀）
 ├── linechart.js    → Canvas 折线图组件
 ├── sync.js         → 云同步 + JSON 导出/导入（含 exercises 字段）
+├── date-roll.js    → 【M2a 新增】本地日历日/月键纯函数（dateKey/monthKey/daysBetween/monthKeyDiff/isClockRolledBack），无依赖不碰 DOM/store
+├── monthly-reset.js→ 【M2a 新增】自然月窗口判定（resolveMonthWindow/freshMonthStamp），依赖 date-roll，策略无关
+├── config.js       → 【动作数据集新增】MEDIA_BASE 常量（图床覆盖，空=本地相对路径）
+├── ex-dataset.js   → 【动作数据集新增】只读动作百科数据层（检索/模糊匹配/媒体URL），读 window.EX_DATASET
 ├── tab-strength.js → 力量训练子 Tab UI 渲染
 ├── tab-cardio.js   → 有氧运动子 Tab UI 渲染
 ├── tab-profile.js  → 个人数据 Tab UI 渲染（含体重图）
 ├── tab-game.js     → 挑战模式 Tab UI 渲染
-├── tab-settings.js → 设置 Tab UI 渲染（动作库/计划/挑战/数据）
+├── tab-settings.js → 设置 Tab UI 渲染（动作库/计划/挑战/数据，含动作百科入口 + 编辑关联区块）
 ├── index.html      → 页面骨架
 ├── index.css       → 样式表（CSS Variables 主题）
 └── api/data.mjs    → Vercel Serverless 同步接口
@@ -104,15 +111,20 @@ app.js → utils.js, store.js
 stats.js → (无依赖，纯函数)
 levels.js → (无依赖，纯数据)
 battle.js → levels.js
-tab-*.js → app.js, stats.js, levels.js, battle.js, linechart.js
+date-roll.js → (无依赖)
+monthly-reset.js → date-roll.js
+ex-dataset.js → (读全局 EX_DATASET，无模块依赖)
+config.js → (无依赖，纯常量)
+tab-*.js → app.js, stats.js, levels.js, battle.js, linechart.js, ex-dataset.js, config.js
 sync.js → store.js, app.js
 ```
 
 - `store.js` 是唯一写入 localStorage 的模块
 - `app.js` 是对外暴露数据 API 的唯一入口（含 getExercises/saveExercises/migrateExercises）
-- `stats.js` / `battle.js` 不操作 DOM 和 store
+- `stats.js` / `battle.js` / `date-roll.js` / `monthly-reset.js` / `ex-dataset.js` 不操作 DOM 和 store
 - 各 `tab-*.js` 负责 UI 渲染，调用 app.js 的 API 读写数据
 - `utils.js` 的 `getAllCardioTypes()` 从 exercises 库读取，回退到旧 cardioTypes store
+- **加载顺序（index.html）**：utils → store → app → stats → levels → battle → date-roll → monthly-reset → config → ex-dataset → tab-*（新模块必须按此依赖序引入）
 
 ## 架构决策
 
