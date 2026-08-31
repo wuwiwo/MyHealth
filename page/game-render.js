@@ -1,4 +1,4 @@
-﻿/* ============================================
+/* ============================================
    MyHealth — Tab: Game (Challenge, Battle, Share)
    ============================================ */
 
@@ -119,6 +119,7 @@ function renderGame(){
       +'<div>🗓️ 每旬（10天）练满 6 天且容量达标 → 永久属性奖励</div>'
       +'<div>⚠️ 上旬未达标 → 永久扣除属性（下旬生效）</div>'
       +'<div>⚔️ 挑战关卡击败 Boss 可推进章节，每日失败限 3 次</div>'
+      +'<div>👑 16 章起 BOSS 同时携带 2 条词条，机制叠加</div>'
       +'<div style="margin-top:8px;text-align:right"><button class="speed-btn" id="guideOk" style="padding:4px 14px;border-color:var(--orange);color:var(--orange)">开始挑战</button></div>'
     gc.parentNode.insertBefore(guide,gc)
     setTimeout(function(){

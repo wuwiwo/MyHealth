@@ -218,7 +218,7 @@ function renderSummonPanel(){
     return
   }
   
-  var rate=info.rate||(15+0)
+  var rate=info.rate||10
   var rateColor=rate>=50?'var(--green)':rate>=30?'var(--orange)':'var(--yellow)'
   var totalN=isFinite(info.total)?info.total:'?'
   var usedN=isFinite(info.used)?info.used:0
@@ -228,13 +228,13 @@ function renderSummonPanel(){
     +'<div class="summon-title">🔮 隐藏挑战</div>'
     +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次）</div>'
     +'<div class="summon-rate-wrap">'
-    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=4?' · 保底 25%':' · 基础 15%')+'）</div>'
+    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=5?' · 必成 100%':usedN===4?' · 保底 80%':' · 基础 10%')+'）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'
     +  '<div style="text-align:center;font-weight:700;color:'+rateColor+';font-size:1rem;margin-top:4px">'+rate+'%</div>'
     +'</div>'
     +hotHtml
     +'<button class="summon-btn" id="summonBtn">🔮 召唤</button>'
-    +'<div style="font-size:.6rem;color:var(--text3);text-align:center;margin-top:6px">第 5 次起成功率 25% · 每天最多成功召唤1次</div>'
+    +'<div style="font-size:.6rem;color:var(--text3);text-align:center;margin-top:6px">成功率阶梯 10/25/40/55/80/100% · 每天最多成功召唤1次</div>'
     +'</div>'
     +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
     +chDebugBlock(info,strVol,c,'normal')
