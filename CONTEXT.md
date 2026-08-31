@@ -82,7 +82,7 @@ page/
 ├── utils.js        → 常量定义（强度等级）、工具函数、toast、主题、getAllCardioTypes、renderMd
 ├── app.js          → 数据 API（getStr/addStr/...）+ 事件委托 + 初始化 + Tab切换 + switchSub + 数据迁移
 ├── stats.js        → 纯函数统计计算（ratio 加权容量/时长/活跃天数/玩家属性/旬周期奖励）
-├── levels.js       → 关卡配置数据（9 章 45 关 NPC 属性）
+├── levels.js       → 关卡配置数据（21 章 117 关 NPC 属性）
 ├── battle.js       → 战斗引擎（纯逻辑，回合制 + Boss 词缀）
 ├── linechart.js    → Canvas 折线图组件
 ├── sync.js         → 云同步 + JSON 导出/导入（含 exercises 字段）

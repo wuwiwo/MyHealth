@@ -126,7 +126,7 @@ store.migrations()  // 本次会话迁移记录 [{key, from, to}]
 
 **责任边界**：store = 键内机械迁移与校验；**app.js = 键间/全局一次性迁移编排**（现行职责不变，boot 时在 Tab 渲染前跑全局 pass）。
 
-**与现有键名衔接**：物理键仍为 `dh-<key>-v<version>`；现有全部键按 version=1 注册（validate=现行校验、migrate=恒等）；未来升版时写新键成功后删除旧键（前滚策略，见待裁决 #2）。
+**与现有键名衔接**：物理键仍为 `dh-<key>-v<version>`；现有全部键按 version=1 注册（validate=现行校验、migrate=恒等）；未来升版时写新键成功后旧键重命名为 `dh-<key>-v<n>-bak` 保留（裁决 #2：旧键保留可回滚；读路径只读新键，杜绝双源脏读）。
 
 **S0 验收**：同一份种子数据迁移前后所有 `store.get` 结果 deepEqual；未注册键读写报错；现有功能冒烟零变化；对外公共 API 签名不变。
 
