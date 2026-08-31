@@ -2,25 +2,39 @@
    MyHealth — Battle Engine (pure logic)
    ============================================ */
 
+
+/* --- M2a S1-C: 确定性 rng 注缝（默认 Math.random，行为不变） --- */
+function mulberry32(seed){
+  var a=seed>>>0
+  return function(){
+    a|=0;a=a+0x6D2B79F5|0
+    var t=Math.imul(a^a>>>15,1|a)
+    t=t+Math.imul(t^t>>>7,61|t)^t
+    return((t^t>>>14)>>>0)/4294967296
+  }
+}
+var _battleRng=Math.random
+function _rng(){return _battleRng()}
+
 var BOSS_AFFIXES=[
   {name:'虚弱诅咒',desc:'你防御低于50时,伤害减少10~20%',
     apply:function(atk,def,isPlayer){
-      if(isPlayer&&def<50){var r=0.8+Math.random()*0.1;return Math.floor(atk*r)}
+      if(isPlayer&&def<50){var r=0.8+_rng()*0.1;return Math.floor(atk*r)}
       return atk
     }},
   {name:'荆棘之躯',desc:'攻击者受到50%反伤(可被防御减免)',
     reflect:function(dmg,atkDef){return Math.max(1,Math.floor(dmg*0.5)-Math.floor(atkDef/2))}},
   {name:'怒气勃发',desc:'每2~3回合攻击力+1~5(可叠加)',
     onTurn:function(turn,enemyAtk,baseAtk){
-      if(turn>=2&&(turn%2===0||turn%3===0)&&Math.random()<0.6){
-        var bonus=1+Math.floor(Math.random()*5);return enemyAtk+bonus}
+      if(turn>=2&&(turn%2===0||turn%3===0)&&_rng()<0.6){
+        var bonus=1+Math.floor(_rng()*5);return enemyAtk+bonus}
       return enemyAtk
     }},
   {name:'生命汲取',desc:'每次攻击恢复伤害量25%的生命',
     onAttack:function(dmg,boss){if(boss&&dmg>0){boss._heal=(boss._heal||0)+Math.floor(dmg*0.25)}return dmg}},
   {name:'铁壁护盾',desc:'每3回合获得一个吸收伤害量30%的护盾',
     onTurn:function(turn,enemyAtk,baseAtk,boss){
-      if(turn>=3&&turn%3===0&&Math.random()<0.5){boss._shield=(boss._shield||0)+Math.floor(baseAtk*0.3)*2;return enemyAtk+Math.floor(baseAtk*0.1)}
+      if(turn>=3&&turn%3===0&&_rng()<0.5){boss._shield=(boss._shield||0)+Math.floor(baseAtk*0.3)*2;return enemyAtk+Math.floor(baseAtk*0.1)}
       return enemyAtk
     }}
 ]
@@ -32,7 +46,7 @@ function pickBossAffix(count){
   var pool=BOSS_AFFIXES.map(function(a,i){return i})
   var picked=[]
   while(picked.length<n&&pool.length){
-    var k=Math.floor(Math.random()*pool.length)
+    var k=Math.floor(_rng()*pool.length)
     picked.push(pool[k])
     pool.splice(k,1)
   }
@@ -103,10 +117,11 @@ function findLevel(id){
 }
 
 function rollDamage(atk,def,variance){
-  return Math.max(1,atk-Math.floor(def/2)+Math.floor(Math.random()*variance)+1)
+  return Math.max(1,atk-Math.floor(def/2)+Math.floor(_rng()*variance)+1)
 }
 
-function createBattle(playerStats,enemyStats,levelInfo,affix){
+function createBattle(playerStats,enemyStats,levelInfo,affix,rng){
+  if(rng)_battleRng=rng
   return{
     player:{atk:playerStats.atk,def:playerStats.def,hp:playerStats.hp,maxHP:playerStats.hp,soulAtk:playerStats.soulAtk||0,soulDef:playerStats.soulDef||0},
     enemy:{atk:enemyStats.atk,def:enemyStats.def,hp:enemyStats.hp,maxHP:enemyStats.hp,soulAtk:enemyStats.soulAtk||0,soulDef:enemyStats.soulDef||0},

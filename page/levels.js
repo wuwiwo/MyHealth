@@ -163,3 +163,7 @@ const LEVELS = {
     {id:'21-6',npc:'BOSS 超越·无限',atk:1760,def:890,hp:16700,soulAtk:835,soulDef:645,boss:true,dualAffix:true}
   ]}
 };
+
+/* 测试/工具暴露（生产环境同 window 全局，无副作用） */
+if (typeof window !== 'undefined') window.LEVELS = LEVELS;
+if (typeof globalThis !== 'undefined' && !globalThis.LEVELS) globalThis.LEVELS = LEVELS;
