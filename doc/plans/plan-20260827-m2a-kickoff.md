@@ -1,7 +1,14 @@
 # plan-20260827：v2.0 开工规划 —— 首切片「时间基座 + 战场骨架」+ 并行「存储注册表」
 
-**状态**：已定稿，待执行
+**状态**：执行中（S0 ✅ · S1-B ✅ · B2~E 待做，截至 2026-08-28）
 **上游文档**：`doc/design-v2.0.md`（设计权威）、`doc/plan-v2.0-implementation.md`（路线/模块/架构已定，本文细化执行层）、`AGENTS.md`（版本/提交纪律）、`CONTEXT.md`（已实现映射）
+**进度快照（2026-08-28）**：
+- ✅ `637516f` S0 store.js schema 注册表（feat/v2-m2a）
+- ✅ `01d7de2` S1-B date-roll + monthly-reset + 23 测试（feat/v2-m2a）
+- ⏳ S1-B2/C/D/E 待执行（见下方 todo）
+- 动作数据集线（独立分支 feat/action-dataset）：P1~P3 已完成（9e759dd + c28b9f8）
+- UI/UX 第一批（独立分支 feat/uiux-batch1）：T1/T2/T4/P3/P4/P6/P7 已完成（7cd32d0）
+- **所有分支均未合入 main**（main 停留在 4364f9a）
 
 **结论先行**：第一个动代码的切片是 **S1「时间基座 + 战场骨架（单敌等价护栏）」**，即 M2a 的第一刀；同时并行开工 **S0「store.js schema 注册表改造」**。S1 全程零用户可见变化（仅 `test:`/`refactor:` 提交），APP_VERSION 不动；S0 与 S1 文件集互斥，天然可双代理并行。二者完成后，M1-经济、M4-离线两条并行线即可解锁。
 
@@ -226,17 +233,17 @@ S2 经济/面板静态版   S3 多敌+目标选择
 
 ## 七、初始 todo 列表（供执行代理接手）
 
-1. [S0] store.js schema 注册表改造 + 等价快照测试（可与 2 并行）
-2. [S1-B] date-roll.js + monthly-reset.js + 边界矩阵测试（本切片首个代码提交）
-3. [S1-B2] stats.js 月度重置委托 + 等价测试（依待裁决 #3 确认去留）
-4. [S1-C] battle.js API 冻结清单 + rng 注入缝 + golden 基线录制
-5. [S1-D] unit.js + state-core.js（含 sleep）+ 单测（依赖 4 完成）
-6. [S1-E] battle.js 骨架化，golden diff 归零 + index.html 标签（依赖 5）
-7. [S1-F] 手动冒烟 + CONTEXT/changelog 同步 + 切片收尾（依赖 6）
-8. [S2] 经济底座 + 技能面板静态版（依赖 1、2）
-9. [S3] 多敌 + 目标选择（依赖 6）
-10. [S4] 词条迁移 + 速度落地（依赖 9）
-11. [S5] 战斗挂钩 + 技能面板可见反馈（依赖 8、10）
+1. [S0] store.js schema 注册表改造 + 等价快照测试（可与 2 并行）— ✅ 637516f
+2. [S1-B] date-roll.js + monthly-reset.js + 边界矩阵测试（本切片首个代码提交）— ✅ 01d7de2（23 测试全绿）
+3. [S1-B2] stats.js 月度重置委托 + 等价测试（依待裁决 #3 确认去留）— ⏳ 待做
+4. [S1-C] battle.js API 冻结清单 + rng 注入缝 + golden 基线录制 — ⏳ 待做
+5. [S1-D] unit.js + state-core.js（含 sleep）+ 单测（依赖 4 完成）— ⏳ 待做
+6. [S1-E] battle.js 骨架化，golden diff 归零 + index.html 标签（依赖 5）— ⏳ 待做
+7. [S1-F] 手动冒烟 + CONTEXT/changelog 同步 + 切片收尾（依赖 6）— ⏳ 待做（CONTEXT 已同步 2026-08-28）
+8. [S2] 经济底座 + 技能面板静态版（依赖 1、2）— ⏳ 未开始
+9. [S3] 多敌 + 目标选择（依赖 6）— ⏳ 未开始
+10. [S4] 词条迁移 + 速度落地（依赖 9）— ⏳ 未开始
+11. [S5] 战斗挂钩 + 技能面板可见反馈（依赖 8、10）— ⏳ 未开始
 
 ---
 
