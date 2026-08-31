@@ -25,84 +25,74 @@ var BOSS_AFFIXES=[
     }}
 ]
 
-/* 抽取 N 条不重复词条（默认 1 条）；dualAffix 关卡（16章起 BOSS）抽 2 条 */
+/* 从词条池抽取 N 条不重复词条（默认 1 条）；dualAffix 关卡（16章起 BOSS）抽 2 条。
+   返回按 index 升序的词条数组，组合顺序稳定（如含「虚弱诅咒」时其 index 必为组合最小值） */
 function pickBossAffix(count){
   var n=count||1
-  if(n<=1){
-    var idx=Math.floor(Math.random()*BOSS_AFFIXES.length)
-    return{index:idx,...BOSS_AFFIXES[idx]}
-  }
   var pool=BOSS_AFFIXES.map(function(a,i){return i})
   var picked=[]
   while(picked.length<n&&pool.length){
     var k=Math.floor(Math.random()*pool.length)
-    picked.push({index:pool[k],...BOSS_AFFIXES[pool[k]]})
+    picked.push(pool[k])
     pool.splice(k,1)
   }
-  // 按 index 排序保证组合顺序稳定（如含「虚弱诅咒」时其 index 必为组合最小值）
-  var parts=picked.sort(function(a,b){return a.index-b.index})
-  return{
-    index:parts[0].index,
-    name:parts.map(function(a){return a.name}).join('·'),
-    desc:parts.map(function(a){return a.desc}).join('；'),
-    multi:true,
-    parts:parts
-  }
+  return picked.sort(function(a,b){return a-b}).map(function(i){return{index:i,...BOSS_AFFIXES[i]}})
+}
+
+/* 钩子组合表：每种钩子的多实例串联语义
+   （onTurn 的结果是新 atk → 回填第2槽；apply 的结果是新 atk → 回填第1槽；
+   onAttack 是副作用钩子 → 用原始参数依次调用；reflect 求和） */
+var AFFIX_HOOK_COMBINERS={
+  apply:function(fns){return function(atk,def,isPlayer){
+    for(var i=0;i<fns.length;i++)atk=fns[i](atk,def,isPlayer)
+    return atk
+  }},
+  onTurn:function(fns){return function(turn,enemyAtk,baseAtk,boss){
+    for(var i=0;i<fns.length;i++)enemyAtk=fns[i](turn,enemyAtk,baseAtk,boss)
+    return enemyAtk
+  }},
+  onAttack:function(fns){return function(dmg,boss){
+    for(var i=0;i<fns.length;i++)fns[i](dmg,boss)
+    return dmg
+  }},
+  reflect:function(fns){return function(dmg,atkDef){
+    var total=0
+    for(var i=0;i<fns.length;i++)total+=fns[i](dmg,atkDef)
+    return total
+  }}
 }
 
 /* 把多条词条合成为单个复合词条供战斗引擎使用。
-   各钩子按各自语义串联：结果只回填到对应的参数槽位，其余参数原样透传
-   （onTurn 的结果是新 atk → 回填第2槽；apply 的结果是新 atk → 回填第1槽；
-   onAttack 是副作用钩子 → 用原始参数依次调用） */
+   单条直接透传原词条；多条按钩子组合表串联（结果回填对应参数槽位，其余参数透传） */
 function combineAffixes(affixes){
   if(!affixes||!affixes.length)return null
   if(affixes.length===1)return affixes[0]
-  function collect(key){
-    var fns=[]
-    for(var i=0;i<affixes.length;i++)if(affixes[i][key])fns.push(affixes[i][key])
-    return fns
-  }
   var comp={
     index:Math.min.apply(null,affixes.map(function(a){return a.index})),
     name:affixes.map(function(a){return a.name}).join('·'),
-    desc:affixes.map(function(a){return a.desc}).join('；'),
-    multi:true,
-    parts:affixes
+    desc:affixes.map(function(a){return a.desc}).join('；')
   }
-  var applies=collect('apply')
-  if(applies.length===1)comp.apply=applies[0]
-  else if(applies.length>1)comp.apply=function(atk,def,isPlayer){
-    for(var i=0;i<applies.length;i++)atk=applies[i](atk,def,isPlayer)
-    return atk
-  }
-  var turns=collect('onTurn')
-  if(turns.length===1)comp.onTurn=turns[0]
-  else if(turns.length>1)comp.onTurn=function(turn,enemyAtk,baseAtk,boss){
-    for(var i=0;i<turns.length;i++)enemyAtk=turns[i](turn,enemyAtk,baseAtk,boss)
-    return enemyAtk
-  }
-  var attacks=collect('onAttack')
-  if(attacks.length===1)comp.onAttack=attacks[0]
-  else if(attacks.length>1)comp.onAttack=function(dmg,boss){
-    for(var i=0;i<attacks.length;i++)attacks[i](dmg,boss)
-    return dmg
-  }
-  var reflects=collect('reflect')
-  if(reflects.length===1)comp.reflect=reflects[0]
-  else if(reflects.length>1){
-    comp.reflect=function(dmg,atkDef){
-      var total=0
-      for(var i=0;i<reflects.length;i++)total+=reflects[i](dmg,atkDef)
-      return total
-    }
+  for(var key in AFFIX_HOOK_COMBINERS){
+    var fns=[]
+    for(var i=0;i<affixes.length;i++)if(affixes[i][key])fns.push(affixes[i][key])
+    if(fns.length===1)comp[key]=fns[0]
+    else if(fns.length>1)comp[key]=AFFIX_HOOK_COMBINERS[key](fns)
   }
   return comp
 }
 
 /* 按关卡配置抽取词条（普通 Boss 单条，dualAffix Boss 复合双条） */
 function rollBossAffixFor(level){
-  var p=pickBossAffix(level&&level.dualAffix?2:1)
-  return p.multi?combineAffixes(p.parts):p
+  return combineAffixes(pickBossAffix(level&&level.dualAffix?2:1))
+}
+
+/* 构造对战双方属性：玩家侧来自 getGameStats()，敌方侧来自关卡定义。
+   供 startBattle 与关卡胜率模拟共用，消除两处构造漂移 */
+function buildBattleSides(stats,lv){
+  return{
+    player:{atk:stats.atk,def:stats.def,hp:stats.hp,soulAtk:stats.soulAtk,soulDef:stats.soulDef},
+    enemy:{atk:lv.atk,def:lv.def,hp:lv.hp,soulAtk:lv.soulAtk||0,soulDef:lv.soulDef||0}
+  }
 }
 
 function findLevel(id){

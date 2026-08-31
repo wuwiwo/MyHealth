@@ -263,8 +263,9 @@ function showLevelPreview(id){
 
   // Simulate 50 battles for accurate win rate
   var wins=0
+  var sides=buildBattleSides(stats,lv)
   for(var s=0;s<50;s++){
-    var batt=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp,soulAtk:stats.soulAtk,soulDef:stats.soulDef},{atk:lv.atk,def:lv.def,hp:lv.hp,soulAtk:lv.soulAtk||0,soulDef:lv.soulDef||0},{npc:lv.npc,boss:lv.boss},lv.boss?rollBossAffixFor(lv):null)
+    var batt=createBattle(sides.player,sides.enemy,{npc:lv.npc,boss:lv.boss},lv.boss?rollBossAffixFor(lv):null)
     for(var t=0;t<100&&!batt.done;t++){battleTick(batt)}
     if(batt.winner)wins++
   }

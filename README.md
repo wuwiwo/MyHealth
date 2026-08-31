@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.10.4
+> Personal Health Manager — 个人健身健康管理应用 v1.10.5
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -188,5 +188,6 @@ Vercel 项目设置：
 | **v1.10.2** | **2026-08-25** | **修复双词条组合器参数丢失导致的弹窗崩溃/战斗卡死/胜率失真** | `doc/changelog-v1.10.md` |
 | **v1.10.3** | **2026-08-25** | **修复战利品按"下一关"类型结算（Boss 胜利此前只发×2）** | `doc/changelog-v1.10.md` |
 | **v1.10.4** | **2026-08-27** | **修复召唤面板概率文案与阶梯不一致（误导决策）+ 补齐引导弹窗双词条说明（v1.10.0 遗漏项）** | `doc/changelog-v1.10.md` |
+| **v1.10.5** | **2026-08-27** | **架构重构（零行为变化）：词条组合器钩子表化去重 + pickBossAffix 数组化 + buildBattleSides 抽取共用** | `doc/changelog-v1.10.md` |
 
-> 当前版本：**v1.10.4**
+> 当前版本：**v1.10.5**

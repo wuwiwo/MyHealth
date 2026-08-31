@@ -1,4 +1,4 @@
-﻿/* ============================================
+/* ============================================
    MyHealth - Game Tab: Battle UI (from tab-game.js)
    Battle overlay, animations, end-of-battle flow, share card
    ============================================ */
@@ -22,8 +22,9 @@ function startBattle(id){
   var trainedToday=((store.get('strength')||{entries:[]}).entries||[]).some(function(e){return e.date===todayStr})||((store.get('cardio')||{entries:[]}).entries||[]).some(function(e){return e.date===todayStr})
   if(!trainedToday&&attempts===0){toast('⚠️ 今天还没训练，属性较低','e')}
   var stats=getGameStats()
+  var sides=buildBattleSides(stats,lv)
   var affix=lv.boss?rollBossAffixFor(lv):null
-  _battle=createBattle({atk:stats.atk,def:stats.def,hp:stats.hp,soulAtk:stats.soulAtk,soulDef:stats.soulDef},{atk:lv.atk,def:lv.def,hp:lv.hp,soulAtk:lv.soulAtk||0,soulDef:lv.soulDef||0},{npc:lv.npc,boss:lv.boss},affix)
+  _battle=createBattle(sides.player,sides.enemy,{npc:lv.npc,boss:lv.boss},affix)
   _battleRunning=false;_battleSpeed=1;_battleTimer=null
   var autoBtn=document.getElementById('battleAuto');
   if(autoBtn){autoBtn.classList.toggle('active',_battleAuto);autoBtn.textContent=_battleAuto?'🔄 自动✓':'🔄 自动'}
@@ -136,8 +137,7 @@ function endBattle(won){
     setGame(g)
     trackLevel(g.current)
     // 🎁 Victory loot: refine points (banked, spendable once soul refinement unlocked)
-    var lv=beatenLv
-    var loot=rollLoot(lv.boss?lv:{boss:false})
+    var loot=rollLoot(beatenLv)
     var ref=getRefine()
     ref.points=(ref.points||0)+loot.points
     saveRefine(ref)
