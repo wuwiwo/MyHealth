@@ -5,28 +5,6 @@
    依赖 pet-store.js / pets.js / pet-materials.js / pet-codex.js。
    ============================================ */
 
-/* 挑战页渲染时调用：在敌群试炼下方插入宠物入口 */
-function renderPetEntry() {
-  var gc = document.getElementById('gameContent')
-  if (!gc) return
-  // 幂等：移除旧的
-  var old = document.getElementById('petEntryWrap')
-  if (old) old.remove()
-  var wrap = document.createElement('div')
-  wrap.id = 'petEntryWrap'
-  wrap.style = 'margin-top:10px'
-  var d = getPetStore()
-  var ready = d.pets.filter(function(p){return p.stage==='mature'&&!p.isDead}).length
-  var total = d.pets.length
-  wrap.innerHTML = '<div class="chapter-hdr" style="margin-top:4px">🐾 宠物 <span style="font-size:.65rem;color:var(--text3)">· M4 养成 '+(ready>0?'<b style="color:var(--green)">'+ready+' 可参战</b>':'')+'</span></div>'
-    +'<div class="lv-grid">'
-    +'<div class="lv-card" data-pet-panel style="border-color:var(--green-g,#22c55e33)"><div class="lv-num">🐾</div><div class="lv-name">宠物面板</div><div class="lv-status" style="color:var(--green,#22c55e)">'+total+' 只</div></div>'
-    +'</div>'
-  gc.parentNode.insertBefore(wrap, gc.nextSibling)
-  var btn = wrap.querySelector('[data-pet-panel]')
-  if (btn) btn.addEventListener('click', function(){ renderPetPanel() })
-}
-
 /* 宠物面板 overlay（新版式：卡片/大按钮/12px+） */
 function renderPetPanel() {
   var ov = document.getElementById('battleOverlay')

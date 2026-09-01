@@ -5,26 +5,6 @@
    依赖 skills.js / skill-store.js。
    ============================================ */
 
-/* 挑战页渲染时调用：插入技能入口 */
-function renderSkillEntry() {
-  var gc = document.getElementById('gameContent')
-  if (!gc) return
-  var old = document.getElementById('skillEntryWrap')
-  if (old) old.remove()
-  var wrap = document.createElement('div')
-  wrap.id = 'skillEntryWrap'
-  wrap.style = 'margin-top:10px'
-  var st = getSkillState()
-  var equipped = (st.loadout || []).filter(Boolean).length
-  wrap.innerHTML = '<div class="chapter-hdr" style="margin-top:4px">⚡ 技能培养 <span style="font-size:.65rem;color:var(--text3)">· M1 '+equipped+'/'+st.slotsUnlocked+' 已装备</span></div>'
-    +'<div class="lv-grid">'
-    +'<div class="lv-card" data-skill-panel style="border-color:var(--blue-g,#3b82f633)"><div class="lv-num">⚡</div><div class="lv-name">技能面板</div><div class="lv-status" style="color:var(--blue,#3b82f6)">'+st.points+' 点</div></div>'
-    +'</div>'
-  gc.parentNode.insertBefore(wrap, gc.nextSibling)
-  var btn = wrap.querySelector('[data-skill-panel]')
-  if (btn) btn.addEventListener('click', function(){ renderSkillPanel() })
-}
-
 /* 技能面板 overlay（新版式：卡片/大按钮/12px+） */
 function renderSkillPanel() {
   var ov = document.getElementById('battleOverlay')

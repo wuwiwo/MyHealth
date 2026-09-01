@@ -152,8 +152,6 @@ function renderGame(){
   gc.querySelectorAll('.lv-card[data-group]').forEach(c=>c.addEventListener('click',()=>{
     startGroupTrial(c.dataset.group)
   }))
-  if (typeof renderPetEntry === 'function') renderPetEntry()
-  if (typeof renderSkillEntry === 'function') renderSkillEntry()
   // v2.0 挑战页三视图（培养/战斗/记录）
   if (typeof renderGameViews === 'function' && document.getElementById('gameTrainView')) {
     renderGameViews()
