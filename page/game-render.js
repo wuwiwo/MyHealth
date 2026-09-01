@@ -132,12 +132,6 @@ function renderGame(){
   if (gc._levelViewOpen) {
     h+='<div style="margin-bottom:10px"><button class="speed-btn" id="lvBack" style="padding:10px 16px;min-height:44px;font-size:14px">← 返回战斗</button></div>'
   }
-  // 敌群试炼入口（M2b，v2.0 准备内容）
-  h+='<div class="chapter-hdr" style="margin-top:4px">👥 敌群试炼 <span style="font-size:.65rem;color:var(--text3)">· M2b 多对多战场</span></div><div class="lv-grid">'
-  Object.entries(GROUP_LEVELS||{}).forEach(([k,glv])=>{
-    h+='<div class="lv-card" data-group="'+glv.id+'" style="border-color:var(--purple-g,#a855f733)"><div class="lv-num">👥</div><div class="lv-name">'+glv.name+'</div><div class="lv-status" style="color:var(--purple,#a855f7)">⚔️ '+glv.enemies.length+' 敌</div></div>'
-  })
-  h+='</div>'
   Object.entries(LEVELS).forEach(([k,ch])=>{
     h+='<div class="chapter-hdr">📖 '+ch.name+'</div><div class="lv-grid">'
     ch.levels.forEach(lv=>{
@@ -153,9 +147,12 @@ function renderGame(){
   gc.querySelectorAll('.lv-card:not(.locked)').forEach(c=>c.addEventListener('click',()=>{
     showLevelPreview(c.dataset.lv)
   }))
-  gc.querySelectorAll('.lv-card[data-group]').forEach(c=>c.addEventListener('click',()=>{
-    startGroupTrial(c.dataset.group)
-  }))
+  gc.querySelectorAll('.lv-card[data-group]').forEach(function(c){
+    c.addEventListener('click', function(){ 
+      var gid = c.getAttribute('data-group')
+      if (typeof startGroupTrial === 'function') startGroupTrial(gid)
+    })
+  })
   // 返回战斗按钮
   var lvBack = document.getElementById('lvBack')
   if (lvBack) lvBack.addEventListener('click', function () {
