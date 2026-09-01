@@ -153,6 +153,7 @@ function renderGame(){
     startGroupTrial(c.dataset.group)
   }))
   if (typeof renderPetEntry === 'function') renderPetEntry()
+  if (typeof renderSkillEntry === 'function') renderSkillEntry()
 }
 
 function allPrevCleared(chKey,lvId){
