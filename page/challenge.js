@@ -466,20 +466,75 @@ function startHiddenChallenge(hotBuff){
     if(c.history.length>50)c.history=c.history.slice(-50)
     saveChallenge(c)
 
-    // 隐藏挑战材料掉落（种类/数量随伤害档位递增）
+    // 隐藏挑战材料掉落（基础掉落 + 每周次数额外奖励）
     try {
-      if (typeof grantMaterial === 'function') {
-        var matDrops = []
-        // 基础：营养液 + 饲料
-        matDrops.push({ type: 'nutrition', n: 1 + Math.floor(Math.random() * 3) })
-        matDrops.push({ type: 'feed', n: 1 + Math.floor(Math.random() * 4) })
-        // 伤害越高掉落越丰富
-        if (dmg >= 5000) { matDrops.push({ type: 'refineNormal', n: 1 + Math.floor(Math.random() * 2) }) }
-        if (dmg >= 10000) { matDrops.push({ type: 'spirit', n: 1 + Math.floor(Math.random() * 2) }) }
-        if (dmg >= 20000) { matDrops.push({ type: 'refineHigh', n: 1 }) }
-        if (dmg >= 30000) { matDrops.push({ type: 'orbShard', n: 2 + Math.floor(Math.random() * 4) }) }
-        matDrops.forEach(function (d) { grantMaterial(d.type, d.n) })
-        state.matReward = matDrops   // 供结果面板显示
+      if (typeof grantMaterial === 'function' && typeof getPetStore === 'function') {
+        var matDrops = []      // 材料掉落
+        var skillPoints = 0    // 技能点（额外奖励）
+        var petEgg = null      // 宠物蛋（5次+奖励）
+
+        // 基础掉落（任何伤害）：
+        matDrops.push({ type: 'nutrition', n: 5 + Math.floor(Math.random() * 6) })        // 5-10
+        matDrops.push({ type: 'feed', n: 3 + Math.floor(Math.random() * 5) })             // 3-7
+        matDrops.push({ type: 'refineNormal', n: 2 + Math.floor(Math.random() * 3) })     // 2-4
+        matDrops.push({ type: 'refineHigh', n: Math.floor(Math.random() * 3) })           // 0-2
+        matDrops.push({ type: 'spirit', n: 1 + Math.floor(Math.random() * 4) })           // 1-4
+        matDrops.push({ type: 'orbShard', n: 4 + Math.floor(Math.random() * 5) })         // 4-8
+
+        // 每周挑战次数额外奖励
+        var d = getPetStore()
+        d.challengeWeek = d.challengeWeek || {}
+        var wkKey = 'W' + Math.ceil(new Date().getDate() / 7)
+        d.challengeWeek[wkKey] = (d.challengeWeek[wkKey] || 0) + 1
+        var weekCount = d.challengeWeek[wkKey]
+
+        if (weekCount >= 2 && weekCount <= 3) {
+          // 2-3 次：营养液 3-5(100%)，技能点 6-10(100%)，普通炼化石 2-3(100%)，高级炼化石 1-2(40%)
+          matDrops.push({ type: 'nutrition', n: 3 + Math.floor(Math.random() * 3) })
+          skillPoints += 6 + Math.floor(Math.random() * 5)
+          matDrops.push({ type: 'refineNormal', n: 2 + Math.floor(Math.random() * 2) })
+          if (Math.random() < 0.4) matDrops.push({ type: 'refineHigh', n: 1 + Math.floor(Math.random() * 2) })
+        } else if (weekCount === 4) {
+          // 4 次：营养液 4-8，技能点 8-12，普通炼化石 3-4，高级炼化石 1-2，饲料 2-4（全 100%）
+          matDrops.push({ type: 'nutrition', n: 4 + Math.floor(Math.random() * 5) })
+          skillPoints += 8 + Math.floor(Math.random() * 5)
+          matDrops.push({ type: 'refineNormal', n: 3 + Math.floor(Math.random() * 2) })
+          matDrops.push({ type: 'refineHigh', n: 1 + Math.floor(Math.random() * 2) })
+          matDrops.push({ type: 'feed', n: 2 + Math.floor(Math.random() * 3) })
+        } else if (weekCount >= 5) {
+          // 5 次+：营养液 6-10，技能点 10-15，普通炼化石 4-5，高级炼化石 2-3，灵能 5-10，随机宠物蛋
+          matDrops.push({ type: 'nutrition', n: 6 + Math.floor(Math.random() * 5) })
+          skillPoints += 10 + Math.floor(Math.random() * 6)
+          matDrops.push({ type: 'refineNormal', n: 4 + Math.floor(Math.random() * 2) })
+          matDrops.push({ type: 'refineHigh', n: 2 + Math.floor(Math.random() * 2) })
+          matDrops.push({ type: 'spirit', n: 5 + Math.floor(Math.random() * 6) })
+          // 随机宠物蛋（未拥有的）
+          try {
+            var owned = d.pets.map(function (p) { return p.speciesId })
+            var codex = listPetCodex().filter(function (id) { return owned.indexOf(id) === -1 })
+            if (codex.length) {
+              var sid = codex[Math.floor(Math.random() * codex.length)]
+              var pet = createPet({ speciesId: sid, rarity: getPetCodex(sid).rarity, name: getPetCodex(sid).name })
+              d.pets.push(pet)
+              petEgg = { name: pet.name }
+            }
+          } catch (e2) {}
+        }
+        savePetStore(d)
+
+        // 发放材料
+        matDrops.forEach(function (dd) { grantMaterial(dd.type, dd.n) })
+        // 发放技能点
+        if (skillPoints > 0 && typeof getSkillState === 'function') {
+          var ss = getSkillState()
+          ss.points += skillPoints
+          ss.totalEarned += skillPoints
+          saveSkillState(ss)
+        }
+        // 供结果面板显示
+        state.matReward = matDrops
+        state.skillPointReward = skillPoints
+        state.petEggReward = petEgg
       }
     } catch (e) { /* 材料系统未启用时忽略 */ }
     
@@ -507,7 +562,9 @@ function startHiddenChallenge(hotBuff){
       +((state.matReward && state.matReward.length) ? state.matReward.map(function(d){
           var names={nutrition:'🧪 营养液',feed:'🍖 饲料',spirit:'✨ 灵能',refineNormal:'🪨 炼化石',refineHigh:'💎 高炼石',orbShard:'🔮 宝珠碎片'};
           return '<span style="margin-right:8px">'+(names[d.type]||d.type)+' <b style="color:var(--green)">+'+d.n+'</b></span>';
-        }).join('') : '<span style="color:var(--text3)">伤害不足，未掉落材料</span>')
+        }).join('') : '<span style="color:var(--text3)">—</span>')
+      +(state.skillPointReward > 0 ? '<div style="margin-top:4px">💠 技能点 <b style="color:var(--blue)">+'+state.skillPointReward+'</b>（本周 '+weekCount+' 次额外奖励）</div>' : '')
+      +(state.petEggReward ? '<div style="margin-top:4px">🥚 宠物蛋 <b style="color:var(--orange)">'+state.petEggReward.name+'</b></div>' : '')
       +  '</div>'
       +'</div>'
       +'<div class="ch-sec-chart" id="chSecChart"></div>'
