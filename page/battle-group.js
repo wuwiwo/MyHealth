@@ -6,6 +6,10 @@
    纯逻辑，无 DOM/store。
    ============================================ */
 
+/* 状态中文名（日志用） */
+var STATUS_NAMES = { sleep:'睡眠', poison:'中毒', freeze:'冰冻', flinch:'畏缩', wet:'潮湿', charging:'蓄力', possessed:'幽魂附身', doomed:'末日', armorbroken:'破甲', slow:'减速', souldown:'魂防降低', lastworded:'遗言诅咒', sleepy:'哈欠' };
+function getStatusName(id){ return STATUS_NAMES[id] || id; }
+
 /* createGroupBattle({allies:[Unit], enemies:[Unit], rng?}) → group battle 状态
    allies/enemies 是 unit.js 的 Unit 数组 */
 function createGroupBattle(opts) {
@@ -150,7 +154,7 @@ function castSkill(gb, actor, skillId) {
       var plain = talentDispatch(t, 'onBeforeStatus', {});
       if (!plain.skipAction) {
         applyStatus(t, { id: sa.id, duration: sa.duration, source: actor });
-        events.push({ msg: '🌀 ' + t.name + ' 附加 ' + sa.id });
+        events.push({ msg: '🌀 ' + actor.name + ' → ' + t.name + ' 施加 ' + getStatusName(sa.id) + '(' + sa.id + ')' });
       }
     }
   });

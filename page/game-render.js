@@ -128,6 +128,12 @@ function renderGame(){
     },100)
   }
   let h=''
+  // 敌群试炼入口（M2b，v2.0 准备内容）
+  h+='<div class="chapter-hdr" style="margin-top:4px">👥 敌群试炼 <span style="font-size:.65rem;color:var(--text3)">· M2b 多对多战场</span></div><div class="lv-grid">'
+  Object.entries(GROUP_LEVELS||{}).forEach(([k,glv])=>{
+    h+='<div class="lv-card" data-group="'+glv.id+'" style="border-color:var(--purple-g,#a855f733)"><div class="lv-num">👥</div><div class="lv-name">'+glv.name+'</div><div class="lv-status" style="color:var(--purple,#a855f7)">⚔️ '+glv.enemies.length+' 敌</div></div>'
+  })
+  h+='</div>'
   Object.entries(LEVELS).forEach(([k,ch])=>{
     h+='<div class="chapter-hdr">📖 '+ch.name+'</div><div class="lv-grid">'
     ch.levels.forEach(lv=>{
@@ -142,6 +148,9 @@ function renderGame(){
   gc.innerHTML=h
   gc.querySelectorAll('.lv-card:not(.locked)').forEach(c=>c.addEventListener('click',()=>{
     showLevelPreview(c.dataset.lv)
+  }))
+  gc.querySelectorAll('.lv-card[data-group]').forEach(c=>c.addEventListener('click',()=>{
+    startGroupTrial(c.dataset.group)
   }))
 }
 
@@ -324,4 +333,97 @@ function updateGameBar(){
   var bar=document.getElementById('gameStatsBar');if(!bar||!bar.isConnected)return
   if(!document.getElementById('tabGame')?.classList.contains('active'))return
   renderGame()
+}
+
+/* ========== 敌群试炼（M2b 多对多） ========== */
+var _groupBattle=null,_groupTimer=null
+
+/* 启动敌群试炼：生成玩家 Unit + 敌人，开群战 */
+function startGroupTrial(groupId){
+  var glv=(GROUP_LEVELS||{})[groupId]
+  if(!glv){toast('敌群关卡不存在','e');return}
+  var stats=getGameStats()
+  var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:stats.hp,atk:stats.atk,def:stats.def,spd:10,soulAtk:stats.soulAtk||0,soulDef:stats.soulDef||0}})
+  var enemies=glv.enemies.map(function(ec,i){
+    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
+  })
+  _groupBattle=createGroupBattle({allies:[player],enemies:enemies})
+  renderGroupOverlay(true)
+  toast('👥 '+glv.name+' 开始！','s')
+  _groupStep()
+}
+
+/* 群战推进（回合循环，自动） */
+function _groupStep(){
+  if(!_groupBattle||_groupBattle.done){_groupDone();return}
+  groupBattleTick(_groupBattle)
+  renderGroupOverlay(false)
+  if(_groupBattle.done){_groupDone();return}
+  _groupTimer=setTimeout(_groupStep,800)
+}
+
+/* 群战结束 */
+function _groupDone(){
+  if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
+  var w=_groupBattle&&_groupBattle.winner
+  renderGroupOverlay(false)
+  if(w==='ally')toast('🎉 敌群讨伐成功！','s')
+  else toast('💀 敌群讨伐失败…','e')
+}
+
+/* 渲染群战 overlay（复用 battleOverlay 结构，独立内容） */
+function renderGroupOverlay(show){
+  var ov=document.getElementById('battleOverlay')
+  if(!ov)return
+  if(show)ov.classList.add('open')
+  if(!_groupBattle){ov.classList.remove('open');return}
+  var gb=_groupBattle
+  var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+    +'<button class="speed-btn" id="gbClose" style="padding:2px 10px">✕</button>'
+    +'<span style="font-size:.85rem;font-weight:700">👥 敌群试炼 · 回合 '+gb.turn+'</span>'
+    +'<span style="flex:1"></span>'
+    +'<span style="font-size:.75rem;color:var(--text3)">'+(gb.winner?'结束':'战斗中…')+'</span>'
+    +'</div>'
+  // 我方
+  h+='<div style="margin-bottom:6px;font-size:.72rem;color:var(--green)">🟢 我方</div>'
+  gb.allies.forEach(function(u){
+    h+=renderGroupUnit(u,'ally')
+  })
+  // 敌方
+  h+='<div style="margin:8px 0 6px;font-size:.72rem;color:var(--red)">🔴 敌方</div>'
+  gb.enemies.forEach(function(u){
+    h+=renderGroupUnit(u,'enemy')
+  })
+  // 日志（最近 5 条）
+  var recent=gb.log.slice(-5)
+  h+='<div style="margin-top:10px;font-size:.68rem;line-height:1.6;color:var(--text3);max-height:120px;overflow-y:auto">'
+  recent.forEach(function(l){
+    l.events.forEach(function(e){h+='<div>'+e.msg+'</div>'})
+  })
+  h+='</div>'
+  ov.innerHTML=h
+  var closeBtn=document.getElementById('gbClose')
+  if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}})
+}
+
+/* 渲染单个群战单位 */
+function renderGroupUnit(u,side){
+  var hpPct=u.hp<=0?0:Math.round(u.hp/u.base.hp*100)
+  var color=side==='ally'?'var(--green)':'var(--red)'
+  var statusIcons=(u.statuses||[]).map(function(s){return statusIcon(s.id)}).join('')
+  var talentTag=u._talents&&u._talents.length?'<span style="font-size:.6rem;color:var(--purple,#a855f7)">天赋×'+u._talents.length+'</span>':''
+  return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--bg2)">'
+    +'<span style="width:70px;font-size:.75rem;color:'+color+'">'+u.name+'</span>'
+    +'<div style="flex:1;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">'
+    +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+'"></div>'
+    +'</div>'
+    +'<span style="width:44px;font-size:.65rem">'+u.hp+'/'+u.base.hp+'</span>'
+    +statusIcons+talentTag
+    +'</div>'
+}
+
+/* 状态图标映射 */
+function statusIcon(id){
+  var map={sleep:'💤',poison:'☠️',freeze:'❄️',flinch:'😵',wet:'💧',charging:'🔋',possessed:'👻',doomed:'🌑',armorbroken:'💔',slow:'🐌',souldown:'🔮',lastworded:'💀',sleepy:'😪'}
+  return '<span title="'+id+'">'+(map[id]||'')+'</span>'
 }
