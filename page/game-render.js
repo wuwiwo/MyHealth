@@ -363,6 +363,7 @@ function updateGameBar(){
 /* ========== 敌群试炼（M2b 多对多） ========== */
 var _groupBattle=null,_groupTimer=null
 var _groupStageId=null   // 当前敌群小关 id（通关记录用）
+var _groupActing=null    // 当前行动中的单位 id（高亮）
 var _petBattlePicks=[]   // 宠物参战选择（M4-6）
 var _groupMode='auto'   // 'auto' | 'manual'（manual=点一下推进一回合）
 var _groupSpeed=1        // 1/2/4
@@ -413,19 +414,24 @@ function autoPickPets(n){
 /* 群战推进（自动模式定时循环；手动模式点按钮触发） */
 function _groupStep(){
   if(!_groupBattle||_groupBattle.done){_groupDone();return}
-  groupBattleTick(_groupBattle)
+  // 单步执行：一次一个单位行动（速度优先级可见）
+  var step = groupBattleStep(_groupBattle)
+  // 高亮当前行动单位
+  if (step.unit) _groupActing = step.unit.id
   renderGroupOverlay(false)
   if(_groupBattle.done){_groupDone();return}
-  // 技能气泡：检测最近事件中的气泡，停顿展示
-  var bubble = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1].events.find(function(e){ return e.type==='bubble'; }) : null
+  // 技能气泡
+  var lastLog = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1] : null
+  var bubble = lastLog ? lastLog.events.find(function(e){ return e.type==='bubble'; }) : null
   if (bubble) {
     showSkillBubble(bubble)
     if (_groupMode==='manual') return
-    _groupTimer=setTimeout(_groupStep,1000/_groupSpeed)   // 气泡停顿后继续
+    _groupTimer=setTimeout(_groupStep,900/_groupSpeed)   // 气泡停顿
     return
   }
   if(_groupMode==='manual')return   // 手动：等用户点下一回合
-  _groupTimer=setTimeout(_groupStep,1200/_groupSpeed)
+  // 每个单位行动间隔（看清速度顺序）
+  _groupTimer=setTimeout(_groupStep,700/_groupSpeed)
 }
 
 /* 技能对话气泡（停顿效果） */
@@ -462,6 +468,11 @@ function _groupDone(){
       msg += (prog.nextStage ? ' · 🔓 解锁 ' + prog.nextStage : ' · 🏆 全部通关！')
     }
     toast(msg, 's')
+    // 立即重渲染小关列表（无需刷新）
+    if (stageId && typeof showGroupStages === 'function') {
+      var lg = stageId.split('-')[0]
+      showGroupStages(lg)
+    }
   }
   else toast('💀 敌群讨伐失败…','e')
 }
@@ -569,25 +580,34 @@ function renderGroupUnit(u,side){
   var hpPct=u.hp<=0?0:Math.round(u.hp/u.base.hp*100)
   var color=side==='ally'?'var(--green)':'var(--red)'
   var statusIcons=(u.statuses||[]).map(function(s){return statusIcon(s.id)}).join('')
-  var talentTag=u._talents&&u._talents.length?'<span style="font-size:.58rem;color:var(--purple,#a855f7)">天赋×'+u._talents.length+'</span>':''
-  var skillTag=u.skills&&u.skills.length?'<span style="font-size:.58rem;color:var(--blue)">技×'+u.skills.length+'</span>':''
+  var talentTag=u._talents&&u._talents.length?'<span style="font-size:12px;color:var(--purple,#a855f7)">✨×'+u._talents.length+'</span>':''
+  var skillTag=u.skills&&u.skills.length?'<span style="font-size:12px;color:var(--blue)">⚡×'+u.skills.length+'</span>':''
   var anim=u.hp<=0?'opacity:.35':''
-  // 技能冷却指示（skill UX：状态可见性）
-  var cdInfo=''
-  if(u.skills&&u.skills.length){
-    var cds=u.skills.map(function(sid){
-      var left=skillCooldownLeft(u,sid)
-      return left>0?'<span style="color:var(--text3);font-size:.55rem">⏳'+left+'</span>':''
-    }).filter(Boolean)
-    if(cds.length)cdInfo='<span style="display:inline-flex;gap:2px">'+cds.join('')+'</span>'
-  }
-  return '<div class="gb-unit" data-uid="'+u.id+'" style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--bg2);cursor:pointer;min-height:44px;'+anim+'">'
-    +'<span style="width:76px;font-size:.78rem;color:'+color+';font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+u.name+'</span>'
-    +'<div style="flex:1;height:12px;background:var(--bg2);border-radius:6px;overflow:hidden;position:relative">'
-    +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+';transition:width .3s ease;border-radius:6px"></div>'
-    +'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--text3)">'+u.hp+'/'+u.base.hp+'</span>'
+  // 行动高亮
+  var acting = (_groupActing===u.id)?'border-color:var(--orange);box-shadow:0 0 12px rgba(249,115,22,.3);background:rgba(249,115,22,.08)':''
+  // 属性直显
+  var soulTxt = (u.base.soulAtk>0||u.base.soulDef>0)?'<span style="font-size:12px;color:var(--purple,#a855f7)">👻'+u.base.soulAtk+' 🔮'+u.base.soulDef+'</span>':''
+  return '<div class="gb-unit" data-uid="'+u.id+'" style="border:1px solid var(--bg2);border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--bg2);'+acting+';'+anim+'">'
+    // 第一行：名称 + 状态 + 天赋/技能标记
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    +'<span style="flex:1;font-size:16px;color:'+color+';font-weight:700">'+u.name+'</span>'
+    +'<span style="display:inline-flex;gap:4px;font-size:14px">'+statusIcons+'</span>'
+    +talentTag+skillTag
     +'</div>'
-    +'<span style="display:inline-flex;align-items:center;gap:3px;font-size:.68rem">'+statusIcons+talentTag+skillTag+cdInfo+'</span>'
+    // 第二行：血条（大）
+    +'<div style="height:16px;background:var(--bg2);border-radius:8px;overflow:hidden;position:relative;margin-bottom:6px;border:1px solid var(--bg2)">'
+    +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+';transition:width .3s ease;border-radius:8px"></div>'
+    +'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text3);font-weight:600">'+u.hp+'/'+u.base.hp+'</span>'
+    +'</div>'
+    // 第三行：属性直显 + 冷却 + 提示
+    +'<div style="display:flex;align-items:center;gap:10px;font-size:13px">'
+    +'<span>⚔️ <b>'+u.base.atk+'</b></span>'
+    +'<span>🛡️ <b>'+u.base.def+'</b></span>'
+    +'<span>💨 <b>'+u.base.spd+'</b></span>'
+    +soulTxt
+    +'<span style="flex:1"></span>'
+    +'<span style="font-size:12px;color:var(--text3)">👆 详情</span>'
+    +'</div>'
     +'</div>'
 }
 

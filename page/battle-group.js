@@ -311,6 +311,53 @@ function groupBattleTick(gb) {
   }
 }
 
+/* 单步执行：一次只行动一个单位（用于逐个行动动画，速度优先级可见）
+   返回 { unit: 行动单位, events, done, winner, queueIndex, queue } */
+function groupBattleStep(gb) {
+  if (gb.done) return { done: true };
+  // 初始化队列（跨步保存）
+  if (!gb._stepQueue || gb._stepQueue.length === 0) {
+    // 开战钩子（金身）
+    if (gb.turn === 0 && typeof playerSkillBattleStart === 'function') {
+      var p0 = gb.allies.find(function(u){ return u._playerSkills; });
+      if (p0) {
+        var evs0 = playerSkillBattleStart(gb, p0);
+        evs0.forEach(function(e){ gb.events.push(e); gb.log.push({turn:0, unit:p0.name, events:[e]}); });
+      }
+    }
+    gb.turn++;
+    gb._stepQueue = buildActionQueue(gb);
+    gb._stepIdx = 0;
+  }
+  // 跳过死亡单位
+  while (gb._stepIdx < gb._stepQueue.length && gb._stepQueue[gb._stepIdx].hp <= 0) gb._stepIdx++;
+  if (gb._stepIdx >= gb._stepQueue.length) {
+    // 本回合结束：场地结算 + 重置队列
+    if (gb.terrain && gb.terrain.onTurnEnd) {
+      var te = gb.terrain.onTurnEnd(gb);
+      if (te && te.events) gb.events = gb.events.concat(te.events);
+    }
+    gb._stepQueue = null; gb._stepIdx = 0;
+    // 回合末检查
+    var alliesAlive2 = gb.allies.some(function (a) { return a.hp > 0; });
+    var enemiesAlive2 = gb.enemies.some(function (e) { return e.hp > 0; });
+    if (!alliesAlive2) { gb.done = true; gb.winner = 'enemy'; }
+    if (!enemiesAlive2) { gb.done = true; gb.winner = 'ally'; }
+    return { done: gb.done, winner: gb.winner, turnEnd: true };
+  }
+  var actor = gb._stepQueue[gb._stepIdx];
+  gb._stepIdx++;
+  var evts = groupUnitTurn(gb, actor);
+  gb.events = gb.events.concat(evts);
+  gb.log.push({ turn: gb.turn, unit: actor.name, events: evts });
+  // 胜负检查
+  var alliesAlive = gb.allies.some(function (a) { return a.hp > 0; });
+  var enemiesAlive = gb.enemies.some(function (e) { return e.hp > 0; });
+  if (!alliesAlive) { gb.done = true; gb.winner = 'enemy'; }
+  if (!enemiesAlive) { gb.done = true; gb.winner = 'ally'; }
+  return { unit: actor, events: evts, done: gb.done, winner: gb.winner, queueIndex: gb._stepIdx, queue: gb._stepQueue };
+}
+
 /* 跑到结束（测试用） */
 function runGroupBattle(gb, maxTurns) {
   var guard = 0;
