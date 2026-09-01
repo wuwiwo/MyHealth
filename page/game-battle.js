@@ -12,8 +12,37 @@ function rollLoot(levelInfo){
   return{points:base*mult,mult:mult,base:base}
 }
 
+/* 重建单敌战斗 overlay 结构（群战 renderGroupOverlay 会覆盖 innerHTML） */
+function restoreSingleBattleOverlay() {
+  var ov = document.getElementById('battleOverlay')
+  if (!ov) return
+  // 只重建一次：若单敌结构还在（有 battleLevel），不重复
+  if (document.getElementById('battleLevel')) return
+  ov.innerHTML =
+    '<div class="battle-hdr">'
+    +'<div class="battle-level" id="battleLevel">1-1</div>'
+    +'<div class="battle-speed">'
+    +'<button class="speed-btn active" data-speed="1">1×</button>'
+    +'<button class="speed-btn" data-speed="2">2×</button>'
+    +'<button class="speed-btn" data-speed="4">4×</button>'
+    +'<button class="speed-btn" data-speed="8">8×</button>'
+    +'<button class="speed-btn" id="battleAuto" title="自动模式">🔄 自动</button>'
+    +'</div>'
+    +'<button class="speed-btn" id="battleClose">✕</button>'
+    +'</div>'
+    +'<div class="battle-arena" id="battleArena">'
+    +'<div class="battle-char" id="battlePlayer"><div class="bc-name">🧑 你</div><div class="bc-hp-bar"><div class="bc-hp-fill" id="bpHP" style="width:100%"></div></div><div class="bc-hp-text" id="bpHPText">HP: 100</div><div class="bc-atk" id="bpAtk">⚔️ 1</div><div class="bc-def" id="bpDef">🛡️ 1</div><div class="bc-soul" id="bpSoulAtk">👻 0</div><div class="bc-soul" id="bpSoulDef">🔮 0</div></div>'
+    +'<div class="battle-vs">⚔️</div>'
+    +'<div class="battle-char" id="battleEnemy"><div class="bc-name" id="beName">👹 敌人</div><div class="bc-hp-bar"><div class="bc-hp-fill enemy" id="beHP" style="width:100%"></div></div><div class="bc-hp-text" id="beHPText">HP: 100</div><div class="bc-atk" id="beAtk">⚔️ 1</div><div class="bc-def" id="beDef">🛡️ 1</div><div class="bc-soul" id="beSoulAtk">👻 0</div><div class="bc-soul" id="beSoulDef">🔮 0</div></div>'
+    +'</div>'
+    +'<div class="battle-log" id="battleLog"></div>'
+    +'<div class="battle-end" id="battleEnd"></div>'
+}
+
 function startBattle(id){
   const lv=findLevel(id);if(!lv)return
+  // 重建单敌战斗 overlay 结构（群战可能覆盖过 innerHTML）
+  restoreSingleBattleOverlay()
   if(!getGame().attempts)getGame().attempts={}
   var todayKey=today()+'_'+id
   var attempts=getGame().attempts[todayKey]||0
