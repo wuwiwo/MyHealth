@@ -386,6 +386,10 @@ function startGroupTrial(groupId){
   }
   var stats=getGameStats()
   var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:stats.hp,atk:stats.atk,def:stats.def,spd:10,soulAtk:stats.soulAtk||0,soulDef:stats.soulDef||0}})
+  // 挂载玩家技能（装备的技能生效）
+  if (typeof attachPlayerSkills === 'function' && typeof getSkillState === 'function') {
+    attachPlayerSkills(player, getSkillState())
+  }
   var enemies=glv.enemies.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })

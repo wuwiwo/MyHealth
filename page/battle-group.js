@@ -205,6 +205,22 @@ function castSkill(gb, actor, skillId) {
   return events;
 }
 
+/* 玩家攻击技能选择：装备的攻击类玩家技能（陨石/冰魄/巨石），非冷却时随机施放 */
+function playerAttackSkillPick(gb, actor) {
+  if (!actor._playerSkills) return null;
+  var atkSkills = Object.keys(actor._playerSkills).filter(function (sid) {
+    var s = getPlayerSkill(sid);
+    return s && s.type === 'attack' && (actor._playerSkills[sid] || 0) >= 1;
+  });
+  if (!atkSkills.length) return null;
+  // 非冷却的
+  var ready = atkSkills.filter(function (sid) { return !skillOnCooldown(actor, sid); });
+  if (!ready.length) return null;
+  // 30% 几率施放（不每回合放），让普攻也有存在感
+  if (Math.random() < 0.3) return ready[Math.floor(Math.random() * ready.length)];
+  return null;
+}
+
 /* 单单位回合 */
 function groupUnitTurn(gb, actor) {
   var events = [];
@@ -238,13 +254,27 @@ function groupUnitTurn(gb, actor) {
     skillId = ai.skillId;
     actTarget = ai.target;
   } else {
-    skillId = pickSkill(actor);
+    // 玩家：优先施放装备的攻击类玩家技能（陨石/冰魄/巨石）
+    var ps = playerAttackSkillPick(gb, actor)
+    if (ps) { skillId = ps; }
+    else skillId = pickSkill(actor);
   }
   var acted = false;
   if (skillId) {
-    var castEvents = castSkill(gb, actor, skillId);
-    events = events.concat(castEvents);
-    acted = true;
+    // 玩家技能用 playerAttackSkill，敌群技能用 castSkill
+    if (actor.side === 'ally' && actor._playerSkills && actor._playerSkills[skillId] && typeof playerAttackSkill === 'function') {
+      var pr = playerAttackSkill(gb, actor, skillId)
+      if (pr) {
+        events = events.concat(pr.events)
+        if (pr.cd) setSkillCooldown(actor, skillId, pr.cd)
+        acted = true
+      }
+    }
+    if (!acted) {
+      var castEvents = castSkill(gb, actor, skillId);
+      events = events.concat(castEvents);
+      acted = true;
+    }
   }
   if (!acted) {
     // 普攻：目标选择（AI 用策略目标，否则随机）

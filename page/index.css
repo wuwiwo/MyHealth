@@ -258,7 +258,7 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 .chapter-hdr::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--bd),transparent)}
 
 /* Battle */
-.battle-overlay{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column}
+.battle-overlay{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column;overflow-y:auto}
 .battle-overlay.open{display:flex}
 .battle-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--bd);flex-shrink:0;gap:8px}
 .battle-level{font-size:1rem;font-weight:700}
