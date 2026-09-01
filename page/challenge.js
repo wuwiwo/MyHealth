@@ -480,6 +480,7 @@ function startHiddenChallenge(hotBuff){
         matDrops.push({ type: 'refineHigh', n: Math.floor(Math.random() * 3) })           // 0-2
         matDrops.push({ type: 'spirit', n: 1 + Math.floor(Math.random() * 4) })           // 1-4
         matDrops.push({ type: 'orbShard', n: 4 + Math.floor(Math.random() * 5) })         // 4-8
+        skillPoints += 20   // 基础掉落：技能点 20/次
 
         // 每周挑战次数额外奖励
         var d = getPetStore()
@@ -502,9 +503,9 @@ function startHiddenChallenge(hotBuff){
           matDrops.push({ type: 'refineHigh', n: 1 + Math.floor(Math.random() * 2) })
           matDrops.push({ type: 'feed', n: 2 + Math.floor(Math.random() * 3) })
         } else if (weekCount >= 5) {
-          // 5 次+：营养液 6-10，技能点 10-15，普通炼化石 4-5，高级炼化石 2-3，灵能 5-10，随机宠物蛋
+          // 5 次+：营养液 6-10，技能点 50-75，普通炼化石 4-5，高级炼化石 2-3，灵能 5-10，随机宠物蛋
           matDrops.push({ type: 'nutrition', n: 6 + Math.floor(Math.random() * 5) })
-          skillPoints += 10 + Math.floor(Math.random() * 6)
+          skillPoints += 50 + Math.floor(Math.random() * 26)   // 50-75
           matDrops.push({ type: 'refineNormal', n: 4 + Math.floor(Math.random() * 2) })
           matDrops.push({ type: 'refineHigh', n: 2 + Math.floor(Math.random() * 2) })
           matDrops.push({ type: 'spirit', n: 5 + Math.floor(Math.random() * 6) })
