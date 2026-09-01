@@ -444,8 +444,35 @@ function _groupDone(){
   if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
   var w=_groupBattle&&_groupBattle.winner
   renderGroupOverlay(false)
-  if(w==='ally')toast('🎉 敌群讨伐成功！','s')
+  if(w==='ally'){
+    // 敌群胜利奖励：技能点 + 材料（随关卡难度递增）
+    var reward = groupVictoryReward(_groupBattle)
+    toast('🎉 敌群讨伐成功！' + reward.msg, 's')
+  }
   else toast('💀 敌群讨伐失败…','e')
+}
+
+/* 敌群胜利奖励：技能点（与挑战一致 100 点/胜）+ 材料掉落 */
+function groupVictoryReward(gb) {
+  var msgs = []
+  // 技能点：100 点 + 周递增（与隐藏挑战一致）
+  var wk = monthKey(new Date()) + '-W' + Math.ceil((new Date().getDate()) / 7)
+  var winCount = recordSkillWin(wk)
+  var award = awardSkillPoints(winCount)
+  msgs.push('💠 技能点 +' + award.gained)
+  // 材料掉落：随敌群大关等级（用敌人数量/强度粗估）
+  var enemyCount = (gb && gb.enemies) ? gb.enemies.length : 2
+  var drops = [
+    { type: 'nutrition', n: 1 + Math.floor(Math.random() * 2) },
+    { type: 'feed', n: 1 + Math.floor(Math.random() * 3) }
+  ]
+  if (enemyCount >= 3) drops.push({ type: 'refineNormal', n: 1 })
+  if (enemyCount >= 4) drops.push({ type: 'spirit', n: 1 + Math.floor(Math.random() * 2) })
+  drops.forEach(function (d) {
+    grantMaterial(d.type, d.n)
+    msgs.push(getMaterialName(d.type) + ' +' + d.n)
+  })
+  return { msg: msgs.join(' · ') }
 }
 
 /* 渲染群战 overlay：手动/自动 + 调速 + 单位 + 动画 + 详情 + 日志 */

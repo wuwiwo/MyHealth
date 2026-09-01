@@ -465,6 +465,23 @@ function startHiddenChallenge(hotBuff){
     })
     if(c.history.length>50)c.history=c.history.slice(-50)
     saveChallenge(c)
+
+    // 隐藏挑战材料掉落（种类/数量随伤害档位递增）
+    try {
+      if (typeof grantMaterial === 'function') {
+        var matDrops = []
+        // 基础：营养液 + 饲料
+        matDrops.push({ type: 'nutrition', n: 1 + Math.floor(Math.random() * 3) })
+        matDrops.push({ type: 'feed', n: 1 + Math.floor(Math.random() * 4) })
+        // 伤害越高掉落越丰富
+        if (dmg >= 5000) { matDrops.push({ type: 'refineNormal', n: 1 + Math.floor(Math.random() * 2) }) }
+        if (dmg >= 10000) { matDrops.push({ type: 'spirit', n: 1 + Math.floor(Math.random() * 2) }) }
+        if (dmg >= 20000) { matDrops.push({ type: 'refineHigh', n: 1 }) }
+        if (dmg >= 30000) { matDrops.push({ type: 'orbShard', n: 2 + Math.floor(Math.random() * 4) }) }
+        matDrops.forEach(function (d) { grantMaterial(d.type, d.n) })
+        state.matReward = matDrops   // 供结果面板显示
+      }
+    } catch (e) { /* 材料系统未启用时忽略 */ }
     
     // Show result (enhanced: reward detail + per-second tap chart)
     var avgRate=state.duration>0?(state.hitCount/state.duration).toFixed(1):'0'
@@ -478,11 +495,19 @@ function startHiddenChallenge(hotBuff){
       +'</div>'
       +'<div class="ch-reward">'
       +  '<div style="font-weight:700;margin-bottom:6px">🎁 本月属性奖励（月度重置）</div>'
-      +  '<div class="ch-reward-info">'
-      +(bonusAtk>0?'  <span style="color:var(--orange)">⚔️ +'+bonusAtk+'</span>':'')
+      +  '<div class="ch-reward-info">'      +(bonusAtk>0?'  <span style="color:var(--orange)">⚔️ +'+bonusAtk+'</span>':'')
       +(bonusDef>0?'  <span style="color:var(--blue)">🛡️ +'+bonusDef+'</span>':'')
       +(bonusHp>0?'  <span style="color:var(--green)">❤️ +'+bonusHp+'</span>':'')
       +(bonusAtk+bonusDef+bonusHp===0?'  <span style="color:var(--text3)">伤害不足，未获得奖励</span>':'')
+      +  '</div>'
+      +'</div>'
+      +'<div class="ch-reward">'
+      +  '<div style="font-weight:700;margin-bottom:6px">📦 材料掉落</div>'
+      +  '<div class="ch-reward-info">'
+      +((state.matReward && state.matReward.length) ? state.matReward.map(function(d){
+          var names={nutrition:'🧪 营养液',feed:'🍖 饲料',spirit:'✨ 灵能',refineNormal:'🪨 炼化石',refineHigh:'💎 高炼石',orbShard:'🔮 宝珠碎片'};
+          return '<span style="margin-right:8px">'+(names[d.type]||d.type)+' <b style="color:var(--green)">+'+d.n+'</b></span>';
+        }).join('') : '<span style="color:var(--text3)">伤害不足，未掉落材料</span>')
       +  '</div>'
       +'</div>'
       +'<div class="ch-sec-chart" id="chSecChart"></div>'
