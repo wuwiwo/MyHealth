@@ -25,28 +25,28 @@ function renderSkillEntry() {
   if (btn) btn.addEventListener('click', function(){ renderSkillPanel() })
 }
 
-/* 技能面板 overlay */
+/* 技能面板 overlay（新版式：卡片/大按钮/12px+） */
 function renderSkillPanel() {
   var ov = document.getElementById('battleOverlay')
   if (!ov) return
   var st = getSkillState()
-  var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="skillClose" style="padding:8px 10px;min-height:44px;min-width:44px">✕</button>'
-    +'<span style="font-size:.9rem;font-weight:700">⚡ 技能培养</span>'
+  var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
+    +'<button class="speed-btn" id="skillClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:14px">✕</button>'
+    +'<span style="font-size:18px;font-weight:700">⚡ 技能培养</span>'
     +'<span style="flex:1"></span>'
-    +'<span style="font-size:.8rem;font-weight:700;color:var(--blue,#3b82f6)">💠 '+st.points+' 点</span>'
+    +'<span style="font-size:16px;font-weight:700;color:var(--blue,#3b82f6)">💠 '+st.points+' 点</span>'
     +'</div>'
   // 槽位
-  h += '<div style="font-size:.72rem;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
-    +'<div style="font-weight:700;margin-bottom:4px">🎯 装备槽位（'+st.slotsUnlocked+'/3，同类型限1）</div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+  h += '<div style="font-size:13px;background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:14px">'
+    +'<div style="font-weight:700;margin-bottom:10px;font-size:14px">🎯 装备槽位（'+st.slotsUnlocked+'/3，同类型限1）</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
   for (var i = 0; i < 3; i++) {
     var sid = (st.loadout || [])[i] || null
     var s = sid ? getPlayerSkill(sid) : null
-    h += '<div style="flex:1;min-width:90px;border:1px solid '+(i < st.slotsUnlocked ? 'var(--bg2)' : 'var(--bg2)')+';border-radius:8px;padding:6px;text-align:center;'+(i>=st.slotsUnlocked?'opacity:.35':'')+'">'
-      +(sid ? '<div style="font-size:.7rem;font-weight:600">'+s.name+'</div><div style="font-size:.6rem;color:var(--text3)">Lv'+(st.levels[sid]||0)+' · '+s.type+'</div>'
-            +'<button class="speed-btn" data-skill-uneq="'+i+'" style="padding:2px 8px;margin-top:4px;font-size:.6rem">卸下</button>'
-            :'<div style="font-size:.65rem;color:var(--text3)">空槽'+(i<st.slotsUnlocked?'':' 🔒')+'</div>')
+    h += '<div style="flex:1;min-width:96px;border:1px solid var(--bg2);border-radius:12px;padding:10px 8px;text-align:center;'+(i>=st.slotsUnlocked?'opacity:.35':'')+'">'
+      +(sid ? '<div style="font-size:14px;font-weight:600">'+s.name+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Lv'+(st.levels[sid]||0)+' · '+s.type+'</div>'
+            +'<button class="speed-btn" data-skill-uneq="'+i+'" style="padding:8px 10px;min-height:40px;margin-top:8px;font-size:12px">卸下</button>'
+            :'<div style="font-size:13px;color:var(--text3);padding:10px 0">空槽'+(i<st.slotsUnlocked?'':' 🔒')+'</div>')
       +'</div>'
   }
   h += '</div></div>'
@@ -56,17 +56,19 @@ function renderSkillPanel() {
     var lv = st.levels[id] || 0
     var cost = lv >= s.maxLevel ? 0 : skillUpgradeCost(s, lv)
     var equippedSlot = (st.loadout||[]).indexOf(id)
-    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg2)">'
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--bg2);border-radius:14px;margin-bottom:10px">'
       +'<div style="flex:1">'
-      +'<div style="font-size:.8rem;font-weight:600">'+s.name+' <span style="color:var(--text3);font-size:.62rem">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:.62rem">● 已装备槽'+equippedSlot+'</span>':'')+'</div>'
-      +'<div style="font-size:.62rem;color:var(--text3)">'+s.desc.replace('n', lv)+'</div>'
-      +'<div style="font-size:.6rem;color:var(--text3)">Lv '+lv+'/'+s.maxLevel+(lv>=s.maxLevel?' · 已满级':' · 升级需 '+cost+' 点')+'</div>'
+      +'<div style="font-size:15px;font-weight:600">'+s.name+' <span style="color:var(--text3);font-size:12px">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:12px">● 槽'+equippedSlot+'</span>':'')+'</div>'
+      +'<div style="font-size:12px;color:var(--text3);margin-top:3px;line-height:1.5">'+s.desc.replace('n', lv)+'</div>'
+      +'<div style="font-size:12px;color:var(--text3);margin-top:3px">Lv '+lv+'/'+s.maxLevel+(lv>=s.maxLevel?' · 已满级':' · 升级需 '+cost+' 点')+'</div>'
       +'</div>'
-      // 操作
+      // 操作（大按钮 44px）
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
       +(equippedSlot>-1
-        ? '<button class="speed-btn" data-skill-equip="'+id+'" data-slot="'+equippedSlot+'" style="padding:4px 8px;font-size:.65rem;border-color:var(--green);color:var(--green)">装备中</button>'
-        : '<button class="speed-btn" data-skill-equip="'+id+'" style="padding:4px 8px;font-size:.65rem">装备</button>')
-      +'<button class="speed-btn" data-skill-up="'+id+'" style="padding:4px 8px;font-size:.65rem;'+(lv>=s.maxLevel||st.points<cost?'opacity:.4':'')+'" '+(lv>=s.maxLevel||st.points<cost?'disabled':'')+'>↑ 升级'+(cost?'('+cost+')':'')+'</button>'
+        ? '<button class="speed-btn" data-skill-equip="'+id+'" data-slot="'+equippedSlot+'" style="padding:10px 12px;min-height:44px;font-size:13px;border-color:var(--green);color:var(--green)">装备中</button>'
+        : '<button class="speed-btn" data-skill-equip="'+id+'" style="padding:10px 12px;min-height:44px;font-size:13px">装备</button>')
+      +'<button class="speed-btn" data-skill-up="'+id+'" style="padding:10px 12px;min-height:44px;font-size:13px;'+(lv>=s.maxLevel||st.points<cost?'opacity:.4':'')+'" '+(lv>=s.maxLevel||st.points<cost?'disabled':'')+'>↑ 升级'+(cost?'('+cost+')':'')+'</button>'
+      +'</div>'
       +'</div>'
   })
   ov.innerHTML = h

@@ -27,46 +27,52 @@ function renderPetEntry() {
   if (btn) btn.addEventListener('click', function(){ renderPetPanel() })
 }
 
-/* 宠物面板 overlay */
+/* 宠物面板 overlay（新版式：卡片/大按钮/12px+） */
 function renderPetPanel() {
   var ov = document.getElementById('battleOverlay')
   if (!ov) return
   var d = getPetStore()
-  var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-    +'<button class="speed-btn" id="petClose" style="padding:2px 8px">✕</button>'
-    +'<span style="font-size:.9rem;font-weight:700">🐾 宠物面板</span>'
+  var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
+    +'<button class="speed-btn" id="petClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:14px">✕</button>'
+    +'<span style="font-size:18px;font-weight:700">🐾 宠物面板</span>'
     +'<span style="flex:1"></span>'
-    +'<button class="speed-btn" id="petSettle" style="padding:2px 8px;border-color:var(--green);color:var(--green)">结算</button>'
+    +'<button class="speed-btn" id="petSettle" style="padding:10px 14px;min-height:44px;font-size:14px;border-color:var(--green);color:var(--green)">结算</button>'
     +'</div>'
   // 材料
   var m = d.materials || {}
-  h += '<div style="font-size:.7rem;background:var(--bg2);border-radius:var(--r);padding:6px 10px;margin-bottom:8px;display:flex;gap:10px;flex-wrap:wrap">'
-    +'<span>🧪 营养液 <b>'+m.nutrition+'</b></span>'
-    +'<span>🍖 饲料 <b>'+m.feed+'</b></span>'
-    +'<span>✨ 灵能 <b>'+m.spirit+'</b></span>'
-    +'<span>🪨 炼化石 <b>'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7)">'+m.refineHigh+'</b></span>'
-    +'<span>💎 宝珠碎片 <b>'+m.orbShard+'</b></span>'
+  h += '<div style="font-size:13px;background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;line-height:1.6">'
+    +'<span>🧪 营养液 <b style="font-size:14px">'+m.nutrition+'</b></span>'
+    +'<span>🍖 饲料 <b style="font-size:14px">'+m.feed+'</b></span>'
+    +'<span>✨ 灵能 <b style="font-size:14px">'+m.spirit+'</b></span>'
+    +'<span>🪨 炼化石 <b style="font-size:14px">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:14px">'+m.refineHigh+'</b></span>'
+    +'<span>💎 宝珠碎片 <b style="font-size:14px">'+m.orbShard+'</b></span>'
     +'</div>'
   // 宠物列表
   if (!d.pets.length) {
-    h += '<div style="text-align:center;padding:20px;color:var(--text3);font-size:.8rem">还没有宠物<br><button class="speed-btn" id="petGetEgg" style="margin-top:8px;border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
+    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:14px;background:var(--bg2);border-radius:16px">还没有宠物 🐾<br><span style="font-size:12px">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:15px;border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
   } else {
     d.pets.forEach(function(p, i) {
       var codex = getPetCodex(p.speciesId) || { name: p.name, rarity: p.rarity }
       var stageIcon = p.stage==='egg'?'🥚':p.stage==='grow'?'🌱':'🐾'
       var stageText = p.stage==='egg'?'孵化 '+Math.round(p.hatchProgress)+'%':p.stage==='grow'?'成长 '+Math.round(p.growth)+'%':'成熟'
       var dead = p.isDead ? '<span style="color:var(--red)">💀 阵亡</span>' : ''
-      h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg2)">'
-        +'<span style="font-size:1.2rem">'+stageIcon+'</span>'
+      // 进度条（孵化/成长）
+      var prog = p.stage==='egg' ? p.hatchProgress : p.stage==='grow' ? p.growth : 100
+      h += '<div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg2);border-radius:14px;margin-bottom:10px">'
+        +'<span style="font-size:26px">'+stageIcon+'</span>'
         +'<div style="flex:1">'
-        +'<div style="font-size:.8rem;font-weight:600">'+(codex.name||p.name)+' <span style="color:var(--purple,#a855f7);font-size:.65rem">'+p.rarity+'</span></div>'
-        +'<div style="font-size:.65rem;color:var(--text3)">'+stageText+' · 饥饿'+Math.round(p.hunger)+' 健康'+Math.round(p.health)+(dead?' · '+dead:'')+'</div>'
+        +'<div style="font-size:16px;font-weight:600">'+(codex.name||p.name)+' <span style="color:var(--purple,#a855f7);font-size:12px">'+p.rarity+'</span></div>'
+        +'<div style="font-size:12px;color:var(--text3);margin:3px 0">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+'</div>'
+        // 进度条
+        +'<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;border:1px solid var(--bg2)"><div style="width:'+Math.min(100,prog)+'%;height:100%;background:var(--orange);border-radius:3px;transition:width .3s"></div></div>'
         +'</div>'
-        // 操作按钮
-        +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:2px 6px">🍖喂</button>'
-        +(p.stage==='egg'?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:2px 6px">🧪营养</button>':'')
-        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:2px 6px;border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">炼化</button>':'')
-        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="detail" data-pet-idx="'+i+'" style="padding:2px 6px">📋</button>':'')
+        // 操作按钮（大按钮 44px）
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+        +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:13px">🍖喂</button>'
+        +(p.stage==='egg'?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:13px">🧪营养</button>':'')
+        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:13px;border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">✨炼化</button>':'')
+        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="detail" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:13px">📋</button>':'')
+        +'</div>'
         +'</div>'
     })
   }
