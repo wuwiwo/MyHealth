@@ -105,6 +105,10 @@ function normalAttack(gb, actor, target) {
     var critDmg = playerCritHook(actor, dmg);
     if (critDmg > dmg) { dmg = critDmg; events.push({ msg: '💥 暴击！' }); }
   }
+  // 玩家受击：瞩目计数
+  if (target.side === 'ally' && target._spotTauntTurn) {
+    target._spotHits = (target._spotHits || 0) + 1;
+  }
   // 玩家受击格挡（pity）
   if (target.side === 'ally' && typeof playerBlockHook === 'function') {
     var blockDmg = playerBlockHook(target, dmg);
@@ -255,6 +259,11 @@ function groupUnitTurn(gb, actor) {
     }
   }
 
+  // 玩家技能回合结束（瞩目回复）
+  if (actor.side === 'ally' && typeof playerSkillTurnEnd === 'function') {
+    var pe = playerSkillTurnEnd(gb, actor, turn);
+    pe.forEach(function (e) { events.push({ msg: e.msg }); });
+  }
   // 天赋 onAfterAction / onTurnEnd
   var ae = talentDispatch(actor, 'onAfterAction', {});
   ae.events.forEach(function (e) { events.push({ msg: e.msg }); });

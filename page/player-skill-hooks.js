@@ -89,6 +89,42 @@ function playerSkillTurnStart(gb, player, turn) {
     player.hp = Math.min(player.base.hp, player.hp + heal);
     events.push({ msg: '💚 气力恢复 +' + heal });
   }
+
+  // 瞩目：n×3% 几率进入嘲讽 1 回合（pity 乘算 + 触发锁2回合）
+  var spotLv = player._playerSkills['spotlight'] || 0;
+  if (spotLv >= 1 && !player._spotLock) {
+    var seff = getPlayerSkill('spotlight').effect(spotLv);
+    var spotChance = seff.chance * (player._spotPity || 1);
+    if (Math.random() < spotChance) {
+      player._taunting = true;
+      player._spotPity = 1;
+      player._spotLock = 2;
+      player._spotTauntTurn = turn;
+      player._spotHits = 0;   // 本回合受击计数
+      events.push({ msg: '🎯 ' + player.name + ' 瞩目：嘲讽敌方！' });
+    } else {
+      player._spotPity = (player._spotPity || 1) * 1.2;
+    }
+  }
+  if (player._spotLock > 0) player._spotLock--;
+  return events;
+}
+
+/* 瞩目回合结束：全体回复 (防+魂防)×受击次数 */
+function playerSkillTurnEnd(gb, player, turn) {
+  var events = [];
+  if (!player || !player._playerSkills) return events;
+  var spotLv = player._playerSkills['spotlight'] || 0;
+  if (spotLv >= 1 && player._spotTauntTurn === turn && player._spotHits > 0) {
+    var healPer = player.base.def + (player.base.soulDef || 0);
+    var total = healPer * player._spotHits;
+    gb.allies.forEach(function (a) {
+      a.hp = Math.min(a.base.hp, a.hp + total);
+      events.push({ msg: '💖 瞩目：全体回复 ' + total + '（受击' + player._spotHits + '次）' });
+    });
+    player._spotHits = 0;
+    player._spotTauntTurn = null;
+  }
   return events;
 }
 
