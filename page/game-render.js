@@ -353,11 +353,21 @@ function startGroupTrial(groupId){
   var enemies=glv.enemies.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })
-  _groupBattle=createGroupBattle({allies:[player],enemies:enemies})
+  // 默认带宠物：优先 _petBattlePicks，否则自动带成熟宠物
+  var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(2)
+  var petUnits = createPetUnitsForBattle(petIds, 2)
+  _groupBattle=createGroupBattle({allies:[player].concat(petUnits),enemies:enemies})
   _groupMode='auto';_groupSpeed=1;_groupDetail=null
   renderGroupOverlay(true)
-  toast('👥 '+glv.name+' 开始！','s')
+  toast('👥 '+glv.name+' 开始！'+(petUnits.length?'（带 '+petUnits.length+' 宠物）':''),'s')
   _groupStep()
+}
+
+/* 自动选参战宠物（最多 n 只成熟宠物） */
+function autoPickPets(n){
+  var ready=getBattleReadyPets()
+  if(!ready.length)return []
+  return ready.slice(0,n||2).map(function(p){return p.speciesId})
 }
 
 /* 群战推进（自动模式定时循环；手动模式点按钮触发） */
@@ -386,19 +396,23 @@ function renderGroupOverlay(show){
   if(show)ov.classList.add('open')
   if(!_groupBattle){ov.classList.remove('open');return}
   var gb=_groupBattle
-  var h='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="gbClose" style="padding:2px 8px">✕</button>'
+  var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;min-height:44px">'
+    +'<button class="speed-btn" id="gbClose" style="padding:8px 10px;min-height:44px;min-width:44px">✕</button>'
     +'<span style="font-size:.85rem;font-weight:700">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
     +'<span style="flex:1"></span>'
     // 手动/自动切换
-    +'<button class="speed-btn" id="gbMode" style="padding:2px 8px;'+( _groupMode==='manual'?'border-color:var(--orange);color:var(--orange)':'')+'">'+(_groupMode==='manual'?'✋ 手动':'🤖 自动')+'</button>'
+    +'<button class="speed-btn" id="gbMode" style="padding:8px 10px;min-height:44px;'+( _groupMode==='manual'?'border-color:var(--orange);color:var(--orange)':'')+'">'+(_groupMode==='manual'?'✋ 手动':'🤖 自动')+'</button>'
     // 调速（自动模式）
-    +(_groupMode==='auto'?'<button class="speed-btn" id="gbSpeed" style="padding:2px 8px">'+_groupSpeed+'×</button>':'')
+    +(_groupMode==='auto'?'<button class="speed-btn" id="gbSpeed" style="padding:8px 10px;min-height:44px">'+_groupSpeed+'×</button>':'')
     // 手动：推进一回合按钮
-    +(_groupMode==='manual'?'<button class="speed-btn" id="gbStep" style="padding:2px 12px;border-color:var(--green);color:var(--green)">⏭️ 下一回合</button>':'')
+    +(_groupMode==='manual'?'<button class="speed-btn" id="gbStep" style="padding:8px 14px;min-height:44px;border-color:var(--green);color:var(--green)">⏭️ 下一回合</button>':'')
     +'</div>'
   // 我方
-  h+='<div style="margin-bottom:4px;font-size:.72rem;color:var(--green)">🟢 我方</div>'
+  h+='<div style="margin-bottom:4px;font-size:.72rem;color:var(--green);display:flex;align-items:center;gap:6px"><span>🟢 我方</span>'
+  gb.allies.forEach(function(u){
+    if(u._petSpecies)h+='<span style="font-size:.6rem;color:var(--purple,#a855f7);background:var(--bg2);padding:1px 6px;border-radius:8px">🐾 宠物</span>'
+  })
+  h+='</div>'
   gb.allies.forEach(function(u){h+=renderGroupUnit(u,'ally')})
   // 敌方
   h+='<div style="margin:8px 0 4px;font-size:.72rem;color:var(--red)">🔴 敌方</div>'
@@ -447,7 +461,8 @@ function renderGroupOverlay(show){
   }
 }
 
-/* 渲染单个群战单位（可点击：详情/选目标） */
+/* 渲染单个群战单位（可点击：详情；触摸区 ≥44px）
+   信息层次：名称/血条/状态/技能冷却 */
 function renderGroupUnit(u,side){
   var hpPct=u.hp<=0?0:Math.round(u.hp/u.base.hp*100)
   var color=side==='ally'?'var(--green)':'var(--red)'
@@ -455,13 +470,22 @@ function renderGroupUnit(u,side){
   var talentTag=u._talents&&u._talents.length?'<span style="font-size:.58rem;color:var(--purple,#a855f7)">天赋×'+u._talents.length+'</span>':''
   var skillTag=u.skills&&u.skills.length?'<span style="font-size:.58rem;color:var(--blue)">技×'+u.skills.length+'</span>':''
   var anim=u.hp<=0?'opacity:.35':''
-  return '<div class="gb-unit" data-uid="'+u.id+'" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bg2);cursor:pointer;'+anim+'">'
-    +'<span style="width:74px;font-size:.75rem;color:'+color+'">'+u.name+'</span>'
-    +'<div style="flex:1;height:10px;background:var(--bg2);border-radius:5px;overflow:hidden;position:relative">'
-    +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+';transition:width .3s"></div>'
+  // 技能冷却指示（skill UX：状态可见性）
+  var cdInfo=''
+  if(u.skills&&u.skills.length){
+    var cds=u.skills.map(function(sid){
+      var left=skillCooldownLeft(u,sid)
+      return left>0?'<span style="color:var(--text3);font-size:.55rem">⏳'+left+'</span>':''
+    }).filter(Boolean)
+    if(cds.length)cdInfo='<span style="display:inline-flex;gap:2px">'+cds.join('')+'</span>'
+  }
+  return '<div class="gb-unit" data-uid="'+u.id+'" style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--bg2);cursor:pointer;min-height:44px;'+anim+'">'
+    +'<span style="width:76px;font-size:.78rem;color:'+color+';font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+u.name+'</span>'
+    +'<div style="flex:1;height:12px;background:var(--bg2);border-radius:6px;overflow:hidden;position:relative">'
+    +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+';transition:width .3s ease;border-radius:6px"></div>'
+    +'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--text3)">'+u.hp+'/'+u.base.hp+'</span>'
     +'</div>'
-    +'<span style="width:52px;font-size:.62rem">'+u.hp+'/'+u.base.hp+'</span>'
-    +statusIcons+talentTag+skillTag
+    +'<span style="display:inline-flex;align-items:center;gap:3px;font-size:.68rem">'+statusIcons+talentTag+skillTag+cdInfo+'</span>'
     +'</div>'
 }
 
@@ -489,7 +513,7 @@ function renderGroupDetail(u){
       var s=SKILLS[sid]
       if(!s)return
       var cd=skillCooldownLeft(u,sid)
-      h+='<div>'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' · '+s.power+'%':'')+(cd?' · 冷却'+cd:'')+'</span></div>'
+      h+='<div>'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' · '+s.power+'%':'')+' · CD'+s.cooldown+(cd>0?' <b style="color:var(--orange)">⏳ 冷却 '+cd+'</b>':' <b style="color:var(--green)">✓ 就绪</b>')+'</span></div>'
     })
   }
   h+='</div>'
