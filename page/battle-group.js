@@ -128,6 +128,8 @@ function castSkill(gb, actor, skillId) {
   var def = SKILLS[skillId];
   if (!def) return events;
   var targets = selectTargets(gb, actor, def);
+  // 技能气泡（对话效果：角色施放技能时喊话）
+  events.push({ type: 'bubble', unit: actor.name, text: '⚡ ' + (actor.name || '') + '：' + def.name + '！', skillId: skillId });
 
   // 伤害
   if (def.type === 'attack') {

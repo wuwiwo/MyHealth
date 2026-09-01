@@ -412,8 +412,31 @@ function _groupStep(){
   groupBattleTick(_groupBattle)
   renderGroupOverlay(false)
   if(_groupBattle.done){_groupDone();return}
+  // 技能气泡：检测最近事件中的气泡，停顿展示
+  var bubble = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1].events.find(function(e){ return e.type==='bubble'; }) : null
+  if (bubble) {
+    showSkillBubble(bubble)
+    if (_groupMode==='manual') return
+    _groupTimer=setTimeout(_groupStep,1000/_groupSpeed)   // 气泡停顿后继续
+    return
+  }
   if(_groupMode==='manual')return   // 手动：等用户点下一回合
   _groupTimer=setTimeout(_groupStep,1200/_groupSpeed)
+}
+
+/* 技能对话气泡（停顿效果） */
+function showSkillBubble(bubble) {
+  var ov = document.getElementById('battleOverlay')
+  if (!ov) return
+  var old = document.getElementById('skillBubble')
+  if (old) old.remove()
+  var el = document.createElement('div')
+  el.id = 'skillBubble'
+  el.style = 'position:absolute;left:50%;top:38%;transform:translateX(-50%);background:rgba(15,23,42,.92);border:2px solid var(--orange);border-radius:16px;padding:10px 18px;font-size:15px;font-weight:600;color:#fff;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.3);animation:bubblePop .3s ease;max-width:80%;text-align:center;pointer-events:none'
+  el.innerHTML = bubble.text
+  ov.appendChild(el)
+  // 气泡自动消失（3 秒）
+  setTimeout(function(){ if (el && el.parentNode) el.remove() }, 2600)
 }
 
 /* 群战结束 */
