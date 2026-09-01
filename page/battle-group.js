@@ -210,8 +210,15 @@ function groupUnitTurn(gb, actor) {
     return events;
   }
 
-  // 选择行动：技能优先（有可用技能且随机触发），否则普攻
-  var skillId = pickSkill(actor);
+  // 选择行动：敌人用 AI 策略，玩家用随机/技能
+  var skillId, actTarget;
+  if (actor.side === 'enemy' && typeof aiDecide === 'function') {
+    var ai = aiDecide(gb, actor);
+    skillId = ai.skillId;
+    actTarget = ai.target;
+  } else {
+    skillId = pickSkill(actor);
+  }
   var acted = false;
   if (skillId) {
     var castEvents = castSkill(gb, actor, skillId);
@@ -219,8 +226,10 @@ function groupUnitTurn(gb, actor) {
     acted = true;
   }
   if (!acted) {
-    // 普攻：目标选择
-    var targets = selectTargets(gb, actor, null);
+    // 普攻：目标选择（AI 用策略目标，否则随机）
+    var targets;
+    if (actTarget) targets = [actTarget];
+    else targets = selectTargets(gb, actor, null);
     if (targets.length) {
       var ta = talentDispatch(actor, 'onBeforeAction', {});
       var multi = ta.mutations.find(function (m) { return m.key === 'multiTarget'; });

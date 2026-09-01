@@ -65,8 +65,12 @@ const e4 = sandbox.createUnit({ id: 'e4', side: 'enemy', base: { hp: 100, atk: 1
 const gb4 = sandbox.createGroupBattle({ allies: [a4], enemies: [e4] });
 gb4.terrain = sandbox.getTerrain('gas');
 gb4.turn = 5;
-const gev = sandbox.terrainTurnStart(gb4);
-assert('毒气回合开始有事件', gev.length >= 1);
+let gasFired = false;
+for (let i = 0; i < 30; i++) {   // 多次尝试，35% 概率必触发
+  const gev = sandbox.terrainTurnStart(gb4);
+  if (gev.length >= 1) { gasFired = true; break; }
+}
+assert('毒气回合开始有事件', gasFired);
 
 // ---- 6. 雪天 ----
 const a5 = sandbox.createUnit({ id: 'a5', side: 'ally', base: { hp: 100, atk: 10, def: 5, spd: 3 } });
