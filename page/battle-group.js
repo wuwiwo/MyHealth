@@ -100,6 +100,16 @@ function normalAttack(gb, actor, target) {
     if (m.key === 'dmgTakenBoost') dmg = Math.floor(dmg * (1 + m.value));
     if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * 0.7);
   });
+  // 玩家暴击技能（取高）
+  if (actor.side === 'ally' && typeof playerCritHook === 'function') {
+    var critDmg = playerCritHook(actor, dmg);
+    if (critDmg > dmg) { dmg = critDmg; events.push({ msg: '💥 暴击！' }); }
+  }
+  // 玩家受击格挡（pity）
+  if (target.side === 'ally' && typeof playerBlockHook === 'function') {
+    var blockDmg = playerBlockHook(target, dmg);
+    if (blockDmg < dmg) { dmg = blockDmg; events.push({ msg: '🛡️ ' + target.name + ' 格挡！' }); }
+  }
   target.hp = Math.max(0, target.hp - dmg);
   events.push({ msg: (actor.name || '单位') + ' 攻击 → ' + dmg + ' 伤害' });
   // 嗜血：造成伤害恢复
@@ -194,6 +204,11 @@ function groupUnitTurn(gb, actor) {
   var events = [];
   var turn = gb.turn + 1;
 
+  // 玩家技能回合开始（气势如虹/气力恢复）
+  if (actor.side === 'ally' && typeof playerSkillTurnStart === 'function') {
+    var ps = playerSkillTurnStart(gb, actor, turn);
+    ps.forEach(function (e) { events.push({ msg: e.msg }); });
+  }
   // 天赋 onTurnStart
   var ts = talentDispatch(actor, 'onTurnStart', { turn: turn, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies });
   ts.events.forEach(function (e) { events.push({ msg: e.msg }); });
@@ -257,6 +272,13 @@ function groupUnitTurn(gb, actor) {
 /* 一个完整回合（所有存活单位按行动队列行动一次） */
 function groupBattleTick(gb) {
   if (gb.done) return;
+  if (gb.turn === 0 && typeof playerSkillBattleStart === 'function') {
+    var player = gb.allies.find(function(u){ return u._playerSkills; });
+    if (player) {
+      var evs = playerSkillBattleStart(gb, player);
+      evs.forEach(function(e){ gb.events.push(e); gb.log.push({turn:0, unit:player.name, events:[e]}); });
+    }
+  }
   gb.turn++;
   var queue = buildActionQueue(gb);
   queue.forEach(function (u) {
