@@ -52,11 +52,11 @@ function renderTrainView() {
 
   // 角色属性卡
   var h = '<div style="background:linear-gradient(135deg,var(--bg2),var(--bg2));border:1px solid var(--orange-g);border-radius:16px;padding:18px;margin-bottom:16px">'
-    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'
-    +'<div style="font-size:28px;width:52px;height:52px;background:var(--bg2);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--orange)">🧑</div>'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
+    +'<div style="font-size:28px;width:56px;height:56px;background:var(--bg2);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--orange)">🧑</div>'
     +'<div style="flex:1"><div style="font-size:18px;font-weight:700">我的角色</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-top:2px">力量训练 → 攻击/生命 ｜ 有氧 → 防御/生命</div></div>'
-    +'<div style="text-align:right"><div style="font-size:18px;font-weight:700;color:var(--orange)">'+stats.atk+'</div><div style="font-size:12px;color:var(--text3)">攻击</div></div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:2px">Lv 1 · 健身勇士</div></div>'
+    +'<div style="text-align:center;background:var(--bg2);border-radius:12px;padding:8px 16px"><div style="font-size:22px;font-weight:700;color:var(--orange)">⚔️ '+stats.atk+'</div><div style="font-size:12px;color:var(--text3)">攻击</div></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
     +statCell('❤️','生命',stats.hp)
@@ -73,6 +73,34 @@ function renderTrainView() {
   // 技能区块
   h += '<div style="font-size:16px;font-weight:700;margin:18px 0 10px">⚡ 技能 <span style="font-size:12px;color:var(--text3)">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
   h += '<button class="speed-btn" data-open-skill style="width:100%;padding:14px;font-size:15px;min-height:48px;border-radius:12px;border-color:var(--blue);color:var(--blue)">⚡ 技能培养面板</button>'
+  // 材料区块：获取说明 + 获取记录
+  h += '<div style="font-size:16px;font-weight:700;margin:18px 0 10px">📦 道具材料 <span style="font-size:12px;color:var(--text3)">获取与记录</span></div>'
+  h += '<div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:12px">'
+  h += '<div style="font-size:13px;font-weight:700;margin-bottom:8px">💡 获取方式</div>'
+  Object.keys(MATERIAL_NAMES).forEach(function(t){
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;border-bottom:1px solid var(--bg2)">'
+      +'<span style="width:110px;font-weight:600">'+getMaterialName(t)+'</span>'
+      +'<span style="flex:1;color:var(--text3);font-size:12px">'+MATERIAL_SOURCES[t]+'</span>'
+      +'<span style="font-weight:700;font-size:14px">×'+(d.materials[t]||0)+'</span>'
+      +'</div>'
+  })
+  h += '</div>'
+  // 获取记录
+  var log = d.materialLog || []
+  h += '<div style="background:var(--bg2);border-radius:14px;padding:14px">'
+  h += '<div style="font-size:13px;font-weight:700;margin-bottom:8px">📜 最近获取</div>'
+  if (!log.length) {
+    h += '<div style="font-size:13px;color:var(--text3);text-align:center;padding:14px">暂无获取记录<br><span style="font-size:12px">通关隐藏挑战可获得材料</span></div>'
+  } else {
+    log.slice(0, 10).forEach(function(l){
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;border-bottom:1px solid var(--bg2)">'
+        +'<span style="flex:1">'+getMaterialName(l.type)+'</span>'
+        +'<span style="color:var(--green);font-weight:700;font-size:14px">+'+(l.n||1)+'</span>'
+        +'<span style="color:var(--text3);font-size:12px">'+l.date+'</span>'
+        +'</div>'
+    })
+  }
+  h += '</div>'
   v.innerHTML = h
   var petBtn = v.querySelector('[data-open-pet]')
   if (petBtn) petBtn.addEventListener('click', function () { renderPetPanel() })

@@ -56,9 +56,34 @@ function grantStarterPet() {
 function grantMaterial(type, n) {
   var d = getPetStore();
   addMaterial(d.materials, type, n);
+  // 获取记录（最近 20 条）
+  d.materialLog = d.materialLog || [];
+  d.materialLog.unshift({ type: type, n: n, date: dateKey(new Date()), ts: Date.now() });
+  if (d.materialLog.length > 20) d.materialLog.length = 20;
   savePetStore(d);
   return { ok: true, type: type, n: n };
 }
+
+/* 材料中文名 */
+var MATERIAL_NAMES = {
+  nutrition: '🧪 营养液',
+  feed: '🍖 宠物饲料',
+  spirit: '✨ 宠物灵能',
+  refineNormal: '🪨 普通炼化石',
+  refineHigh: '💎 高级炼化石',
+  orbShard: '🔮 宝珠碎片'
+};
+function getMaterialName(type) { return MATERIAL_NAMES[type] || type; }
+
+/* 材料获取说明 */
+var MATERIAL_SOURCES = {
+  nutrition: '隐藏挑战胜利掉落（10-20%）',
+  feed: '隐藏挑战胜利掉落（20-30%）',
+  spirit: '隐藏挑战胜利掉落（5-10%）',
+  refineNormal: '隐藏挑战胜利掉落',
+  refineHigh: '隐藏挑战胜利掉落（Boss 关）',
+  orbShard: '隐藏挑战胜利掉落 / 分解宝珠'
+};
 
 /* 每日结算入口（app 初始化/进宠物页时调用）：
    对每只宠物按天结算，返回事件 */
