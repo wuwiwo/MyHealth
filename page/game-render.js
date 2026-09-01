@@ -357,7 +357,12 @@ function startGroupTrial(groupId){
   var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(2)
   var petUnits = createPetUnitsForBattle(petIds, 2)
   _groupBattle=createGroupBattle({allies:[player].concat(petUnits),enemies:enemies})
-  _groupMode='auto';_groupSpeed=1;_groupDetail=null
+  // 模式/速度持久化（记住上次选择）
+  _groupMode=localStorage.getItem('dh-group-mode')||'auto'
+  _groupSpeed=parseInt(localStorage.getItem('dh-group-speed')||'1',10)||1
+  if(['auto','manual'].indexOf(_groupMode)<0)_groupMode='auto'
+  if([1,2,4,8].indexOf(_groupSpeed)<0)_groupSpeed=1
+  _groupDetail=null
   renderGroupOverlay(true)
   toast('👥 '+glv.name+' 开始！'+(petUnits.length?'（带 '+petUnits.length+' 宠物）':''),'s')
   _groupStep()
@@ -377,7 +382,7 @@ function _groupStep(){
   renderGroupOverlay(false)
   if(_groupBattle.done){_groupDone();return}
   if(_groupMode==='manual')return   // 手动：等用户点下一回合
-  _groupTimer=setTimeout(_groupStep,600/_groupSpeed)
+  _groupTimer=setTimeout(_groupStep,1200/_groupSpeed)
 }
 
 /* 群战结束 */
@@ -431,13 +436,15 @@ function renderGroupOverlay(show){
   var modeBtn=document.getElementById('gbMode')
   if(modeBtn)modeBtn.addEventListener('click',function(){
     _groupMode=_groupMode==='auto'?'manual':'auto'
+    localStorage.setItem('dh-group-mode',_groupMode)
     if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
     if(_groupMode==='auto')_groupStep()
     else renderGroupOverlay(false)
   })
   var speedBtn=document.getElementById('gbSpeed')
   if(speedBtn)speedBtn.addEventListener('click',function(){
-    _groupSpeed=_groupSpeed===1?2:_groupSpeed===2?4:1
+    _groupSpeed=_groupSpeed===1?2:_groupSpeed===2?4:_groupSpeed===4?8:1
+    localStorage.setItem('dh-group-speed',String(_groupSpeed))
     if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
     _groupStep()
   })
