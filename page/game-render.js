@@ -337,6 +337,10 @@ function updateGameBar(){
 
 /* ========== 敌群试炼（M2b 多对多） ========== */
 var _groupBattle=null,_groupTimer=null
+var _groupMode='auto'   // 'auto' | 'manual'（manual=点一下推进一回合）
+var _groupSpeed=1        // 1/2/4
+var _groupAnimEl=null    // 动画中的单位
+var _groupDetail=null    // 详情面板中的单位 id
 
 /* 启动敌群试炼：生成玩家 Unit + 敌人，开群战 */
 function startGroupTrial(groupId){
@@ -348,18 +352,20 @@ function startGroupTrial(groupId){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })
   _groupBattle=createGroupBattle({allies:[player],enemies:enemies})
+  _groupMode='auto';_groupSpeed=1;_groupDetail=null
   renderGroupOverlay(true)
   toast('👥 '+glv.name+' 开始！','s')
   _groupStep()
 }
 
-/* 群战推进（回合循环，自动） */
+/* 群战推进（自动模式定时循环；手动模式点按钮触发） */
 function _groupStep(){
   if(!_groupBattle||_groupBattle.done){_groupDone();return}
   groupBattleTick(_groupBattle)
   renderGroupOverlay(false)
   if(_groupBattle.done){_groupDone();return}
-  _groupTimer=setTimeout(_groupStep,800)
+  if(_groupMode==='manual')return   // 手动：等用户点下一回合
+  _groupTimer=setTimeout(_groupStep,600/_groupSpeed)
 }
 
 /* 群战结束 */
@@ -371,55 +377,146 @@ function _groupDone(){
   else toast('💀 敌群讨伐失败…','e')
 }
 
-/* 渲染群战 overlay（复用 battleOverlay 结构，独立内容） */
+/* 渲染群战 overlay：手动/自动 + 调速 + 单位 + 动画 + 详情 + 日志 */
 function renderGroupOverlay(show){
   var ov=document.getElementById('battleOverlay')
   if(!ov)return
   if(show)ov.classList.add('open')
   if(!_groupBattle){ov.classList.remove('open');return}
   var gb=_groupBattle
-  var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-    +'<button class="speed-btn" id="gbClose" style="padding:2px 10px">✕</button>'
-    +'<span style="font-size:.85rem;font-weight:700">👥 敌群试炼 · 回合 '+gb.turn+'</span>'
+  var h='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
+    +'<button class="speed-btn" id="gbClose" style="padding:2px 8px">✕</button>'
+    +'<span style="font-size:.85rem;font-weight:700">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
     +'<span style="flex:1"></span>'
-    +'<span style="font-size:.75rem;color:var(--text3)">'+(gb.winner?'结束':'战斗中…')+'</span>'
+    // 手动/自动切换
+    +'<button class="speed-btn" id="gbMode" style="padding:2px 8px;'+( _groupMode==='manual'?'border-color:var(--orange);color:var(--orange)':'')+'">'+(_groupMode==='manual'?'✋ 手动':'🤖 自动')+'</button>'
+    // 调速（自动模式）
+    +(_groupMode==='auto'?'<button class="speed-btn" id="gbSpeed" style="padding:2px 8px">'+_groupSpeed+'×</button>':'')
+    // 手动：推进一回合按钮
+    +(_groupMode==='manual'?'<button class="speed-btn" id="gbStep" style="padding:2px 12px;border-color:var(--green);color:var(--green)">⏭️ 下一回合</button>':'')
     +'</div>'
   // 我方
-  h+='<div style="margin-bottom:6px;font-size:.72rem;color:var(--green)">🟢 我方</div>'
-  gb.allies.forEach(function(u){
-    h+=renderGroupUnit(u,'ally')
-  })
+  h+='<div style="margin-bottom:4px;font-size:.72rem;color:var(--green)">🟢 我方</div>'
+  gb.allies.forEach(function(u){h+=renderGroupUnit(u,'ally')})
   // 敌方
-  h+='<div style="margin:8px 0 6px;font-size:.72rem;color:var(--red)">🔴 敌方</div>'
-  gb.enemies.forEach(function(u){
-    h+=renderGroupUnit(u,'enemy')
-  })
-  // 日志（最近 5 条）
-  var recent=gb.log.slice(-5)
-  h+='<div style="margin-top:10px;font-size:.68rem;line-height:1.6;color:var(--text3);max-height:120px;overflow-y:auto">'
+  h+='<div style="margin:8px 0 4px;font-size:.72rem;color:var(--red)">🔴 敌方</div>'
+  gb.enemies.forEach(function(u){h+=renderGroupUnit(u,'enemy')})
+  // 日志（最近 8 条）
+  var recent=gb.log.slice(-8)
+  h+='<div style="margin-top:10px;font-size:.68rem;line-height:1.6;color:var(--text3);max-height:110px;overflow-y:auto;border-top:1px solid var(--bg2);padding-top:6px">'
   recent.forEach(function(l){
     l.events.forEach(function(e){h+='<div>'+e.msg+'</div>'})
   })
   h+='</div>'
   ov.innerHTML=h
+  // 事件绑定
   var closeBtn=document.getElementById('gbClose')
   if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}})
+  var modeBtn=document.getElementById('gbMode')
+  if(modeBtn)modeBtn.addEventListener('click',function(){
+    _groupMode=_groupMode==='auto'?'manual':'auto'
+    if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
+    if(_groupMode==='auto')_groupStep()
+    else renderGroupOverlay(false)
+  })
+  var speedBtn=document.getElementById('gbSpeed')
+  if(speedBtn)speedBtn.addEventListener('click',function(){
+    _groupSpeed=_groupSpeed===1?2:_groupSpeed===2?4:1
+    if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
+    _groupStep()
+  })
+  var stepBtn=document.getElementById('gbStep')
+  if(stepBtn)stepBtn.addEventListener('click',function(){_groupStep()})
+  // 单位点击：看详情
+  ov.querySelectorAll('.gb-unit').forEach(function(el){
+    el.addEventListener('click',function(){
+      var uid=el.getAttribute('data-uid')
+      var u=gb.units.find(function(x){return x.id===uid})
+      if(!u)return
+      _groupDetail=uid
+      renderGroupDetail(u)
+    })
+  })
+  // 攻击动画（高亮受伤单位）
+  if(_groupAnimEl){
+    var el=ov.querySelector('.gb-unit[data-uid="'+_groupAnimEl+'"]')
+    if(el){el.classList.add('gb-hit');setTimeout(function(){el.classList.remove('gb-hit')},400)}
+    _groupAnimEl=null
+  }
 }
 
-/* 渲染单个群战单位 */
+/* 渲染单个群战单位（可点击：详情/选目标） */
 function renderGroupUnit(u,side){
   var hpPct=u.hp<=0?0:Math.round(u.hp/u.base.hp*100)
   var color=side==='ally'?'var(--green)':'var(--red)'
   var statusIcons=(u.statuses||[]).map(function(s){return statusIcon(s.id)}).join('')
-  var talentTag=u._talents&&u._talents.length?'<span style="font-size:.6rem;color:var(--purple,#a855f7)">天赋×'+u._talents.length+'</span>':''
-  return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--bg2)">'
-    +'<span style="width:70px;font-size:.75rem;color:'+color+'">'+u.name+'</span>'
-    +'<div style="flex:1;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">'
-    +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+'"></div>'
+  var talentTag=u._talents&&u._talents.length?'<span style="font-size:.58rem;color:var(--purple,#a855f7)">天赋×'+u._talents.length+'</span>':''
+  var skillTag=u.skills&&u.skills.length?'<span style="font-size:.58rem;color:var(--blue)">技×'+u.skills.length+'</span>':''
+  var anim=u.hp<=0?'opacity:.35':''
+  return '<div class="gb-unit" data-uid="'+u.id+'" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bg2);cursor:pointer;'+anim+'">'
+    +'<span style="width:74px;font-size:.75rem;color:'+color+'">'+u.name+'</span>'
+    +'<div style="flex:1;height:10px;background:var(--bg2);border-radius:5px;overflow:hidden;position:relative">'
+    +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+';transition:width .3s"></div>'
     +'</div>'
-    +'<span style="width:44px;font-size:.65rem">'+u.hp+'/'+u.base.hp+'</span>'
-    +statusIcons+talentTag
+    +'<span style="width:52px;font-size:.62rem">'+u.hp+'/'+u.base.hp+'</span>'
+    +statusIcons+talentTag+skillTag
     +'</div>'
+}
+
+/* 详情面板：属性/技能/天赋/状态/冷却 */
+function renderGroupDetail(u){
+  var ov=document.getElementById('battleOverlay')
+  if(!ov)return
+  var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+    +'<button class="speed-btn" id="gbDetailBack" style="padding:2px 8px">← 返回</button>'
+    +'<span style="font-size:.9rem;font-weight:700">'+(u.name||'单位')+'</span>'
+    +'<span style="font-size:.65rem;color:var(--text3)">'+u.side+' · Lv'+u.level+'</span>'
+    +'</div>'
+  // 属性
+  h+='<div style="font-size:.72rem;line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
+  h+='<div style="font-weight:700;margin-bottom:4px">📊 属性</div>'
+  h+='❤️ HP <b>'+u.hp+'</b>/'+u.base.hp+'　⚔️ 攻 <b>'+u.base.atk+'</b>　🛡️ 防 <b>'+u.base.def+'</b>'
+  h+='　💨 速 <b>'+u.base.spd+'</b>'+(u.base.soulAtk?'　👻 魂攻 <b>'+u.base.soulAtk+'</b>':'')+(u.base.soulDef?'　🔮 魂防 <b>'+u.base.soulDef+'</b>':'')
+  h+='</div>'
+  // 技能
+  h+='<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
+  h+='<div style="font-weight:700;margin-bottom:4px">⚡ 技能</div>'
+  if(!u.skills||!u.skills.length){h+='<div style="color:var(--text3)">（无技能，普通攻击）</div>'}
+  else{
+    u.skills.forEach(function(sid){
+      var s=SKILLS[sid]
+      if(!s)return
+      var cd=skillCooldownLeft(u,sid)
+      h+='<div>'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' · '+s.power+'%':'')+(cd?' · 冷却'+cd:'')+'</span></div>'
+    })
+  }
+  h+='</div>'
+  // 天赋
+  h+='<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
+  h+='<div style="font-weight:700;margin-bottom:4px">✨ 天赋</div>'
+  if(!u._talents||!u._talents.length){h+='<div style="color:var(--text3)">（无天赋）</div>'}
+  else{
+    u._talents.forEach(function(tid){
+      var t=TALENTS[tid]
+      if(!t)return
+      h+='<div>'+t.name+' <span style="color:var(--text3)">· '+t.desc+'</span></div>'
+    })
+  }
+  h+='</div>'
+  // 状态
+  h+='<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px">'
+  h+='<div style="font-weight:700;margin-bottom:4px">🌀 状态</div>'
+  if(!u.statuses||!u.statuses.length){h+='<div style="color:var(--text3)">（无状态）</div>'}
+  else{
+    u.statuses.forEach(function(st){
+      var def=getStatusDef(st.id)
+      h+='<div>'+statusIcon(st.id)+' '+getStatusName(st.id)+(def&&def.grade?' <span style="color:var(--text3)">[等级'+def.grade+']</span>':'')+' <span style="color:var(--text3)">剩余'+st.duration+'回合'+(st.stacks>1?' · '+st.stacks+'层':'')+'</span></div>'
+    })
+  }
+  h+='</div>'
+  ov.innerHTML=h
+  var back=document.getElementById('gbDetailBack')
+  if(back)back.addEventListener('click',function(){_groupDetail=null;renderGroupOverlay(false)})
 }
 
 /* 状态图标映射 */

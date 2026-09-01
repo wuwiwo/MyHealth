@@ -448,3 +448,13 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 
 /* ========== HOT BUFF FLASH ========== */
 @keyframes hotFlash{0%{opacity:1}100%{opacity:0}}
+
+/* ===== 群战 UI（M2b） ===== */
+.gb-unit{transition:background .2s}
+.gb-unit:hover{background:rgba(128,128,128,.08)}
+.gb-hit{animation:gbFlash .4s ease}
+@keyframes gbFlash{
+  0%{background:rgba(239,68,68,.35)}
+  100%{background:transparent}
+}
+.gb-unit .gb-hp-fill{transition:width .3s ease}
