@@ -373,7 +373,11 @@ var _groupDetail=null    // 详情面板中的单位 id
 
 /* 启动敌群试炼：生成玩家 Unit + 敌人，开群战 */
 function startGroupTrial(groupId){
-  var glv=(GROUP_LEVELS||{})[groupId]
+  // 支持：小关 id（g1-1）或大关 id（g1，取第 1 关）
+  var stage = (typeof getGroupStage === 'function') ? getGroupStage(groupId) : null
+  var glv
+  if (stage) glv = stage
+  else glv = (GROUP_LEVELS||{})[groupId] ? (GROUP_LEVELS[groupId].stages || [])[0] : null
   if(!glv){toast('敌群关卡不存在','e');return}
   var stats=getGameStats()
   var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:stats.hp,atk:stats.atk,def:stats.def,spd:10,soulAtk:stats.soulAtk||0,soulDef:stats.soulDef||0}})

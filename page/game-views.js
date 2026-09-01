@@ -113,6 +113,37 @@ function statCell(icon, label, val) {
 }
 
 /* ===== 战斗视图：本旬目标 + 敌群 + 关卡 ===== */
+
+/* 大关内 10 小关列表 */
+function showGroupStages(groupId) {
+  var glv = (GROUP_LEVELS || {})[groupId]
+  if (!glv) return
+  var v = document.getElementById('gameBattleView')
+  if (!v) return
+  var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+    +'<button class="speed-btn" id="groupBack" style="padding:10px 12px;min-height:44px;font-size:14px">← 返回</button>'
+    +'<span style="font-size:18px;font-weight:700">'+glv.name+'</span>'
+    +'<span style="flex:1"></span>'
+    +'<span style="font-size:12px;color:var(--text3)">'+glv.desc+'</span>'
+    +'</div>'
+  h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">'
+  glv.stages.forEach(function (st) {
+    var icon = st.type === 'boss' ? '👑' : st.type === 'elite' ? '⭐' : '⚔️'
+    var color = st.type === 'boss' ? 'var(--red)' : st.type === 'elite' ? 'var(--orange)' : 'var(--blue)'
+    h += '<button class="speed-btn" data-stage="'+st.id+'" style="padding:12px 4px;min-height:56px;font-size:13px;border-radius:10px;border-color:'+color+';color:'+color+';display:flex;flex-direction:column;align-items:center">'
+      +'<span style="font-size:16px">'+icon+'</span>'
+      +'<span style="font-size:12px;margin-top:2px">'+st.name.replace(/^[⭐👑] /,'')+'</span>'
+      +'<span style="font-size:11px;opacity:.8">'+st.enemies.length+'敌</span>'
+      +'</button>'
+  })
+  h += '</div>'
+  v.innerHTML = h
+  var back = document.getElementById('groupBack')
+  if (back) back.addEventListener('click', function () { renderBattleView() })
+  v.querySelectorAll('[data-stage]').forEach(function (c) {
+    c.addEventListener('click', function () { startGroupTrial(c.getAttribute('data-stage')) })
+  })
+}
 function renderBattleView() {
   var v = document.getElementById('gameBattleView')
   if (!v) return
@@ -130,13 +161,13 @@ function renderBattleView() {
     +'<div style="flex:1;background:var(--bg2);border:1px solid var(--green-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--green)">'+wkStatus+'</div><div style="font-size:12px;color:var(--text3)">状态</div></div>'
     +'</div></div>'
 
-  // 敌群战斗
-  h += '<div style="font-size:16px;font-weight:700;margin:18px 0 10px">👥 敌群试炼</div>'
+  // 敌群战斗（6 大关 × 10 小关）
+  h += '<div style="font-size:16px;font-weight:700;margin:18px 0 10px">👥 敌群试炼 <span style="font-size:12px;color:var(--text3)">6 大关 · 每关 10 小关</span></div>'
   h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">'
   Object.entries(GROUP_LEVELS || {}).forEach(function ([k, glv]) {
     h += '<button class="speed-btn" data-group="'+glv.id+'" style="padding:14px 10px;font-size:14px;min-height:56px;border-radius:12px;text-align:left;display:flex;flex-direction:column">'
       +'<span style="font-size:15px;font-weight:600">'+glv.name+'</span>'
-      +'<span style="font-size:12px;color:var(--text3);margin-top:2px">'+glv.enemies.length+' 敌 · '+glv.desc+'</span>'
+      +'<span style="font-size:12px;color:var(--text3);margin-top:2px">'+glv.desc+'</span>'
       +'</button>'
   })
   h += '</div>'
@@ -147,7 +178,7 @@ function renderBattleView() {
 
   v.innerHTML = h
   v.querySelectorAll('[data-group]').forEach(function (c) {
-    c.addEventListener('click', function () { startGroupTrial(c.getAttribute('data-group')) })
+    c.addEventListener('click', function () { showGroupStages(c.getAttribute('data-group')) })
   })
   var lvBtn = v.querySelector('[data-open-levels]')
   if (lvBtn) lvBtn.addEventListener('click', function () {

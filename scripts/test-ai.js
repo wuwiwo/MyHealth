@@ -62,7 +62,8 @@ assert('集火残血目标', target5.id === 'weak', 'target=' + (target5&&target
 
 // ---- 6. 全战斗 AI 跑通 ----
 const player = sandbox.createUnit({ id:'player', side:'ally', name:'🧑 你', base:{hp:1500,atk:100,def:50,spd:10} });
-const g3Enemies = (sandbox.GROUP_LEVELS||{})['g3'] ? sandbox.GROUP_LEVELS.g3.enemies.map(function(ec,i){
+const g3Stage = sandbox.getGroupStage ? sandbox.getGroupStage('g3-3') : null;
+const g3Enemies = g3Stage ? g3Stage.enemies.map(function(ec,i){
   return sandbox.createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base});
 }) : [];
 const gb6 = sandbox.createGroupBattle({ allies:[player], enemies:g3Enemies });
