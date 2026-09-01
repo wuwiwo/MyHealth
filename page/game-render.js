@@ -152,6 +152,7 @@ function renderGame(){
   gc.querySelectorAll('.lv-card[data-group]').forEach(c=>c.addEventListener('click',()=>{
     startGroupTrial(c.dataset.group)
   }))
+  if (typeof renderPetEntry === 'function') renderPetEntry()
 }
 
 function allPrevCleared(chKey,lvId){
@@ -337,6 +338,7 @@ function updateGameBar(){
 
 /* ========== 敌群试炼（M2b 多对多） ========== */
 var _groupBattle=null,_groupTimer=null
+var _petBattlePicks=[]   // 宠物参战选择（M4-6）
 var _groupMode='auto'   // 'auto' | 'manual'（manual=点一下推进一回合）
 var _groupSpeed=1        // 1/2/4
 var _groupAnimEl=null    // 动画中的单位
