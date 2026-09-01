@@ -465,3 +465,9 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
   60%{opacity:1;transform:translateX(-50%) scale(1.05)}
   100%{opacity:1;transform:translateX(-50%) scale(1)}
 }
+
+/* 伤害飘字 */
+@keyframes floatUp{
+  0%{opacity:1;transform:translateY(0)}
+  100%{opacity:0;transform:translateY(-30px)}
+}

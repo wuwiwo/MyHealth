@@ -423,6 +423,8 @@ function _groupStep(){
   // 高亮当前行动单位
   if (step.unit) _groupActing = step.unit.id
   renderGroupOverlay(false)
+  // 攻击反馈动画：解析本次行动的日志，高亮受击目标 + 伤害飘字
+  if (step.unit) playAttackFeedback(_groupBattle, step)
   if(_groupBattle.done){_groupDone();return}
   // 技能气泡
   var lastLog = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1] : null
@@ -436,6 +438,42 @@ function _groupStep(){
   if(_groupMode==='manual')return   // 手动：等用户点下一回合
   // 每个单位行动间隔（看清速度顺序）
   _groupTimer=setTimeout(_groupStep,700/_groupSpeed)
+}
+
+/* 攻击反馈动画：解析本次行动日志，受击目标闪烁 + 伤害飘字 */
+function playAttackFeedback(gb, step) {
+  var ov = document.getElementById('battleOverlay')
+  if (!ov) return
+  var lastLog = gb.log.length ? gb.log[gb.log.length-1] : null
+  if (!lastLog) return
+  // 找本次行动的伤害事件（"X 攻击 → N" / "→ N 伤害"）
+  lastLog.events.forEach(function(e){
+    var m = /→ (\d+) (?:伤害|魂伤害)/.exec(e.msg)
+    if (!m) return
+    // 受击目标是日志里被攻击的单位 —— 从消息里找目标名
+    var targetMatch = /([^\s]+) 攻击 →/.exec(e.msg)
+    var hitName = targetMatch ? targetMatch[1] : null
+    // 找对应单位卡片
+    var cards = ov.querySelectorAll('.gb-unit')
+    var targetCard = null
+    if (hitName) {
+      for (var i=0;i<cards.length;i++){
+        if (cards[i].textContent.indexOf(hitName) > -1){ targetCard = cards[i]; break }
+      }
+    }
+    // 受击闪烁
+    if (targetCard) {
+      targetCard.classList.add('gb-hit')
+      setTimeout(function(){ targetCard.classList.remove('gb-hit') }, 500)
+      // 伤害飘字
+      var rect = targetCard.getBoundingClientRect()
+      var float = document.createElement('div')
+      float.textContent = '-' + m[1]
+      float.style = 'position:fixed;left:'+(rect.left+rect.width/2-15)+'px;top:'+rect.top+'px;color:var(--red);font-size:18px;font-weight:700;z-index:99;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.4)'
+      ov.appendChild(float)
+      setTimeout(function(){ float.remove() }, 900)
+    }
+  })
 }
 
 /* 技能对话气泡（停顿效果） */
@@ -532,12 +570,24 @@ function renderGroupOverlay(show){
   // 敌方
   h+='<div style="margin:8px 0 4px;font-size:.72rem;color:var(--red)">🔴 敌方</div>'
   gb.enemies.forEach(function(u){h+=renderGroupUnit(u,'enemy')})
-  // 日志（最近 8 条）
-  var recent=gb.log.slice(-8)
-  h+='<div style="margin-top:10px;font-size:.68rem;line-height:1.6;color:var(--text3);max-height:110px;overflow-y:auto;border-top:1px solid var(--bg2);padding-top:6px">'
-  recent.forEach(function(l){
-    l.events.forEach(function(e){h+='<div>'+e.msg+'</div>'})
+  // 战斗日志（全部保留，分回合显示，可复制）
+  var curTurn = null
+  h+='<div style="margin-top:12px;display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:14px;font-weight:700">📜 战斗日志</span>'
+    +'<span style="flex:1"></span>'
+    +'<button class="speed-btn" id="gbCopyLog" style="padding:6px 10px;min-height:36px;font-size:12px">📋 复制</button>'
+    +'</div>'
+  h+='<div id="gbLogBox" style="margin-top:6px;font-size:12px;line-height:1.7;color:var(--text3);max-height:200px;overflow-y:auto;border:1px solid var(--bg2);border-radius:10px;padding:10px 12px">'
+  gb.log.forEach(function(l){
+    if(l.turn!==curTurn){
+      curTurn=l.turn
+      h+='<div style="font-weight:700;color:var(--orange);margin:6px 0 3px">—— 回合 '+l.turn+' ——</div>'
+    }
+    l.events.forEach(function(e){
+      if(e && e.msg) h+='<div>'+e.msg+'</div>'
+    })
   })
+  if(!gb.log.length)h+='<div style="color:var(--text3)">战斗开始…</div>'
   h+='</div>'
   ov.innerHTML=h
   // 事件绑定
@@ -560,6 +610,20 @@ function renderGroupOverlay(show){
   })
   var stepBtn=document.getElementById('gbStep')
   if(stepBtn)stepBtn.addEventListener('click',function(){_groupStep()})
+  // 复制日志按钮
+  var copyBtn=document.getElementById('gbCopyLog')
+  if(copyBtn)copyBtn.addEventListener('click',function(){
+    var gb2=_groupBattle
+    if(!gb2)return
+    var text=gb2.log.map(function(l){
+      return '回合 '+l.turn+' | '+l.unit+': '+l.events.map(function(e){return e.msg}).join('；')
+    }).join('\n')
+    try{
+      navigator.clipboard.writeText(text).then(function(){toast('📋 日志已复制','s')})
+    }catch(e){
+      var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('📋 日志已复制','s')
+    }
+  })
   // 单位点击：看详情
   ov.querySelectorAll('.gb-unit').forEach(function(el){
     el.addEventListener('click',function(){
@@ -630,18 +694,30 @@ function renderGroupDetail(u){
   h+='❤️ HP <b>'+u.hp+'</b>/'+u.base.hp+'　⚔️ 攻 <b>'+u.base.atk+'</b>　🛡️ 防 <b>'+u.base.def+'</b>'
   h+='　💨 速 <b>'+u.base.spd+'</b>'+(u.base.soulAtk?'　👻 魂攻 <b>'+u.base.soulAtk+'</b>':'')+(u.base.soulDef?'　🔮 魂防 <b>'+u.base.soulDef+'</b>':'')
   h+='</div>'
-  // 技能
+  // 技能（兼容：敌群技能 u.skills + 玩家技能 _playerSkills）
   h+='<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
   h+='<div style="font-weight:700;margin-bottom:4px">⚡ 技能</div>'
-  if(!u.skills||!u.skills.length){h+='<div style="color:var(--text3)">（无技能，普通攻击）</div>'}
-  else{
+  var skillShown = false
+  if(u.skills&&u.skills.length){
     u.skills.forEach(function(sid){
       var s=SKILLS[sid]
       if(!s)return
       var cd=skillCooldownLeft(u,sid)
       h+='<div>'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' · '+s.power+'%':'')+' · CD'+s.cooldown+(cd>0?' <b style="color:var(--orange)">⏳ 冷却 '+cd+'</b>':' <b style="color:var(--green)">✓ 就绪</b>')+'</span></div>'
+      skillShown = true
     })
   }
+  // 玩家技能（_playerSkills：暴击/陨石等）
+  if(u._playerSkills){
+    Object.keys(u._playerSkills).forEach(function(sid){
+      var s=getPlayerSkill(sid)
+      if(!s)return
+      var lv=u._playerSkills[sid]
+      h+='<div>'+s.name+' <span style="color:var(--text3)">· '+s.type+' · Lv'+lv+' · '+(s.effect? (s.effect(lv).chance?('几率'+(s.effect(lv).chance*100).toFixed(0)+'%'):'') :'')+'</span></div>'
+      skillShown = true
+    })
+  }
+  if(!skillShown)h+='<div style="color:var(--text3)">（无技能，普通攻击）</div>'
   h+='</div>'
   // 天赋
   h+='<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
