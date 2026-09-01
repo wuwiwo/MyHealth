@@ -362,6 +362,7 @@ function updateGameBar(){
 
 /* ========== 敌群试炼（M2b 多对多） ========== */
 var _groupBattle=null,_groupTimer=null
+var _groupStageId=null   // 当前敌群小关 id（通关记录用）
 var _petBattlePicks=[]   // 宠物参战选择（M4-6）
 var _groupMode='auto'   // 'auto' | 'manual'（manual=点一下推进一回合）
 var _groupSpeed=1        // 1/2/4
@@ -376,6 +377,12 @@ function startGroupTrial(groupId){
   if (stage) glv = stage
   else glv = (GROUP_LEVELS||{})[groupId] ? (GROUP_LEVELS[groupId].stages || [])[0] : null
   if(!glv){toast('敌群关卡不存在','e');return}
+  // 记录当前小关 id（通关解锁用）
+  _groupStageId = stage ? groupId : null
+  // 通关的关卡不可重打
+  if (_groupStageId && typeof isGroupStageCleared === 'function' && isGroupStageCleared(_groupStageId)) {
+    toast('该关卡已通关 ✅','e'); return
+  }
   var stats=getGameStats()
   var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:stats.hp,atk:stats.atk,def:stats.def,spd:10,soulAtk:stats.soulAtk||0,soulDef:stats.soulDef||0}})
   var enemies=glv.enemies.map(function(ec,i){
@@ -442,9 +449,19 @@ function _groupDone(){
   var w=_groupBattle&&_groupBattle.winner
   renderGroupOverlay(false)
   if(w==='ally'){
+    // 记录敌群通关（解锁下一关）
+    var stageId = _groupStageId || null
+    var prog = null
+    if (stageId && typeof markGroupStageCleared === 'function') {
+      prog = markGroupStageCleared(stageId)
+    }
     // 敌群胜利奖励：技能点 + 材料（随关卡难度递增）
     var reward = groupVictoryReward(_groupBattle)
-    toast('🎉 敌群讨伐成功！' + reward.msg, 's')
+    var msg = '🎉 敌群讨伐成功！' + reward.msg
+    if (prog && prog.firstClear) {
+      msg += (prog.nextStage ? ' · 🔓 解锁 ' + prog.nextStage : ' · 🏆 全部通关！')
+    }
+    toast(msg, 's')
   }
   else toast('💀 敌群讨伐失败…','e')
 }

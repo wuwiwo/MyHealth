@@ -128,15 +128,32 @@ function showGroupStages(groupId) {
     +'</div>'
   h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">'
   glv.stages.forEach(function (st) {
+    var cleared = isGroupStageCleared(st.id)
+    var unlocked = isGroupStageUnlocked(st.id)
     var icon = st.type === 'boss' ? '👑' : st.type === 'elite' ? '⭐' : '⚔️'
     var color = st.type === 'boss' ? 'var(--red)' : st.type === 'elite' ? 'var(--orange)' : 'var(--blue)'
-    h += '<button class="speed-btn" data-stage="'+st.id+'" style="padding:12px 4px;min-height:56px;font-size:13px;border-radius:10px;border-color:'+color+';color:'+color+';display:flex;flex-direction:column;align-items:center">'
+    // 状态：已通关（锁定灰）/ 可挑战 / 未解锁
+    var statusHtml, btnStyle
+    if (cleared) {
+      statusHtml = '<span style="font-size:11px;color:var(--green)">✅ 已通关</span>'
+      btnStyle = 'opacity:.5;border-color:var(--green);color:var(--green)'
+    } else if (unlocked) {
+      statusHtml = '<span style="font-size:11px">⚔️ 可挑战</span>'
+      btnStyle = 'border-color:' + color + ';color:' + color
+    } else {
+      statusHtml = '<span style="font-size:11px">🔒 未解锁</span>'
+      btnStyle = 'opacity:.35'
+    }
+    h += '<button class="speed-btn" data-stage="'+st.id+'" '+(unlocked && !cleared ? '' : 'disabled')+' style="padding:12px 4px;min-height:56px;font-size:13px;border-radius:10px;'+btnStyle+';display:flex;flex-direction:column;align-items:center">'
       +'<span style="font-size:16px">'+icon+'</span>'
       +'<span style="font-size:12px;margin-top:2px">'+st.name.replace(/^[⭐👑] /,'')+'</span>'
-      +'<span style="font-size:11px;opacity:.8">'+st.enemies.length+'敌</span>'
+      +statusHtml
       +'</button>'
   })
   h += '</div>'
+  // 进度条
+  var stats = groupProgressStats()
+  h += '<div style="margin-top:12px;font-size:13px;color:var(--text3)">📈 敌群进度：'+stats.cleared+'/'+stats.total+' 关通关</div>'
   v.innerHTML = h
   var back = document.getElementById('groupBack')
   if (back) back.addEventListener('click', function () { renderBattleView() })
