@@ -616,7 +616,7 @@ function renderGroupOverlay(show){
     var gb2=_groupBattle
     if(!gb2)return
     var text=gb2.log.map(function(l){
-      return '回合 '+l.turn+' | '+l.unit+': '+l.events.map(function(e){return e.msg}).join('；')
+      return '【回合 '+l.turn+'】'+l.unit+': '+l.events.map(function(e){return e.msg}).filter(Boolean).join('；')
     }).join('\n')
     try{
       navigator.clipboard.writeText(text).then(function(){toast('📋 日志已复制','s')})
