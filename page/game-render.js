@@ -154,6 +154,13 @@ function renderGame(){
   }))
   if (typeof renderPetEntry === 'function') renderPetEntry()
   if (typeof renderSkillEntry === 'function') renderSkillEntry()
+  // v2.0 挑战页三视图（培养/战斗/记录）
+  if (typeof renderGameViews === 'function' && document.getElementById('gameTrainView')) {
+    renderGameViews()
+    // 旧视图隐藏（由新选项卡控制）
+    var gc2 = document.getElementById('gameContent')
+    if (gc2 && _gameTab === 'battle' && !gc2._levelViewOpen) gc2.style.display = 'none'
+  }
 }
 
 function allPrevCleared(chKey,lvId){
