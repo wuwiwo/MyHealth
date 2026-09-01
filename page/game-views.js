@@ -151,10 +151,15 @@ function renderBattleView() {
   })
   var lvBtn = v.querySelector('[data-open-levels]')
   if (lvBtn) lvBtn.addEventListener('click', function () {
-    // 展开关卡列表（复用 gameContent）
+    // 展开关卡列表（复用 gameContent，标记打开状态）
     var gc = document.getElementById('gameContent')
     var vv = document.getElementById('gameBattleView')
-    if (gc && vv) { gc.style.display = 'block'; vv.style.display = 'none'; renderGame() }
+    if (gc && vv) {
+      gc._levelViewOpen = true
+      gc.style.display = 'block'
+      vv.style.display = 'none'
+      renderGame()
+    }
   })
 }
 

@@ -128,6 +128,10 @@ function renderGame(){
     },100)
   }
   let h=''
+  // 关卡列表视图：返回按钮（从战斗视图进入时）
+  if (gc._levelViewOpen) {
+    h+='<div style="margin-bottom:10px"><button class="speed-btn" id="lvBack" style="padding:10px 16px;min-height:44px;font-size:14px">← 返回战斗</button></div>'
+  }
   // 敌群试炼入口（M2b，v2.0 准备内容）
   h+='<div class="chapter-hdr" style="margin-top:4px">👥 敌群试炼 <span style="font-size:.65rem;color:var(--text3)">· M2b 多对多战场</span></div><div class="lv-grid">'
   Object.entries(GROUP_LEVELS||{}).forEach(([k,glv])=>{
@@ -152,12 +156,29 @@ function renderGame(){
   gc.querySelectorAll('.lv-card[data-group]').forEach(c=>c.addEventListener('click',()=>{
     startGroupTrial(c.dataset.group)
   }))
+  // 返回战斗按钮
+  var lvBack = document.getElementById('lvBack')
+  if (lvBack) lvBack.addEventListener('click', function () {
+    gc._levelViewOpen = false
+    gc.style.display = 'none'
+    var vv = document.getElementById('gameBattleView')
+    if (vv) vv.style.display = 'block'
+    switchGameTab('battle')
+  })
   // v2.0 挑战页三视图（培养/战斗/记录）
   if (typeof renderGameViews === 'function' && document.getElementById('gameTrainView')) {
     renderGameViews()
-    // 旧视图隐藏（由新选项卡控制）
+    // 旧视图隐藏（由新选项卡控制）；关卡列表打开时保持显示
     var gc2 = document.getElementById('gameContent')
-    if (gc2 && _gameTab === 'battle' && !gc2._levelViewOpen) gc2.style.display = 'none'
+    if (gc2 && _gameTab === 'battle') {
+      if (gc2._levelViewOpen) {
+        gc2.style.display = 'block'
+        var vv2 = document.getElementById('gameBattleView')
+        if (vv2) vv2.style.display = 'none'
+      } else {
+        gc2.style.display = 'none'
+      }
+    }
   }
 }
 
