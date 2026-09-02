@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v1.11.0
+> Personal Health Manager — 个人健身健康管理应用 v2.0.0
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -46,26 +46,55 @@ Vercel Blob Storage (public)
 
 ```
 page/
-├── store.js            数据 Store v1.2（K-V 接口 + schema 校验 + onChange 通知 + 配额守护）
+├── store.js            数据 Store v1.3（schema 注册表 + 版本迁移 + -bak 备份 + onChange）
+├── ex-dataset.js       动作百科数据层（1324 动作检索/关联匹配/tagHtml）
+├── config.js           运行时配置（MEDIA_BASE 图床覆盖）
 ├── utils.js            常量、工具函数、toast、主题、openModal helper
-├── levels.js           关卡配置（21 章 117 关）
+├── levels.js           关卡配置（21 章 117 关，单敌）
+├── date-roll.js        本地日历日/月键纯函数（DST 安全）
+├── monthly-reset.js    自然月窗口判定（resolveMonthWindow）
 ├── stats.js            纯函数统计计算（容量加权 / 旬周期 / 炼魂升级概率）
-├── battle.js           战斗引擎（纯逻辑 + 魂攻击阶段 + Boss 词缀）
-├── challenge.js        隐藏挑战召唤 + 小游戏 + 伤害兑月奖励
+├── state-core.js       状态框架（defineStatus/applyStatus/tick/dispatch）
+├── status-defs.js      状态注册表（中毒/冰冻/潮湿/蓄力/诅咒等 12+）
+├── unit.js             Unit 战斗单位模型（阵营/速度/属性修正）
+├── talent.js           敌群天赋（16 种：利刃/嗜血/再生/复仇…）
+├── skill.js            敌群技能（25 种，含冷却/先制度）
+├── enemy.js            敌人编成（tier 阶梯 minion/elite/boss）
+├── battle.js           单敌战斗引擎（rng 注缝 + 五段式 hook + Boss 词条）
+├── battle-group.js     多对多群战引擎（速度行动队列 + 单步执行）
+├── terrain.js          战斗场地（6 种）
+├── group-levels.js     敌群关卡（6 大关 × 10 小关程序化生成）
+├── group-progress.js   敌群线性解锁进度
+├── ai.js               敌人 AI（斩杀/治疗/集火/Boss 大招）
+├── challenge.js        隐藏挑战召唤 + 小游戏 + 伤害兑月奖励 + 技能点
 ├── linechart.js        Canvas 折线图（可复用）
-├── sync.js             云同步 + 导出 / 导入（网络重试 + 时间戳冲突比对）
 ├── app.js              数据层 + 事件委托注册表 + 初始化 + 迁移 + Tab 切换
-├── tab-strength.js     力量训练子 Tab + 今日速览卡片
+├── sync.js             云同步 + 导出 / 导入（网络重试 + 时间戳冲突比对）
+├── tab-strength.js     力量训练子 Tab + 今日速览卡片 + 动作选择弹层
 ├── tab-cardio.js       有氧运动子 Tab
-├── tab-profile.js      个人 Tab（个人数据 / 训练数据 子 Tab，30 天趋势图）
-├── game-render.js      挑战 Tab 渲染（关卡 + 属性条 + 旬目标卡 + 引导）
+├── tab-profile.js      个人 Tab（个人数据 / 训练数据，热力图长按/月分组）
+├── game-render.js      挑战 Tab 渲染（群战 UI/调速/飘字/技能气泡/引导）
 ├── game-battle.js      挑战 Tab 战斗 UI + 战利品 + 分享卡片
 ├── game-records.js     挑战 Tab 历史记录 + 属性变更日志
 ├── game-refine.js      挑战 Tab 炼魂系统弹窗 + 批量炼化
+├── game-views.js       挑战页三视图（培养/战斗/记录）
 ├── tab-game.js         挑战 Tab 事件入口（onGameEvent）
-├── tab-settings.js     设置 Tab（动作库 / 计划 / 挑战 / 数据 4 个子 Tab）
+├── tab-settings.js     设置 Tab（动作库 / 计划 / 挑战 / 数据 + 动作百科）
+├── pets.js             宠物生命周期（蛋→孵化→成长→成熟→阵亡+离线结算）
+├── pet-materials.js    培育材料（6 种）+ 宠物炼化（R50/SR60/SSR80/UR100）
+├── pet-codex.js        14 只宠物图鉴 + 技能/天赋注册 + createPetUnit
+├── pet-store.js        dh-pets-v1 持久化 + 材料掉落 + 每日结算
+├── pet-ui.js           宠物面板 UI（喂食/营养/炼化/参战）
+├── skills.js           玩家技能注册表（9 技能）+ 技能点经济 + 槽位
+├── player-skill-hooks.js 玩家技能战斗挂钩（暴击/格挡/护盾/陨石…）
+├── skill-store.js      dh-skills-v1 持久化
+├── skill-ui.js         技能面板 UI
+├── orbs.js             宝珠系统（5 类型×4 品质 合成/分解/装配/月重置）
 ├── index.html          页面骨架
 ├── index.css           样式表
+├── media/              动作媒体（images/ + videos/，已关联动作）
+├── data/
+│   └── exercises-dataset.js  动作数据集（window.EX_DATASET，仅中文瘦身）
 ├── api/
 │   └── data.mjs        Vercel Serverless 同步接口 + Blob 清理
 ├── package.json
@@ -84,7 +113,7 @@ doc/
 ├── changelog-v1.7.md
 ├── changelog-v1.8.md
 ├── changelog-v1.9.md
-├── changelog-v1.11.md  ← 最新版本日志
+├── changelog-v2.0.md  ← 最新版本日志
 ├── design-v2.0.md       v2.0 设计文档（技能/宠物/宝珠）
 ├── design-uiux-adjustments.md  v2.0 UI/UX 调整设计
 ├── plan-v2.0-implementation.md v2.0 实施计划
@@ -190,5 +219,6 @@ Vercel 项目设置：
 | **v1.10.4** | **2026-08-27** | **修复召唤面板概率文案与阶梯不一致（误导决策）+ 补齐引导弹窗双词条说明（v1.10.0 遗漏项）** | `doc/changelog-v1.10.md` |
 | **v1.10.5** | **2026-08-27** | **架构重构（零行为变化）：词条组合器钩子表化去重 + pickBossAffix 数组化 + buildBattleSides 抽取共用** | `doc/changelog-v1.10.md` |
 | **v1.11.0** | **2026-09-01** | **动作百科（1324 动作）+ 动作关联机制 + MEDIA_BASE 图床覆盖 + store schema 注册表 + 时间工具（M2a S0/S1-B）+ 训练/个人/挑战/设置 UI 优化** | `doc/changelog-v1.11.md` |
+| **v2.0.0** | **2026-09-02** | **v2.0 大版本：玩家技能系统（9 技能）+ 多对多敌群战场（60 关/天赋/AI/场地）+ 宠物养成（14 只/炼化/共鸣）+ 宠物战斗 + 宝珠系统 + 挑战页三视图** | `doc/changelog-v2.0.md` |
 
-> 当前版本：**v1.11.0**
+> 当前版本：**v2.0.0**
