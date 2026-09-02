@@ -103,6 +103,44 @@ page/
 └── api/data.mjs    → Vercel Serverless 同步接口
 ```
 
+### v2.0 新增模块（M1-M6，f 分支 feat/v2-m2a-rest）
+
+```
+├── date-roll.js      → 日期键纯函数（dateKey/monthKey/daysBetween）
+├── monthly-reset.js  → 自然月窗口判定（resolveMonthWindow）
+├── unit.js           → Unit 模型（createUnit/查询/速度/属性修正）
+├── state-core.js     → 状态框架（defineStatus/applyStatus/tickStatuses/dispatch）
+├── status-defs.js    → 敌群状态定义（中毒/冰冻/畏缩/末日等）
+├── talent.js         → 16 敌群天赋注册表
+├── skill.js          → 25 敌群技能注册表（含冷却/先制度）
+├── enemy.js          → 敌群敌人工厂（createEnemyUnit + tier 阶梯）
+├── battle.js         → 单敌战斗引擎（含 rng 注缝 mulberry32）
+├── battle-group.js   → 多对多群战引擎（行动队列/单步/天赋技能状态场地）
+├── terrain.js        → 6 场地（沙暴/雪天/酷暑/雨天/反转/毒气）
+├── group-levels.js   → 敌群 6 大关×10 小关（60 关程序化生成）
+├── group-progress.js → 敌群线性解锁（通关解锁下一关）
+├── ai.js             → 敌人 AI 策略
+├── pets.js           → 宠物生命周期（蛋→成熟）
+├── pet-materials.js  → 材料系统 + 宠物炼化
+├── pet-codex.js      → 14 只宠物图鉴 + 宠物技能/天赋 + createPetUnit
+├── pet-store.js      → dh-pets-v1 持久化 + 材料掉落
+├── pet-ui.js         → 宠物面板 UI
+├── skills.js         → 玩家 9 技能注册表 + 技能点经济
+├── player-skill-hooks.js → 玩家技能战斗挂钩
+├── skill-store.js    → dh-skills-v1 持久化
+├── skill-ui.js       → 技能面板 UI
+├── orbs.js           → 宝珠系统（5类型×4品质 合成/升级/装配）
+└── game-views.js     → 挑战页三视图（培养/战斗/记录）
+```
+
+### v2.0 store keys
+
+| Key | 用途 |
+|-----|------|
+| dh-pets-v1 | 宠物（pets/materials/materialLog/challengeWeek）|
+| dh-skills-v1 | 玩家技能（points/levels/loadout/slotsUnlocked）|
+| dh-groupProgress | 敌群通关进度（cleared）|
+
 ### 依赖方向
 
 ```
