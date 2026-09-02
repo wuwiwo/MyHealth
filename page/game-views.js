@@ -76,6 +76,8 @@ function renderTrainView() {
   // 技能区块
   h += '<div style="font-size:16px;font-weight:700;margin:18px 0 10px">⚡ 技能 <span style="font-size:12px;color:var(--text3)">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
   h += '<button class="speed-btn" data-open-skill style="width:100%;padding:14px;font-size:15px;min-height:48px;border-radius:12px;border-color:var(--blue);color:var(--blue)">⚡ 技能培养面板</button>'
+  h += '<div style="font-size:16px;font-weight:700;margin:18px 0 10px">🔮 炼魂 <span style="font-size:12px;color:var(--text3)">角色属性强化</span></div>'
+  h += '<button class="speed-btn" data-open-refine style="width:100%;padding:14px;font-size:15px;min-height:48px;border-radius:12px;border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">🔮 炼魂系统</button>'
   // 材料区块：获取说明 + 获取记录
   h += '<div style="font-size:16px;font-weight:700;margin:18px 0 10px">📦 道具材料 <span style="font-size:12px;color:var(--text3)">获取与记录</span></div>'
   h += '<div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:12px">'
@@ -109,6 +111,8 @@ function renderTrainView() {
   if (petBtn) petBtn.addEventListener('click', function () { renderPetPanel() })
   var skillBtn = v.querySelector('[data-open-skill]')
   if (skillBtn) skillBtn.addEventListener('click', function () { renderSkillPanel() })
+  var refineBtn = v.querySelector('[data-open-refine]')
+  if (refineBtn) refineBtn.addEventListener('click', function () { if (typeof showRefineDialog === 'function') showRefineDialog(); else toast('炼魂系统未解锁（需通关解锁）','e') })
 }
 
 function statCell(icon, label, val) {
