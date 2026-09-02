@@ -94,7 +94,24 @@ function init(){
   backfillJunePermBonus()
   fixDefBonusRatio()
 
+  autoLinkExercises()
   renderStr();renderCar();renderProf();renderGame();renderSettings();renderSummonPanel()
+}
+
+/* 自动关联动作百科：给未关联动作按中文名匹配 dsId（持久化） */
+function autoLinkExercises(){
+  try{
+    if(typeof EXD==='undefined'||!EXD.ready())return;
+    var list=store.get('exercises')||[];
+    var changed=false;
+    list.forEach(function(ex){
+      if(!ex.dsId){
+        var cands=EXD.matchCandidates(ex.name,1);
+        if(cands&&cands.length){ex.dsId=cands[0].item.id;changed=true;}
+      }
+    });
+    if(changed)store.set('exercises',list);
+  }catch(e){}
 }
 
 /* ========== EVENT DELEGATION ========== */

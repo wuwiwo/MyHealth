@@ -138,7 +138,7 @@ function showExEditor(editId){
       var m=EXD.mediaUrls(c.item.img);
       ch+='<button type="button" data-dsid="'+c.item.id+'" class="ec" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer">'
         +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
-        +'<div style="flex:1;min-width:0"><div style="font-size:.88rem;font-weight:700">'+c.item.zh+'</div>'
+        +'<div style="flex:1;min-width:0"><div style="font-size:.88rem;font-weight:700;color:var(--text1)">'+c.item.zh+'</div>'
         +'<div style="font-size:.66rem;color:var(--text3);margin-top:2px">'+c.item.name+'</div></div>'
         +'<span style="font-size:.65rem;color:var(--purple);border:1px solid var(--purple);border-radius:var(--rp);padding:2px 7px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
     });
