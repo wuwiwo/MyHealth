@@ -249,8 +249,8 @@ function openDsPicker(onPick){
 
   function renderChips(){
     var cr=document.getElementById('dsCatRow'),er=document.getElementById('dsEqRow');
-    cr.innerHTML=chipHtml('全部部位','',!curCat)+EXD.cats().map(function(c){return chipHtml(c,c,c===curCat)}).join('');
-    er.innerHTML=chipHtml('全部器械','',!curEq)+EXD.eqs().map(function(e2){return chipHtml(e2,e2,e2===curEq)}).join('');
+    cr.innerHTML=chipHtml('全部部位','',!curCat)+EXD.cats().map(function(c){return chipHtml(EXD.getCatLabel(c),c,c===curCat)}).join('');
+    er.innerHTML=chipHtml('全部器械','',!curEq)+EXD.eqs().map(function(e2){return chipHtml(EXD.getEqLabel(e2),e2,e2===curEq)}).join('');
     cr.querySelectorAll('.car-type').forEach(function(b){b.addEventListener('click',function(){curCat=b.dataset.v;renderChips();renderList(true)})});
     er.querySelectorAll('.car-type').forEach(function(b){b.addEventListener('click',function(){curEq=b.dataset.v;renderChips();renderList(true)})});
   }

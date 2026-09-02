@@ -124,7 +124,7 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 .ec-ex{font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:6px}
 .ec-wt{display:inline-flex;align-items:center;gap:3px;background:rgba(59,130,246,.1);color:var(--blue);font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:var(--rp);border:1px solid rgba(59,130,246,.15)}
 .ec-actions{display:flex;gap:4px;flex-shrink:0}
-.ec-act{width:32px;height:32px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;background:var(--bg3);transition:all .15s;-webkit-tap-highlight-color:transparent}
+.ec-act{width:32px;height:32px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;background:var(--bg3);color:var(--text2);transition:all .15s;-webkit-tap-highlight-color:transparent}
 .ec-act:hover{background:var(--bd);border-color:var(--bd-l)}
 .ec-act:active{transform:scale(.88)}
 .ec-prog{margin-top:10px}

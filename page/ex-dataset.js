@@ -16,6 +16,21 @@ var EXD = (function() {
   var _catList = null;
   var _eqList = null;
 
+  /* 部位/器械中英映射（筛选显示中文） */
+  var CAT_LABELS = {
+    back:'背部', cardio:'有氧', chest:'胸部', 'lower arms':'小臂', 'lower legs':'小腿',
+    neck:'颈部', shoulders:'肩部', 'upper arms':'大臂', 'upper legs':'大腿', waist:'腰腹'
+  };
+  var EQ_LABELS = {
+    assisted:'辅助', band:'弹力带', barbell:'杠铃', 'body weight':'自重', 'bosu ball':'波速球',
+    cable:'绳索', dumbbell:'哑铃', 'elliptical machine':'椭圆机', 'ez barbell':'EZ杠',
+    hammer:'锤式', kettlebell:'壶铃', 'leverage machine':'杠杆机', 'medicine ball':'药球',
+    'olympic barbell':'奥林匹克杠铃', 'resistance band':'阻力带', roller:'泡沫轴', rope:'绳子',
+    'skierg machine':'滑雪机', 'sled machine':'雪橇机', 'smith machine':'史密斯机',
+    'stability ball':'稳定球', 'stationary bike':'动感单车', 'stepmill machine':'楼梯机',
+    tire:'轮胎', 'trap bar':'陷阱杠', 'upper body ergometer':'上肢测力计', weighted:'负重', 'wheel roller':'健腹轮'
+  };
+
   function row(r) {
     return {
       id: r[IDX.id], name: r[IDX.name], zh: r[IDX.zh],
@@ -119,6 +134,8 @@ var EXD = (function() {
     }
     return _catList;
   }
+  /* 部位中文标签 */
+  function getCatLabel(cat) { return CAT_LABELS[cat] || cat; }
 
   function eqs() {
     if (!_eqList) {
@@ -128,6 +145,8 @@ var EXD = (function() {
     }
     return _eqList;
   }
+  /* 器械中文标签 */
+  function getEqLabel(eq) { return EQ_LABELS[eq] || eq; }
 
   /* 媒体 URL: 图床优先(MEDIA_BASE)，回退本地 page/media/
      rel 如 'images/0001-x.jpg' | 'videos/0001-x.gif' -> 返回 {primary, fallback} */
@@ -148,6 +167,8 @@ var EXD = (function() {
     search: search,
     cats: cats,
     eqs: eqs,
+    getCatLabel: getCatLabel,
+    getEqLabel: getEqLabel,
     mediaUrls: mediaUrls
   };
 })();
