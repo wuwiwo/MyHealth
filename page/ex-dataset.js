@@ -44,6 +44,19 @@ var EXD = (function() {
     return CAT_LABELS[val] || EQ_LABELS[val] || TARGET_LABELS[val] || val;
   }
 
+  /* 多彩标签（中文 + 色彩） */
+  var TAG_COLORS = {
+    cat: { back:'#3b82f6', cardio:'#ef4444', chest:'#f59e0b', 'lower arms':'#10b981', 'lower legs':'#8b5cf6', neck:'#ec4899', shoulders:'#06b6d4', 'upper arms':'#f97316', 'upper legs':'#84cc16', waist:'#6366f1' },
+    eq: { dumbbell:'#f97316', barbell:'#3b82f6', 'body weight':'#10b981', cable:'#8b5cf6', band:'#f59e0b', kettlebells:'#ef4444' }
+  };
+  function tagHtml(label, kind){
+    var colors = TAG_COLORS[kind] || {};
+    var color = '#64748b';
+    var c = toZh(label);
+    for(var k in colors){ if(label===k){ color=colors[k]; break; } }
+    return '<span style="display:inline-block;font-size:.62rem;font-weight:600;padding:2px 8px;border-radius:10px;color:#fff;background:'+color+';margin:2px 3px 0 0;opacity:.85;line-height:1.5">'+c+'</span>';
+  }
+
   function row(r) {
     return {
       id: r[IDX.id], name: r[IDX.name], zh: r[IDX.zh],
@@ -183,6 +196,12 @@ var EXD = (function() {
     getCatLabel: getCatLabel,
     getEqLabel: getEqLabel,
     toZh: toZh,
+    tagHtml: tagHtml,
     mediaUrls: mediaUrls
   };
 })();
+/* 全局暴露 tagHtml/zhLabel（供 tab-strength 等早加载文件用） */
+if (typeof window !== 'undefined') {
+  window.tagHtml = function(label, kind){ return EXD.tagHtml(label, kind); };
+  window.zhLabel = function(v){ return EXD.toZh(v); };
+}

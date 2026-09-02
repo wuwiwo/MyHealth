@@ -449,16 +449,3 @@ function showAttrInfo(){
 }
 
 /* ========== 动作标签：中英翻译 + 多彩 tag ========== */
-function zhLabel(v){ return (typeof EXD!=='undefined'&&EXD.ready()&&EXD.toZh)?EXD.toZh(v):v; }
-var TAG_COLORS = {
-  cat: { back:'#3b82f6', cardio:'#ef4444', chest:'#f59e0b', 'lower arms':'#10b981', 'lower legs':'#8b5cf6', neck:'#ec4899', shoulders:'#06b6d4', 'upper arms':'#f97316', 'upper legs':'#84cc16', waist:'#6366f1' },
-  eq: { dumbbell:'#f97316', barbell:'#3b82f6', 'body weight':'#10b981', cable:'#8b5cf6', band:'#f59e0b', kettlebells:'#ef4444' }
-};
-function tagHtml(label, kind){
-  var colors = TAG_COLORS[kind] || {};
-  var color = '#64748b';
-  var c = zhLabel(label);   // 显示中文
-  // 用原始英文匹配颜色
-  for(var k in colors){ if(label===k){ color=colors[k]; break; } }
-  return '<span style="display:inline-block;font-size:.62rem;font-weight:600;padding:2px 8px;border-radius:10px;color:#fff;background:'+color+';margin:2px 3px 0 0;opacity:.85;line-height:1.5">'+c+'</span>';
-}

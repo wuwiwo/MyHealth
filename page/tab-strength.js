@@ -442,7 +442,7 @@ function openStrExPicker(){
       +(m?'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:1px solid var(--bd)">':'<div style="width:56px;height:56px;border-radius:10px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px">💪</div>')
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:.9rem;font-weight:700;color:var(--text1)">'+(linked?linked.zh:ex.name)+'</div>'
-      +(linked?'<div style="font-size:.62rem;color:var(--text3);margin-top:1px">'+linked.name+'</div>':'')
+      +(linked?'<div style="margin-top:2px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+tagHtml(linked.target,'cat')+'</div>':'')
       +'</div>'
       +'<span style="font-size:.65rem;color:var(--text3)"></span>'
       +'</button>';
