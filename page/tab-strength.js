@@ -352,11 +352,18 @@ function openStrEdit(entry){
 /* ========== STRENGTH EVENT HANDLER ========== */
 function onStrengthEvent(el,id,act){
   switch(id){
+    case 'strExercise':openStrExPicker();return true;
     case 'strPrevDay':{var d=parseDate(_strDate);d.setDate(d.getDate()-1);_strDate=toDate(d);renderStr();return true}
     case 'strNextDay':{var d=parseDate(_strDate);d.setDate(d.getDate()+1);_strDate=toDate(d);renderStr();return true}
     case 'strGoToday':_strDate=today();renderStr();return true;
     case 'strAddBtn':_strForm=!_strForm;el.textContent=_strForm?'✖ 收起':'＋ 新增一组'
-      document.getElementById('strAddCard').classList.toggle('open',_strForm);if(_strForm){document.getElementById('strExercise').focus();adaptStrForm(document.getElementById('strExercise').value.trim())}return true;
+      document.getElementById('strAddCard').classList.toggle('open',_strForm);
+      if(_strForm){
+        var sex=document.getElementById('strExercise');
+        sex.focus();adaptStrForm(sex.value.trim());
+        sex.setAttribute('readonly','readonly');   // 点选弹层选择，不手输
+      }
+      return true;
     case 'strSubmit':{
       var ex=document.getElementById('strExercise').value.trim()
       if(!ex){toast('请输入动作名称','e');return true}
@@ -421,4 +428,33 @@ function onStrengthEvent(el,id,act){
   if(act==='strDel'){
     if(confirm('确定删除这条记录？')){delStr(el.dataset.id);renderStr();toast('已删除','s')};return true}
   return false
+}
+
+/* ========== 训练页动作选择弹层（图片 + 中文名） ========== */
+function openStrExPicker(){
+  var exs=getStrengthExercises();
+  var modal=openModal(null,'strExPicker');
+  var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🎯 选择动作</div><div style="max-height:70vh;overflow-y:auto;margin-top:6px">';
+  exs.forEach(function(ex){
+    var linked=(typeof EXD!=='undefined'&&EXD.ready()&&ex.dsId)?EXD.get(ex.dsId):null;
+    var m=linked?EXD.mediaUrls(linked.img):null;
+    h+='<button type="button" class="ec" data-pickex="'+ex.name+'" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer;border:1px solid var(--bd);border-radius:12px;background:var(--bg2)">'
+      +(m?'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:1px solid var(--bd)">':'<div style="width:56px;height:56px;border-radius:10px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px">💪</div>')
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:.88rem;font-weight:700;color:var(--text1)">'+(linked?linked.zh:ex.name)+'</div>'
+      +'<div style="font-size:.65rem;color:var(--text3);margin-top:2px">'+(linked?linked.name:(ex.type==='strength'?'力量动作':'有氧运动'))+'</div>'
+      +'</div>'
+      +'<span style="font-size:.65rem;color:var(--text3)"></span>'
+      +'</button>';
+  });
+  h+='</div></div>';
+  modal.innerHTML=h;
+  modal.querySelectorAll('[data-pickex]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var name=btn.getAttribute('data-pickex');
+      var input=document.getElementById('strExercise');
+      if(input){input.value=name;adaptStrForm(name);}
+      modal.remove();
+    });
+  });
 }
