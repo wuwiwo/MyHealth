@@ -465,16 +465,16 @@ function playAttackFeedback(gb, step) {
         }
       }
     }
-    // 受击闪烁 + 飘字
+    // 受击闪烁 + 飘字（追加到卡片内部，绝对定位跟随卡片）
     if (targetCard) {
       targetCard.classList.add('gb-hit')
       setTimeout(function(){ targetCard.classList.remove('gb-hit') }, 500)
-      var ovRect = ov.getBoundingClientRect()
-      var cardRect = targetCard.getBoundingClientRect()
       var float = document.createElement('div')
       float.textContent = '-' + m[1]
-      float.style = 'position:absolute;left:'+(cardRect.left-ovRect.left+cardRect.width/2-15)+'px;top:'+(cardRect.top-ovRect.top+10)+'px;color:var(--red);font-size:18px;font-weight:700;z-index:99;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.4)'
-      ov.appendChild(float)
+      float.style = 'position:absolute;top:4px;right:10px;color:var(--red);font-size:20px;font-weight:800;z-index:5;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.5)'
+      // 卡片需相对定位
+      targetCard.style.position = 'relative'
+      targetCard.appendChild(float)
       setTimeout(function(){ float.remove() }, 900)
     }
   })
