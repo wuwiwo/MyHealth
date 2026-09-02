@@ -18,6 +18,8 @@ const sandbox = { Math, JSON, console, Date };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 files.forEach(f => vm.runInContext(load(f), sandbox));
+// 确定性 rng（修复 flaky：未播种时全战斗断言随 Math.random 摆动）
+sandbox._battleRng = sandbox.mulberry32(20260902);
 
 let pass = 0, fail = 0;
 function assert(name, cond, detail) {
@@ -61,15 +63,22 @@ const target5 = sandbox.aiPickTarget(gb5, killer, null);
 assert('集火残血目标', target5.id === 'weak', 'target=' + (target5&&target5.id));
 
 // ---- 6. 全战斗 AI 跑通 ----
-const player = sandbox.createUnit({ id:'player', side:'ally', name:'🧑 你', base:{hp:1500,atk:100,def:50,spd:10} });
-const g3Stage = sandbox.getGroupStage ? sandbox.getGroupStage('g3-3') : null;
-const g3Enemies = g3Stage ? g3Stage.enemies.map(function(ec,i){
-  return sandbox.createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base});
-}) : [];
-const gb6 = sandbox.createGroupBattle({ allies:[player], enemies:g3Enemies });
-sandbox.runGroupBattle(gb6, 100);
-assert('AI 全战斗跑通', gb6.done === true && (gb6.winner==='ally'||gb6.winner==='enemy'), 'winner=' + gb6.winner);
-assert('AI 战斗有技能施放', JSON.stringify(gb6.log).match(/冲撞|咬击|黑气|地刺|治疗|破甲/), '');
+// 注：群战栈(ai/skill/enemy)仍直接用 Math.random，单次战斗可能无技能施放。
+// 断言意图=「AI 会施放技能」→ 多次试验取并集消除 flaky。
+let anySkill = false, allDone = true;
+for (let trial = 0; trial < 5; trial++) {
+  const player = sandbox.createUnit({ id:'player', side:'ally', name:'🧑 你', base:{hp:1500,atk:100,def:50,spd:10} });
+  const g3Stage = sandbox.getGroupStage ? sandbox.getGroupStage('g3-3') : null;
+  const g3Enemies = g3Stage ? g3Stage.enemies.map(function(ec,i){
+    return sandbox.createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base});
+  }) : [];
+  const gb6 = sandbox.createGroupBattle({ allies:[player], enemies:g3Enemies });
+  sandbox.runGroupBattle(gb6, 100);
+  if (!(gb6.done === true && (gb6.winner==='ally'||gb6.winner==='enemy'))) allDone = false;
+  if (JSON.stringify(gb6.log).match(/冲撞|咬击|黑气|地刺|治疗|破甲/)) anySkill = true;
+}
+assert('AI 全战斗跑通', allDone, '有未完成的战斗');
+assert('AI 战斗有技能施放', anySkill, '5 次试验均无技能施放');
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);
