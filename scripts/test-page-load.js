@@ -81,13 +81,17 @@ Object.entries(globals).forEach(([label, check]) => {
   ok(check(sandbox), label);
 });
 
-/* 4. HTML 骨架接线检查（防 v2.0.3 二号事故：JS 依赖的容器/静态按钮缺失） */
-const requiredIds = ['gameTrainView', 'gameBattleView', 'gameRecordView', 'gameContent', 'gameStatsBar', 'periodCard', 'recordsCard', 'battleOverlay', 'summonPanel'];
+/* 4. HTML 骨架接线检查（防接线事故：JS 依赖的容器/静态按钮缺失 + 旧部件已删） */
+const requiredIds = ['gameTrainView', 'gameBattleView', 'gameRecordView', 'gameContent', 'battleOverlay', 'summonPanel'];
 requiredIds.forEach(id => {
   ok(html.includes('id="' + id + '"'), '骨架容器 #' + id);
 });
 const gtabCount = (html.match(/data-gtab=/g) || []).length;
 ok(gtabCount === 3, '三视图选项卡按钮 [data-gtab] ×3 (实际 ' + gtabCount + ')');
+/* v2.0.5: 旧部件容器必须已删（三视图接管，防新旧共存） */
+['gameStatsBar', 'periodCard', 'recordsCard'].forEach(id => {
+  ok(!html.includes('id="' + id + '"'), '旧容器 #' + id + ' 已从骨架移除');
+});
 
 console.log(fail ? '\nFAIL ' + fail : '\nALL PASS (' + pass + ')');
 process.exit(fail ? 1 : 0);
