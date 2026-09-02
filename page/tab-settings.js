@@ -64,19 +64,23 @@ function exCardHtml(ex,badge,isCardio){
   var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+(linked?' <span title="已关联动作百科" style="font-size:.7rem">📖</span>':'')+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
   if(linked){
     var m=EXD.mediaUrls(linked.img);
-    h+='<div style="display:flex;gap:8px;margin-top:6px;align-items:center">'
-      +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;background:var(--bg2)">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:.72rem;color:var(--text1)">'+linked.zh+'</div>'
-      +'<div style="font-size:.62rem;color:var(--text3)">'+linked.cat+' · '+linked.eq+' · '+linked.target+'</div></div></div>';
+    // 图片外侧大图 + 中文主/英文次
+    h+='<div style="display:flex;gap:12px;margin-top:10px;align-items:center">'
+      +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:72px;height:72px;border-radius:12px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:.92rem;font-weight:700;color:var(--text1)">'+linked.zh+'</div>'
+      +'<div style="font-size:.68rem;color:var(--text3);margin-top:2px">'+linked.name+'</div>'
+      +'<div style="font-size:.72rem;color:var(--text3);margin-top:4px">'+linked.cat+' · '+linked.eq+' · '+linked.target+'</div>'
+      +'</div></div>';
   }
   if(ex.eqWeight){
     var unitLabel=ex.unit==='sec'?'秒':'次';
-    h+='<div style="margin-top:4px;font-size:.68rem;color:var(--orange)">⚖️ 等效 '+ex.eqWeight+'kg/'+unitLabel+'（不计弯鿖重量）</div>';
+    h+='<div style="margin-top:6px;font-size:.78rem;color:var(--orange)">⚖️ 等效 '+ex.eqWeight+'kg/'+unitLabel+'（不计弯鿖重量）</div>';
   }
   if(ex.description){
     var first=mdFirstLine(ex.description);
-    h+='<div style="margin-top:6px;font-size:.72rem;color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span style="color:var(--text3);font-size:.65rem"> …展开</span></div>';
-    h+='<div class="ex-desc-full" style="display:none;margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:var(--rs);border:1px solid var(--bd)">'+renderMd(ex.description)+'</div>';
+    h+='<div style="margin-top:8px;font-size:.8rem;color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span style="color:var(--text3);font-size:.72rem"> …展开</span></div>';
+    h+='<div class="ex-desc-full" style="display:none;margin-top:6px;padding:10px 12px;background:var(--bg);border-radius:var(--rs);border:1px solid var(--bd)">'+renderMd(ex.description)+'</div>';
   }
   h+='</div>';
   return h;
@@ -117,11 +121,11 @@ function showExEditor(editId){
       var it=EXD.get(curDsId);
       if(it){
         var m=EXD.mediaUrls(it.img);
-        area.innerHTML='<div class="ec" style="margin-top:2px"><div style="display:flex;gap:10px;align-items:center">'
-          +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--bg2)">'
-          +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.8rem">'+it.zh+'</div>'
-          +'<div style="font-size:.65rem;color:var(--text3)">'+it.name+'</div>'
-          +'<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap"><span style="font-size:.6rem;background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+it.cat+'</span><span style="font-size:.6rem;background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+it.eq+'</span><span style="font-size:.6rem;background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+it.target+'</span></div></div>'
+        area.innerHTML='<div class="ec" style="margin-top:2px"><div style="display:flex;gap:12px;align-items:center">'
+          +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
+          +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.92rem">'+it.zh+'</div>'
+          +'<div style="font-size:.68rem;color:var(--text3)">'+it.name+'</div>'
+          +'<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap"><span style="font-size:.68rem;background:var(--bg);border:1px solid var(--bd);padding:2px 8px;border-radius:var(--rp)">'+it.cat+'</span><span style="font-size:.68rem;background:var(--bg);border:1px solid var(--bd);padding:2px 8px;border-radius:var(--rp)">'+it.eq+'</span><span style="font-size:.68rem;background:var(--bg);border:1px solid var(--bd);padding:2px 8px;border-radius:var(--rp)">'+it.target+'</span></div></div>'
           +'<button class="ec-act" id="exLinkClear" title="解除关联">✕</button></div></div>';
         document.getElementById('exLinkClear').addEventListener('click',function(){curDsId=null;renderLinkArea()});
         return;
@@ -132,11 +136,11 @@ function showExEditor(editId){
     var ch=cands.length?'<div style="margin-top:4px;font-size:.68rem;color:var(--text3)">按名称匹配的候选:</div>':'';
     cands.forEach(function(c){
       var m=EXD.mediaUrls(c.item.img);
-      ch+='<button type="button" data-dsid="'+c.item.id+'" class="ec" style="display:flex;width:100%;text-align:left;gap:10px;margin-top:6px;padding:8px;align-items:center;cursor:pointer">'
-        +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:44px;height:44px;border-radius:9px;object-fit:cover;background:var(--bg2)">'
-        +'<div style="flex:1;min-width:0"><div style="font-size:.76rem;font-weight:600">'+c.item.zh+'</div>'
-        +'<div style="font-size:.62rem;color:var(--text3)">'+c.item.name+' · '+c.item.cat+' · '+c.item.eq+'</div></div>'
-        +'<span style="font-size:.58rem;color:var(--purple);border:1px solid var(--purple);border-radius:var(--rp);padding:1px 6px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
+      ch+='<button type="button" data-dsid="'+c.item.id+'" class="ec" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer">'
+        +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:.88rem;font-weight:700">'+c.item.zh+'</div>'
+        +'<div style="font-size:.66rem;color:var(--text3);margin-top:2px">'+c.item.name+' · '+c.item.cat+' · '+c.item.eq+'</div></div>'
+        +'<span style="font-size:.65rem;color:var(--purple);border:1px solid var(--purple);border-radius:var(--rp);padding:2px 7px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
     });
     ch+='<button type="button" id="exLinkPick" class="add-btn" style="margin-top:8px;font-size:.78rem;padding:8px">🔍 从数据集选择'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
     area.innerHTML=ch;
