@@ -30,6 +30,19 @@ var EXD = (function() {
     'stability ball':'稳定球', 'stationary bike':'动感单车', 'stepmill machine':'楼梯机',
     tire:'轮胎', 'trap bar':'陷阱杠', 'upper body ergometer':'上肢测力计', weighted:'负重', 'wheel roller':'健腹轮'
   };
+  /* 肌群/部位(靶)中英映射 */
+  var TARGET_LABELS = {
+    abs:'腹肌', abductors:'外展肌', adductors:'内收肌', biceps:'肱二头肌', calves:'小腿肌',
+    'cardiovascular system':'心血管', chest:'胸部', forearms:'前臂', glutes:'臀肌', hamstrings:'腘绳肌',
+    hip: '髋部', hip_flexors:'髋屈肌', lats:'背阔肌', 'lower back':'下背', obliques:'腹斜肌',
+    pectorals:'胸肌', quads:'股四头肌', 'upper back':'上背', triceps:'肱三头肌', spine:'脊柱',
+    traps:'斜方肌', deltoids:'三角肌'
+  };
+  /* 通用翻译：优先英文，其他原样 */
+  function toZh(val) {
+    if (!val) return val;
+    return CAT_LABELS[val] || EQ_LABELS[val] || TARGET_LABELS[val] || val;
+  }
 
   function row(r) {
     return {
@@ -169,6 +182,7 @@ var EXD = (function() {
     eqs: eqs,
     getCatLabel: getCatLabel,
     getEqLabel: getEqLabel,
+    toZh: toZh,
     mediaUrls: mediaUrls
   };
 })();

@@ -70,7 +70,7 @@ function exCardHtml(ex,badge,isCardio){
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:.92rem;font-weight:700;color:var(--text1)">'+linked.zh+'</div>'
       +'<div style="font-size:.68rem;color:var(--text3);margin-top:2px">'+linked.name+'</div>'
-      +'<div style="font-size:.72rem;color:var(--text3);margin-top:4px">'+linked.cat+' · '+linked.eq+' · '+linked.target+'</div>'
+      +'<div style="margin-top:4px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+'</div>'
       +'</div></div>';
   }
   if(ex.eqWeight){
@@ -125,7 +125,7 @@ function showExEditor(editId){
           +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
           +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.92rem">'+it.zh+'</div>'
           +'<div style="font-size:.68rem;color:var(--text3)">'+it.name+'</div>'
-          +'<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap"><span style="font-size:.68rem;background:var(--bg);border:1px solid var(--bd);padding:2px 8px;border-radius:var(--rp)">'+it.cat+'</span><span style="font-size:.68rem;background:var(--bg);border:1px solid var(--bd);padding:2px 8px;border-radius:var(--rp)">'+it.eq+'</span><span style="font-size:.68rem;background:var(--bg);border:1px solid var(--bd);padding:2px 8px;border-radius:var(--rp)">'+it.target+'</span></div></div>'
+          +'<div style="margin-top:4px">'+tagHtml(it.cat,'cat')+tagHtml(it.eq,'eq')+tagHtml(it.target,'cat')+'</div></div>'
           +'<button class="ec-act" id="exLinkClear" title="解除关联">✕</button></div></div>';
         document.getElementById('exLinkClear').addEventListener('click',function(){curDsId=null;renderLinkArea()});
         return;
@@ -139,7 +139,7 @@ function showExEditor(editId){
       ch+='<button type="button" data-dsid="'+c.item.id+'" class="ec" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer">'
         +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
         +'<div style="flex:1;min-width:0"><div style="font-size:.88rem;font-weight:700">'+c.item.zh+'</div>'
-        +'<div style="font-size:.66rem;color:var(--text3);margin-top:2px">'+c.item.name+' · '+c.item.cat+' · '+c.item.eq+'</div></div>'
+        +'<div style="font-size:.66rem;color:var(--text3);margin-top:2px">'+c.item.name+'</div></div>'
         +'<span style="font-size:.65rem;color:var(--purple);border:1px solid var(--purple);border-radius:var(--rp);padding:2px 7px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
     });
     ch+='<button type="button" id="exLinkPick" class="add-btn" style="margin-top:8px;font-size:.78rem;padding:8px">🔍 从数据集选择'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
@@ -261,7 +261,7 @@ function openDsPicker(onPick){
       +'<img loading="lazy" src="'+m.primary+'" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--bg2)">'
       +'<div style="flex:1;min-width:0"><div style="font-size:.78rem;font-weight:600">'+it.zh+'</div>'
       +'<div style="font-size:.62rem;color:var(--text3)">'+it.name+'</div>'
-      +'<div style="font-size:.6rem;color:var(--text2);margin-top:2px">'+it.cat+' · '+it.eq+' · 🎯'+it.target+'</div></div></button>';
+      +'<div style="margin-top:3px">'+tagHtml(it.cat,'cat')+tagHtml(it.eq,'eq')+tagHtml(it.target,'cat')+'</div></div></button>';
   }
 
   function renderList(reset){
@@ -446,4 +446,19 @@ function showAttrInfo(){
   void modal;
   document.getElementById('attrClose').addEventListener('click',function(){modal.remove()});
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()});
+}
+
+/* ========== 动作标签：中英翻译 + 多彩 tag ========== */
+function zhLabel(v){ return (typeof EXD!=='undefined'&&EXD.ready()&&EXD.toZh)?EXD.toZh(v):v; }
+var TAG_COLORS = {
+  cat: { back:'#3b82f6', cardio:'#ef4444', chest:'#f59e0b', 'lower arms':'#10b981', 'lower legs':'#8b5cf6', neck:'#ec4899', shoulders:'#06b6d4', 'upper arms':'#f97316', 'upper legs':'#84cc16', waist:'#6366f1' },
+  eq: { dumbbell:'#f97316', barbell:'#3b82f6', 'body weight':'#10b981', cable:'#8b5cf6', band:'#f59e0b', kettlebells:'#ef4444' }
+};
+function tagHtml(label, kind){
+  var colors = TAG_COLORS[kind] || {};
+  var color = '#64748b';
+  var c = zhLabel(label);   // 显示中文
+  // 用原始英文匹配颜色
+  for(var k in colors){ if(label===k){ color=colors[k]; break; } }
+  return '<span style="display:inline-block;font-size:.62rem;font-weight:600;padding:2px 8px;border-radius:10px;color:#fff;background:'+color+';margin:2px 3px 0 0;opacity:.85;line-height:1.5">'+c+'</span>';
 }
