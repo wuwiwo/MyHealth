@@ -465,11 +465,12 @@ function playAttackFeedback(gb, step) {
     if (targetCard) {
       targetCard.classList.add('gb-hit')
       setTimeout(function(){ targetCard.classList.remove('gb-hit') }, 500)
-      // 伤害飘字
-      var rect = targetCard.getBoundingClientRect()
+      // 伤害飘字（相对 overlay 定位，跟随滚动）
+      var ovRect = ov.getBoundingClientRect()
+      var cardRect = targetCard.getBoundingClientRect()
       var float = document.createElement('div')
       float.textContent = '-' + m[1]
-      float.style = 'position:fixed;left:'+(rect.left+rect.width/2-15)+'px;top:'+rect.top+'px;color:var(--red);font-size:18px;font-weight:700;z-index:99;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.4)'
+      float.style = 'position:absolute;left:'+(cardRect.left-ovRect.left+cardRect.width/2-15)+'px;top:'+(cardRect.top-ovRect.top+10)+'px;color:var(--red);font-size:18px;font-weight:700;z-index:99;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.4)'
       ov.appendChild(float)
       setTimeout(function(){ float.remove() }, 900)
     }
@@ -577,7 +578,7 @@ function renderGroupOverlay(show){
     +'<span style="flex:1"></span>'
     +'<button class="speed-btn" id="gbCopyLog" style="padding:6px 10px;min-height:36px;font-size:12px">📋 复制</button>'
     +'</div>'
-  h+='<div id="gbLogBox" style="margin-top:6px;font-size:12px;line-height:1.7;color:var(--text3);max-height:200px;overflow-y:auto;border:1px solid var(--bg2);border-radius:10px;padding:10px 12px">'
+  h+='<div id="gbLogBox" style="margin-top:6px;font-size:12px;line-height:1.8;color:var(--text3);max-height:300px;overflow-y:auto;border:1px solid var(--bg2);border-radius:10px;padding:10px 12px;overscroll-behavior:contain">'
   gb.log.forEach(function(l){
     if(l.turn!==curTurn){
       curTurn=l.turn
@@ -612,6 +613,9 @@ function renderGroupOverlay(show){
   if(stepBtn)stepBtn.addEventListener('click',function(){_groupStep()})
   // 复制日志按钮
   var copyBtn=document.getElementById('gbCopyLog')
+  // 日志自动滚动到底部
+  var logBox = document.getElementById('gbLogBox')
+  if (logBox) logBox.scrollTop = logBox.scrollHeight
   if(copyBtn)copyBtn.addEventListener('click',function(){
     var gb2=_groupBattle
     if(!gb2)return
