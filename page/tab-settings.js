@@ -188,6 +188,18 @@ function showExEditor(editId){
     if(!name){toast('请输入名称','e');return}
     var desc=document.getElementById('exDesc').value.trim();
     var list=getExercises();
+    var mergeResult=null;
+    if(isEdit&&name!==editId){
+      // 改名：撞名 → 合并迁移（历史/PR/计划四库联动），否则纯改名
+      var exists=list.some(function(x){return x.id===name});
+      if(exists&&!confirm('「'+name+'」已存在：\n\n将把「'+editId+'」的历史训练记录、PR（取最大值）与计划引用合并到「'+name+'」，并删除旧动作。\n\n确认合并？'))return;
+      mergeResult=renameOrMergeExercise(editId,name);
+      if(!mergeResult.ok){toast('原动作不存在，刷新后重试','e');return}
+      editId=name;
+      list=getExercises();
+    }else if(!isEdit&&list.some(function(x){return x.id===name})){
+      toast('已存在同名动作','e');return;
+    }
     if(curType==='strength'){
       var ratio=parseInt(document.getElementById('exRatioVal').textContent);
       var eqWeightRaw=document.getElementById('exEqWeight').value.trim();
@@ -198,19 +210,20 @@ function showExEditor(editId){
       var hasDist=document.getElementById('exHasDist').checked;
       var newEx={id:isEdit?editId:(name),name:name,type:'cardio',ratio:null,intensity:curIntensity,emoji:emoji,hasDist:hasDist,description:desc,eqWeight:null,unit:'rep'};
     }
-    if(curDsId)newEx.dsId=curDsId;
+    // dsId：合并时保留目标动作的关联（若目标已有关联），否则用编辑表单里的
+    var effDsId=(mergeResult&&mergeResult.merged&&mergeResult.dstDsId)?mergeResult.dstDsId:curDsId;
+    if(effDsId)newEx.dsId=effDsId;
     if(isEdit){
       var idx=list.findIndex(function(x){return x.id===editId});
       if(idx>-1)list[idx]=newEx;
     }else{
-      if(list.some(function(x){return x.id===newEx.id})){toast('已存在同名动作','e');return}
       list.push(newEx);
     }
     saveExercises(list);
     modal.remove();
     renderExLibrary();
     if(typeof initCardioTypes==='function')initCardioTypes();
-    toast(isEdit?'已更新':'已添加「'+name+'」','s');
+    toast(isEdit?(mergeResult&&mergeResult.merged?'已合并到「'+name+'」':'已更新'):'已添加「'+name+'」','s');
   });
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()});
 }

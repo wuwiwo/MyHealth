@@ -100,6 +100,40 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v2.0.3 | 44 | 761 行 game-render.js | 🔴 修复发布事故：index.html 漏挂 24 个 v2.0 模块 + 页面加载链冒烟测试 |
 | v2.0.4 | 44 | 761 行 game-render.js | 🔴 二号接线事故：补挑战页三视图 HTML 骨架（选项卡+容器）+ 骨架接线检查 |
 | v2.0.5 | 44 | 761 行 game-render.js | 移除挑战页旧部件（属性条/旬卡/记录卡）——消除新旧 UI 叠放 |
+| v2.0.6 | 44 | 761 行 game-render.js | 动作改名/合并四库联动迁移 + 关卡列表跨视图漏显修复 |
+
+---
+
+## v2.0.6
+
+**Date:** 2026-09-02
+
+### 新增功能
+
+- 🔀 **动作改名 / 合并迁移**：解决早期动作命名不规范（如「抬举」应为「肩推」）的修正工具
+  - 设置→动作库编辑动作时改名：**无撞名** → 纯改名（id=name 同步更新，dsId/ratio 等字段保留）
+  - **撞现有动作名** → 弹确认合并：历史训练记录归并、PR 按最大值合并（重量/次数/容量分别取 max，日期取较大者那条）、计划引用替换、旧动作删除
+  - 四库联动：`exercises` / `strength.entries` / `prs` 键 / `plans` 引用一次性迁移
+  - `app.js` 新增 `renameOrMergeExercise(oldId,newName)` 数据 API；合并时目标动作无 dsId 则继承源的
+  - 使用方式：设置→动作库→✏️ 编辑不规范动作→改名为规范名→确认合并
+
+### 修复
+
+- 🩹 **关卡列表跨视图漏显**：battle 视图展开「挑战关卡」列表后切到培养/记录页，关卡列表仍显示。`switchGameTab` 现按「battle 视图 + 已展开」双条件控制 `gameContent` 显隐
+
+### 测试
+
+- 新增 `scripts/test-exercise-rename.js`（21 项断言）：纯改名四库迁移 / 合并 PR max+日期策略 / dsId 继承与保留 / 边界（同名、源不存在）/ switchGameTab 显隐行为
+
+### 修改文件
+
+- `page/app.js`（renameOrMergeExercise API）
+- `page/tab-settings.js`（exSave 改名/合并接线 + confirm 弹窗）
+- `page/game-views.js`（switchGameTab 关卡列表显隐）
+- `page/utils.js`（APP_VERSION 2.0.5 → 2.0.6）
+- `page/index.html`（cache-busting v50 → v51）
+- `scripts/test-exercise-rename.js`（新增）
+- `doc/changelog-v2.0.md` / `README.md`（版本表）
 
 ---
 

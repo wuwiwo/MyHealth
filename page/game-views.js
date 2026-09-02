@@ -40,6 +40,9 @@ function switchGameTab(tab) {
   vTrain.style.display = tab === 'train' ? 'block' : 'none'
   vBattle.style.display = tab === 'battle' ? 'block' : 'none'
   vRecord.style.display = tab === 'record' ? 'block' : 'none'
+  // 关卡列表只在战斗视图内展开时可见（防漏到培养/记录页）
+  var gc = document.getElementById('gameContent')
+  if (gc) gc.style.display = (tab === 'battle' && gc._levelViewOpen) ? 'block' : 'none'
 }
 
 /* ===== 培养视图：角色属性卡 + 宠物 + 技能 ===== */

@@ -53,6 +53,56 @@ function getExerciseMap(){
 function getStrengthExercises(){return getExercises().filter(function(ex){return ex.type==='strength'})}
 function getCardioExercises(){return getExercises().filter(function(ex){return ex.type==='cardio'})}
 
+/* 动作改名 / 合并（v2.0.6）
+   把 oldId 动作改名为 newName：
+   - newName 已存在 → 合并：删除旧条目，历史训练/计划引用归并到新名，
+     PR 按最大值合并（重量/次数/容量分别取 max，日期取较大者那条），
+     目标动作无 dsId 时继承源的
+   - newName 不存在 → 纯改名（id=name 同步更新，dsId/ratio 等字段保留）
+   四库联动：exercises / strength.entries / prs 键 / plans 引用 */
+function renameOrMergeExercise(oldId,newName){
+  if(!oldId||!newName||oldId===newName)return{ok:false}
+  var list=getExercises()
+  var src=list.find(function(x){return x.id===oldId})
+  if(!src)return{ok:false}
+  var dstRef=list.find(function(x){return x.id===newName})
+  var merged=!!dstRef
+  if(merged){
+    if(!dstRef.dsId&&src.dsId)dstRef.dsId=src.dsId   // 目标无关联则继承
+    list=list.filter(function(x){return x.id!==oldId})
+  }else{
+    src.id=newName;src.name=newName
+  }
+  saveExercises(list)
+  // 历史训练记录
+  var st=store.get('strength')||{entries:[]}
+  var stChanged=false
+  ;(st.entries||[]).forEach(function(e){if(e.exercise===oldId){e.exercise=newName;stChanged=true}})
+  if(stChanged)store.set('strength',st)
+  // PR：键迁移 / 最大值合并
+  var prs=store.get('prs')||{}
+  var srcPr=prs[oldId]
+  if(srcPr){
+    if(merged&&prs[newName]){
+      var np=prs[newName]
+      ;[['maxWeight','weightDate'],['maxReps','repsDate'],['maxVolume','volDate']].forEach(function(pair){
+        var k=pair[0],dk=pair[1]
+        if(srcPr[k]&&(np[k]==null||srcPr[k]>np[k])){np[k]=srcPr[k];np[dk]=srcPr[dk]}
+      })
+    }else{
+      prs[newName]=srcPr
+    }
+    delete prs[oldId]
+    store.set('prs',prs)
+  }
+  // 训练计划引用
+  var pl=store.get('plans')||{plans:[]}
+  var plChanged=false
+  ;(pl.plans||[]).forEach(function(p){(p.exercises||[]).forEach(function(e){if(e.exercise===oldId){e.exercise=newName;plChanged=true}})})
+  if(plChanged)store.set('plans',pl)
+  return{ok:true,merged:merged,dstDsId:merged?(dstRef&&dstRef.dsId)||null:null}
+}
+
 /* ========== INIT ========== */
 function init(){
   document.getElementById('appVersion').textContent='v'+APP_VERSION
