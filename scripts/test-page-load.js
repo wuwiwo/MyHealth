@@ -81,5 +81,13 @@ Object.entries(globals).forEach(([label, check]) => {
   ok(check(sandbox), label);
 });
 
+/* 4. HTML 骨架接线检查（防 v2.0.3 二号事故：JS 依赖的容器/静态按钮缺失） */
+const requiredIds = ['gameTrainView', 'gameBattleView', 'gameRecordView', 'gameContent', 'gameStatsBar', 'periodCard', 'recordsCard', 'battleOverlay', 'summonPanel'];
+requiredIds.forEach(id => {
+  ok(html.includes('id="' + id + '"'), '骨架容器 #' + id);
+});
+const gtabCount = (html.match(/data-gtab=/g) || []).length;
+ok(gtabCount === 3, '三视图选项卡按钮 [data-gtab] ×3 (实际 ' + gtabCount + ')');
+
 console.log(fail ? '\nFAIL ' + fail : '\nALL PASS (' + pass + ')');
 process.exit(fail ? 1 : 0);

@@ -98,6 +98,31 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v2.0.1 | 44 | 761 行 game-render.js | 隐藏挑战昨日未用资格顺延 + borrow 测试套件 |
 | v2.0.2 | 44 | 761 行 game-render.js | 顺延重构为双池设计：补召成功不占今日名额（每周次数不少） |
 | v2.0.3 | 44 | 761 行 game-render.js | 🔴 修复发布事故：index.html 漏挂 24 个 v2.0 模块 + 页面加载链冒烟测试 |
+| v2.0.4 | 44 | 761 行 game-render.js | 🔴 二号接线事故：补挑战页三视图 HTML 骨架（选项卡+容器）+ 骨架接线检查 |
+
+---
+
+## v2.0.4
+
+**Date:** 2026-09-02
+
+### 修复
+
+- 🔴 **二号接线事故：挑战页三视图 HTML 骨架缺失**（v2.0.3 只修了 script 漏挂，用户验证后功能入口仍不可见）
+  - 症状：v2.0.3 加载后版本号正确、JS 全就位，但挑战页没有「培养/战斗/记录」三视图与宠物/技能/敌群入口
+  - 根因：`game-views.js` 依赖 index.html 提供 `[data-gtab]` 静态选项卡按钮与 `#gameTrainView`/`#gameBattleView`/`#gameRecordView` 三个容器——**rest 分支的 index.html 从未包含这些骨架**（与 script 漏挂同源的接线缺失）
+  - 修复：tabGame 内补三视图选项卡栏（🐾培养/⚔️战斗/📊记录）+ 三个视图容器 + 注释标注；`gameContent`（关卡列表）保留为 battle 视图内展开形态
+
+### 测试
+
+- `test-page-load.js` 扩至 **27 项断言**：新增 HTML 骨架接线检查（9 个必需容器 id + 3 个 data-gtab 按钮），静态资源→模块→骨架三层全链验证
+
+### 修改文件
+
+- `page/index.html`（tabGame 三视图骨架 + cache-busting v48 → v49）
+- `page/utils.js`（APP_VERSION 2.0.3 → 2.0.4）
+- `scripts/test-page-load.js`（扩断言）
+- `doc/changelog-v2.0.md` / `README.md`（版本表）
 
 ---
 
