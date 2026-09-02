@@ -65,7 +65,12 @@ function feedPet(pet) {
   if (pet.stage !== 'grow') return { ok: false, reason: '非成长期' };
   var inc = PET_CONFIG.feedHunger[0] + Math.random() * (PET_CONFIG.feedHunger[1] - PET_CONFIG.feedHunger[0]);
   pet.hunger = Math.min(100, pet.hunger + inc);
-  return { ok: true, hunger: pet.hunger, inc: inc };
+  // 喂养加成长度（健康>50 时效果更好，符合"喂养→成长"直觉）
+  var growInc = pet.health > 50 ? (2 + Math.random() * 3) : (1 + Math.random() * 2);
+  pet.growth = Math.min(100, (pet.growth || 0) + growInc);
+  // 成长满 100 → 成熟
+  if (pet.growth >= 100) { pet.stage = 'mature'; pet.isDead = false; return { ok: true, hunger: pet.hunger, inc: inc, matured: true, growth: pet.growth }; }
+  return { ok: true, hunger: pet.hunger, inc: inc, growth: pet.growth };
 }
 
 /* 健康度损失（按饥饿度） */
