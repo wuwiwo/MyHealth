@@ -1,6 +1,6 @@
 /* ============================================
    MyHealth — Enemy Group Progress (敌群解锁)
-   敌群试炼线性解锁：g1-1 → g1-2 → ... → g6-10
+   敌群试炼线性解锁：g1-1 → g1-2 → ... → g9-10
    通关的关卡锁定（不可重打），胜利解锁下一关。
    进度存 dh-group-progress（store 注册表）。
    纯逻辑 + store。
@@ -39,7 +39,7 @@ function stageOrderKey(stageId) {
 /* 全部小关 id（按顺序） */
 function allStageIds() {
   var ids = [];
-  for (var lg = 1; lg <= 6; lg++) {
+  for (var lg = 1; lg <= 9; lg++) {
     for (var st = 1; st <= 10; st++) ids.push('g' + lg + '-' + st);
   }
   return ids;
@@ -83,7 +83,7 @@ function markGroupStageCleared(stageId) {
 /* 进度统计 */
 function groupProgressStats() {
   var d = getGroupProgress();
-  return { cleared: d.cleared.length, total: 60, clearedStages: d.cleared };
+  return { cleared: d.cleared.length, total: 90, clearedStages: d.cleared };
 }
 
 /* 测试/工具暴露 */
