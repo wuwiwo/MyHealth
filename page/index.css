@@ -7,7 +7,7 @@
   --blue:#3B82F6;--blue-g:rgba(59,130,246,0.30);
   --purple:#A855F7;--red:#EF4444;--yellow:#EAB308;
   --bg:#0b1120;--bg2:#111827;--bg3:#1e293b;--bd:#1e293b;--bd-l:#334155;
-  --text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;
+  --text:#f1f5f9;--text1:#f1f5f9;--text2:#94a3b8;--text3:#64748b;
   --r:14px;--rs:10px;--rp:999px;--mw:500px;
   --font:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
   --shadow:0 1px 2px rgba(0,0,0,.14);
@@ -16,7 +16,7 @@
 [data-theme="light"] {
   --bg:#fafaf9;--bg2:#ffffff;--bg3:#f5f5f4;
   --bd:#e7e5e4;--bd-l:#d6d3d1;
-  --text:#1c1917;--text2:#57534e;--text3:#a8a29e;
+  --text:#1c1917;--text1:#1c1917;--text2:#57534e;--text3:#a8a29e;
   --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
   --shadow-lg:0 4px 16px rgba(0,0,0,.08);
 }
