@@ -23,15 +23,16 @@ var ENEMY_NAMES = {
 
 /* 生成单个敌人配置 */
 function genEnemyCfg(lg, st, slot, isElite, isBoss) {
-  var lvScale = 1 + (lg - 1) * 0.55 + (st - 1) * 0.1;   // 大关/小关缩放
-  var hasSoul = lg >= 3;                                  // 大关 3 起有魂攻防
+  // 平衡曲线：g1 弱（新号可过），g6 对中后期玩家有挑战（攻 200-400 玩家可打）
+  var lvScale = 1 + (lg - 1) * 0.8 + (st - 1) * 0.16;   // g6-10 Boss: 1+4+1.44=6.44
+  var hasSoul = lg >= 3;
   var tier = isBoss ? 'boss' : isElite ? 'elite2' : (st % 3 === 0 ? 'elite1' : 'minion');
 
-  // 属性基础
-  var atk = Math.floor((isBoss ? 18 : isElite ? 14 : 8) * lvScale);
-  var def = Math.floor((isBoss ? 12 : isElite ? 9 : 4) * lvScale * 0.8);
-  var hp = Math.floor((isBoss ? 300 : isElite ? 160 : 80) * lvScale);
-  var spd = 2 + Math.floor(lvScale * 1.5);
+  // 属性基础（适中）
+  var atk = Math.floor((isBoss ? 40 : isElite ? 26 : 14) * lvScale);
+  var def = Math.floor((isBoss ? 28 : isElite ? 18 : 8) * lvScale * 0.85);
+  var hp = Math.floor((isBoss ? 600 : isElite ? 320 : 160) * lvScale);
+  var spd = 3 + Math.floor(lvScale * 1.8);
 
   var cfg = {
     name: isBoss ? ENEMY_NAMES.boss[lg % ENEMY_NAMES.boss.length] : (isElite || tier==='elite1' ? ENEMY_NAMES.elite[(lg+st) % ENEMY_NAMES.elite.length] : ENEMY_NAMES.minion[(lg+st+slot) % ENEMY_NAMES.minion.length]),
@@ -39,8 +40,8 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
     base: { atk: atk, def: def, hp: hp, spd: Math.min(12, spd) }
   };
   if (hasSoul) {
-    cfg.base.soulAtk = Math.floor((isBoss ? 12 : 6) * lvScale);
-    cfg.base.soulDef = Math.floor((isBoss ? 8 : 4) * lvScale);
+    cfg.base.soulAtk = Math.floor((isBoss ? 28 : 14) * lvScale);
+    cfg.base.soulDef = Math.floor((isBoss ? 18 : 9) * lvScale);
   }
   // 精英/Boss 带天赋
   var talents = [];
