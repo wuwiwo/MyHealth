@@ -84,16 +84,16 @@ function genStageEnemies(lg, st) {
   if (isBoss) {
     // Boss 关：1 Boss + 1-2 护卫
     enemies.push(genEnemyCfg(lg, st, 0, false, true));
-    var guards = 1 + (lg >= 3 ? (Math.random() < 0.5 ? 1 : 0) : 0);
+    var guards = lg >= 3 ? 2 : 1;   // 稳定：大关3+ 恒 2 护卫
     for (var i = 0; i < guards; i++) enemies.push(genEnemyCfg(lg, st, i+1, true, false));
   } else if (isElite) {
     // 精英关：1 精英 + 1-2 杂兵
     enemies.push(genEnemyCfg(lg, st, 0, true, false));
-    var adds = lg >= 3 ? (Math.random() < 0.5 ? 2 : 1) : 1;
+    var adds = lg >= 3 ? 2 : 1;   // 稳定：大关3+ 恒 2 杂兵
     for (var j = 0; j < adds; j++) enemies.push(genEnemyCfg(lg, st, j+1, false, false));
   } else {
-    // 普通关：1-2（大关1-2）或 2-3（大关3-6）
-    var count = lg <= 2 ? (1 + Math.floor(Math.random() * 2)) : (2 + Math.floor(Math.random() * 2));
+    // 普通关：稳定数量（小关 1-3 单敌，4-9 双敌）
+    var count = st <= 3 ? 1 : (lg <= 2 ? 2 : (st === 9 ? 3 : 2));
     count = Math.min(count, maxEnemies);
     for (var k = 0; k < count; k++) enemies.push(genEnemyCfg(lg, st, k, false, false));
   }

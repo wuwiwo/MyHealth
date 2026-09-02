@@ -450,22 +450,25 @@ function playAttackFeedback(gb, step) {
   lastLog.events.forEach(function(e){
     var m = /→ (\d+) (?:伤害|魂伤害)/.exec(e.msg)
     if (!m) return
-    // 受击目标是日志里被攻击的单位 —— 从消息里找目标名
-    var targetMatch = /([^\s]+) 攻击 →/.exec(e.msg)
-    var hitName = targetMatch ? targetMatch[1] : null
-    // 找对应单位卡片
-    var cards = ov.querySelectorAll('.gb-unit')
+    // 受击目标：优先用事件里的 targetId
     var targetCard = null
-    if (hitName) {
-      for (var i=0;i<cards.length;i++){
-        if (cards[i].textContent.indexOf(hitName) > -1){ targetCard = cards[i]; break }
+    if (e.targetId) {
+      targetCard = ov.querySelector('.gb-unit[data-uid="'+e.targetId+'"]')
+    }
+    if (!targetCard) {
+      var hitName = /([^\s]+) 攻击 →/.exec(e.msg)
+      var name = hitName ? hitName[1] : null
+      if (name) {
+        var cards = ov.querySelectorAll('.gb-unit')
+        for (var i=0;i<cards.length;i++){
+          if (cards[i].textContent.indexOf(name) > -1){ targetCard = cards[i]; break }
+        }
       }
     }
-    // 受击闪烁
+    // 受击闪烁 + 飘字
     if (targetCard) {
       targetCard.classList.add('gb-hit')
       setTimeout(function(){ targetCard.classList.remove('gb-hit') }, 500)
-      // 伤害飘字（相对 overlay 定位，跟随滚动）
       var ovRect = ov.getBoundingClientRect()
       var cardRect = targetCard.getBoundingClientRect()
       var float = document.createElement('div')

@@ -115,7 +115,7 @@ function normalAttack(gb, actor, target) {
     if (blockDmg < dmg) { dmg = blockDmg; events.push({ msg: '🛡️ ' + target.name + ' 格挡！' }); }
   }
   target.hp = Math.max(0, target.hp - dmg);
-  events.push({ msg: (actor.name || '单位') + ' 攻击 → ' + dmg + ' 伤害' });
+  events.push({ msg: (actor.name || '单位') + ' 攻击 → ' + dmg + ' 伤害', targetId: target.id });
   // 嗜血：造成伤害恢复
   var bt = talentDispatch(actor, 'onAfterDamage', { dealt: dmg, target: target });
   bt.events.forEach(function (e) { events.push({ msg: e.msg }); });
@@ -143,7 +143,7 @@ function castSkill(gb, actor, skillId) {
           var dmg = h.amount;
           td.mutations.forEach(function (m) { if (m.key === 'dmgBoost') dmg = Math.floor(dmg * (1 + m.value)); });
           t.hp = Math.max(0, t.hp - dmg);
-          events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + dmg + ' 伤害' });
+          events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + dmg + ' 伤害', targetId: t.id });
           // 蓄力重击：蓄力状态
           if (skillId === 'chargeup') {
             applyStatus(actor, { id: 'charging', duration: 1 });
