@@ -229,12 +229,16 @@ function renderSummonPanel(){
     // Already played today
     var bonus=c.seasonBonus||{atk:0,def:0,hp:0};
     var rewarded=c.lastRewardDate===today()
+    // v2.0.8: 补召误锁恢复——v2.0.6 前补召结算误写 summonedDate，这类存档需开放恢复入口
+    var yd=new Date();yd.setDate(yd.getDate()-1)
+    var madeUpLocked=c.madeUpDate===toDate(yd)
+    var showRecover=!rewarded||madeUpLocked
     el.innerHTML='<div class="summon-card done">'
       +'<div class="summon-title">⚡ 今日隐藏挑战已完成</div>'
-      +'<div class="summon-info">明日继续，每月 1 号重置奖励</div>'
+      +'<div class="summon-info">'+(madeUpLocked?'昨日补召已完成，可恢复今日召唤资格':'明日继续，每月 1 号重置奖励')+'</div>'
       +(bonus.atk+bonus.def+bonus.hp>0?'<div class="summon-bonus">本月已获得: ⚔️+'+bonus.atk+' 🛡️+'+bonus.def+' ❤️+'+bonus.hp+'</div>':'')
       +(info.can&&info.mode==='makeup'?'<button class="summon-btn" id="makeupBtn" style="margin-top:8px;background:rgba(34,197,94,.1);border-color:var(--green);color:var(--green);padding:10px;font-size:.8rem">🔁 补召昨日挑战（剩 '+info.remainBorrow+' 次，不占今日名额）</button>':'')
-      +(!rewarded?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);padding:10px;font-size:.8rem">↩️ 今日未完成？恢复挑战</button>':'')
+      +(showRecover?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);padding:10px;font-size:.8rem">↩️ '+(madeUpLocked?'补召已结算？恢复今日召唤资格':'今日未完成？恢复挑战')+'</button>':'')
       +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
       +'</div>'
       +chDebugBlock(info,strVol,c,'done')

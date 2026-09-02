@@ -102,6 +102,27 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v2.0.5 | 44 | 761 行 game-render.js | 移除挑战页旧部件（属性条/旬卡/记录卡）——消除新旧 UI 叠放 |
 | v2.0.6 | 44 | 761 行 game-render.js | 动作改名/合并四库联动迁移 + 关卡列表跨视图漏显修复 |
 | v2.0.7 | 44 | 761 行 game-render.js | 🩹 补召结算不锁今日名额（applyChallengeSettle 分型记账） |
+| v2.0.8 | 44 | 761 行 game-render.js | 🩹 补召误锁存档恢复入口（done 卡恢复按钮条件放宽） |
+
+---
+
+## v2.0.8
+
+**Date:** 2026-09-02
+
+### 修复
+
+- 🩹 **补召误锁存档的自助恢复入口**：v2.0.7 修复了未来的结算行为，但**部署前**已完成补召的存档已被旧逻辑写入 `summonedDate=今日`，且现有「↩️ 恢复挑战」按钮被 `!rewarded` 条件挡住（补召结算写了 lastRewardDate）——用户无任何自助途径解锁
+  - done 卡恢复按钮条件放宽为 `!rewarded || madeUpDate===昨日`（精确命中补召误锁状态，正常完成用户不受影响）
+  - 恢复文案按状态区分：「补召已结算？恢复今日召唤资格」
+  - 恢复后需今日容量 ≥100kg 才能召唤（正常容量守卫）
+
+### 修改文件
+
+- `page/challenge.js`（done 卡恢复条件）
+- `page/utils.js`（APP_VERSION 2.0.7 → 2.0.8）
+- `page/index.html`（cache-busting v52 → v53）
+- `doc/changelog-v2.0.md` / `README.md`（版本表）
 
 ---
 
