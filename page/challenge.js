@@ -22,6 +22,7 @@ function getChallenge(){
   c.lastRewardDate=str(c.lastRewardDate,'')
   c.madeUpDate=str(c.madeUpDate,'')
   c.madeUpUsed=num(c.madeUpUsed,0)
+  c.pendingIsMakeup=!!c.pendingIsMakeup
   c.history=Array.isArray(c.history)?c.history:[]
   // 清理 v1.9.1 时代遗留字段（已无使用）
   if(c.todayFailCount!==undefined){delete c.todayFailCount}
@@ -111,6 +112,22 @@ function canSummon(){
 }
 
 /* Attempt summon */
+/* 结算状态转换（v2.0.7）：按挑战类型记账
+   - 正常召唤：summonedDate=今日（每日 1 次守卫）
+   - 补召（pendingIsMakeup）：madeUpDate 已在召唤时记账，**不写 summonedDate**
+     → 今日名额保留，补召后当天仍可正常召唤 */
+function applyChallengeSettle(c, isMakeup){
+  c.pendingChallenge=false
+  if(isMakeup){
+    c.madeUpDate=toDate((function(){var d=new Date();d.setDate(d.getDate()-1);return d})())
+  }else{
+    c.summonedDate=today()
+  }
+  c.pendingIsMakeup=false
+  c.lastRewardDate=today()
+}
+
+/* Attempt summon */
 function attemptSummon(){
   var info=canSummon()
   if(!info.can){toast(info.reason,'e');return}
@@ -122,13 +139,15 @@ function attemptSummon(){
     // Success! Mark pending, show challenge preview (NOT started yet)
     c.pendingChallenge=true
     if(consumeBorrow){
-      // 补召成功：记 madeUpDate/madeUpUsed，不占用今日名额（今日仍可正常召唤）
+      // 补召成功：记 madeUpDate/madeUpUsed + pendingIsMakeup 标记（结算时不占今日名额）
       c.madeUpDate=toDate((function(){var d=new Date();d.setDate(d.getDate()-1);return d})())
       c.madeUpUsed=(typeof c.madeUpUsed==='number'&&isFinite(c.madeUpUsed)?c.madeUpUsed:0)+1
+      c.pendingIsMakeup=true
       toast('🔮 补召成功！补上昨日的挑战，点击开始！','s')
     }else{
       c.summonedDate=today()
       c.todayUsed=(typeof c.todayUsed==='number'&&isFinite(c.todayUsed)?c.todayUsed:0)+1
+      c.pendingIsMakeup=false
       toast('🔮 召唤成功！点击开始挑战！','s')
     }
     saveChallenge(c)
@@ -484,10 +503,7 @@ function startHiddenChallenge(hotBuff){
     c.seasonBonus.atk=(c.seasonBonus.atk||0)+bonusAtk
     c.seasonBonus.def=(c.seasonBonus.def||0)+bonusDef
     c.seasonBonus.hp=(c.seasonBonus.hp||0)+bonusHp
-    // 结算成功：清除 pending 资格，标记今日已完成（中途退出/刷新则不会走到这里）
-    c.pendingChallenge=false
-    c.summonedDate=today()
-    c.lastRewardDate=today()
+    applyChallengeSettle(c, c.pendingIsMakeup === true)
     // 记录历史成绩（含 buff）
     c.history=c.history||[]
     c.history.push({

@@ -101,6 +101,32 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v2.0.4 | 44 | 761 行 game-render.js | 🔴 二号接线事故：补挑战页三视图 HTML 骨架（选项卡+容器）+ 骨架接线检查 |
 | v2.0.5 | 44 | 761 行 game-render.js | 移除挑战页旧部件（属性条/旬卡/记录卡）——消除新旧 UI 叠放 |
 | v2.0.6 | 44 | 761 行 game-render.js | 动作改名/合并四库联动迁移 + 关卡列表跨视图漏显修复 |
+| v2.0.7 | 44 | 761 行 game-render.js | 🩹 补召结算不锁今日名额（applyChallengeSettle 分型记账） |
+
+---
+
+## v2.0.7
+
+**Date:** 2026-09-02
+
+### 修复
+
+- 🩹 **补召结算误锁今日名额**：`endChallenge` 结算时无条件写 `summonedDate=today()`，把 v2.0.2 双池设计的「补召不占今日名额」抹掉了——补召打完后当天无法正常召唤（用户报告）
+  - 结算状态转换抽取为 `applyChallengeSettle(c, isMakeup)`：正常挑战 → `summonedDate=今日`；补召 → 仅保持 `madeUpDate` 记账，**不写** `summonedDate`
+  - 召唤成功时记 `pendingIsMakeup` 标记，结算按标记分型；`getChallenge` 归一化新字段
+  - 补召结算后当天正常召唤完整可用；材料/属性奖励两场独立发放不受影响
+
+### 测试
+
+- `test-challenge-borrow.js` 扩至 **27 项断言**：补召结算不锁今日 / 正常结算锁今日 / 同日两场全完成链路
+
+### 修改文件
+
+- `page/challenge.js`（applyChallengeSettle + attemptSummon 标记 + endChallenge 接入）
+- `page/utils.js`（APP_VERSION 2.0.6 → 2.0.7）
+- `page/index.html`（cache-busting v51 → v52）
+- `scripts/test-challenge-borrow.js`（扩断言）
+- `doc/changelog-v2.0.md` / `README.md`（版本表）
 
 ---
 

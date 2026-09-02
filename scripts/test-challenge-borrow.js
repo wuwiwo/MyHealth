@@ -141,5 +141,38 @@ c = sb.getChallenge(); c.pendingChallenge = false; sb.saveChallenge(c);
 info = sb.canSummon();
 assert('11 补召完成后剩余补召次数作废(今日池0) → can:false', info.can === false && info.borrowed === 0, JSON.stringify(info));
 
+/* 12. v2.0.7 核心修复: 补召结算不锁今日 (applyChallengeSettle) */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6), entry(T, '深蹲', 100, 1)], {}, () => 0.01);
+sb.attemptSummon(); // 补召成功
+c = sb.getChallenge();
+assert('12a 结算前 pendingIsMakeup=true', c.pendingIsMakeup === true);
+sb.applyChallengeSettle(c, true); // 补召挑战打完结算
+sb.saveChallenge(c); // endChallenge 流程内随后 saveChallenge(c) — 测试同步回写
+c = sb.getChallenge();
+assert('12b 补召结算 summonedDate 仍空', c.summonedDate !== T, 'summonedDate=' + c.summonedDate);
+assert('12c madeUpDate=昨日', c.madeUpDate === Y);
+assert('12d pendingIsMakeup 已清', c.pendingIsMakeup === false);
+info = sb.canSummon();
+assert('12e 今日池保留 → 可正常召唤', info.can === true && info.mode === 'normal' && info.remainToday === 1, JSON.stringify(info));
+
+/* 13. 正常结算锁今日 */
+sb = makeSandbox([entry(T, '深蹲', 100, 3)], {}, () => 0.01);
+c = sb.getChallenge(); c.pendingChallenge = true; c.pendingIsMakeup = false; sb.saveChallenge(c);
+sb.applyChallengeSettle(c, false);
+sb.saveChallenge(c);
+c = sb.getChallenge();
+assert('13 正常结算 summonedDate=今日', c.summonedDate === T && c.pendingChallenge === false);
+
+/* 14. 补召结算后当天再正常召唤成功 → 两场都完成 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6), entry(T, '深蹲', 100, 3)], {}, () => 0.01);
+sb.attemptSummon(); // 补召
+c = sb.getChallenge(); sb.applyChallengeSettle(c, true); sb.saveChallenge(c);
+c = sb.getChallenge(); c.pendingChallenge = false; sb.saveChallenge(c);
+sb.attemptSummon(); // 正常召唤 (今日池)
+c = sb.getChallenge();
+assert('14a 正常召唤成功 summonedDate=今日', c.summonedDate === T);
+assert('14b 补召记录保留 madeUpDate=昨日', c.madeUpDate === Y);
+assert('14c 两场都完成', c.summonedDate === T && c.madeUpDate === Y && c.pendingChallenge === true);
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);
