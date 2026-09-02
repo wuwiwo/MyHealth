@@ -60,20 +60,28 @@ function getWeekKey(){
 }
 
 /* Today's volume from strength entries */
-function getTodayVolume(){
+function getVolumeFor(dateStr){
   var strE=((store.get('strength')||{entries:[]}).entries)||[]
-  var filtered=strE.filter(function(e){return e.date===today()})
+  var filtered=strE.filter(function(e){return e.date===dateStr})
   return sumVolume(filtered,getExerciseMap())
 }
+function getTodayVolume(){return getVolumeFor(today())}
 
 /* Can summon? Each 100kg grants 1 attempt; ladder 10/25/40/55/80/100 via summonRate().
-   容量实时对齐：训练记录被删除导致总次数缩水时，撤销未开始的召唤资格并封顶已用次数 */
+   容量实时对齐：训练记录被删除导致总次数缩水时，撤销未开始的召唤资格并封顶已用次数
+   昨日顺延：昨天容量≥100 且昨天未成功召唤（history/weekDays 判定）→ 昨日未用资格并入今日 */
 function canSummon(){
   checkChallengeDailyReset()
   var c=getChallenge()
   var vol=getTodayVolume()
   if(typeof vol!=='number'||!isFinite(vol))vol=0
-  var total=Math.floor(vol/100)
+  var yd=new Date();yd.setDate(yd.getDate()-1)
+  var yKey=toDate(yd)
+  var yVol=getVolumeFor(yKey)
+  if(typeof yVol!=='number'||!isFinite(yVol))yVol=0
+  var usedYesterday=(c.history||[]).some(function(h){return h&&h.date===yKey})||(c.weekDays||[]).indexOf(yKey)>=0
+  var borrowed=usedYesterday?0:Math.floor(yVol/100)
+  var total=Math.floor(vol/100)+borrowed
   // 容量回撤守卫：pending 资格所依赖的训练记录被删除（total < 已用数，含成功那一次）→ 同步撤销
   if(c.pendingChallenge&&c.summonedDate!==today()&&total<c.todayUsed){
     c.pendingChallenge=false
@@ -84,11 +92,11 @@ function canSummon(){
   // 已召唤成功但还没开始（稍后再说/刷新后恢复）
   if(c.pendingChallenge)return{can:true,pending:true,reason:'已召唤成功，等待开始挑战'}
   if(c.summonedDate===today())return{can:false,reason:'今日已召唤成功，挑战完成'}
-  if(total<1)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,reason:'今日训练容量 '+Math.round(vol)+'kg，每 100kg 获得 1 次召唤机会'}
-  if(c.todayUsed>=total)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,reason:'今日召唤次数已用完（'+total+'次），明天再练更猛！'}
+  if(total<1)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,borrowed:0,yVol:yVol,reason:'今日训练容量 '+Math.round(vol)+'kg（昨日无可用补召资格），每 100kg 获得 1 次召唤机会'}
+  if(c.todayUsed>=total)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,borrowed:borrowed,yVol:yVol,reason:'召唤次数已用完（'+total+'次'+(borrowed>0?'，含昨日补召':'')+'），明天再练更猛！'}
   // 新规则: 10% 起每次失败 +15%，第5次80%，第6次起100%
   var rate=summonRate(c.todayUsed)
-  return{can:true,rate:rate,total:total,used:c.todayUsed,vol:vol}
+  return{can:true,rate:rate,total:total,used:c.todayUsed,vol:vol,borrowed:borrowed,yVol:yVol}
 }
 
 /* Attempt summon */
@@ -169,7 +177,8 @@ function renderSummonPanel(){
   var triggers=Math.floor(strVol/100)
   var c0=getChallenge()
   // pending 挑战不受当日容量限制（可能昨天召唤成功今天才打开）
-  if(strVol<100&&!c0.pendingChallenge){
+  // 今日容量不足但可借用昨日未用资格（info.can=true）→ 落到下方正常召唤卡片
+  if(strVol<100&&!info.can&&!c0.pendingChallenge){
     el.innerHTML=chDebugBlock(info,strVol,c0,'vol100')
     mountSummonExtras(el,info,strVol,c0,'vol100')
     return
@@ -236,6 +245,7 @@ function renderSummonPanel(){
   el.innerHTML='<div class="summon-card">'
     +'<div class="summon-title">🔮 隐藏挑战</div>'
     +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次）</div>'
+    +(info.borrowed>0?'<div class="summon-info" style="color:var(--green)">✨ 已并入昨日未用召唤资格 '+info.borrowed+' 次（昨日 '+Math.round(info.yVol||0)+'kg）</div>':'')
     +'<div class="summon-rate-wrap">'
     +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=5?' · 必成 100%':usedN===4?' · 保底 80%':' · 基础 10%')+'）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'

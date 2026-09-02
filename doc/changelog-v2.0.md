@@ -95,3 +95,30 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v1.10.4~v1.10.5 | 18 | 574 行 challenge.js | 文案修复/词条钩子表化重构 |
 | v1.11.0 | 22 | 583 行 challenge.js | 动作百科+关联机制+store注册表+时间工具+UI优化 |
 | v2.0.0 | 44 | 761 行 game-render.js | 技能/敌群群战/宠物/宝珠 + 挑战页三视图 |
+| v2.0.1 | 44 | 761 行 game-render.js | 隐藏挑战昨日未用资格顺延 + borrow 测试套件 |
+
+---
+
+## v2.0.1
+
+**Date:** 2026-09-02
+
+### 新增功能
+
+- 🔮 **隐藏挑战「昨日未用资格顺延」**：解决漏录训练后补录仍无法触发隐藏挑战的问题
+  - 判定：昨日（仅 1 天）容量 ≥100kg 且昨天未成功召唤（`history[]` 为主 / `weekDays` 兜底，防周一跨周重置误判）→ 昨日 `floor(容量/100)` 次召唤资格并入今日
+  - 昨日召过不顺延（不双计）；今日成功限 1 次守卫不变；训练记录删除的回撤守卫兼容合并后总额
+  - 召唤面板：借用时显示绿色提示「✨ 已并入昨日未用召唤资格 N 次（昨日 Xkg）」；不可召唤文案注明「昨日无可用补召资格」
+  - 新增 `getVolumeFor(date)`（`getTodayVolume` 委托重构）
+
+### 测试
+
+- 新增 `scripts/test-challenge-borrow.js`（10 项断言）：顺延/已召不双计（history+weekDays 双路径）/今日昨日合并/门槛不足/限 1 次守卫/回撤兼容
+
+### 修改文件
+
+- `page/challenge.js`（canSummon 顺延逻辑 + 面板提示）
+- `page/utils.js`（APP_VERSION 2.0.0 → 2.0.1）
+- `page/index.html`（cache-busting v45 → v46）
+- `scripts/test-challenge-borrow.js`（新增）
+- `README.md`（版本表新增行）
