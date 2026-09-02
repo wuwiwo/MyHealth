@@ -97,6 +97,31 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v2.0.0 | 44 | 761 行 game-render.js | 技能/敌群群战/宠物/宝珠 + 挑战页三视图 |
 | v2.0.1 | 44 | 761 行 game-render.js | 隐藏挑战昨日未用资格顺延 + borrow 测试套件 |
 | v2.0.2 | 44 | 761 行 game-render.js | 顺延重构为双池设计：补召成功不占今日名额（每周次数不少） |
+| v2.0.3 | 44 | 761 行 game-render.js | 🔴 修复发布事故：index.html 漏挂 24 个 v2.0 模块 + 页面加载链冒烟测试 |
+
+---
+
+## v2.0.3
+
+**Date:** 2026-09-02
+
+### 修复
+
+- 🔴 **发布事故修复：index.html 漏挂 24 个 v2.0 模块 script 标签**
+  - 症状：补召的隐藏挑战结算面板「📦 材料掉落 —」；更严重的是宠物/技能/敌群 60 关/宝珠/挑战页三视图在**线上全部不可见**（模块文件在仓库但从未被浏览器加载），v2.0.0~v2.0.2 均受影响
+  - 根因：v2.0.0 合并发布时 index.html 的 script 链未同步 HANDOFF §3 的加载顺序，`grantMaterial`/`getPetStore` 等全局不存在 → 材料掉落块 `typeof` 守卫静默跳过
+  - 修复：补全全部 24 个缺失标签（date-roll/monthly-reset/state-core/status-defs/unit/talent/skill/enemy/battle-group/terrain/group-levels/group-progress/ai/pets/pet-materials/pet-codex/pet-store/pet-ui/skills/player-skill-hooks/skill-store/skill-ui/orbs/game-views），顺序严格按依赖关系
+
+### 测试
+
+- 新增 `scripts/test-page-load.js`（17 项断言，**防复发**）：解析 index.html 实际 script 顺序 → vm 沙盒按序加载全部模块 → 断言 0 加载异常 + 各系统代表性全局存在（材料/宠物/技能/群战/敌群/宝珠/三视图/状态/时间工具/召唤）
+
+### 修改文件
+
+- `page/index.html`（补 24 个 script 标签 + cache-busting v47 → v48）
+- `page/utils.js`（APP_VERSION 2.0.2 → 2.0.3）
+- `scripts/test-page-load.js`（新增）
+- `doc/changelog-v2.0.md` / `README.md`（版本表）
 
 ---
 
