@@ -20,6 +20,8 @@ function getChallenge(){
   c.hotBuffUsed=!!c.hotBuffUsed
   c.pendingChallenge=!!c.pendingChallenge
   c.lastRewardDate=str(c.lastRewardDate,'')
+  c.madeUpDate=str(c.madeUpDate,'')
+  c.madeUpUsed=num(c.madeUpUsed,0)
   c.history=Array.isArray(c.history)?c.history:[]
   // 清理 v1.9.1 时代遗留字段（已无使用）
   if(c.todayFailCount!==undefined){delete c.todayFailCount}
@@ -42,7 +44,7 @@ function checkChallengeDailyReset(){
   var c=getChallenge()
   var t=today()
   var dirty=false
-  if(c.useDate!==t){c.useDate=t;c.todayUsed=0;dirty=true}
+  if(c.useDate!==t){c.useDate=t;c.todayUsed=0;c.madeUpUsed=0;dirty=true}
   // 结构修复：todayUsed 非有限数 → 0
   if(typeof c.todayUsed!=='number'||!isFinite(c.todayUsed)){c.todayUsed=0;dirty=true}
   if(typeof c.seasonBonus!=='object'||!c.seasonBonus){c.seasonBonus={atk:0,def:0,hp:0};dirty=true}
@@ -69,19 +71,28 @@ function getTodayVolume(){return getVolumeFor(today())}
 
 /* Can summon? Each 100kg grants 1 attempt; ladder 10/25/40/55/80/100 via summonRate().
    容量实时对齐：训练记录被删除导致总次数缩水时，撤销未开始的召唤资格并封顶已用次数
-   昨日顺延：昨天容量≥100 且昨天未成功召唤（history/weekDays 判定）→ 昨日未用资格并入今日 */
+   双池设计（v2.0.2）：
+   - 今日池 floor(今日容量/100)：成功 → summonedDate=今日（每日 1 次守卫）
+   - 补召池 floor(昨日容量/100)：昨日漏召（仅 1 天）→ 顺延至今日；成功 → madeUpDate=昨日，
+     **不占用今日名额**，今日仍可正常召唤（否则每周成功次数会少一次）
+   - 优先消耗补召池（当日过期）；失败按消耗池记账，阶梯概率按今日总尝试次数 */
 function canSummon(){
   checkChallengeDailyReset()
   var c=getChallenge()
-  var vol=getTodayVolume()
+  var vol=getVolumeFor(today())
   if(typeof vol!=='number'||!isFinite(vol))vol=0
   var yd=new Date();yd.setDate(yd.getDate()-1)
   var yKey=toDate(yd)
   var yVol=getVolumeFor(yKey)
   if(typeof yVol!=='number'||!isFinite(yVol))yVol=0
   var usedYesterday=(c.history||[]).some(function(h){return h&&h.date===yKey})||(c.weekDays||[]).indexOf(yKey)>=0
-  var borrowed=usedYesterday?0:Math.floor(yVol/100)
-  var total=Math.floor(vol/100)+borrowed
+  var madeUp=c.madeUpDate===yKey
+  var todayPool=Math.floor(vol/100)
+  var borrowPool=(!usedYesterday&&!madeUp)?Math.floor(yVol/100):0
+  var madeUpUsed=(typeof c.madeUpUsed==='number'&&isFinite(c.madeUpUsed))?c.madeUpUsed:0
+  var remainBorrow=Math.max(0,borrowPool-madeUpUsed)
+  var remainToday=(c.summonedDate===today())?0:Math.max(0,todayPool-c.todayUsed)
+  var total=todayPool+borrowPool
   // 容量回撤守卫：pending 资格所依赖的训练记录被删除（total < 已用数，含成功那一次）→ 同步撤销
   if(c.pendingChallenge&&c.summonedDate!==today()&&total<c.todayUsed){
     c.pendingChallenge=false
@@ -91,12 +102,12 @@ function canSummon(){
   }
   // 已召唤成功但还没开始（稍后再说/刷新后恢复）
   if(c.pendingChallenge)return{can:true,pending:true,reason:'已召唤成功，等待开始挑战'}
-  if(c.summonedDate===today())return{can:false,reason:'今日已召唤成功，挑战完成'}
-  if(total<1)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,borrowed:0,yVol:yVol,reason:'今日训练容量 '+Math.round(vol)+'kg（昨日无可用补召资格），每 100kg 获得 1 次召唤机会'}
-  if(c.todayUsed>=total)return{can:false,total:total,used:c.todayUsed,rate:summonRate(c.todayUsed),vol:vol,borrowed:borrowed,yVol:yVol,reason:'召唤次数已用完（'+total+'次'+(borrowed>0?'，含昨日补召':'')+'），明天再练更猛！'}
-  // 新规则: 10% 起每次失败 +15%，第5次80%，第6次起100%
-  var rate=summonRate(c.todayUsed)
-  return{can:true,rate:rate,total:total,used:c.todayUsed,vol:vol,borrowed:borrowed,yVol:yVol}
+  var rate=summonRate(c.todayUsed+madeUpUsed)
+  if(remainBorrow>0&&remainToday>0)return{can:true,mode:'both',rate:rate,total:total,used:c.todayUsed,vol:vol,borrowed:borrowPool,remainBorrow:remainBorrow,remainToday:remainToday,yVol:yVol}
+  if(remainBorrow>0)return{can:true,mode:'makeup',rate:rate,total:total,used:c.todayUsed,vol:vol,borrowed:borrowPool,remainBorrow:remainBorrow,remainToday:0,yVol:yVol}
+  if(remainToday>0)return{can:true,mode:'normal',rate:rate,total:total,used:c.todayUsed,vol:vol,borrowed:0,remainBorrow:0,remainToday:remainToday,yVol:yVol}
+  if(c.summonedDate===today()&&!madeUp&&yVol>=100)return{can:false,total:total,used:c.todayUsed,vol:vol,borrowed:0,yVol:yVol,reason:'今日已召唤成功；昨日虽漏召但补召资格不可用'}
+  return{can:false,total:total,used:c.todayUsed,vol:vol,borrowed:0,yVol:yVol,reason:'今日训练容量 '+Math.round(vol)+'kg（昨日无可用补召资格），每 100kg 获得 1 次召唤机会'}
 }
 
 /* Attempt summon */
@@ -106,19 +117,29 @@ function attemptSummon(){
   var c=getChallenge()
   var rate=isFinite(info.rate)?info.rate:10
   var roll=Math.random()*100
+  var consumeBorrow=info.remainBorrow>0   // 优先消耗补召池（当日过期）
   if(roll<rate){
     // Success! Mark pending, show challenge preview (NOT started yet)
     c.pendingChallenge=true
-    c.todayUsed=isFinite(info.used)?info.used+1:1
+    if(consumeBorrow){
+      // 补召成功：记 madeUpDate/madeUpUsed，不占用今日名额（今日仍可正常召唤）
+      c.madeUpDate=toDate((function(){var d=new Date();d.setDate(d.getDate()-1);return d})())
+      c.madeUpUsed=(typeof c.madeUpUsed==='number'&&isFinite(c.madeUpUsed)?c.madeUpUsed:0)+1
+      toast('🔮 补召成功！补上昨日的挑战，点击开始！','s')
+    }else{
+      c.summonedDate=today()
+      c.todayUsed=(typeof c.todayUsed==='number'&&isFinite(c.todayUsed)?c.todayUsed:0)+1
+      toast('🔮 召唤成功！点击开始挑战！','s')
+    }
     saveChallenge(c)
-    toast('🔮 召唤成功！点击开始挑战！','s')
     showChallengePreview()
   }else{
-    // Failure — attempt used, rate climbs for next try
-    c.todayUsed=isFinite(info.used)?info.used+1:1
+    // Failure — attempt used (按消耗池记账), rate climbs for next try
+    if(consumeBorrow)c.madeUpUsed=(typeof c.madeUpUsed==='number'&&isFinite(c.madeUpUsed)?c.madeUpUsed:0)+1
+    else c.todayUsed=(typeof c.todayUsed==='number'&&isFinite(c.todayUsed)?c.todayUsed:0)+1
     saveChallenge(c)
-    var newRate=summonRate(c.todayUsed)
-    var remain=isFinite(info.total)&&isFinite(info.used)?info.total-info.used-1:'?'
+    var newRate=summonRate(c.todayUsed+c.madeUpUsed)
+    var remain=isFinite(info.total)?Math.max(0,info.total-(c.todayUsed+c.madeUpUsed)):'?'
     toast('❌ 召唤失败！下次成功率 '+newRate+'%（剩 '+remain+' 次）','e')
     renderSummonPanel()
   }
@@ -193,6 +214,7 @@ function renderSummonPanel(){
       +'<div class="summon-title">⚡ 今日隐藏挑战已完成</div>'
       +'<div class="summon-info">明日继续，每月 1 号重置奖励</div>'
       +(bonus.atk+bonus.def+bonus.hp>0?'<div class="summon-bonus">本月已获得: ⚔️+'+bonus.atk+' 🛡️+'+bonus.def+' ❤️+'+bonus.hp+'</div>':'')
+      +(info.can&&info.mode==='makeup'?'<button class="summon-btn" id="makeupBtn" style="margin-top:8px;background:rgba(34,197,94,.1);border-color:var(--green);color:var(--green);padding:10px;font-size:.8rem">🔁 补召昨日挑战（剩 '+info.remainBorrow+' 次，不占今日名额）</button>':'')
       +(!rewarded?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);padding:10px;font-size:.8rem">↩️ 今日未完成？恢复挑战</button>':'')
       +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
       +'</div>'
@@ -208,6 +230,8 @@ function renderSummonPanel(){
       toast('已恢复今日挑战资格，重新召唤吧 🔮','s')
       renderSummonPanel()
     })
+    var mk=document.getElementById('makeupBtn')
+    if(mk)mk.addEventListener('click',function(){attemptSummon()})
     return
   }
   // 已召唤成功但没开始（稍后再说/刷新后）→ 恢复预览
@@ -240,12 +264,12 @@ function renderSummonPanel(){
   var rateColor=rate>=50?'var(--green)':rate>=30?'var(--orange)':'var(--yellow)'
   var totalN=isFinite(info.total)?info.total:'?'
   var usedN=isFinite(info.used)?info.used:0
-  var remain=isFinite(info.total)&&isFinite(info.used)?info.total-info.used:'?'
+  var remain=isFinite(info.remainToday)?(info.remainToday+info.remainBorrow):'?'
   var hotHtml=renderHotBuffHint(c)
   el.innerHTML='<div class="summon-card">'
     +'<div class="summon-title">🔮 隐藏挑战</div>'
     +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次）</div>'
-    +(info.borrowed>0?'<div class="summon-info" style="color:var(--green)">✨ 已并入昨日未用召唤资格 '+info.borrowed+' 次（昨日 '+Math.round(info.yVol||0)+'kg）</div>':'')
+    +(info.borrowed>0?'<div class="summon-info" style="color:var(--green)">🔁 昨日补召机会剩 '+info.remainBorrow+'/'+info.borrowed+' 次（昨日 '+Math.round(info.yVol||0)+'kg · 优先消耗 · 不占今日名额）</div>':'')
     +'<div class="summon-rate-wrap">'
     +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=5?' · 必成 100%':usedN===4?' · 保底 80%':' · 基础 10%')+'）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'

@@ -1,13 +1,18 @@
 #!/usr/bin/env node
-/* 昨日未用召唤资格顺延 — canSummon borrow 逻辑测试
+/* 双池召唤资格测试（v2.0.2）：今日池 + 昨日补召池
+   核心语义：补召成功不占用今日名额（每周成功次数不少）
    场景:
-   1) 昨日 300kg 未召唤 → 今日 0 容量也可用 3 次 (borrowed=3)
-   2) 昨日 300kg 已召唤(history 命中) → 不顺延 total=0
-   3) 昨日 300kg 已召唤(weekDays 命中, 旧数据无 history) → 不顺延
-   4) 今日 150 + 昨日 300 未用 → total=1+3=4
-   5) 今日 300 且昨日已用 → total=3 (行为不变)
-   6) 昨日 50kg 未召唤 → 不够 100kg 门槛 borrowed=0
-   7) 召唤成功写 summonedDate=today → 今日不可再召 (限 1 次守卫不破坏)
+   1) 昨日300未召, 今日0 → mode=makeup, remainBorrow=3
+   2) 昨日已召(history) → 无补召池, 不可召
+   3) 昨日已召(weekDays 兜底) → 同上
+   4) 今日150+昨日300未用 → mode=both, total=4
+   5) 今日300且昨日已用 → 纯今日 total=3
+   6) 昨日50kg → 不足门槛
+   7) 今日已召 + 昨日300未召 → 仍可补召 (mode=makeup) ← 核心修复
+   8) 补召成功 → madeUpDate 记账, summonedDate 仍空, 今日可正常召
+   9) 补召后再正常召唤成功 → summonedDate=今日, 全部完成
+   10) 全部完成后 → 不可再召
+   11) 失败记账: 补召池失败不计入 todayUsed (不压缩今日池)
    Run: node scripts/test-challenge-borrow.js */
 'use strict';
 const fs = require('fs');
@@ -20,20 +25,16 @@ function assert(name, cond, detail) {
   else { fail++; console.log(' ✗ ' + name + (detail ? ' — ' + detail : '')); }
 }
 
-function yesterdayKey() {
-  const d = new Date(); d.setDate(d.getDate() - 1);
+function dayKey(offset) {
+  const d = new Date(); d.setDate(d.getDate() + offset);
   const p = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')];
   return p.join('-');
 }
-function todayKey() {
-  const d = new Date();
-  const p = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')];
-  return p.join('-');
-}
+const Y = dayKey(-1), T = dayKey(0);
 
-/* 搭建 sandbox：stub store/数据层，加载 utils+stats+challenge */
-function makeSandbox(entries, challengeObj) {
-  const sandbox = { Math, JSON, console, Date };
+function makeSandbox(entries, challengeObj, rng) {
+  const sandbox = { JSON, console, Date };
+  sandbox.Math = Object.create(Math); sandbox.Math.random = rng || (() => 0.5);
   sandbox.window = sandbox;
   const data = {
     strength: { entries: entries },
@@ -47,13 +48,15 @@ function makeSandbox(entries, challengeObj) {
     const m = {}; (data.exercises || []).forEach(e => { m[e.id] = e; }); return m;
   };
   sandbox.toast = function() {};
-  sandbox.document = undefined;
   vm.createContext(sandbox);
   const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
-  vm.runInContext(load('utils.js'), sandbox);   // today/toDate
-  vm.runInContext(load('stats.js'), sandbox);   // sumVolume
+  vm.runInContext(load('utils.js'), sandbox);
+  vm.runInContext(load('stats.js'), sandbox);
   vm.runInContext(load('challenge.js'), sandbox);
-  // 注入 challenge 对象（绕过 store 默认）
+  // headless 桩: toast 走 utils 全局(需 document), 预览/重渲染覆写为空
+  sandbox.document = { getElementById: () => null, body: { appendChild: () => {} } };
+  sandbox.showChallengePreview = function() {};
+  sandbox.renderSummonPanel = function() {};
   if (challengeObj != null) sandbox.store.set('challenge', challengeObj);
   return sandbox;
 }
@@ -61,56 +64,82 @@ function makeSandbox(entries, challengeObj) {
 function entry(date, exercise, weight, reps) {
   return { id: 'x' + Math.random().toString(36).slice(2, 8), date, exercise, weight, actualReps: reps };
 }
-const Y = yesterdayKey(), T = todayKey();
 
-/* 1. 昨日 300kg 未召唤 → 今日可借用 3 次 */
-let sb = makeSandbox([entry(Y, '深蹲', 50, 6)], {});
+/* 1. 昨日300未召, 今日0 → makeup 模式 */
+let sb = makeSandbox([entry(Y, '深蹲', 50, 6)], {}, () => 0.99); // 先恒失败
 let info = sb.canSummon();
-assert('1a 昨日300未召 → can:true', info.can === true, JSON.stringify(info));
-assert('1b borrowed=3', info.borrowed === 3, 'borrowed=' + info.borrowed);
-assert('1c total=3', info.total === 3, 'total=' + info.total);
+assert('1a 昨日300未召 → can:true mode=makeup', info.can === true && info.mode === 'makeup', JSON.stringify(info));
+assert('1b remainBorrow=3', info.remainBorrow === 3, 'remainBorrow=' + info.remainBorrow);
 
-/* 2. 昨日已召唤(history) → 不顺延 */
-sb = makeSandbox([entry(Y, '深蹲', 50, 6)], { history: [{ date: Y }] });
+/* 2. 昨日已召(history) → 无补召池 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6)], { history: [{ date: Y }] }, () => 0.99);
 info = sb.canSummon();
-assert('2 昨日已召(history) → total=0 不可召', info.can === false && info.total === 0, JSON.stringify(info));
+assert('2 昨日已召(history) → can:false', info.can === false && (info.borrowed === 0 || info.total === 0), JSON.stringify(info));
 
-/* 3. 旧数据: weekDays 命中昨天 → 不顺延 */
-sb = makeSandbox([entry(Y, '深蹲', 50, 6)], { weekDays: [Y] });
+/* 3. weekDays 兜底 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6)], { weekDays: [Y] }, () => 0.99);
 info = sb.canSummon();
-assert('3 昨日已召(weekDays) → total=0', info.can === false && info.total === 0, JSON.stringify(info));
+assert('3 昨日已召(weekDays) → can:false', info.can === false, JSON.stringify(info));
 
-/* 4. 今日 150 + 昨日 300 未用 → total=4 */
-sb = makeSandbox([entry(Y, '深蹲', 50, 6), entry(T, '深蹲', 50, 3)], {});
+/* 4. 今日150 + 昨日300未用 → both 模式 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6), entry(T, '深蹲', 50, 3)], {}, () => 0.99);
 info = sb.canSummon();
-assert('4 今日+昨日合并 total=4', info.can === true && info.total === 4 && info.borrowed === 3, 'total=' + info.total + ' borrowed=' + info.borrowed);
+assert('4 mode=both total=4', info.can === true && info.mode === 'both' && info.total === 4 && info.remainBorrow === 3 && info.remainToday === 1, JSON.stringify(info));
 
-/* 5. 今日 300 且昨日已用 → total=3（原行为不变） */
-sb = makeSandbox([entry(Y, '深蹲', 50, 6), entry(T, '深蹲', 100, 3)], { history: [{ date: Y }] });
+/* 5. 今日300且昨日已用 → 纯今日 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6), entry(T, '深蹲', 100, 3)], { history: [{ date: Y }] }, () => 0.99);
 info = sb.canSummon();
-assert('5 纯今日 total=3 borrowed=0', info.can === true && info.total === 3 && info.borrowed === 0, 'total=' + info.total);
+assert('5 纯今日 total=3 borrowed=0', info.can === true && info.mode === 'normal' && info.total === 3, JSON.stringify(info));
 
-/* 6. 昨日 50kg 未召 → 不够门槛 */
-sb = makeSandbox([entry(Y, '深蹲', 50, 1)], {});
+/* 6. 昨日50kg */
+sb = makeSandbox([entry(Y, '深蹲', 50, 1)], {}, () => 0.99);
 info = sb.canSummon();
-assert('6 昨日50kg 不顺延', info.can === false && info.borrowed === 0, JSON.stringify(info));
+assert('6 昨日50kg 不顺延', info.can === false, JSON.stringify(info));
 
-/* 7. 召唤成功守卫: summonedDate=today 后不可再召（顺延不破坏每日限 1 次） */
-sb = makeSandbox([entry(Y, '深蹲', 50, 6)], {});
-let c = sb.getChallenge();
-c.summonedDate = T;
-sb.saveChallenge(c);
+/* 7. 核心修复: 今日已召 + 昨日300未召 → 仍可补召 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6)], {}, () => 0.99);
+let c = sb.getChallenge(); c.summonedDate = T; sb.saveChallenge(c);
 info = sb.canSummon();
-assert('7 今日已召 → 不可再召（即使昨日可借）', info.can === false, JSON.stringify(info));
+assert('7 今日已召仍可补召', info.can === true && info.mode === 'makeup' && info.remainBorrow === 3, JSON.stringify(info));
 
-/* 8. 回撤守卫兼容：pending + 昨日记录被删 → total 缩水撤销 */
-sb = makeSandbox([entry(Y, '深蹲', 50, 6)], {});
+/* 8. 补召成功 → madeUpDate 记账, summonedDate 仍空 (rng=0.01 < 10% 必成)
+   今日另录 100kg → 补召完成后今日池可正常召 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6), entry(T, '深蹲', 100, 1)], {}, () => 0.01);
+sb.attemptSummon();
 c = sb.getChallenge();
-c.pendingChallenge = true; c.todayUsed = 1; c.summonedDate = Y; // 名义上昨日召唤成功留 pending? summonedDate!==today → 走守卫
-sb.saveChallenge(c);
-// 删除昨日记录 → 昨日容量 0，但 summonedDate=Y 属于 history? 未入 history → borrowed=0, total=0 < todayUsed=1
+assert('8a 补召成功 madeUpDate=昨日', c.madeUpDate === Y, 'madeUpDate=' + c.madeUpDate);
+assert('8b summonedDate 仍空(今日名额保留)', c.summonedDate !== T, 'summonedDate=' + c.summonedDate);
+assert('8c pendingChallenge=true', c.pendingChallenge === true);
 info = sb.canSummon();
-assert('8 记录删除 → 资格撤销', info.can === true && info.pending === true ? true : (sb.getChallenge().pendingChallenge === false), 'guard ran');
+assert('8d 补召后 pending → 等待开始', info.can === true && info.pending === true);
+
+/* 模拟完成挑战 (清 pending) → 今日可正常召 */
+c = sb.getChallenge(); c.pendingChallenge = false; sb.saveChallenge(c);
+info = sb.canSummon();
+assert('8e 补召完成后今日可正常召 mode=normal', info.can === true && info.mode === 'normal' && info.remainToday === 1, JSON.stringify(info));
+
+/* 9. 再正常召唤成功 → summonedDate=今日 */
+sb.attemptSummon();
+c = sb.getChallenge();
+assert('9 正常召唤成功 summonedDate=今日', c.summonedDate === T, 'summonedDate=' + c.summonedDate);
+c.pendingChallenge = false; sb.saveChallenge(c); // 模拟挑战已打完
+info = sb.canSummon();
+assert('9b 全部完成 → can:false', info.can === false, JSON.stringify(info));
+
+/* 10. 失败记账: 补召池失败不压缩今日池 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6), entry(T, '深蹲', 50, 3)], {}, () => 0.99); // 恒失败
+sb.attemptSummon(); // 消耗补召池 (优先)
+c = sb.getChallenge();
+assert('10a 失败计入 madeUpUsed', c.madeUpUsed === 1 && c.todayUsed === 0, 'madeUpUsed=' + c.madeUpUsed + ' todayUsed=' + c.todayUsed);
+info = sb.canSummon();
+assert('10b 今日池未压缩 remainToday=1', info.remainToday === 1 && info.remainBorrow === 2, JSON.stringify(info));
+
+/* 11. madeUp 已补 + 昨日剩余补召次数作废；今日池空 → 不可召 */
+sb = makeSandbox([entry(Y, '深蹲', 50, 6)], {}, () => 0.01);
+sb.attemptSummon(); // 补召成功 (消耗1次, madeUpDate=Y)
+c = sb.getChallenge(); c.pendingChallenge = false; sb.saveChallenge(c);
+info = sb.canSummon();
+assert('11 补召完成后剩余补召次数作废(今日池0) → can:false', info.can === false && info.borrowed === 0, JSON.stringify(info));
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

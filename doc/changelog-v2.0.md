@@ -96,6 +96,34 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v1.11.0 | 22 | 583 行 challenge.js | 动作百科+关联机制+store注册表+时间工具+UI优化 |
 | v2.0.0 | 44 | 761 行 game-render.js | 技能/敌群群战/宠物/宝珠 + 挑战页三视图 |
 | v2.0.1 | 44 | 761 行 game-render.js | 隐藏挑战昨日未用资格顺延 + borrow 测试套件 |
+| v2.0.2 | 44 | 761 行 game-render.js | 顺延重构为双池设计：补召成功不占今日名额（每周次数不少） |
+
+---
+
+## v2.0.2
+
+**Date:** 2026-09-02
+
+### 修复
+
+- 🔧 **补召重构为双池设计**（修正 v2.0.1 缺陷：顺延资格并入今日池后，补召成功会占用当日"每日一次"名额，导致每周成功次数少一次）
+  - 资格拆分为**今日池**（floor(今日容量/100)，成功锁 `summonedDate`）与**补召池**（floor(昨日容量/100)，仅昨日漏召时存在，当日过期）
+  - 补召成功 → 记 `madeUpDate`/`madeUpUsed`，**不设置** `summonedDate`，今日正常召唤照常可用
+  - 尝试优先消耗补召池（先过期先消耗）；失败按消耗池分别记账，阶梯概率按今日总尝试次数
+  - 今日已召 + 昨日漏召 → 面板 done 卡出现「🔁 补召昨日挑战」按钮；挑战页三视图文案同步
+  - `getChallenge` 归一化新字段 `madeUpDate`/`madeUpUsed`；dailyReset 每日重置 `madeUpUsed`
+
+### 测试
+
+- `test-challenge-borrow.js` 重写为双池语义 18 项断言（全绿）：补召成功不占今日名额/今日已召仍可补召/失败分池记账/剩余补召作废/history+weekDays 双路径
+
+### 修改文件
+
+- `page/challenge.js`（双池 canSummon + attemptSummon 分池记账 + 面板 done 卡补召按钮）
+- `page/utils.js`（APP_VERSION 2.0.1 → 2.0.2）
+- `page/index.html`（cache-busting v46 → v47）
+- `scripts/test-challenge-borrow.js`（重写）
+- `README.md`（版本表新增行）
 
 ---
 
