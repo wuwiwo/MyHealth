@@ -234,8 +234,8 @@ function openDsPicker(onPick){
     +'<div class="modal-handle"></div>'
     +'<div style="display:flex;align-items:center;gap:8px;padding:10px 14px 0"><div class="modal-title" style="flex:1">'+(onPick?'🔗 关联动作':'📖 动作百科')+'</div><button class="ec-act" id="dsClose">✕</button></div>'
     +'<div style="padding:8px 14px"><input class="fi" id="dsKw" placeholder="搜索：中文名 / 英文 / 肌群 / 器械" style="width:100%"></div>'
-    +'<div class="car-types" id="dsCatRow" style="padding:0 14px;overflow-x:auto"></div>'
-    +'<div class="car-types" id="dsEqRow" style="padding:6px 14px 4px;overflow-x:auto"></div>'
+    +'<div class="car-types" id="dsCatRow" style="padding:6px 14px 0;overflow-x:auto;white-space:nowrap;display:flex;gap:4px;align-items:center"></div>'
+    +'<div class="car-types" id="dsEqRow" style="padding:6px 14px 4px;overflow-x:auto;white-space:nowrap;display:flex;gap:4px;align-items:center"></div>'
     +'<div id="dsList" style="flex:1;overflow-y:auto;padding:8px 14px 20px;-webkit-overflow-scrolling:touch"></div>'
     +'<div id="dsDetail" style="display:none"></div>'
     +(EXD.ready()?'':'<div style="padding:20px;text-align:center;color:var(--text3);font-size:.75rem">数据集未加载</div>')

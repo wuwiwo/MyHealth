@@ -258,7 +258,7 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 .chapter-hdr::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--bd),transparent)}
 
 /* Battle */
-.battle-overlay{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column;overflow-y:auto}
+.battle-overlay{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column}
 .battle-overlay.open{display:flex}
 .battle-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--bd);flex-shrink:0;gap:8px}
 .battle-level{font-size:1rem;font-weight:700}
@@ -449,25 +449,6 @@ box-shadow:0 2px 8px rgba(249,115,22,.25)}
 /* ========== HOT BUFF FLASH ========== */
 @keyframes hotFlash{0%{opacity:1}100%{opacity:0}}
 
-/* ===== 群战 UI（M2b） ===== */
-.gb-unit{transition:background .2s}
-.gb-unit:hover{background:rgba(128,128,128,.08)}
-.gb-hit{animation:gbFlash .4s ease}
-@keyframes gbFlash{
-  0%{background:rgba(239,68,68,.35)}
-  100%{background:transparent}
-}
-.gb-unit .gb-hp-fill{transition:width .3s ease}
-
-/* 技能对话气泡 */
-@keyframes bubblePop{
-  0%{opacity:0;transform:translateX(-50%) scale(.7)}
-  60%{opacity:1;transform:translateX(-50%) scale(1.05)}
-  100%{opacity:1;transform:translateX(-50%) scale(1)}
-}
-
-/* 伤害飘字 */
-@keyframes floatUp{
-  0%{opacity:1;transform:translateY(0)}
-  100%{opacity:0;transform:translateY(-30px)}
-}
+/* 动作百科筛选区：紧凑单行横向滚动（不换行，不占垂直空间） */
+#dsCatRow,#dsEqRow{flex-wrap:nowrap !important}
+#dsCatRow .car-type,#dsEqRow .car-type{flex-shrink:0;padding:6px 12px;font-size:.7rem;white-space:nowrap}
