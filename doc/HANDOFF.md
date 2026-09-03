@@ -1,8 +1,8 @@
 # MyHealth v2.0 交接文档 (HANDOFF)
 
-> **用途**：供其他 AI / 开发者直接接手 v2.0 开发
-> **生成**：2026-09-02
-> **分支**：`feat/v2-m2a-rest`（所有 v2.0 代码在这里，**main 未动**）
+> **用途**：供其他 AI / 开发者直接接手 v2.0 维护
+> **生成**：2026-09-02（最后更新：2026-09-03，对应 v2.0.9）
+> **分支**：`main`（v2.0 已合并并发布，`feat/v2-m2a-rest` 领先 main 0 提交；当前 `APP_VERSION` = 2.0.9）
 > **说明**：本文件汇总 v2.0 全部已实现系统、模块、测试、进度与待办
 
 ---
@@ -10,8 +10,8 @@
 ## 0. 立即上手
 
 ```bash
-# 切换分支
-git checkout feat/v2-m2a-rest
+# 已在 main 分支（v2.0 已合并发布，无需切分支）
+git status -sb
 
 # 本地测试（page/ 是 Vercel 根目录）
 cd page && python3 -m http.server 8801
@@ -20,7 +20,7 @@ cd page && python3 -m http.server 8801
 
 **开发者注意**：
 - 改 `page/*.js` 后**必须 bump** `page/index.html` 里的 `?vXX` cache-busting 版本号（否则浏览器缓存旧代码，改动看不到）—— 这是本项目的关键坑
-- 运行测试：`node scripts/test-*.js`（全部应 0 失败）
+- 运行测试：`node scripts/test-*.js`（全部应 0 失败；`test-ai.js` 有 flaky，见 §6 提示）
 
 ---
 
@@ -70,7 +70,7 @@ MyHealth — 个人健身健康管理 App（原生 JS + HTML + CSS，无构建�
 - **`page/orbs.js`**：5 类型（血气/攻击/魂攻/防御/魂防）× 4 品质（N/R/SR/SSR）+ 合成（65% 成功率）/分解/升级/装配/月重置 + 战斗属性应用
 
 ### 敌群系统（M2b 重构）
-- **`page/group-levels.js`**：6 大关 × 10 小关 = 60 关（程序化生成）：
+- **`page/group-levels.js`**：9 大关 × 10 小关 = 90 关（程序化生成）：
   - 第 5 小关精英（⭐）、第 10 小关 Boss（👑）
   - 大关 1-2 无魂攻防、最多 2 敌；大关 3-6 最多 4 敌（含魂攻防）
   - 难度随大关/小关递进
@@ -122,7 +122,7 @@ store.js → ex-dataset.js → config.js → utils.js → levels.js → date-rol
 |------|------|
 | test-battle | 单敌战斗 + rng |
 | test-group-battle | 群战引擎 |
-| test-group-levels | 60 关生成/精英Boss/数量魂攻防规则 |
+| test-group-levels | 90 关生成/精英Boss/数量魂攻防规则 |
 | test-group-progress | 敌群解锁链 |
 | test-ai | AI 策略 |
 | test-enemy | 16 天赋 + 编成阶梯 |
@@ -144,6 +144,8 @@ store.js → ex-dataset.js → config.js → utils.js → levels.js → date-rol
 
 运行：`for t in scripts/test-*.js; do node $t; done`
 
+> ⚠️ **flaky 提示**：`test-ai.js` 的「AI 战斗有技能施放」断言依赖 `Math.random`（群战栈未吃 `battle.js` 注入的 `mulberry32`），用 5 次试验取并集消除抖动，但实测失败率约 30%（30 次跑 9 次失败）。**技能在真实战斗中确实会施放**——探针复算 `g3-3` 敌人每场都放 `咬击`。属测试收敛问题，非游戏 bug。要稳定可把群战 RNG 改走 `mulberry32`（见 `battle.js` 的 rng 注缝做法）。
+
 ---
 
 ## 7. 关键机制说明
@@ -164,12 +166,12 @@ store.js → ex-dataset.js → config.js → utils.js → levels.js → date-rol
 
 ## 8. 未完成/待办
 
-- [ ] **M2b 更多内容**：敌群关卡数值平衡（当前属性曲线可能偏强，60 关全通需强角色）
-- [ ] **动作百科**：媒体文件在 `page/media/`（部署时需确认 Vercel 能访问），图床 `MEDIA_BASE` 可配置
+- [x] **合并 main**：v2.0 已合并（merge commit `3d454d7 feat: v2.0.0 release`），`feat/v2-m2a-rest` 领先 main 0 提交
+- [x] **版本发布**：已发布，当前 `APP_VERSION` = 2.0.9（main = `307ad9b`，2026-09-03）
+- [x] **关卡挑战共存**：117 关单敌列表（关卡试炼）与群战已实现共存——v2.0.5 移除与新三视图叠放的旧组件，v2.0.6 修复列表跨视图漏显；最终手感并入下方「真机验收」
+- [ ] **M2b 更多内容**：敌群关卡数值平衡（当前属性曲线可能偏强，90 关全通需强角色）
+- [ ] **动作百科**：媒体接线已完成（本地 `page/media/` + 图床 `MEDIA_BASE` 可配，见 `config.js`），**待确认 Vercel 部署可访问**
 - [ ] **真机验收**：本地测试 OK，但真机（手机）手感/性能未全面验证
-- [ ] **合并 main**：所有 v2.0 在 feat/v2-m2a-rest，**未合 main**（main 停留在 v1.11.0/x.x 老版本）
-- [ ] **版本发布**：v2.0 系统开发完但未 bump 到 2.x（当前 APP_VERSION 仍 1.x）
-- [ ] **关卡挑战**：117 关战斗（单敌）与群战共存，需确认 UX 不冲突
 
 ---
 
@@ -190,5 +192,5 @@ store.js → ex-dataset.js → config.js → utils.js → levels.js → date-rol
 ## 10. 版本纪律提醒
 
 - 施工阶段改 `page/*.js` → bump APP_VERSION + README/changelog/架构表 三项同步
-- **但 v2.0 开发中未发布**，所以现在只做代码提交，不 bump 版本
+- v2.0 已发布（当前 2.0.9），施工改动即按上方三项纪律 bump 版本；纯文档改动用 `docs:` 前缀、不 bump
 - 所有提交用 `feat:`/`fix:` 前缀，文档用 `docs:`
