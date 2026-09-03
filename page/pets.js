@@ -57,7 +57,8 @@ function feedNutrition(pet) {
   if (pet.stage !== 'egg') return { ok: false, reason: '非孵化期' };
   var inc = PET_CONFIG.nutritionPerFeed[0] + Math.random() * (PET_CONFIG.nutritionPerFeed[1] - PET_CONFIG.nutritionPerFeed[0]);
   pet.hatchProgress = Math.min(100, pet.hatchProgress + inc);
-  return { ok: true, progress: pet.hatchProgress, inc: inc };
+  normalizePetStage(pet);  // 孵化满 → 立即成长期
+  return { ok: true, progress: pet.hatchProgress, inc: inc, stage: pet.stage };
 }
 
 /* 喂饲料（成长期）：恢复饥饿 10%~15% */
@@ -69,6 +70,7 @@ function feedPet(pet) {
   var growInc = pet.health > 50 ? (2 + Math.random() * 3) : (1 + Math.random() * 2);
   pet.growth = Math.min(100, (pet.growth || 0) + growInc);
   // 成长满 100 → 成熟
+  normalizePetStage(pet);  // 成长满 → 立即成熟
   if (pet.growth >= 100) { pet.stage = 'mature'; pet.isDead = false; return { ok: true, hunger: pet.hunger, inc: inc, matured: true, growth: pet.growth }; }
   return { ok: true, hunger: pet.hunger, inc: inc, growth: pet.growth };
 }
@@ -158,6 +160,19 @@ function hatchCheck(pet) {
   return { hatched: false };
 }
 
+/* 实时阶段校正（v2.0.9）：egg→grow（孵化满）/ grow→mature（成长满）
+   解决 hatchProgress=100 但 stage 卡在 egg 的 bug（阶段转换原仅在每日结算触发） */
+function normalizePetStage(pet) {
+  if (pet.stage === 'egg' && pet.hatchProgress >= 100) {
+    pet.stage = 'grow';
+    if (pet.growth == null) pet.growth = 0;
+  }
+  if (pet.stage === 'grow' && pet.growth >= 100) {
+    pet.stage = 'mature';
+  }
+  return pet;
+}
+
 /* 共鸣加成：按持有总数返回倍率档位 */
 function resonanceBonus(totalCount) {
   if (totalCount > 10) return 0.10;
@@ -187,6 +202,7 @@ if (typeof window !== 'undefined') {
   window.feedPet = feedPet;
   window.settlePet = settlePet;
   window.hatchCheck = hatchCheck;
+  window.normalizePetStage = normalizePetStage;
   window.resonanceBonus = resonanceBonus;
   window.monthlyResetPet = monthlyResetPet;
 }
@@ -197,6 +213,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.feedPet = feedPet;
   globalThis.settlePet = settlePet;
   globalThis.hatchCheck = hatchCheck;
+  globalThis.normalizePetStage = normalizePetStage;
   globalThis.resonanceBonus = resonanceBonus;
   globalThis.monthlyResetPet = monthlyResetPet;
 }

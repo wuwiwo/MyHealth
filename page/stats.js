@@ -262,7 +262,7 @@ function getRefineGradeProgress(upgrades, grade) {
  * @param {object} upgrades
  * @returns {{ success, stat, grade, msg, advance, allDone }}
  */
-function attemptRefine(upgrades) {
+function attemptCharacterRefine(upgrades) {
   var grade = getCurrentRefineGrade(upgrades);
   if (!grade) return {success: false, msg: '🎉 所有等级已满！', allDone: true};
   var g = REFINE_GRADES[grade];

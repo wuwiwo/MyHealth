@@ -30,6 +30,7 @@ function renderPetPanel() {
     h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:14px;background:var(--bg2);border-radius:16px">还没有宠物 🐾<br><span style="font-size:12px">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:15px;border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
   } else {
     d.pets.forEach(function(p, i) {
+      normalizePetStage(p);   // v2.0.9: 实时校正阶段（防 hatchProgress=100 卡 egg）
       var codex = getPetCodex(p.speciesId) || { name: p.name, rarity: p.rarity }
       var stageIcon = p.stage==='egg'?'🥚':p.stage==='grow'?'🌱':'🐾'
       var stageText = p.stage==='egg'?'孵化 '+Math.round(p.hatchProgress)+'%':p.stage==='grow'?'成长 '+Math.round(p.growth)+'%':'成熟'

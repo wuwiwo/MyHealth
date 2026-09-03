@@ -102,7 +102,7 @@ function doRefineBatch(count){
   for(var i=0;i<actualCount && !stop;i++){
     grade=getCurrentRefineGrade(refine.upgrades);
     if(!grade){breakReason='getCurrentRefineGrade返回null';stop=true;break}
-    var r=attemptRefine(refine.upgrades);
+    var r=attemptCharacterRefine(refine.upgrades);
     results.push(r);
     if(r.success)successes++;else fails++;
     if(r.allDone){breakReason='allDone=true';stop=true;break}
