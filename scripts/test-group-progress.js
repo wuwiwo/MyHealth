@@ -27,18 +27,19 @@ assert('g1-10 通关后 g2-1 解锁', sb.isGroupStageUnlocked('g2-1'));
 // 4. 重复通关不重复计数
 const r2 = sb.markGroupStageCleared('g1-1');
 assert('重复通关 firstClear=false', r2.firstClear === false);
-// 5. 进度统计
+// 5. 进度统计（敌群已扩至 9 大关 × 10 小关 = 90 关）
+const TOTAL = 90;
 const stats = sb.groupProgressStats();
-assert('进度 10/60', stats.cleared === 10 && stats.total === 60, JSON.stringify(stats));
+assert('进度 10/' + TOTAL, stats.cleared === 10 && stats.total === TOTAL, JSON.stringify(stats));
 // 6. 通关后不可重打（startGroupTrial 里拦截，这里测 isGroupStageCleared）
 assert('g1-1 已通关', sb.isGroupStageCleared('g1-1'));
-// 7. 60 关顺序解锁链
+// 7. 90 关顺序解锁链
 let allOk = true;
-for (let i = 0; i < 60; i++) {
+for (let i = 0; i < TOTAL; i++) {
   const id = sb.allStageIds()[i];
   if (!sb.isGroupStageUnlocked(id)) { allOk = false; break; }
   sb.markGroupStageCleared(id);
 }
-assert('60 关顺序解锁全通', allOk && sb.groupProgressStats().cleared === 60);
+assert('90 关顺序解锁全通', allOk && sb.groupProgressStats().cleared === TOTAL);
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail>0?1:0);
