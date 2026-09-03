@@ -4,14 +4,15 @@
 # 或: node scripts/install-hook.js (Windows)
 
 set -e
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(git rev-parse --show-toplevel)"
 HOOK="$ROOT/.git/hooks/pre-commit"
 
-cat > "$HOOK" <<EOF
+cat > "$HOOK" <<'EOF'
 #!/bin/sh
 # MyHealth pre-commit hook — 版本纪律校验 (AGENTS.md)
-ROOT="\$(cd "\$(dirname "\$0")/../.." && pwd)"
-node "\$ROOT/scripts/check-release.js"
+# 用 git rev-parse 取仓库根，避免 MSYS 下 dirname + cd 拼出 E:\e\dd 这类错路径
+cd "$(git rev-parse --show-toplevel)"
+node scripts/check-release.js
 EOF
 
 chmod +x "$HOOK" 2>/dev/null || true
