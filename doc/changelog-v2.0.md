@@ -6,6 +6,30 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 
 ---
 
+## v2.0.11
+
+**Date:** 2026-09-06
+
+### 新增功能
+
+- 🐞 **全局 Debug 面板**（`page/debug.js` 新模块）：debug FAB 从挑战页专属提升为全 tab 可用，点击展开底部抽屉
+  - **概览**：APP_VERSION / today / monthKey / weekKey / 当前 tab / 存储用量（键数+字节）/ 旬周期状态
+  - **存储**：全部 localStorage 键（dh- 前缀业务键）列表，单键展开 JSON 查看 + 一键复制
+  - **属性·经济**：技能点状态（本周胜局/周键/槽位/loadout/等级）、敌群发点预演（胜1~6）、今日容量
+  - **挑战**：challenge 存档 + canSummon JSON + 召唤门槛核对；内嵌诊断块开关（替代原 FAB 长按入口）
+  - **错误**：window.onerror + unhandledrejection 全局捕获（保留最近 30 条），标签页显示计数
+- 挑战页内嵌诊断块（红框明细）逻辑不变，开关收进抽屉「挑战」分区
+
+### 修改文件
+
+- `page/debug.js`（新增模块）
+- `page/challenge.js`（移除 FAB 所有权，`_chDebugOn` → `window.__debugChallenge`）
+- `page/index.html`（挂载 debug.js + cache-busting v55 → v56）
+- `page/utils.js`（APP_VERSION 2.0.10 → 2.0.11）
+- `README.md` / `CONTEXT.md` / `doc/changelog-v2.0.md`（目录树 + 版本表 + 架构表）
+
+---
+
 ## v2.0.10
 
 **Date:** 2026-09-06
@@ -168,6 +192,35 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v2.0.8 | 44 | 761 行 game-render.js | 🩹 补召误锁存档恢复入口（done 卡恢复按钮条件放宽） |
 | v2.0.9 | 44 | 763 行 game-render.js | 宠物阶级归一化 + 动作改名/合并修复 + 炼化入口回归（外部会话提交，README 表补记） |
 | v2.0.10 | 44 | 763 行 game-render.js | ⚖️ 敌群通关技能点 100→10（1/10），周递增倍率不变 |
+| v2.0.11 | 45 | 763 行 game-render.js | 🐞 全局 Debug 面板（debug.js 新模块，FAB 全 tab + 抽屉五分区 + 错误捕获） |
+
+---
+
+## v2.0.11
+
+**Date:** 2026-09-06
+
+### 新增功能
+
+- 🐞 **全局 Debug 面板**：原挑战页专属的 🔍 诊断 FAB 提升为全局（所有 tab 可见），点击展开底部抽屉，五分区：
+  - 概览：版本号/日期/周期键（monthKey/weekKey/旬）/当前 tab/存储用量/JS 错误数
+  - 存储：全部 localStorage 键 + 单键 JSON 展开 + 一键复制（排查存档问题不再需要连电脑）
+  - 属性·经济：技能点全状态 + 敌群发点预演 + 今日容量（验证 v2.0.10 数值调整）
+  - 挑战：challenge 存档/canSummon JSON + 挑战页内嵌诊断块开关
+  - 错误：全局 error + unhandledrejection 捕获，保留最近 30 条
+- 挑战页内嵌诊断（红框明细：branch/todayEntries/canSummon/challenge JSON）行为不变，开关移入抽屉
+
+### 修改文件
+
+- `page/debug.js`（新增，~230 行）
+- `page/challenge.js`（FAB 移交 debug.js，诊断开关改 `window.__debugChallenge`）
+- `page/index.html`（挂载 debug.js，cache-busting v55 → v56）
+- `page/utils.js`（APP_VERSION 2.0.10 → 2.0.11）
+- `README.md` / `CONTEXT.md` / `doc/changelog-v2.0.md`（目录树/版本表/架构演化表）
+
+### 测试
+
+- `test-page-load.js` 27/27（含 debug.js 加载链）· `test-challenge-borrow.js` 27/27 · `test-battle.js` 16/16
 
 ---
 

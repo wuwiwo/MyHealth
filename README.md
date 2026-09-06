@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.0.10
+> Personal Health Manager — 个人健身健康管理应用 v2.0.11
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -78,6 +78,7 @@ page/
 ├── game-records.js     挑战 Tab 历史记录 + 属性变更日志
 ├── game-refine.js      挑战 Tab 炼魂系统弹窗 + 批量炼化
 ├── game-views.js       挑战页三视图（培养/战斗/记录）
+├── debug.js            全局 Debug 面板（FAB+抽屉：概览/存储/属性经济/挑战/错误）
 ├── tab-game.js         挑战 Tab 事件入口（onGameEvent）
 ├── tab-settings.js     设置 Tab（动作库 / 计划 / 挑战 / 数据 + 动作百科）
 ├── pets.js             宠物生命周期（蛋→孵化→成长→成熟→阵亡+离线结算）
@@ -230,5 +231,6 @@ Vercel 项目设置：
 | **v2.0.8** | **2026-09-02** | **补召误锁存档自助恢复入口（v2.0.7 部署前打完补召的用户解锁今日资格）** | `doc/changelog-v2.0.md` |
 | **v2.0.9** | **2026-09-06** | **宠物阶级实时归一化 + 动作改名/合并修复（炼化入口回归训练视图）+ 群战测试 90 关扩容** | `doc/changelog-v2.0.md` |
 | **v2.0.10** | **2026-09-06** | **敌群通关技能点 100→10（1/10），周递增倍率不变（隐藏挑战数值不动）** | `doc/changelog-v2.0.md` |
+| **v2.0.11** | **2026-09-06** | **全局 Debug 面板：全 tab FAB+抽屉五分区（概览/存储/属性经济/挑战/错误捕获），挑战页内嵌诊断保留** | `doc/changelog-v2.0.md` |
 
-> 当前版本：**v2.0.10**
+> 当前版本：**v2.0.11**

@@ -165,23 +165,13 @@ function attemptSummon(){
 }
 
 /* ========== SUMMON PANEL UI ========== */
-/* Debug: 屏幕诊断 — 悬浮 FAB 切换（不占版面，默认半透明可点） */
-var _chDebugOn=false
-function toggleChDebug(){_chDebugOn=!_chDebugOn;renderDebugFab();renderSummonPanel()}
-function renderDebugFab(){
-  var fab=document.getElementById('debugFab')
-  if(!fab){
-    fab=document.createElement('button');fab.id='debugFab';fab.className='debug-fab';fab.title='debug'
-    fab.textContent='🔍'
-    fab.addEventListener('click',toggleChDebug)
-    document.body.appendChild(fab)
-  }
-  fab.classList.toggle('on',_chDebugOn)
-}
+/* Debug: 屏幕诊断 — FAB 与抽屉由 debug.js 全局提供；此处内嵌诊断块
+   由 window.__debugChallenge 控制（DebugPanel 抽屉「挑战」分区开关） */
+function toggleChDebug(){window.__debugChallenge=!window.__debugChallenge;renderSummonPanel();if(window.DebugPanel)window.DebugPanel.refresh()}
 /* 组装充足诊断数据 */
 function chDebugBlock(info,strVol,c,branch){
   var out=''
-  if(_chDebugOn){
+  if(window.__debugChallenge){
     var entries=((store.get('strength')||{entries:[]}).entries)||[]
     var todayE=entries.filter(function(e){return e.date===today()})
     var exMap=getExerciseMap()
@@ -205,7 +195,6 @@ function chDebugBlock(info,strVol,c,branch){
 }
 /* 挂载调试块 + 绑定开关（每个分支统一调用） */
 function mountSummonExtras(el,info,strVol,c,branch){
-  renderDebugFab()
   var hb=document.getElementById('chHistoryBtn')
   if(hb)hb.addEventListener('click',function(){showChallengeHistory()})
 }

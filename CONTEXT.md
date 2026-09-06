@@ -131,6 +131,7 @@ page/
 ├── skill-ui.js       → 技能面板 UI
 ├── orbs.js           → 宝珠系统（5类型×4品质 合成/升级/装配）
 └── game-views.js     → 挑战页三视图（培养/战斗/记录）
+└── debug.js          → 全局 Debug 面板（FAB+抽屉五分区，错误捕获）
 ```
 
 ### v2.0 store keys
