@@ -509,7 +509,7 @@ function _groupDone(){
     if (stageId && typeof markGroupStageCleared === 'function') {
       prog = markGroupStageCleared(stageId)
     }
-    // 敌群胜利奖励：技能点 + 材料（随关卡难度递增）
+    // 敌群胜利奖励：技能点（10 点/胜，原 100 的 1/10）+ 材料（随关卡难度递增）
     var reward = groupVictoryReward(_groupBattle)
     var msg = '🎉 敌群讨伐成功！' + reward.msg
     if (prog && prog.firstClear) {
@@ -525,10 +525,10 @@ function _groupDone(){
   else toast('💀 敌群讨伐失败…','e')
 }
 
-/* 敌群胜利奖励：技能点（与挑战一致 100 点/胜）+ 材料掉落 */
+/* 敌群胜利奖励：技能点（10 点/胜，与挑战数值独立）+ 材料掉落 */
 function groupVictoryReward(gb) {
   var msgs = []
-  // 技能点：100 点 + 周递增（与隐藏挑战一致）
+  // 技能点：10 点 + 周递增
   var wk = monthKey(new Date()) + '-W' + Math.ceil((new Date().getDate()) / 7)
   var winCount = recordSkillWin(wk)
   var award = awardSkillPoints(winCount)

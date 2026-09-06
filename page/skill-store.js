@@ -28,7 +28,7 @@ function saveSkillState(d) {
 /* 隐藏挑战胜利结算：获得技能点（周递增） */
 function awardSkillPoints(winCount) {
   var d = getSkillState();
-  var gained = earnSkillPoints(100, winCount || 0);
+  var gained = earnSkillPoints(10, winCount || 0);   // 敌群通关 10 点（原 100 的 1/10），周递增照旧
   d.points += gained;
   d.totalEarned += gained;
   saveSkillState(d);

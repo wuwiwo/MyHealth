@@ -100,7 +100,7 @@ registerPlayerSkill({
 
 /* --- 技能点经济 --- */
 
-/* 技能点：隐藏挑战成功 +100 点，周递增（首 0%，后续 +50%/次，最高 +250%） */
+/* 技能点：敌群通关 +10 点（原 100 的 1/10），周递增（首 0%，后续 +50%/次，最高 +250%） */
 function weeklyBonusRate(winCountThisWeek) {
   // 第 1 次 0% 加成；之后每次 +50%，最高 +250%
   var n = Math.max(0, (winCountThisWeek || 0) - 1);
