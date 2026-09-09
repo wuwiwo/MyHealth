@@ -2,10 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>💪 MyHealth</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
-<link rel="stylesheet" href="index.css?v54">
+<link rel="stylesheet" href="index.css?v55">
 </head>
 <body>
 <div id="app">
@@ -17,31 +17,31 @@
           <div class="header-logo">💪</div>
           <div class="header-title-group">
             <div class="header-title">My<span>Health</span></div>
-            <div class="header-subtitle">Personal Health Manager <span id="appVersion" style="font-size:.65rem;color:var(--orange);font-weight:600;margin-left:4px"></span></div>
+            <div class="header-subtitle">Personal Health Manager <span id="appVersion" style="font-size:var(--fs-xs);color:var(--orange);font-weight:600;margin-left:4px"></span></div>
           </div>
         </div>
         <div class="header-right">
-          <button class="header-btn" id="syncBtn" title="同步数据" style="font-size:.75rem">🔄</button>
-          <button class="header-btn" id="themeToggle">🌙</button>
-          <div class="sync-dot" id="syncIndicator" title="同步状态">🔄</div>
+          <button class="header-btn" id="syncBtn" title="同步数据" aria-label="同步数据" style="font-size:var(--fs-xs)">🔄</button>
+          <button class="header-btn" id="themeToggle" aria-label="切换主题">🌙</button>
+          <div class="sync-dot" id="syncIndicator" title="同步状态" role="status" aria-live="polite">🔄</div>
         </div>
       </div>
     </div>
   </header>
 
   <!-- Tab Bar -->
-  <nav class="tab-bar">
-    <button class="tab-btn active" data-tab="training">🏋️ 训练</button>
-    <button class="tab-btn" data-tab="profile">📊 个人</button>
-    <button class="tab-btn" data-tab="game">🎮 挑战</button>
-    <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
+  <nav class="tab-bar" id="mainTabBar" role="tablist" aria-label="主导航">
+    <button class="tab-btn active" id="tabBtnTraining" data-tab="training" role="tab" aria-selected="true" aria-controls="tabTraining">🏋️ 训练</button>
+    <button class="tab-btn" id="tabBtnProfile" data-tab="profile" role="tab" aria-selected="false" aria-controls="tabProfile">📊 个人</button>
+    <button class="tab-btn" id="tabBtnGame" data-tab="game" role="tab" aria-selected="false" aria-controls="tabGame">🎮 挑战</button>
+    <button class="tab-btn" id="tabBtnSettings" data-tab="settings" role="tab" aria-selected="false" aria-controls="tabSettings">⚙️ 设置</button>
   </nav>
 
   <!-- ===== TAB: TRAINING (strength + cardio sub-tabs) ===== -->
   <section class="tab-content active" id="tabTraining">
-    <nav class="tab-bar sub-tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
-      <button class="tab-btn active" data-sub="strength">💪 力量</button>
-      <button class="tab-btn" data-sub="cardio">🏃 有氧</button>
+    <nav class="tab-bar sub-tab-bar" role="tablist" aria-label="训练分类">
+      <button class="tab-btn active" data-sub="strength" role="tab" aria-selected="true" aria-controls="subStrength">💪 力量</button>
+      <button class="tab-btn" data-sub="cardio" role="tab" aria-selected="false" aria-controls="subCardio">🏃 有氧</button>
     </nav>
 
     <!-- Today snapshot: weekly + period progress -->
@@ -54,12 +54,12 @@
     <div class="sub-tab active" id="subStrength">
       <div class="section-hdr">📅 日期</div>
       <div class="date-nav">
-        <button class="dn-btn" id="strPrevDay">◀</button>
+        <button class="dn-btn" id="strPrevDay" aria-label="上一天">◀</button>
         <div class="dn-display">
           <div class="dn-main" id="strDateMain">加载中...</div>
           <div class="dn-sub" id="strDateSub"></div>
         </div>
-        <button class="dn-btn" id="strNextDay">▶</button>
+        <button class="dn-btn" id="strNextDay" aria-label="下一天">▶</button>
         <button class="dn-btn dn-today" id="strGoToday">今天</button>
       </div>
       <div class="day-vol" id="strDayVol"></div>
@@ -68,18 +68,18 @@
       <button class="add-btn" id="strAddBtn">＋ 新增一组</button>
       <div class="add-card" id="strAddCard">
         <div class="fg">
-          <label class="fl">动作</label>
+          <label class="fl" for="strExercise">动作</label>
           <div class="ex-suggest" id="strSuggest"></div>
           <input class="fi" id="strExercise" list="strExList" placeholder="输入或选择...">
           <datalist id="strExList"></datalist>
         </div>
-        <div class="fg" id="strWeightFg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="strWeight"></div></div>
-        <div class="fg" id="strEqWeightInfo" style="display:none"><label class="fl">等效重量</label><div id="strEqWeightDisplay" style="font-size:.85rem;color:var(--text2);padding:8px 0">—</div></div>
+        <div class="fg" id="strWeightFg"><div class="fl" id="strWtLbl">重量 (kg)</div><div class="weight-grid" id="strWeight" role="group" aria-labelledby="strWtLbl"></div></div>
+        <div class="fg" id="strEqWeightInfo" style="display:none"><div class="fl">等效重量</div><div id="strEqWeightDisplay" style="font-size:.85rem;color:var(--text2);padding:8px 0">—</div></div>
         <div class="fg" id="strRepsFg">
-          <label class="fl" id="strRepsLabel">次数</label>
-          <div class="reps-row">
-            <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-">−</button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+">+</button></div></div>
-            <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-">−</button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+">+</button></div></div>
+          <div class="fl" id="strRepsLabel">次数</div>
+          <div class="reps-row" role="group" aria-labelledby="strRepsLabel">
+            <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-" aria-label="减少目标次数">−</button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+" aria-label="增加目标次数">+</button></div></div>
+            <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-" aria-label="减少实际次数">−</button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+" aria-label="增加实际次数">+</button></div></div>
           </div>
         </div>
         <button class="sb-btn" id="strSubmit">⚡ 记录</button>
@@ -102,12 +102,12 @@
     <div class="sub-tab" id="subCardio">
       <div class="section-hdr">📅 日期</div>
       <div class="date-nav">
-        <button class="dn-btn" id="carPrevDay">◀</button>
+        <button class="dn-btn" id="carPrevDay" aria-label="上一天">◀</button>
         <div class="dn-display">
           <div class="dn-main" id="carDateMain">加载中...</div>
           <div class="dn-sub" id="carDateSub"></div>
         </div>
-        <button class="dn-btn" id="carNextDay">▶</button>
+        <button class="dn-btn" id="carNextDay" aria-label="下一天">▶</button>
         <button class="dn-btn dn-today" id="carGoToday">今天</button>
       </div>
       <div class="day-vol" id="carDayVol"></div>
@@ -115,28 +115,28 @@
       <div class="section-hdr">今日有氧</div>
       <button class="add-btn" id="carAddBtn">＋ 新增记录</button>
       <div class="add-card" id="carAddCard">
-        <div class="fg"><label class="fl">运动类型</label>
-          <div class="car-types" id="carTypes"></div>
+        <div class="fg"><div class="fl" id="carTypeLbl">运动类型</div>
+          <div class="car-types" id="carTypes" role="group" aria-labelledby="carTypeLbl"></div>
           <button class="md-write" id="carCustomType" style="margin-top:4px;font-size:.7rem">＋ 自定义类型</button>
         </div>
-        <div class="fg"><label class="fl">强度</label>
-          <div class="car-types" id="carIntensity"></div>
+        <div class="fg"><div class="fl" id="carIntLbl">强度</div>
+          <div class="car-types" id="carIntensity" role="group" aria-labelledby="carIntLbl"></div>
         </div>
-        <div class="fg"><label class="fl">时长 (分钟)</label>
-          <div class="stepper" style="max-width:200px">
-            <button class="sp-btn" id="carDurDown">−</button>
+        <div class="fg"><label class="fl" id="carDurLbl">时长 (分钟)</label>
+          <div class="stepper" role="group" aria-labelledby="carDurLbl" style="max-width:200px">
+            <button class="sp-btn" id="carDurDown" aria-label="减少时长">−</button>
             <span class="sp-val" id="carDurVal">30</span>
-            <button class="sp-btn" id="carDurUp">+</button>
+            <button class="sp-btn" id="carDurUp" aria-label="增加时长">+</button>
           </div>
         </div>
-        <div class="fg"><label class="fl">距离 (km) <span class="fl-note" id="carDistLabel">可选</span></label>
-          <div class="stepper" style="max-width:200px">
-            <button class="sp-btn" id="carDistDown">−</button>
+        <div class="fg"><label class="fl" id="carDistLbl">距离 (km) <span class="fl-note" id="carDistLabel">可选</span></label>
+          <div class="stepper" role="group" aria-labelledby="carDistLbl" style="max-width:200px">
+            <button class="sp-btn" id="carDistDown" aria-label="减少距离">−</button>
             <span class="sp-val" id="carDistVal">0</span>
-            <button class="sp-btn" id="carDistUp">+</button>
+            <button class="sp-btn" id="carDistUp" aria-label="增加距离">+</button>
           </div>
         </div>
-        <div class="fg"><label class="fl">备注</label><input class="fi" id="carNote" placeholder="感觉怎么样？"></div>
+        <div class="fg"><label class="fl" for="carNote">备注</label><input class="fi" id="carNote" placeholder="感觉怎么样？"></div>
         <button class="sb-btn" id="carSubmit">🏃 记录</button>
       </div>
 
@@ -153,9 +153,9 @@
   <!-- ===== TAB: PROFILE ===== -->
   <section class="tab-content" id="tabProfile">
     <!-- Sub-tab bar -->
-    <nav class="tab-bar sub-tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
-      <button class="tab-btn active" data-sub="personal">👤 个人数据</button>
-      <button class="tab-btn" data-sub="training">📊 训练数据</button>
+    <nav class="tab-bar sub-tab-bar" role="tablist" aria-label="个人数据分类">
+      <button class="tab-btn active" data-sub="personal" role="tab" aria-selected="true" aria-controls="subPersonal">👤 个人数据</button>
+      <button class="tab-btn" data-sub="training" role="tab" aria-selected="false" aria-controls="subTraining">📊 训练数据</button>
     </nav>
 
     <!-- Sub-tab: Personal Data -->
@@ -167,9 +167,9 @@
       <div class="section-hdr">⚖️ 体重记录</div>
       <div id="wtNoteTags"></div>
       <div class="weight-form-row">
-        <input type="number" class="fi" id="wtInput" value="70.0" step="0.1" min="20" max="300" style="width:100px;text-align:center;font-size:1.1rem;font-weight:700">
+        <input type="number" class="fi" id="wtInput" aria-label="体重（公斤）" value="70.0" step="0.1" min="20" max="300" style="width:100px;text-align:center;font-size:var(--fs-lg);font-weight:700">
         <span style="font-size:.85rem;color:var(--text2)">kg</span>
-        <input class="fi" id="wtNote" placeholder="备注（可选）" style="flex:1;max-width:200px">
+        <input class="fi" id="wtNote" aria-label="体重记录备注" placeholder="备注（可选）" style="flex:1;max-width:200px">
         <button class="sb-btn" id="wtSubmit" style="flex:0;padding:12px 20px;white-space:nowrap">📝 记录</button>
       </div>
 
@@ -192,10 +192,10 @@
     <!-- v2.0.5: 旧属性条/旬目标卡/记录卡容器已删（三视图培养/战斗/记录完整接管） -->
 
     <!-- v2.0 三视图选项卡（培养/战斗/记录）— game-views.js 静态按钮 -->
-    <nav class="tab-bar sub-tab-bar" id="gameViewTabBar" style="margin:0 -12px 10px;border-bottom:1px solid var(--bd)">
-      <button class="tab-btn" data-gtab="train">🐾 培养</button>
-      <button class="tab-btn" data-gtab="battle">⚔️ 战斗</button>
-      <button class="tab-btn" data-gtab="record">📊 记录</button>
+    <nav class="tab-bar sub-tab-bar" id="gameViewTabBar" role="tablist" aria-label="挑战视图">
+      <button class="tab-btn" data-gtab="train" role="tab" aria-selected="true" aria-controls="gameTrainView">🐾 培养</button>
+      <button class="tab-btn" data-gtab="battle" role="tab" aria-selected="false" aria-controls="gameBattleView">⚔️ 战斗</button>
+      <button class="tab-btn" data-gtab="record" role="tab" aria-selected="false" aria-controls="gameRecordView">📊 记录</button>
     </nav>
 
     <!-- v2.0 三视图容器 -->
@@ -207,7 +207,7 @@
     <div id="gameContent"></div>
 
     <!-- Battle overlay (full screen inside tab) -->
-    <div class="battle-overlay" id="battleOverlay">
+    <div class="battle-overlay" id="battleOverlay" role="dialog" aria-modal="true" aria-label="战斗">
       <div class="battle-hdr">
         <div class="battle-level" id="battleLevel">1-1</div>
         <div class="battle-speed">
@@ -245,7 +245,7 @@
     </div>
 
     <!-- Share card modal -->
-    <div class="share-overlay" id="shareOverlay">
+    <div class="share-overlay" id="shareOverlay" role="dialog" aria-modal="true" aria-label="分享战报">
       <div class="share-card" id="shareCard">
         <div class="share-header">🏆 挑战胜利！</div>
         <div class="share-level" id="shareLevel">1-1 试炼之始</div>
@@ -263,11 +263,11 @@
 
   <!-- ===== TAB: SETTINGS ===== -->
   <section class="tab-content" id="tabSettings">
-    <nav class="tab-bar sub-tab-bar" style="margin:0 -12px 0;border-bottom:1px solid var(--bd)">
-      <button class="tab-btn active" data-sub="library">🏋️ 动作库</button>
-      <button class="tab-btn" data-sub="plans">📋 计划</button>
-      <button class="tab-btn" data-sub="game">🎮 挑战</button>
-      <button class="tab-btn" data-sub="data">📂 数据</button>
+    <nav class="tab-bar sub-tab-bar" role="tablist" aria-label="设置分类">
+      <button class="tab-btn active" data-sub="library" role="tab" aria-selected="true" aria-controls="subLibrary">🏋️ 动作库</button>
+      <button class="tab-btn" data-sub="plans" role="tab" aria-selected="false" aria-controls="subPlans">📋 计划</button>
+      <button class="tab-btn" data-sub="game" role="tab" aria-selected="false" aria-controls="subGame">🎮 挑战</button>
+      <button class="tab-btn" data-sub="data" role="tab" aria-selected="false" aria-controls="subData">📂 数据</button>
     </nav>
 
     <div class="sub-tab active" id="subLibrary"></div>
@@ -277,51 +277,51 @@
   </section>
 </div>
 
-<script src="store.js?v54"></script>
-<script src="data/exercises-dataset.js?v54"></script>
-<script src="ex-dataset.js?v54"></script>
-<script src="config.js?v54"></script>
-<script src="utils.js?v54"></script>
-<script src="levels.js?v54"></script>
-<script src="date-roll.js?v54"></script>
-<script src="monthly-reset.js?v54"></script>
-<script src="stats.js?v54"></script>
-<script src="state-core.js?v54"></script>
-<script src="status-defs.js?v54"></script>
-<script src="unit.js?v54"></script>
-<script src="talent.js?v54"></script>
-<script src="skill.js?v54"></script>
-<script src="enemy.js?v54"></script>
-<script src="battle.js?v54"></script>
-<script src="battle-group.js?v54"></script>
-<script src="terrain.js?v54"></script>
-<script src="group-levels.js?v54"></script>
-<script src="group-progress.js?v54"></script>
-<script src="ai.js?v54"></script>
-<script src="challenge.js?v54"></script>
-<script src="linechart.js?v54"></script>
-<script src="app.js?v54"></script>
-<script src="sync.js?v54"></script>
-<script src="tab-strength.js?v54"></script>
-<script src="tab-cardio.js?v54"></script>
-<script src="tab-profile.js?v54"></script>
-<script src="game-render.js?v54"></script>
-<script src="game-battle.js?v54"></script>
-<script src="game-records.js?v54"></script>
-<script src="game-refine.js?v54"></script>
-<script src="tab-game.js?v54"></script>
-<script src="tab-settings.js?v54"></script>
-<script src="pets.js?v54"></script>
-<script src="pet-materials.js?v54"></script>
-<script src="pet-codex.js?v54"></script>
-<script src="pet-store.js?v54"></script>
-<script src="pet-ui.js?v54"></script>
-<script src="skills.js?v54"></script>
-<script src="player-skill-hooks.js?v54"></script>
-<script src="skill-store.js?v54"></script>
-<script src="skill-ui.js?v54"></script>
-<script src="orbs.js?v54"></script>
-<script src="game-views.js?v54"></script>
+<script src="store.js?v55"></script>
+<script src="data/exercises-dataset.js?v55"></script>
+<script src="ex-dataset.js?v55"></script>
+<script src="config.js?v55"></script>
+<script src="utils.js?v55"></script>
+<script src="levels.js?v55"></script>
+<script src="date-roll.js?v55"></script>
+<script src="monthly-reset.js?v55"></script>
+<script src="stats.js?v55"></script>
+<script src="state-core.js?v55"></script>
+<script src="status-defs.js?v55"></script>
+<script src="unit.js?v55"></script>
+<script src="talent.js?v55"></script>
+<script src="skill.js?v55"></script>
+<script src="enemy.js?v55"></script>
+<script src="battle.js?v55"></script>
+<script src="battle-group.js?v55"></script>
+<script src="terrain.js?v55"></script>
+<script src="group-levels.js?v55"></script>
+<script src="group-progress.js?v55"></script>
+<script src="ai.js?v55"></script>
+<script src="challenge.js?v55"></script>
+<script src="linechart.js?v55"></script>
+<script src="app.js?v55"></script>
+<script src="sync.js?v55"></script>
+<script src="tab-strength.js?v55"></script>
+<script src="tab-cardio.js?v55"></script>
+<script src="tab-profile.js?v55"></script>
+<script src="game-render.js?v55"></script>
+<script src="game-battle.js?v55"></script>
+<script src="game-records.js?v55"></script>
+<script src="game-refine.js?v55"></script>
+<script src="tab-game.js?v55"></script>
+<script src="tab-settings.js?v55"></script>
+<script src="pets.js?v55"></script>
+<script src="pet-materials.js?v55"></script>
+<script src="pet-codex.js?v55"></script>
+<script src="pet-store.js?v55"></script>
+<script src="pet-ui.js?v55"></script>
+<script src="skills.js?v55"></script>
+<script src="player-skill-hooks.js?v55"></script>
+<script src="skill-store.js?v55"></script>
+<script src="skill-ui.js?v55"></script>
+<script src="orbs.js?v55"></script>
+<script src="game-views.js?v55"></script>
 <script>init()</script>
 </body>
 </html>
