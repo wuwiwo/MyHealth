@@ -86,7 +86,7 @@ function renderChart(){
   }else{
     existingToggle.innerHTML=toggleHtml;
   }
-  drawLineChart(c,{labels:recs.map(function(r){return r.date.slice(5)}),values:recs.map(function(r){return r.weight}),color:'#F97316',suffix:'kg'})
+  drawLineChart(c,{labels:recs.map(function(r){return r.date.slice(5)}),values:recs.map(function(r){return r.weight}),color:'var(--brand-fill)',suffix:'kg'})
   var wBtn=document.getElementById('wtViewWeek'),mBtn=document.getElementById('wtViewMonth');
   if(wBtn)wBtn.addEventListener('click',function(){_wtView='week';renderChart()});
   if(mBtn)mBtn.addEventListener('click',function(){_wtView='month';renderChart()});
@@ -183,11 +183,11 @@ function renderStats(){
   document.getElementById('statsSection').innerHTML=h
 
   var canvas=document.getElementById('statsCanvas')
-  if(canvas){drawLineChart(canvas,{labels:labels,values:volumes,color:'#22C55E',suffix:'kg'})}
+  if(canvas){drawLineChart(canvas,{labels:labels,values:volumes,color:'var(--green)',suffix:'kg'})}
   var c30=document.getElementById('stats30Canvas')
-  if(c30){drawLineChart(c30,{labels:d30.labels,values:d30.vols,color:'#F97316',suffix:'kg'})}
+  if(c30){drawLineChart(c30,{labels:d30.labels,values:d30.vols,color:'var(--brand-fill)',suffix:'kg'})}
   var c30c=document.getElementById('stats30CarCanvas')
-  if(c30c){drawLineChart(c30c,{labels:d30.labels,values:d30.carMins,color:'#3B82F6',suffix:'分'})}
+  if(c30c){drawLineChart(c30c,{labels:d30.labels,values:d30.carMins,color:'var(--blue)',suffix:'分'})}
 }
 
 /* Build last-30-day daily series: labels (M/D), daily volume, daily cardio minutes */
