@@ -174,7 +174,7 @@ function endBattle(won){
     el.innerHTML='<div class="be-result be-win">🏆 胜利！</div>'+lootLine+'<div class="be-replay"><button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button></div>'
     celebrate()
     if(_battleAuto&&nextId){
-      el.innerHTML+='<div style="font-size:.7rem;color:var(--text3);text-align:center;margin-top:6px">🔄 自动模式：2秒后进入下一关...</div>'
+      el.innerHTML+='<div style="font-size:var(--fs-2xs);color:var(--text3);text-align:center;margin-top:6px">🔄 自动模式：2秒后进入下一关...</div>'
       setTimeout(function(){
         var ov=document.getElementById('battleOverlay');
         if(ov&&ov.classList.contains('open')&&_battleAuto){

@@ -54,7 +54,7 @@ var EXD = (function() {
     var color = '#64748b';
     var c = toZh(label);
     for(var k in colors){ if(label===k){ color=colors[k]; break; } }
-    return '<span style="display:inline-block;font-size:.62rem;font-weight:600;padding:2px 8px;border-radius:10px;color:#fff;background:'+color+';margin:2px 3px 0 0;opacity:.85;line-height:1.5">'+c+'</span>';
+    return '<span style="display:inline-block;font-size:var(--fs-3xs);font-weight:600;padding:2px 8px;border-radius:10px;color:#fff;background:'+color+';margin:2px 3px 0 0;opacity:.85;line-height:1.5">'+c+'</span>';
   }
 
   function row(r) {

@@ -161,7 +161,7 @@ function autoLinkExercises(){
       }
     });
     if(changed)store.set('exercises',list);
-  }catch(e){}
+  }catch(e){console.warn('[app] 回填 dsId 失败（已忽略）',e)}
 }
 
 /* ========== EVENT DELEGATION ========== */

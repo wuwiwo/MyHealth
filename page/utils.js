@@ -35,16 +35,16 @@ function renderMd(src){
     var line=lines[i];
     if(/^#\s+/.test(line)){
       if(inList){html+='</ul>';inList=false}
-      html+='<div style="font-weight:700;font-size:.9rem;margin:6px 0 4px">'+escInline(line.replace(/^#\s+/,''))+'</div>';
+      html+='<div style="font-weight:700;font-size:var(--fs-base);margin:6px 0 4px">'+escInline(line.replace(/^#\s+/,''))+'</div>';
     }else if(/^-\s+/.test(line)){
       if(!inList){html+='<ul style="margin:4px 0;padding-left:18px;list-style:disc">';inList=true}
-      html+='<li style="font-size:.78rem;line-height:1.6">'+escInline(line.replace(/^-\s+/,''))+'</li>';
+      html+='<li style="font-size:var(--fs-sm);line-height:1.6">'+escInline(line.replace(/^-\s+/,''))+'</li>';
     }else if(/^\s*$/.test(line)){
       if(inList){html+='</ul>';inList=false}
       html+='<div style="height:6px"></div>';
     }else{
       if(inList){html+='</ul>';inList=false}
-      html+='<div style="font-size:.78rem;line-height:1.6;margin:2px 0">'+escInline(line)+'</div>';
+      html+='<div style="font-size:var(--fs-sm);line-height:1.6;margin:2px 0">'+escInline(line)+'</div>';
     }
   }
   if(inList)html+='</ul>';

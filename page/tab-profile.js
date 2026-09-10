@@ -11,7 +11,7 @@ function fmtW(w){var n=Number(w);if(isNaN(n))return w;return String(Math.round(n
 function renderProf(){
   var pc=document.getElementById('profileCard')
   var prof=getProf()
-  pc.innerHTML='<div class="pf-row"><label>身高</label><input type="number" id="pfHeight" value="'+prof.height+'" step="1" min="100" max="250"></div><div class="pf-row"><label>性别</label><select id="pfGender"><option value="男"'+(prof.gender==='男'?' selected':'')+'>男</option><option value="女"'+(prof.gender==='女'?' selected':'')+'>女</option></select></div><div class="pf-row"><label>出生年</label><input type="number" id="pfBirth" value="'+prof.birthYear+'" step="1" min="1950" max="2010"></div><button class="sb-btn" id="pfSave" style="margin-top:4px">💾 保存资料</button>'
+  pc.innerHTML='<div class="pf-row"><label for="pfHeight">身高</label><input type="number" id="pfHeight" value="'+prof.height+'" step="1" min="100" max="250"></div><div class="pf-row"><label for="pfGender">性别</label><select id="pfGender"><option value="男"'+(prof.gender==='男'?' selected':'')+'>男</option><option value="女"'+(prof.gender==='女'?' selected':'')+'>女</option></select></div><div class="pf-row"><label for="pfBirth">出生年</label><input type="number" id="pfBirth" value="'+prof.birthYear+'" step="1" min="1950" max="2010"></div><button class="sb-btn" id="pfSave" style="margin-top:4px">💾 保存资料</button>'
   document.getElementById('pfSave').addEventListener('click',function(){
     prof.height=parseFloat(document.getElementById('pfHeight').value)||175
     prof.gender=document.getElementById('pfGender').value
@@ -42,10 +42,10 @@ function renderWtList(){
     var list=byM[mk]
     var latest=Number(list[0].weight),earliest=Number(list[list.length-1].weight)
     var delta=list.length>1?(latest-earliest):0
-    var dLabel=list.length>1?' <span style="font-size:.62rem;color:'+(delta<=0?'var(--green)':'var(--orange)')+'">'+(delta>0?'+':'')+(Math.round(delta*100)/100)+'</span>':''
+    var dLabel=list.length>1?' <span style="font-size:var(--fs-3xs);color:'+(delta<=0?'var(--green)':'var(--orange)')+'">'+(delta>0?'+':'')+(Math.round(delta*100)/100)+'</span>':''
     h+='<div data-wtm="'+mk+'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);cursor:pointer;box-shadow:var(--shadow)">'
-      +'<span style="font-size:.8rem;font-weight:700">'+mk.replace('-','年 ')+'月</span>'
-      +'<span style="font-size:.68rem;color:var(--text3)">'+list.length+' 条 · 最新 <b style="color:var(--text)">'+fmtW(latest)+'</b>kg'+dLabel+' <span style="display:inline-block;transition:transform .2s;transform:rotate('+(open?90:0)+'deg)">▸</span></span></div>'
+      +'<span style="font-size:var(--fs-sm);font-weight:700">'+mk.replace('-','年 ')+'月</span>'
+      +'<span style="font-size:var(--fs-2xs);color:var(--text3)">'+list.length+' 条 · 最新 <b style="color:var(--text)">'+fmtW(latest)+'</b>kg'+dLabel+' <span style="display:inline-block;transition:transform .2s;transform:rotate('+(open?90:0)+'deg)">▸</span></span></div>'
     if(open){
       h+=list.map(function(r){return'<div class="wt-entry" style="margin-left:12px"><div><span class="wt-val">'+fmtW(r.weight)+'</span> <span class="wt-date">kg · '+r.date+'</span>'+(r.note?'<br><span class="wt-note">💬 '+r.note+'</span>':'')+'</div><button class="ec-act" data-a="wtDel" data-id="'+r.id+'">🗑️</button></div>'}).join('')
     }
@@ -62,8 +62,8 @@ function renderWtList(){
 function renderChart(){
   var wrap=document.getElementById('weightChart');if(!wrap)return
   var toggleHtml='<div style="display:flex;gap:6px;margin-bottom:8px">'
-    +'<button class="car-type'+(_wtView==='week'?' selected':'')+'" id="wtViewWeek" style="padding:5px 14px;font-size:.72rem">📅 周</button>'
-    +'<button class="car-type'+(_wtView==='month'?' selected':'')+'" id="wtViewMonth" style="padding:5px 14px;font-size:.72rem">📅 月</button>'
+    +'<button class="car-type'+(_wtView==='week'?' selected':'')+'" id="wtViewWeek" style="padding:5px 14px;font-size:var(--fs-xs)">📅 周</button>'
+    +'<button class="car-type'+(_wtView==='month'?' selected':'')+'" id="wtViewMonth" style="padding:5px 14px;font-size:var(--fs-xs)">📅 月</button>'
     +'</div>';
   var c=document.getElementById('weightCanvas');if(!c)return
   var all=getWt().reverse(); // oldest first
@@ -99,9 +99,10 @@ function renderWtNoteTags(){
   var counts={};
   recs.forEach(function(r){if(r.note){counts[r.note]=(counts[r.note]||0)+1}});
   var top=Object.keys(counts).sort(function(a,b){return counts[b]-counts[a]}).slice(0,5);
+  // 高频备注是快捷填充辅助区，无数据时整块隐藏（不占位、不显示空态）
   if(!top.length){el.innerHTML='';return}
-  el.innerHTML='<div style="margin-bottom:4px;font-size:.62rem;color:var(--text3)">高频备注</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">'
-    +top.map(function(n){return'<button class="car-type" data-wtnote="'+n.replace(/"/g,'&quot;')+'" style="padding:3px 10px;font-size:.68rem">'+n+'</button>'}).join('')
+  el.innerHTML='<div style="margin-bottom:4px;font-size:var(--fs-3xs);color:var(--text3)">高频备注</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">'
+    +top.map(function(n){return'<button class="car-type" data-wtnote="'+n.replace(/"/g,'&quot;')+'" style="padding:3px 10px;font-size:var(--fs-2xs)">'+n+'</button>'}).join('')
     +'</div>';
   el.querySelectorAll('[data-wtnote]').forEach(function(b){
     b.addEventListener('click',function(){
@@ -115,18 +116,18 @@ function renderPRs(){
   var prs=store.get('prs')||{}
   var keys=Object.keys(prs)
   var el=document.getElementById('prSection');if(!el)return
-  if(!keys.length){el.innerHTML='';return}
+  if(!keys.length){el.innerHTML=emptyHtml('🏆','还没有个人最佳','完成力量训练后自动记录','<button class="empty-cta" onclick="switchTab(&quot;strength&quot;)">去记录一组</button>');return}
   var exMap=getExerciseMap()
   var h='<div class="section-hdr">🏆 个人最佳</div><div class="stats-grid">'
   keys.forEach(function(ex){var pr=prs[ex]
-    h+='<div class="sc"><div class="sc-v" style="font-size:1rem">'+ex+'</div><div class="sc-l" style="font-size:.65rem;line-height:1.5">'
+    h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-lg)">'+ex+'</div><div class="sc-l" style="font-size:var(--fs-3xs);line-height:1.5">'
     if(pr.maxWeight)h+='🏋️ '+pr.maxWeight+'kg<br>'
     if(pr.maxReps)h+='🔢 '+pr.maxReps+'次<br>'
     if(pr.maxVolume){
       var ratio=exMap[ex]&&exMap[ex].ratio!=null?exMap[ex].ratio:100
       if(ratio<100){
         var eff=Math.round(pr.maxVolume*ratio/100)
-        h+='📊 '+pr.maxVolume+'kg <span style="font-size:.6rem;color:var(--text3)">→'+eff+'</span>'
+        h+='📊 '+pr.maxVolume+'kg <span style="font-size:var(--fs-3xs);color:var(--text3)">→'+eff+'</span>'
       }else{
         h+='📊 '+pr.maxVolume+'kg'
       }
@@ -167,17 +168,17 @@ function renderStats(){
   h+='<div class="sc sc-vol"><div class="sc-v">'+strEntries.length+'</div><div class="sc-l">力量组数</div></div>'
   h+='<div class="sc sc-rate"><div class="sc-v">'+carEntries.length+'</div><div class="sc-l">有氧次数</div></div>'
   var favText=top5.slice(0,3).join('<br>')
-  h+='<div class="sc sc-fav"><div class="sc-v" style="font-size:.8rem">'+favText+'</div><div class="sc-l">最爱动作</div></div>'
+  h+='<div class="sc sc-fav"><div class="sc-v" style="font-size:var(--fs-sm)">'+favText+'</div><div class="sc-l">最爱动作</div></div>'
   h+='</div>'
   if(volumes.some(function(v){return v>0})){
-    h+='<div class="chart-wrap"><div style="font-size:.7rem;color:var(--text3);padding:4px 8px 0">月度总容量趋势 (kg)</div><canvas id="statsCanvas"></canvas></div>'
+    h+='<div class="chart-wrap"><div style="font-size:var(--fs-2xs);color:var(--text3);padding:4px 8px 0">月度总容量趋势 (kg)</div><canvas id="statsCanvas"></canvas></div>'
   }
   // Last 30 days: daily volume & cardio duration
   var d30=buildLast30Days()
   if(d30.days>0){
-    h+='<div class="chart-wrap" style="margin-top:10px"><div style="font-size:.7rem;color:var(--text3);padding:4px 8px 0">最近 30 天每日容量 (kg)</div><canvas id="stats30Canvas"></canvas></div>'
+    h+='<div class="chart-wrap" style="margin-top:10px"><div style="font-size:var(--fs-2xs);color:var(--text3);padding:4px 8px 0">最近 30 天每日容量 (kg)</div><canvas id="stats30Canvas"></canvas></div>'
     if(d30.carDays>0){
-      h+='<div class="chart-wrap" style="margin-top:10px"><div style="font-size:.7rem;color:var(--text3);padding:4px 8px 0">最近 30 天有氧时长 (分钟)</div><canvas id="stats30CarCanvas"></canvas></div>'
+      h+='<div class="chart-wrap" style="margin-top:10px"><div style="font-size:var(--fs-2xs);color:var(--text3);padding:4px 8px 0">最近 30 天有氧时长 (分钟)</div><canvas id="stats30CarCanvas"></canvas></div>'
     }
   }
   document.getElementById('statsSection').innerHTML=h
@@ -229,7 +230,7 @@ function renderHeatmap(){
   var max=1;for(var k in dd){if(dd[k].score>max)max=dd[k].score}
   function lv(r){if(r===0)return 0;var ra=r/max;if(ra<=.1)return 1;if(ra<=.3)return 2;if(ra<=.5)return 3;if(ra<=.75)return 4;return 5}
   var modeBtn='<button class="hm-nav-btn" data-n="hmMode" style="color:'+( _hmMode==='vol'?'var(--orange)':'var(--blue)')+'" title="切换容量/次数">'+( _hmMode==='vol'?'🏋️':'🔢')+'</button>'
-  var h='<div class="section-hdr">📅 训练热力图 <span style="font-size:.65rem;font-weight:400;margin-left:6px">('+(_hmMode==='vol'?'容量 kg':'总次数')+')</span></div><div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav">'+modeBtn+'<button class="hm-nav-btn" data-n="hmP">◀</button><button class="hm-nav-btn" data-n="hmT">📍</button><button class="hm-nav-btn" data-n="hmN">▶</button></div></div><div class="hm-grid">'
+  var h='<div class="section-hdr">📅 训练热力图 <span style="font-size:var(--fs-3xs);font-weight:400;margin-left:6px">('+(_hmMode==='vol'?'容量 kg':'总次数')+')</span></div><div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav">'+modeBtn+'<button class="hm-nav-btn" data-n="hmP">◀</button><button class="hm-nav-btn" data-n="hmT">📍</button><button class="hm-nav-btn" data-n="hmN">▶</button></div></div><div class="hm-grid">'
   wd.forEach(function(d){h+='<div class="hm-dh">'+d+'</div>'})
   for(var i=0;i<so;i++)h+='<div class="hm-cell"></div>'
   for(var d=1;d<=dim;d++){var da=dd[d],ll=lv(da.score),t=da.date===today();var tip=_hmMode==='vol'?(da.vol>0?Math.round(da.vol)+'kg':''):(da.counts>0?da.counts:'') ;h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+ll+'" data-date="'+da.date+'" data-vol="'+Math.round(da.vol)+'" data-cnt="'+da.counts+'" title="'+da.date+(tip?' · '+tip:'')+'">'+d+'</div>'}

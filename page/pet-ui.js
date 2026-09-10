@@ -11,23 +11,23 @@ function renderPetPanel() {
   if (!ov) return
   var d = getPetStore()
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="petClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:14px">✕</button>'
-    +'<span style="font-size:18px;font-weight:700">🐾 宠物面板</span>'
+    +'<button class="speed-btn" id="petClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
+    +'<span style="font-size:var(--fs-lg);font-weight:700">🐾 宠物面板</span>'
     +'<span style="flex:1"></span>'
-    +'<button class="speed-btn" id="petSettle" style="padding:10px 14px;min-height:44px;font-size:14px;border-color:var(--green);color:var(--green)">结算</button>'
+    +'<button class="speed-btn" id="petSettle" style="padding:10px 14px;min-height:44px;font-size:var(--fs-base);border-color:var(--green);color:var(--green)">结算</button>'
     +'</div>'
   // 材料
   var m = d.materials || {}
-  h += '<div style="font-size:13px;background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;line-height:1.6">'
-    +'<span>🧪 营养液 <b style="font-size:14px">'+m.nutrition+'</b></span>'
-    +'<span>🍖 饲料 <b style="font-size:14px">'+m.feed+'</b></span>'
-    +'<span>✨ 灵能 <b style="font-size:14px">'+m.spirit+'</b></span>'
-    +'<span>🪨 炼化石 <b style="font-size:14px">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:14px">'+m.refineHigh+'</b></span>'
-    +'<span>💎 宝珠碎片 <b style="font-size:14px">'+m.orbShard+'</b></span>'
+  h += '<div style="font-size:var(--fs-sm);background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;line-height:1.6">'
+    +'<span>🧪 营养液 <b style="font-size:var(--fs-base)">'+m.nutrition+'</b></span>'
+    +'<span>🍖 饲料 <b style="font-size:var(--fs-base)">'+m.feed+'</b></span>'
+    +'<span>✨ 灵能 <b style="font-size:var(--fs-base)">'+m.spirit+'</b></span>'
+    +'<span>🪨 炼化石 <b style="font-size:var(--fs-base)">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:var(--fs-base)">'+m.refineHigh+'</b></span>'
+    +'<span>💎 宝珠碎片 <b style="font-size:var(--fs-base)">'+m.orbShard+'</b></span>'
     +'</div>'
   // 宠物列表
   if (!d.pets.length) {
-    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:14px;background:var(--bg2);border-radius:16px">还没有宠物 🐾<br><span style="font-size:12px">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:15px;border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
+    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:var(--fs-base);background:var(--bg2);border-radius:16px">还没有宠物 🐾<br><span style="font-size:var(--fs-xs)">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:var(--fs-md);border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
   } else {
     d.pets.forEach(function(p, i) {
       normalizePetStage(p);   // v2.0.9: 实时校正阶段（防 hatchProgress=100 卡 egg）
@@ -38,19 +38,19 @@ function renderPetPanel() {
       // 进度条（孵化/成长）
       var prog = p.stage==='egg' ? p.hatchProgress : p.stage==='grow' ? p.growth : 100
       h += '<div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg2);border-radius:14px;margin-bottom:10px">'
-        +'<span style="font-size:26px">'+stageIcon+'</span>'
+        +'<span style="font-size:var(--fs-2xl)">'+stageIcon+'</span>'
         +'<div style="flex:1">'
-        +'<div style="font-size:16px;font-weight:600">'+(codex.name||p.name)+' <span style="color:var(--purple,#a855f7);font-size:12px">'+p.rarity+'</span></div>'
-        +'<div style="font-size:12px;color:var(--text3);margin:3px 0">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+'</div>'
+        +'<div style="font-size:var(--fs-lg);font-weight:600">'+(codex.name||p.name)+' <span style="color:var(--purple,#a855f7);font-size:var(--fs-xs)">'+p.rarity+'</span></div>'
+        +'<div style="font-size:var(--fs-xs);color:var(--text3);margin:3px 0">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+'</div>'
         // 进度条
         +'<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;border:1px solid var(--bg2)"><div style="width:'+Math.min(100,prog)+'%;height:100%;background:var(--orange);border-radius:3px;transition:width .3s"></div></div>'
         +'</div>'
         // 操作按钮（大按钮 44px）
         +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
-        +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:13px">🍖喂</button>'
-        +(p.stage==='egg'?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:13px">🧪营养</button>':'')
-        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:13px;border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">✨炼化</button>':'')
-        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="detail" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:13px">📋</button>':'')
+        +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">🍖喂</button>'
+        +(p.stage==='egg'?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">🧪营养</button>':'')
+        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">✨炼化</button>':'')
+        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="detail" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">📋</button>':'')
         +'</div>'
         +'</div>'
     })
@@ -58,7 +58,7 @@ function renderPetPanel() {
   // 参战选择（成熟宠物）
   var ready = d.pets.filter(function(p){return p.stage==='mature'&&!p.isDead})
   if (ready.length) {
-    h += '<div style="margin-top:10px;font-size:.75rem">⚔️ 选择参战宠物（最多 2 只）</div>'
+    h += '<div style="margin-top:10px;font-size:var(--fs-xs)">⚔️ 选择参战宠物（最多 2 只）</div>'
     h += '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">'
     ready.forEach(function(p, ri) {
       var sel = (_petBattlePicks||[]).includes(p.speciesId)
@@ -125,12 +125,12 @@ function renderPetDetail(pet) {
   var codex = getPetCodex(pet.speciesId) || {}
   var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
     +'<button class="speed-btn" id="petDBack" style="padding:2px 8px">← 返回</button>'
-    +'<span style="font-size:.9rem;font-weight:700">'+(codex.name||pet.name)+' <span style="color:var(--purple,#a855f7);font-size:.7rem">'+pet.rarity+'</span></span>'
+    +'<span style="font-size:var(--fs-base);font-weight:700">'+(codex.name||pet.name)+' <span style="color:var(--purple,#a855f7);font-size:var(--fs-2xs)">'+pet.rarity+'</span></span>'
     +'</div>'
   // 基础属性（codex + 炼化）
   var b = codex.base || {}
   var rs = pet.refineStats || {}
-  h += '<div style="font-size:.72rem;line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
+  h += '<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
   h += '<div style="font-weight:700;margin-bottom:4px">📊 属性（基础+炼化）</div>'
   h += '❤️ HP <b>'+(b.hp||0)+(rs.hp?'<span style="color:var(--green)">+'+rs.hp+'</span>':'')+'</b>'
   h += '　⚔️ 攻 <b>'+(b.atk||0)+(rs.atk?'<span style="color:var(--green)">+'+rs.atk+'</span>':'')+'</b>'
@@ -139,7 +139,7 @@ function renderPetDetail(pet) {
   h += '　👻 魂攻 <b>'+(b.soulAtk||0)+(rs.soulAtk?'<span style="color:var(--green)">+'+rs.soulAtk+'</span>':'')+'</b>'
   h += '</div>'
   // 技能
-  h += '<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
+  h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
   h += '<div style="font-weight:700;margin-bottom:4px">⚡ 技能</div>'
   ;(codex.skills||[]).forEach(function(sid){
     var s = SKILLS[sid]
@@ -149,7 +149,7 @@ function renderPetDetail(pet) {
   })
   h += '</div>'
   // 天赋
-  h += '<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px">'
+  h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px">'
   h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋</div>'
   ;(codex.talents||[]).forEach(function(tid){
     var t = TALENTS[tid]

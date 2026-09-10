@@ -36,7 +36,8 @@
   --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:20px;
   --sp-6:24px;--sp-8:32px;--sp-10:40px;--sp-12:48px;
   --gap-sm:var(--sp-2);--gap:var(--sp-3);--gap-lg:var(--sp-4);
-  /* ---- Type（31 档 → 8 核心 + 1 装饰，最小 12px） ---- */
+  /* ---- Type（31 档 → 10 阶，末 2 档微字号仅用于密集元信息） ---- */
+  --fs-3xs:.625rem;--fs-2xs:.6875rem;
   --fs-xs:.75rem;--fs-sm:.8125rem;--fs-base:.875rem;--fs-md:.9375rem;
   --fs-lg:1.0625rem;--fs-xl:1.25rem;--fs-2xl:1.5rem;--fs-3xl:2rem;--fs-hero:2.5rem;
   --lh-tight:1.2;--lh-base:1.5;--lh-loose:1.7;
@@ -209,6 +210,8 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .empty-e{font-size:var(--fs-hero);margin-bottom:10px;display:block;opacity:.35}
 .empty-t{font-size:var(--fs-md);font-weight:700;color:var(--text2)}
 .empty-s{font-size:var(--fs-xs);margin-top:4px;color:var(--text3)}
+.empty-cta{margin-top:var(--sp-4);min-height:var(--touch-min);padding:0 var(--sp-5);border:1px solid var(--brand-fill);border-radius:var(--rp);background:transparent;color:var(--brand-fill);font-size:var(--fs-base);font-weight:700;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.empty-cta:active{background:var(--brand-fill);color:var(--on-brand)}
 
 /* Stats Grid */
 .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}

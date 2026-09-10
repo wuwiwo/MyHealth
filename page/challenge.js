@@ -199,7 +199,7 @@ function chDebugBlock(info,strVol,c,branch){
       lines.push('  ['+i+'] '+e.exercise+' w='+w+' eq='+(e.eqWeight!=null?e.eqWeight:'-')+' n='+n+' ratio='+r+' vol='+vol)
     })
     lines.push('challenge='+JSON.stringify(c))
-    out+='<div style="margin-top:4px;padding:8px;background:#1a1a1a;border:1px dashed #ef4444;border-radius:8px;font-size:.6rem;color:#94a3b8;line-height:1.6;white-space:pre-wrap;word-break:break-all">'+lines.join('\n')+'</div>'
+    out+='<div style="margin-top:4px;padding:8px;background:#1a1a1a;border:1px dashed #ef4444;border-radius:8px;font-size:var(--fs-3xs);color:#94a3b8;line-height:1.6;white-space:pre-wrap;word-break:break-all">'+lines.join('\n')+'</div>'
   }
   return out
 }
@@ -237,9 +237,9 @@ function renderSummonPanel(){
       +'<div class="summon-title">⚡ 今日隐藏挑战已完成</div>'
       +'<div class="summon-info">'+(madeUpLocked?'昨日补召已完成，可恢复今日召唤资格':'明日继续，每月 1 号重置奖励')+'</div>'
       +(bonus.atk+bonus.def+bonus.hp>0?'<div class="summon-bonus">本月已获得: ⚔️+'+bonus.atk+' 🛡️+'+bonus.def+' ❤️+'+bonus.hp+'</div>':'')
-      +(info.can&&info.mode==='makeup'?'<button class="summon-btn" id="makeupBtn" style="margin-top:8px;background:rgba(34,197,94,.1);border-color:var(--green);color:var(--green);padding:10px;font-size:.8rem">🔁 补召昨日挑战（剩 '+info.remainBorrow+' 次，不占今日名额）</button>':'')
-      +(showRecover?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);padding:10px;font-size:.8rem">↩️ '+(madeUpLocked?'补召已结算？恢复今日召唤资格':'今日未完成？恢复挑战')+'</button>':'')
-      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
+      +(info.can&&info.mode==='makeup'?'<button class="summon-btn" id="makeupBtn" style="margin-top:8px;background:rgba(34,197,94,.1);border-color:var(--green);color:var(--green);padding:10px;font-size:var(--fs-sm)">🔁 补召昨日挑战（剩 '+info.remainBorrow+' 次，不占今日名额）</button>':'')
+      +(showRecover?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);padding:10px;font-size:var(--fs-sm)">↩️ '+(madeUpLocked?'补召已结算？恢复今日召唤资格':'今日未完成？恢复挑战')+'</button>':'')
+      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
       +'</div>'
       +chDebugBlock(info,strVol,c,'done')
     mountSummonExtras(el,info,strVol,c,'done')
@@ -275,8 +275,8 @@ function renderSummonPanel(){
     el.innerHTML='<div class="summon-card done">'
       +'<div class="summon-title">🔮 隐藏挑战</div>'
       +'<div class="summon-info">'+(info.reason||'今日不可召唤')+'</div>'
-      +(isFinite(info.total)?'<div class="summon-info" style="font-size:.65rem;color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+Math.max(0,isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
-      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
+      +(isFinite(info.total)?'<div class="summon-info" style="font-size:var(--fs-3xs);color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+Math.max(0,isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
+      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
       +'</div>'
       +chDebugBlock(info,strVol,c,'cannot')
     mountSummonExtras(el,info,strVol,c,'cannot')
@@ -294,15 +294,15 @@ function renderSummonPanel(){
     +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次）</div>'
     +(info.borrowed>0?'<div class="summon-info" style="color:var(--green)">🔁 昨日补召机会剩 '+info.remainBorrow+'/'+info.borrowed+' 次（昨日 '+Math.round(info.yVol||0)+'kg · 优先消耗 · 不占今日名额）</div>':'')
     +'<div class="summon-rate-wrap">'
-    +  '<div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=5?' · 必成 100%':usedN===4?' · 保底 80%':' · 基础 10%')+'）</div>'
+    +  '<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=5?' · 必成 100%':usedN===4?' · 保底 80%':' · 基础 10%')+'）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'
-    +  '<div style="text-align:center;font-weight:700;color:'+rateColor+';font-size:1rem;margin-top:4px">'+rate+'%</div>'
+    +  '<div style="text-align:center;font-weight:700;color:'+rateColor+';font-size:var(--fs-lg);margin-top:4px">'+rate+'%</div>'
     +'</div>'
     +hotHtml
     +'<button class="summon-btn" id="summonBtn">🔮 召唤</button>'
-    +'<div style="font-size:.6rem;color:var(--text3);text-align:center;margin-top:6px">成功率阶梯 10/25/40/55/80/100% · 每天最多成功召唤1次</div>'
+    +'<div style="font-size:var(--fs-3xs);color:var(--text3);text-align:center;margin-top:6px">成功率阶梯 10/25/40/55/80/100% · 每天最多成功召唤1次</div>'
     +'</div>'
-    +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:.78rem">📜 历史召唤成绩</button>'
+    +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
     +chDebugBlock(info,strVol,c,'normal')
   var btn=document.getElementById('summonBtn')
   if(btn)btn.addEventListener('click',attemptSummon)
@@ -341,19 +341,19 @@ function showChallengePreview(){
   if(old)old.remove()
   var stats=getGameStats()
   var modal=openModal(null,'challengeModal',{noBackdrop:true})
-  var h='<div class="modal-sheet">'
+  var h='<div class="modal-sheet wide">'
     +'<div class="modal-handle"></div>'
     +'<div class="modal-title">🔬 隐藏挑战</div>'
     +'<div class="ch-preview">'
     +  '<div class="ch-preview-title">召唤成功！</div>'
-    +  '<div style="font-size:.72rem;color:var(--text3);margin-bottom:8px">倒计时 8-12 秒，疯狂点击攻击按钮造成伤害，伤害将转化为本月属性奖励。</div>'
+    +  '<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">倒计时 8-12 秒，疯狂点击攻击按钮造成伤害，伤害将转化为本月属性奖励。</div>'
     +  '<div class="ch-stats" style="grid-template-columns:1fr 1fr 1fr 1fr">'
     +    '<div class="ch-stat">⚔️ <b>'+stats.atk+'</b></div>'
     +    '<div class="ch-stat">👻 <b>'+(stats.soulAtk||0)+'</b></div>'
     +    '<div class="ch-stat">🛡️ <b>'+stats.def+'</b></div>'
     +    '<div class="ch-stat">🔮 <b>'+(stats.soulDef||0)+'</b></div>'
     +  '</div>'
-    +  '<div style="font-size:.68rem;color:var(--text3);text-align:center;margin:8px 0">基础伤害 = 攻×50% + 魂攻×150% + 防×100% + 魂防×100%，暴击 20%×1.5 倍</div>'
+    +  '<div style="font-size:var(--fs-2xs);color:var(--text3);text-align:center;margin:8px 0">基础伤害 = 攻×50% + 魂攻×150% + 防×100% + 魂防×100%，暴击 20%×1.5 倍</div>'
     +'</div>'
     +'<div class="modal-actions">'
     +  '<button class="m-btn-cancel" id="chLater">稍后再说</button>'
@@ -421,7 +421,7 @@ function startHiddenChallenge(hotBuff){
   }
   
   var modal=openModal(null,'challengeModal',{noBackdrop:true})
-  var h='<div class="modal-sheet">'
+  var h='<div class="modal-sheet wide">'
     +'<div class="modal-handle"></div>'
     +'<div class="modal-title">🔬 隐藏挑战</div>'
     +(hotBuff?'<div class="ch-hotbuff">'+hotBuffLabel(hotBuff)+'</div>':'')
@@ -635,7 +635,7 @@ function startHiddenChallenge(hotBuff){
       var cumEl=document.getElementById('chCumulative')
       if(cumEl){
         var cum=c.seasonBonus
-        cumEl.innerHTML='<div style="font-size:.68rem;color:var(--text3);margin-top:8px">本月累计: ⚔️+'+cum.atk+' 🛡️+'+cum.def+' ❤️+'+cum.hp+'</div>'
+        cumEl.innerHTML='<div style="font-size:var(--fs-2xs);color:var(--text3);margin-top:8px">本月累计: ⚔️+'+cum.atk+' 🛡️+'+cum.def+' ❤️+'+cum.hp+'</div>'
       }
       var closeBtn=document.getElementById('chClose')
       if(closeBtn)closeBtn.addEventListener('click',function(){modal.remove();renderSummonPanel();renderGame()})
@@ -649,12 +649,12 @@ function startHiddenChallenge(hotBuff){
     var n=perSec&&perSec.length?perSec.length:duration
     var maxHits=1
     for(var i=0;i<n;i++){if((perSec[i]||0)>maxHits)maxHits=perSec[i]}
-    var h='<div style="font-size:.68rem;color:var(--text3);margin:8px 0 4px">⏱️ 每秒点击次数</div><div style="display:flex;align-items:flex-end;gap:3px;height:64px;padding:0 2px">'
+    var h='<div style="font-size:var(--fs-2xs);color:var(--text3);margin:8px 0 4px">⏱️ 每秒点击次数</div><div style="display:flex;align-items:flex-end;gap:3px;height:64px;padding:0 2px">'
     for(var i=0;i<n;i++){
       var v=perSec[i]||0
       var bh=Math.max(2,Math.round(v/maxHits*56))
       var c=v>=maxHits&&maxHits>1?'var(--orange)':'var(--blue)'
-      h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px" title="第'+(i+1)+'秒: '+v+'次"><div style="height:'+bh+'px;background:'+c+';border-radius:3px 3px 0 0;width:100%;min-width:4px"></div><span style="font-size:.55rem;color:var(--text3)">'+(i+1)+'</span></div>'
+      h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px" title="第'+(i+1)+'秒: '+v+'次"><div style="height:'+bh+'px;background:'+c+';border-radius:3px 3px 0 0;width:100%;min-width:4px"></div><span style="font-size:var(--fs-3xs);color:var(--text3)">'+(i+1)+'</span></div>'
     }
     h+='</div>'
     container.innerHTML=h
@@ -689,8 +689,8 @@ function showChallengeHistory(){
   }else{
     var rows=h.slice().reverse().map(function(r,i){
       var buffLabel=r.buff?hotBuffLabel(r.buff):'无 buff'
-      return'<div class="ec" style="margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+r.date+'</div><div class="ec-actions"><span style="font-size:.65rem;color:var(--text3)">#'+(h.length-i)+'</span></div></div>'
-        +'<div style="font-size:.7rem;color:var(--text2);line-height:1.7;padding:2px 0">'
+      return'<div class="ec" style="margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+r.date+'</div><div class="ec-actions"><span style="font-size:var(--fs-3xs);color:var(--text3)">#'+(h.length-i)+'</span></div></div>'
+        +'<div style="font-size:var(--fs-2xs);color:var(--text2);line-height:1.7;padding:2px 0">'
         +'⚔️ '+r.dmg+' 伤害 · 🎯 '+r.hits+' 次 ('+r.avgRate+'/秒) · 💥 '+r.crits+' 暴击<br>'
         +'🥇 最强 '+r.maxHit+' · 🎁 ⚔️+'+r.atk+' 🛡️+'+r.def+' ❤️+'+r.hp
         +(r.buff?'<br><span style="color:#fbbf24">'+buffLabel+'</span>':'')

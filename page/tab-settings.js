@@ -18,7 +18,7 @@ function renderExLibrary(){
   var strength=list.filter(function(ex){return ex.type==='strength'});
   var cardio=list.filter(function(ex){return ex.type==='cardio'});
 
-  var h='<div class="section-hdr">🏋️ 力量动作 <span style="font-size:.65rem;color:var(--text3);font-weight:400">('+strength.length+')</span></div>';
+  var h='<div class="section-hdr">🏋️ 力量动作 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+strength.length+')</span></div>';
   if(strength.length){
     h+='<div class="ex-lib-list">';
     strength.forEach(function(ex){
@@ -30,7 +30,7 @@ function renderExLibrary(){
     h+='<div class="empty"><span class="empty-e">🏋️</span><div class="empty-t">还没有力量动作</div></div>';
   }
 
-  h+='<div class="section-hdr" style="margin-top:16px">🏃 有氧类型 <span style="font-size:.65rem;color:var(--text3);font-weight:400">('+cardio.length+')</span></div>';
+  h+='<div class="section-hdr" style="margin-top:16px">🏃 有氧类型 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+cardio.length+')</span></div>';
   if(cardio.length){
     h+='<div class="ex-lib-list">';
     cardio.forEach(function(ex){
@@ -45,7 +45,7 @@ function renderExLibrary(){
 
   h+='<button class="add-btn" id="exNewBtn" style="margin-top:12px">＋ 新建动作</button>';
   h+='<button class="add-btn" id="exWikiBtn" style="margin-top:8px;background:var(--bg);color:var(--text);border:1px solid var(--bd)">📖 动作百科'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
-  h+='<div style="text-align:center;margin-top:6px;font-size:.7rem;color:var(--text3)">力量 ratio 影响容量计算（100%=满容量）</div>';
+  h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">力量 ratio 影响容量计算（100%=满容量）</div>';
   el.innerHTML=h;
   var wikiBtn=document.getElementById('exWikiBtn');
   if(wikiBtn)wikiBtn.addEventListener('click',function(){openDsPicker(null)});
@@ -61,25 +61,25 @@ function renderExLibrary(){
 function exCardHtml(ex,badge,isCardio){
   var namePrefix=isCardio?(ex.emoji||'🏃')+' ':'';
   var linked=ex.dsId&&EXD.ready()?EXD.get(ex.dsId):null;
-  var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+(linked?' <span title="已关联动作百科" style="font-size:.7rem">📖</span>':'')+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
+  var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+(linked?' <span title="已关联动作百科" style="font-size:var(--fs-2xs)">📖</span>':'')+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
   if(linked){
     var m=EXD.mediaUrls(linked.img);
     // 图片外侧大图 + 中文主/英文次
     h+='<div style="display:flex;gap:12px;margin-top:10px;align-items:center">'
       +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:72px;height:72px;border-radius:12px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:.92rem;font-weight:700;color:var(--text1)">'+linked.zh+'</div>'
-      +'<div style="font-size:.68rem;color:var(--text3);margin-top:2px">'+linked.name+'</div>'
+      +'<div style="font-size:var(--fs-md);font-weight:700;color:var(--text1)">'+linked.zh+'</div>'
+      +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-top:2px">'+linked.name+'</div>'
       +'<div style="margin-top:4px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+'</div>'
       +'</div></div>';
   }
   if(ex.eqWeight){
     var unitLabel=ex.unit==='sec'?'秒':'次';
-    h+='<div style="margin-top:6px;font-size:.78rem;color:var(--orange)">⚖️ 等效 '+ex.eqWeight+'kg/'+unitLabel+'（不计弯鿖重量）</div>';
+    h+='<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--orange)">⚖️ 等效 '+ex.eqWeight+'kg/'+unitLabel+'（不计弯鿖重量）</div>';
   }
   if(ex.description){
     var first=mdFirstLine(ex.description);
-    h+='<div style="margin-top:8px;font-size:.8rem;color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span style="color:var(--text3);font-size:.72rem"> …展开</span></div>';
+    h+='<div style="margin-top:8px;font-size:var(--fs-sm);color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span style="color:var(--text3);font-size:var(--fs-xs)"> …展开</span></div>';
     h+='<div class="ex-desc-full" style="display:none;margin-top:6px;padding:10px 12px;background:var(--bg);border-radius:var(--rs);border:1px solid var(--bd)">'+renderMd(ex.description)+'</div>';
   }
   h+='</div>';
@@ -94,22 +94,22 @@ function showExEditor(editId){
 
   var modal=openModal(null,'exModal')
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(isEdit?'✏️ 编辑动作':'＋ 新建动作')+'</div>';
-  h+='<div class="fg"><label class="fl">类型</label><div class="car-types" id="exTypeSel">';
+  h+='<div class="fg"><span class="fl" id="lbl-s-g1">类型</span><div class="car-types" id="exTypeSel" role="group" aria-labelledby="lbl-s-g1">';
   h+='<button class="car-type'+(ex.type==='strength'?' selected':'')+'" data-extype="strength">💪 力量</button>';
   h+='<button class="car-type'+(ex.type==='cardio'?' selected':'')+'" data-extype="cardio">🏃 有氧</button>';
   h+='</div></div>';
-  h+='<div class="fg"><label class="fl">名称</label><input class="fi" id="exName" value="'+ex.name+'" placeholder="如: 弯举"></div>';
-  h+='<div class="fg" id="exRatioFg"'+(ex.type==='strength'?'':' style="display:none"')+'><label class="fl">力量比值 (ratio %) <span style="font-weight:400;text-transform:none">折算率10~100%</span></label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="exRatioD">−</button><span class="sp-val" id="exRatioVal">'+(ex.ratio!=null?ex.ratio:100)+'</span><button class="sp-btn" id="exRatioU">+</button></div></div>';
-  h+='<div class="fg" id="exEqWeightFg"'+(ex.type==='strength'?'':' style="display:none"')+'><label class="fl">等效重量 (kg/次) <span style="font-weight:400;text-transform:none">自重动作设此值，留空则用实际重量</span></label><input class="fi" id="exEqWeight" type="number" step="0.1" min="0" value="'+(ex.eqWeight!=null?ex.eqWeight:'')+'" placeholder="如: 0.5（留空=哑铃动作）"></div>';
-  h+='<div class="fg" id="exUnitFg"'+(ex.type==='strength'?'':' style="display:none"')+'><label class="fl">计量单位</label><div class="car-types" id="exUnitSel">';
+  h+='<div class="fg"><label class="fl" for="exName">名称</label><input class="fi" id="exName" value="'+ex.name+'" placeholder="如: 弯举"></div>';
+  h+='<div class="fg" id="exRatioFg"'+(ex.type==='strength'?'':' style="display:none"')+'><span class="fl" id="lbl-s-g2">力量比值 (ratio %) <span style="font-weight:400;text-transform:none">折算率10~100%</span></span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-s-g2"><button class="sp-btn" id="exRatioD">−</button><span class="sp-val" id="exRatioVal">'+(ex.ratio!=null?ex.ratio:100)+'</span><button class="sp-btn" id="exRatioU">+</button></div></div>';
+  h+='<div class="fg" id="exEqWeightFg"'+(ex.type==='strength'?'':' style="display:none"')+'><label class="fl" for="exEqWeight">等效重量 (kg/次) <span style="font-weight:400;text-transform:none">自重动作设此值，留空则用实际重量</span></label><input class="fi" id="exEqWeight" type="number" step="0.1" min="0" value="'+(ex.eqWeight!=null?ex.eqWeight:'')+'" placeholder="如: 0.5（留空=哑铃动作）"></div>';
+  h+='<div class="fg" id="exUnitFg"'+(ex.type==='strength'?'':' style="display:none"')+'><span class="fl" id="lbl-s-g3">计量单位</span><div class="car-types" id="exUnitSel" role="group" aria-labelledby="lbl-s-g3">';
   h+='<button class="car-type'+(ex.unit!=='sec'?' selected':'')+'" data-exunit="rep">🔢 按次数</button>';
   h+='<button class="car-type'+(ex.unit==='sec'?' selected':'')+'" data-exunit="sec">⏱️ 按秒数</button>';
   h+='</div></div>';
-  h+='<div class="fg" id="exEmojiFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><label class="fl">图标 emoji</label><input class="fi" id="exEmoji" value="'+(ex.emoji||'🏃')+'" placeholder="🏃"></div>';
-  h+='<div class="fg" id="exIntensityFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><label class="fl">默认强度</label><div class="car-types" id="exIntensitySel"></div></div>';
-  h+='<div class="fg" id="exHasDistFg"'+(ex.type==='cardio'?'':' style="display:none"')+' style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="exHasDist"'+(ex.hasDist?' checked':'')+'><label class="fl" style="margin:0">有距离统计</label></div>';
-  h+='<div class="fg"><label class="fl">动作描述 <span style="font-weight:400;text-transform:none">（支持 **加粗** #标题 `代码` -列表）</span></label><textarea class="fi" id="exDesc" rows="4" style="resize:vertical;font-size:.78rem;line-height:1.6" placeholder="可选：记录动作要领、注意事项...">'+(ex.description||'').replace(/</g,'&lt;')+'</textarea></div>';
-  h+='<div class="fg" id="exLinkFg"><label class="fl">📚 关联动作百科 <span style="font-weight:400;text-transform:none">（可选，提供说明与动图）</span></label><div id="exLinkArea"></div></div>';
+  h+='<div class="fg" id="exEmojiFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><label class="fl" for="exEmoji">图标 emoji</label><input class="fi" id="exEmoji" value="'+(ex.emoji||'🏃')+'" placeholder="🏃"></div>';
+  h+='<div class="fg" id="exIntensityFg"'+(ex.type==='cardio'?'':' style="display:none"')+'><span class="fl" id="lbl-s-g4">默认强度</span><div class="car-types" id="exIntensitySel" role="group" aria-labelledby="lbl-s-g4"></div></div>';
+  h+='<div class="fg" id="exHasDistFg"'+(ex.type==='cardio'?'':' style="display:none"')+' style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="exHasDist"'+(ex.hasDist?' checked':'')+'><label class="fl" for="exHasDist" style="margin:0">有距离统计</label></div>';
+  h+='<div class="fg"><label class="fl" for="exDesc">动作描述 <span style="font-weight:400;text-transform:none">（支持 **加粗** #标题 `代码` -列表）</span></label><textarea class="fi" id="exDesc" rows="4" style="resize:vertical;font-size:var(--fs-sm);line-height:1.6" placeholder="可选：记录动作要领、注意事项...">'+(ex.description||'').replace(/</g,'&lt;')+'</textarea></div>';
+  h+='<div class="fg" id="exLinkFg"><span class="fl" id="lbl-s-g5">📚 关联动作百科 <span style="font-weight:400;text-transform:none">（可选，提供说明与动图）</span></span><div id="exLinkArea" role="group" aria-labelledby="lbl-s-g5"></div></div>';
   h+='<div class="modal-actions"><button class="m-btn-cancel" id="exCancel">取消</button><button class="m-btn-save" id="exSave">💾 保存</button></div></div>';
   modal.innerHTML=h;void modal;
 
@@ -123,8 +123,8 @@ function showExEditor(editId){
         var m=EXD.mediaUrls(it.img);
         area.innerHTML='<div class="ec" style="margin-top:2px"><div style="display:flex;gap:12px;align-items:center">'
           +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
-          +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.92rem">'+it.zh+'</div>'
-          +'<div style="font-size:.68rem;color:var(--text3)">'+it.name+'</div>'
+          +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">'+it.zh+'</div>'
+          +'<div style="font-size:var(--fs-2xs);color:var(--text3)">'+it.name+'</div>'
           +'<div style="margin-top:4px">'+tagHtml(it.cat,'cat')+tagHtml(it.eq,'eq')+tagHtml(it.target,'cat')+'</div></div>'
           +'<button class="ec-act" id="exLinkClear" title="解除关联">✕</button></div></div>';
         document.getElementById('exLinkClear').addEventListener('click',function(){curDsId=null;renderLinkArea()});
@@ -133,16 +133,16 @@ function showExEditor(editId){
     }
     // 未关联: 候选建议 + 手动选择按钮
     var cands=EXD.ready()?EXD.matchCandidates(ex.name||document.getElementById('exName').value||'',4):[];
-    var ch=cands.length?'<div style="margin-top:4px;font-size:.68rem;color:var(--text3)">按名称匹配的候选:</div>':'';
+    var ch=cands.length?'<div style="margin-top:4px;font-size:var(--fs-2xs);color:var(--text3)">按名称匹配的候选:</div>':'';
     cands.forEach(function(c){
       var m=EXD.mediaUrls(c.item.img);
       ch+='<button type="button" data-dsid="'+c.item.id+'" class="ec" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer">'
         +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
-        +'<div style="flex:1;min-width:0"><div style="font-size:.88rem;font-weight:700;color:var(--text1)">'+c.item.zh+'</div>'
-        +'<div style="font-size:.66rem;color:var(--text3);margin-top:2px">'+c.item.name+'</div></div>'
-        +'<span style="font-size:.65rem;color:var(--purple);border:1px solid var(--purple);border-radius:var(--rp);padding:2px 7px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
+        +'<div style="flex:1;min-width:0"><div style="font-size:var(--fs-base);font-weight:700;color:var(--text1)">'+c.item.zh+'</div>'
+        +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-top:2px">'+c.item.name+'</div></div>'
+        +'<span style="font-size:var(--fs-3xs);color:var(--purple);border:1px solid var(--purple);border-radius:var(--rp);padding:2px 7px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
     });
-    ch+='<button type="button" id="exLinkPick" class="add-btn" style="margin-top:8px;font-size:.78rem;padding:8px">🔍 从数据集选择'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
+    ch+='<button type="button" id="exLinkPick" class="add-btn" style="margin-top:8px;font-size:var(--fs-sm);padding:8px">🔍 从数据集选择'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
     area.innerHTML=ch;
     area.querySelectorAll('[data-dsid]').forEach(function(b){
       b.addEventListener('click',function(){curDsId=b.dataset.dsid;renderLinkArea()});
@@ -251,7 +251,7 @@ function openDsPicker(onPick){
     +'<div class="car-types" id="dsEqRow" style="padding:6px 14px 4px;overflow-x:auto;white-space:nowrap;display:flex;gap:4px;align-items:center"></div>'
     +'<div id="dsList" style="flex:1;overflow-y:auto;padding:8px 14px 20px;-webkit-overflow-scrolling:touch"></div>'
     +'<div id="dsDetail" style="display:none"></div>'
-    +(EXD.ready()?'':'<div style="padding:20px;text-align:center;color:var(--text3);font-size:.75rem">数据集未加载</div>')
+    +(EXD.ready()?'':'<div style="padding:20px;text-align:center;color:var(--text3);font-size:var(--fs-xs)">数据集未加载</div>')
     +'</div>';
   ov.innerHTML=h;
   document.body.appendChild(ov);
@@ -272,8 +272,8 @@ function openDsPicker(onPick){
     var m=EXD.mediaUrls(it.img);
     return '<button type="button" class="ec" data-id="'+it.id+'" style="display:flex;width:100%;text-align:left;gap:10px;padding:8px;margin-bottom:6px;align-items:center;cursor:pointer">'
       +'<img loading="lazy" src="'+m.primary+'" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--bg2)">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:.78rem;font-weight:600">'+it.zh+'</div>'
-      +'<div style="font-size:.62rem;color:var(--text3)">'+it.name+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:var(--fs-sm);font-weight:600">'+it.zh+'</div>'
+      +'<div style="font-size:var(--fs-3xs);color:var(--text3)">'+it.name+'</div>'
       +'<div style="margin-top:3px">'+tagHtml(it.cat,'cat')+tagHtml(it.eq,'eq')+tagHtml(it.target,'cat')+'</div></div></button>';
   }
 
@@ -283,7 +283,7 @@ function openDsPicker(onPick){
     var slice=rows.slice(_exdShown-_exdPage,_exdShown);
     var frag='';
     slice.forEach(function(r){frag+=cardHtml(EXD.row(r))});
-    if(!rows.length&&!reset)frag='<div style="text-align:center;color:var(--text3);font-size:.72rem;padding:12px">没有更多了</div>';
+    if(!rows.length&&!reset)frag='<div style="text-align:center;color:var(--text3);font-size:var(--fs-xs);padding:12px">没有更多了</div>';
     else if(!rows.length&&reset)frag='<div class="empty"><span class="empty-e">🔍</span><div class="empty-t">无匹配动作</div></div>';
     box.insertAdjacentHTML('beforeend',frag);
     box.querySelectorAll('[data-id]:not([data-wired])').forEach(function(b){
@@ -317,19 +317,19 @@ function showDsDetail(id){
   var it=EXD.get(id);if(!it)return;
   var list=document.getElementById('dsList'),det=document.getElementById('dsDetail');
   var mi=EXD.mediaUrls(it.img),mg=EXD.mediaUrls(it.gif);
-  var secTags=(it.sec||[]).map(function(s){return '<span style="font-size:.6rem;background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+s+'</span>'}).join(' ');
-  var steps=(it.steps||[]).map(function(s,i){return '<li style="font-size:.74rem;line-height:1.65;margin-bottom:5px">'+s+'</li>'}).join('');
+  var secTags=(it.sec||[]).map(function(s){return '<span style="font-size:var(--fs-3xs);background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+s+'</span>'}).join(' ');
+  var steps=(it.steps||[]).map(function(s,i){return '<li style="font-size:var(--fs-xs);line-height:1.65;margin-bottom:5px">'+s+'</li>'}).join('');
   det.innerHTML='<div style="position:absolute;inset:0;background:var(--bg);z-index:2;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column">'
-    +'<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg)"><button class="ec-act" id="dsBack">◀</button><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.9rem">'+it.zh+'</div><div style="font-size:.62rem;color:var(--text3)">'+it.name+'</div></div></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg)"><button class="ec-act" id="dsBack">◀</button><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-base)">'+it.zh+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">'+it.name+'</div></div></div>'
     +'<div style="flex:1;padding:14px">'
     +'<div id="dsMediaWrap" style="position:relative;width:200px;height:200px;margin:0 auto 12px;background:var(--bg2);border-radius:14px;overflow:hidden;cursor:pointer">'
     +'<img id="dsImg" loading="lazy" src="'+mi.primary+'" onerror="'+(mi.fallback?"this.onerror=null;this.src='"+mi.fallback+"'":"this.style.visibility='hidden'")+'" style="width:100%;height:100%;object-fit:cover">'
-    +(it.gif?'<div id="dsPlayOv" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25)"><span style="background:rgba(0,0,0,.55);color:#fff;font-size:.7rem;padding:6px 12px;border-radius:99px">▶ 播放动画</span></div>':'')
+    +(it.gif?'<div id="dsPlayOv" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25)"><span style="background:rgba(0,0,0,.55);color:#fff;font-size:var(--fs-2xs);padding:6px 12px;border-radius:99px">▶ 播放动画</span></div>':'')
     +'</div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span style="font-size:.64rem;background:var(--purple);color:#fff;padding:2px 9px;border-radius:var(--rp)">'+it.cat+'</span><span style="font-size:.64rem;background:var(--blue);color:#fff;padding:2px 9px;border-radius:var(--rp)">'+it.eq+'</span><span style="font-size:.64rem;background:var(--green);color:#fff;padding:2px 9px;border-radius:var(--rp)">🎯 '+it.target+'</span></div>'
-    +(it.mg?'<div style="margin-bottom:10px"><div style="font-size:.68rem;color:var(--text3);margin-bottom:4px">协同肌群</div>'+secTags+'</div>':'')
-    +(it.ins?'<div style="font-size:.78rem;line-height:1.7;color:var(--text1);white-space:normal;margin-bottom:12px">'+it.ins+'</div>':'')
-    +(steps?'<div><div style="font-size:.68rem;color:var(--text3);margin-bottom:6px">分步说明</div><ol style="padding-left:18px;margin:0">'+steps+'</ol></div>':'')
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span style="font-size:var(--fs-3xs);background:var(--purple);color:#fff;padding:2px 9px;border-radius:var(--rp)">'+it.cat+'</span><span style="font-size:var(--fs-3xs);background:var(--blue);color:#fff;padding:2px 9px;border-radius:var(--rp)">'+it.eq+'</span><span style="font-size:var(--fs-3xs);background:var(--green);color:#fff;padding:2px 9px;border-radius:var(--rp)">🎯 '+it.target+'</span></div>'
+    +(it.mg?'<div style="margin-bottom:10px"><div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:4px">协同肌群</div>'+secTags+'</div>':'')
+    +(it.ins?'<div style="font-size:var(--fs-sm);line-height:1.7;color:var(--text1);white-space:normal;margin-bottom:12px">'+it.ins+'</div>':'')
+    +(steps?'<div><div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">分步说明</div><ol style="padding-left:18px;margin:0">'+steps+'</ol></div>':'')
     +'</div></div>';
   list.style.display='none';det.style.display='block';
   document.getElementById('dsBack').addEventListener('click',function(){det.style.display='none';list.style.display=''});
@@ -350,28 +350,28 @@ function renderSettingsPlans(){
   var el=document.getElementById('subPlans');if(!el)return
   var strPlans=getPlans();
   var carPlans=getCardioPlans();
-  var h='<div class="section-hdr">🏋️ 力量计划 <span style="font-size:.65rem;color:var(--text3);font-weight:400">('+strPlans.length+')</span></div>';
+  var h='<div class="section-hdr">🏋️ 力量计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+strPlans.length+')</span></div>';
   if(strPlans.length){
     strPlans.forEach(function(p){
       var tags=p.exercises.map(function(e){return e.exercise}).slice(0,5).join('、');
-      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditStrPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelStrPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="font-size:.7rem;color:var(--text2)">'+tags+'</div></div></div>';
+      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditStrPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelStrPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="font-size:var(--fs-2xs);color:var(--text2)">'+tags+'</div></div></div>';
     });
   }else{
     h+='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有力量计划</div></div>';
   }
-  h+='<div class="section-hdr" style="margin-top:16px">🏃 有氧计划 <span style="font-size:.65rem;color:var(--text3);font-weight:400">('+carPlans.length+')</span></div>';
+  h+='<div class="section-hdr" style="margin-top:16px">🏃 有氧计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+carPlans.length+')</span></div>';
   if(carPlans.length){
     carPlans.forEach(function(p){
       var tags=p.segments.map(function(s){
         var ct=getAllCardioTypes().find(function(x){return x.id===s.type})||{emoji:'🏃',name:s.type};
         return ct.emoji+s.duration+'min';
       }).slice(0,6);
-      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditCarPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelCarPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:.7rem;background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>';
+      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditCarPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelCarPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>';
     });
   }else{
     h+='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有有氧计划</div></div>';
   }
-  h+='<div style="text-align:center;margin-top:8px;font-size:.7rem;color:var(--text3)">计划在训练 Tab 中创建和执行</div>';
+  h+='<div style="text-align:center;margin-top:8px;font-size:var(--fs-2xs);color:var(--text3)">计划在训练 Tab 中创建和执行</div>';
   el.innerHTML=h;
 }
 
@@ -386,7 +386,7 @@ function renderSettingsGame(){
   h+='<button class="sb-btn" id="setAttrLogBtn" style="background:var(--bg);color:var(--text);border:1px solid var(--bd)">📜 查看日志</button>';
   h+='<div class="section-hdr" style="margin-top:16px">🏆 历史最佳记录</div>';
   h+='<div class="stats-grid">';
-  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:.9rem">📖 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
+  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">📖 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>';
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>';
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>';
@@ -405,7 +405,7 @@ function renderSettingsData(){
   h+='<button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="importDataBtn">📥 导入数据</button>';
   h+='</div>';
   h+='<button class="sb-btn" id="syncDataBtn" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--bd)">🔄 手动云同步</button>';
-  h+='<div style="text-align:center;margin-top:6px;font-size:.7rem;color:var(--text3)">用于手动备份或跨设备转移数据</div>';
+  h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">用于手动备份或跨设备转移数据</div>';
   el.innerHTML=h;
 }
 
@@ -444,11 +444,11 @@ function showAttrInfo(){
   var p=info.period||{name:'—',volThreshold:2500};
   var modal=openModal();
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
-    +'<div style="font-size:.8rem;line-height:1.7;color:var(--text2);padding:4px 0">'
+    +'<div style="font-size:var(--fs-sm);line-height:1.7;color:var(--text2);padding:4px 0">'
     +'<div style="color:var(--orange);font-weight:700;margin-bottom:4px">⚔️ '+info.atk+'</div>'
     +'<div style="color:var(--blue);font-weight:700;margin-bottom:4px">🛡️ '+info.def+'</div>'
     +'<div style="color:var(--green);font-weight:700;margin-bottom:4px">❤️ '+info.hp+'</div>'
-    +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:.7rem;color:var(--text3)">'
+    +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:var(--fs-2xs);color:var(--text3)">'
     +'📊 本月力量容量: '+info.vol+' kg (×动作ratio)<br>'
     +'🏃 本月有氧时长: '+info.dur+' 分钟<br>'
     +'📅 当前旬: '+p.name+' (容量目标 '+p.volThreshold+'kg)<br>'
