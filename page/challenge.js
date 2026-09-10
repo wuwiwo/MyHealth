@@ -573,7 +573,7 @@ function startHiddenChallenge(hotBuff){
               d.pets.push(pet)
               petEgg = { name: pet.name }
             }
-          } catch (e2) {}
+          } catch (e2) { console.warn('[challenge] 宠物蛋发放失败', e2) }
         }
         savePetStore(d)
 

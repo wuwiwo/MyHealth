@@ -11,7 +11,7 @@
   --orange:#FB923C;--orange-l:#FDBA74;--orange-d:#F97316;--orange-g:rgba(var(--brand-rgb),.35);
   /* ---- 语义 ---- */
   --green:#4ADE80;--green-d:#22C55E;--green-g:rgba(var(--success-rgb),.30);
-  --blue:var(--blue);--blue-g:rgba(var(--info-rgb),.30);
+  --blue:#60A5FA;--blue-g:rgba(var(--info-rgb),.30);
   --purple:#C084FC;--red:#F87171;--yellow:#FACC15;
   /* ---- RGB 通道（消灭硬编码 rgba 的关键机制，原生支持零构建） ---- */
   --brand-rgb:251,146,60;--success-rgb:74,222,128;--danger-rgb:248,113,113;

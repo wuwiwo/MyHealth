@@ -119,7 +119,7 @@ function autoBackup(){
     var a=document.createElement('a');a.href=url;a.download='myhealth-auto-'+today()+'-'+Date.now().toString(36)+'.json'
     a.click();URL.revokeObjectURL(url)
     return true
-  }catch(e){return false}
+  }catch(e){console.warn('[sync] 自动备份导出失败',e);return false}
 }
 
 function showSyncDialog(){

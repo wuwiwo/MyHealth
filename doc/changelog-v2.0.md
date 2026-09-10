@@ -141,6 +141,44 @@ v2.0 是里程碑大版本：上线玩家技能系统、多对多敌群战场、
 | v2.0.6 | 44 | 761 行 game-render.js | 动作改名/合并四库联动迁移 + 关卡列表跨视图漏显修复 |
 | v2.0.7 | 44 | 761 行 game-render.js | 🩹 补召结算不锁今日名额（applyChallengeSettle 分型记账） |
 | v2.0.8 | 44 | 761 行 game-render.js | 🩹 补召误锁存档恢复入口（done 卡恢复按钮条件放宽） |
+| v2.0.9 | 44 | 763 行 game-render.js | 敌群 6→9 大关（90 关）+ 宠物阶段归一化 + hook 路径修复 |
+
+---
+
+## v2.0.9
+
+**Date:** 2026-09-03
+
+### 新增功能
+
+- 🗺️ **敌群扩容 6→9 大关（60→90 关）**：`group-levels.js` 新增 g7/g8/g9 三大关，每大关 10 小关，atk 由 g1-1 的 14 递增到 g9-10 的 353；每大关第 5 关为精英、第 10 关为 Boss
+  - `920bae8`
+- ⚖️ **敌群难度曲线重平衡**：g1 明显偏弱、g6 起具备挑战性；喂食即成长（feed-to-mature）
+  - `867ba7b`
+- 🔥 **炼魂入口回归训练视图**：角色炼魂 B→A，支持 1/10/50 倍批量
+  - `16461b6`
+
+### 修复
+
+- 🐾 **宠物阶段实时归一化**：`pets.js` 阶段值改为读取时归一化，避免旧存档残留越界阶段值导致的显示/判定异常
+  - `307ad9b`
+- 🔁 **动作改名/合并联动**：`stats.js` 统计口径跟随改名后的动作名（`renameOrMergeExercise` 四库联动的收尾）
+  - `307ad9b`
+- 🪝 **pre-commit hook 在 Windows/MSYS 下的路径错误**：原 `cd "$(dirname "$0")/../.."` 拼出 `E:\e\dd\...` 错路径，导致 `check-release.js` MODULE_NOT_FOUND，卡死所有提交
+  - 改为 `git rev-parse --show-toplevel`，同步修 `scripts/install-hook.sh`
+  - `b06a148`
+- 🧪 **两个群战测试因 90 关扩容而过期**：`test-group-levels.js` 改判 9 大关并遍历 90 关（补 g9 精英/Boss/难度递增）；`test-group-progress.js` 引入 `const TOTAL = 90`
+  - `155fdfb`
+
+### 修改文件
+
+- `page/group-levels.js`（g7/g8/g9 生成）、`page/group-progress.js`（进度上限）
+- `page/pets.js`（阶段实时归一化）、`page/pet-ui.js`（阶段展示）
+- `page/game-views.js`（炼魂入口）、`page/game-refine.js`（炼魂批量）
+- `page/stats.js`（改名联动）、`page/index.html`（cache-busting）
+- `page/utils.js`（APP_VERSION 2.0.8 → 2.0.9）
+- `scripts/test-pet-stage.js`（新增）、`scripts/test-group-levels.js`、`scripts/test-group-progress.js`
+- `scripts/install-hook.sh`、`.git/hooks/pre-commit`
 
 ---
 
