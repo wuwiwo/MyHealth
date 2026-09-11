@@ -6,7 +6,7 @@
 
 **1. 更新 `README.md`**
 
-- 顶部副标题版本号：`v1.5.1`
+- 顶部副标题版本号（形如 `v2.1.5`）
 - 「版本」章节的版本历史表格：新增当前版本行（版本号、日期、摘要、文档路径）
 - 若新增/删除文件，更新目录结构树
 - 更新当前版本指向最新 changelog
@@ -50,7 +50,10 @@
 
 ### Issue tracker
 
-GitHub Issues — `gh issue` CLI 操作 `wuwiwo/MyHealth` 仓库。详见 `docs/agents/issue-tracker.md`。
+GitHub Issues，仓库 `wuwiwo/MyHealth`。详见 `docs/agents/issue-tracker.md`。
+
+> ⚠️ **本机开发环境未安装 `gh` CLI**（`command -v gh` 无输出）。需要操作 Issue 时用网页端，或先装：`winget install GitHub.cli`。
+> ⚠️ 所有 git 命令都受 `doc/HANDOFF.md` §0.2.1 的沙箱限制影响 —— **判断"推没推"要用 `git ls-remote`，别信 `git status`**。
 
 ### Triage labels
 
@@ -58,12 +61,16 @@ GitHub Issues — `gh issue` CLI 操作 `wuwiwo/MyHealth` 仓库。详见 `docs/
 
 ### Domain docs
 
-单上下文 — 根目录 `CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
+单上下文 — 根目录 `CONTEXT.md`。
 
-### Sub-agent 调用约定（lead-planner / 总指挥）
+> 注：`docs/adr/` 目录**尚未创建**。历史设计决策目前散落在 `doc/design-v2.0.md`、`doc/design-tokens-v2.1.md` 与各版本 changelog 中。
 
-调用 `lead-planner` 子代理（.commandcode/agents/lead-planner.md）时：
+### Sub-agent 调用约定
 
-- **边界**：prompt 给任务目标 + 相关文件路径；**可附少量关键上下文补充**（已拍板的决策要点、背景一句话），但**大段文档内容**（设计文档全文、代码边界描述）由 agent 自己 `read_file` / `grep` 读取，以文件原文为唯一事实来源。
+> ⚠️ **本节原先引用的 `.commandcode/agents/lead-planner.md` 在当前工作区已不存在**（`.commandcode/` 整个目录都没有）。以下原则作为通用约定保留，重新引入规划类子代理时可直接复用。
+
+调用规划类子代理时：
+
+- **边界**：prompt 只给任务目标 + 相关文件路径；**可附少量关键上下文补充**（已拍板的决策要点、背景一句话），但**大段文档内容**（设计文档全文、代码边界描述）由 agent 自己 `read_file` / `grep` 读取，以文件原文为唯一事实来源。
 - **理由**：大段 prompt 导致 token 膨胀 → 响应慢 → 流式传输断连（本项目已多次因此卡死，如 2026-08-27 动作数据集规划 286K tokens 断连事件）。
-- 例：`让 lead-planner 读 doc/design-v2.0.md 与 doc/plans/plan-20260827-m2a-kickoff.md，规划 XXX（补充：已拍板路线B/仅中文瘦身）`，而非粘贴文档全文。
+- 例：`让子代理读 doc/design-v2.0.md 与 doc/plans/plan-20260827-m2a-kickoff.md，规划 XXX（补充：已拍板路线B/仅中文瘦身）`，而非粘贴文档全文。

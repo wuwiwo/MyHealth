@@ -30,7 +30,23 @@
 | **魂攻击/魂防御** | 独立于攻防的新属性，10章起敌方拥有，无魂防时魂攻全额伤害 | `battle.js` battleTick 魂攻击阶段 |
 | **云同步** | 手动推送到 Vercel Blob / 导出 JSON / 导入 JSON | `sync.js`，API 端 `api/data.mjs` |
 | **主题** | 深色/浅色切换，CSS Variables 实现 | `utils.js:48-51`，store key: `theme` |
-| **热量图** | 日历形式展示训练分布 | 各 tab 文件中渲染 |
+| **热力图** | 日历形式展示训练分布 | 各 tab 文件中渲染 |
+
+### v2.0 / v2.1 新增词汇
+
+| 术语 | 含义 | 代码映射 |
+|------|------|----------|
+| **敌群** | 多对多战斗模式，9 大关 × 10 小关 = 90 关（每大关第 5 关精英 / 第 10 关 Boss，最多 3 敌） | `group-levels.js` 生成，`battle-group.js` 引擎，`group-progress.js` 解锁 |
+| **宠物** | 14 只，蛋 → 成长 → 成熟三阶段；可上场最多 2 只；参战走群战引擎 | `pets.js`（生命周期）/ `pet-codex.js`（图鉴）/ `pet-store.js`（持久化）/ `pet-ui.js`（面板） |
+| **宠物天赋** | 宠物**固有专属**被动，**不可跨宠物装配**。SSR 单天赋、UR 双天赋、R/SR 无 | `pet-codex.js` 的 `registerTalent` + `getPetTalents()`（恒取图鉴值，忽略存档 `talentIds`） |
+| **炼化** | 宠物属性强化，等级上限 R50 / SR60 / SSR80 / UR100，按稀有度成功率递减 | `pet-materials.js` 的 `attemptRefine` / `refineMaxLevel` / `refineSuccessRate` |
+| **玩家技能** | 9 个可升级技能，消耗技能点；装备位最多 3（`unlockSkillSlots` 未接线，**实际 9 选 1**） | `skills.js` / `player-skill-hooks.js` / `skill-store.js` |
+| **宝珠** | 5 类型 × 4 品质，65% 合成率，每 20 碎片/次 | `orbs.js` |
+| **命中 / 闪避** | v2.1.5 引入。基础命中 95%，命中率 = 基础 + `_accMod` − 目标 `_eva`，clamp `[5%, 100%]` | `battle-group.js` 的 `BASE_HIT_RATE` / `groupHitChance()` / `groupRollHit()` |
+| **天赋 hook** | 天赋与战斗引擎的对接点。群战引擎调度：`onTurnStart/End`、`onBefore/AfterAction`、`onDamage`、`onAfterDamage`、`onBeforeStatus`、`onBeforeHit`、`onBeforeCrit`、`onAllyStatus`、`onAllyDamage`、`onBeforeHeal`、`onFoeHeal` | `talent.js` 的 `talentDispatch()` / `talentAura()`，在 `battle-group.js` 被调用 |
+| **场地** | 6 种战斗场地（沙暴/雪天/酷暑/雨天/反转/毒气） | `terrain.js` |
+| **状态** | 敌群负面/特殊状态；`grade` 1=普通 2=高级 3=特级 | `status-defs.js` 定义，`state-core.js` 框架 |
+| **瞩目** | 玩家技能「瞩目」的嘲讽机制，受影响单位速度 ×2 | `player-skill-hooks.js` / `battle-group.js` 的 `_taunting` |
 
 ### 动作列表（EXERCISES，`utils.js:9`）
 
@@ -150,6 +166,7 @@ page/
 ### 依赖方向
 
 ```
+—— v1.x 基础层 ——
 utils.js → store.js
 app.js → utils.js, store.js
 stats.js → (无依赖，纯函数)
@@ -161,6 +178,32 @@ ex-dataset.js → (读全局 EX_DATASET，无模块依赖)
 config.js → (无依赖，纯常量)
 tab-*.js → app.js, stats.js, levels.js, battle.js, linechart.js, ex-dataset.js, config.js
 sync.js → store.js, app.js
+
+—— v2.0 战斗内容层 ——
+unit.js → (无依赖)
+state-core.js → (无依赖)
+status-defs.js → state-core.js
+talent.js → (无依赖，读写 unit.base)
+skill.js → (无依赖)
+enemy.js → unit.js, talent.js, skill.js
+terrain.js → (无依赖)
+battle-group.js → unit.js, talent.js, skill.js, status-defs.js, state-core.js, terrain.js
+ai.js → unit.js, skill.js
+group-levels.js → unit.js, enemy.js
+group-progress.js → store.js
+
+—— v2.0 养成层 ——
+pets.js → (无依赖)
+pet-codex.js → unit.js, talent.js, skill.js
+pet-materials.js → pet-codex.js
+pet-store.js → store.js
+pet-ui.js → pet-store.js, pet-codex.js, pet-materials.js, pets.js
+skills.js → (无依赖)
+player-skill-hooks.js → unit.js, state-core.js
+skill-store.js → store.js
+skill-ui.js → skills.js, skill-store.js
+orbs.js → store.js
+game-views.js / game-render.js / debug.js → UI 层，末尾加载
 ```
 
 - `store.js` 是唯一写入 localStorage 的模块
@@ -172,7 +215,14 @@ sync.js → store.js, app.js
 
 ## 架构决策
 
-`docs/adr/` 目录尚未创建。历史架构决策参考：
-- `doc/project-analysis-v1.0.md` — 初始架构分析
-- `doc/code-review-v1.0.md` — 代码审查记录
-- `doc/changelog-v*.md` — 各版本变更记录
+`docs/adr/` 目录**尚未创建**，设计决策目前散落在下列文档中（按主题查）：
+
+| 主题 | 权威文档 |
+|------|----------|
+| 样式 / 令牌 / 无障碍（**写样式前必读**） | `doc/design-tokens-v2.1.md` |
+| v2.0 玩法设计：玩家技能 / 宠物 / 多对多敌群 | `doc/design-v2.0.md`（含 OQ 裁决表） |
+| v2.0 实施路线、模块边界、数据结构 | `doc/plan-v2.0-implementation.md` |
+| 敌群内容层：天赋 / 技能 / 编成梯度 | `doc/2.0 敌群设计.md` |
+| 机制结构性结论：战斗层决策数、经济通胀、防御轴失效 | `doc/mechanics-biopsy-v2.0.4.md` |
+| 各版本变更明细 | `doc/changelog-v*.md` |
+| 接手开发必读（环境/纪律/清单/踩坑） | `doc/HANDOFF.md` |
