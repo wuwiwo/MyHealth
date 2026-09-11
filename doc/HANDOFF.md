@@ -4,8 +4,8 @@
 > **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
 > **生成**：2026-09-02 · **最后更新：2026-09-11（对应 v2.1.2）**
 > **分支**：`main` —— 提交号与「领先/落后 N 个提交」变动频繁且会随每次提交立刻过期，**以 `git log --oneline -5` 与 `git status -sb` 的实时输出为准**，本文档不再写死
-> **当前版本**：`APP_VERSION` = `2.1.2` · cache-busting `?v62` · 45 个 `page/*.js` 模块
-> **测试**：26 套件 / 551 断言，全部通过（含 a11y 护栏 40/40）
+> **当前版本**：`APP_VERSION` = `2.1.3` · cache-busting `?v63` · 45 个 `page/*.js` 模块
+> **测试**：26 套件 / 584 断言，全部通过（含 a11y 护栏 40/40）
 
 ---
 
@@ -104,10 +104,10 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 
 | 项 | 值 |
 |---|---|
-| 当前版本 | **v2.1.2**（2026-09-11） |
+| 当前版本 | **v2.1.3**（2026-09-11） |
 | HEAD | `37894e8`（敌群 desc 文案修复 + 版本三项同步） |
 | 远端 | `origin/main` = `190c96b`，本地领先 1 个提交（待推送） |
-| cache-busting | `?v62`（`page/index.html` 内全部 47 处） |
+| cache-busting | `?v63`（`page/index.html` 内全部 47 处） |
 | 模块数 | 45 个 `page/*.js`（+ 1 个 `page/data/exercises-dataset.js`） |
 | 最大文件 | `page/game-render.js` 763 行，其次 `page/challenge.js` 709 行 |
 
@@ -120,6 +120,7 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 - **v2.1.0** — 🎨 **设计体系版本**（设计令牌 + 移动端触控 + WCAG AA + 护栏测试）
 - **v2.1.1** — 🐞 Debug 面板合入设计体系线（令牌化 + a11y + 冲突合并）
 - **v2.1.2** — 📝 敌群关卡 `desc` 敌数文案与实际对齐（g3–g9 的「4 敌」→「最多 3 敌」）+ 修正同源过期注释 + 加防回归断言
+- **v2.1.3** — 🐾 宠物养成：属性面板补炼化进度 / 炼化石 10:1 兑换 / 技能指定升级 / 天赋槽解锁
 
 > ⚠️ **v2.0.10/2.0.11 与 v2.1.0 曾分叉**（两条线都改 `index.html`/`utils.js`/`README`/`changelog`），已于 `dd46332` 合并解决。若再见到两条线并行，合并前先看 §8 的冲突回避经验。
 
@@ -299,6 +300,10 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 - 生命周期：蛋 → 孵化 → 成长期 → 成熟期 → 阵亡；离线结算；共鸣加成；月重置
 - 6 材料（营养液/饲料/灵能/普通炼化石/高级炼化石/宝珠碎片）；炼化上限按稀有度 R50/SR60/SSR80/UR100
+- **炼化石兑换**（v2.1.3）：普通 → 高级 **10:1**（`exchangeRefineStones`），普通石只在炼化 Lv<50 可用，后期靠兑换消化
+- **技能升级**（v2.1.3）：`upgradePetSkill(pet, bag, skillId)` 指定技能，消耗 ✨ 灵能、递增（Lv0→1 与 Lv1→2 各 1，之后每级 +1），上限 **Lv10**；旧的 `useSpirit`（随机升级）保留但 UI 已不用
+- **天赋槽解锁**（v2.1.3）：天赋不分级，「升级」= 开新槽 + 从池里挑一个。槽位 R2/SR2/SSR3/UR4；可解锁池 = **本稀有度及以下**；消耗 ✨ 灵能、递增（第 1 个额外槽 5，之后 +5）
+- ⚠️ **原有 10 个宠物天赋仍是空壳**（只有 name/desc，无 hooks/statMods，**战斗不生效**）：`lucky_pocket` `dark_eye` `winter_core` `holy_guard` `mirror_field` `inspiration` `mind_eye` `fighter_instinct` `immovable` `pressure_field`。v2.1.3 新增的 4 个低阶天赋（坚韧/轻捷/敏锐/活力）**带 statMods、真正生效**。要补齐这 10 个需改战斗数值 + 同步 `test-pet-codex.js:49` 的 UR 基准断言
 - 图鉴 14 只（3R+4SR+4SSR+3UR）；成熟宠物可参战（独立行动）
 - 阶段值读取时实时归一化（防旧存档越界值）
 
@@ -332,7 +337,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ---
 
-## 8. 测试（26 套件 / 551 断言，全绿）
+## 8. 测试（26 套件 / 584 断言，全绿）
 
 ```bash
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
@@ -344,13 +349,13 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `test-page-load` | 27 | 页面加载链冒烟（校验 index.html 挂载了全部模块 + 骨架容器）——**接线事故防线** |
 | `test-challenge-borrow` | 27 | 隐藏挑战顺延/补召/误锁恢复 |
 | `test-skill` | 40 | 25 敌群技能 |
-| `test-pet-codex` | 37 | 图鉴 + 参战 Unit 生成 |
+| `test-pet-codex` | 56 | 图鉴 + 参战 Unit 生成 + **天赋槽/池/解锁/生效** |
 | `test-group-levels` | 40 | 90 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / **`desc` 敌数与实际一致** |
 | `test-skills` | 29 | 玩家技能 |
 | `test-enemy` | 26 | 16 天赋 + 编成阶梯 |
 | `test-state-core` | 25 | 状态框架 |
 | `test-status` | 25 | 状态定义 |
-| `test-pet-materials` | 24 | 材料 + 炼化 |
+| `test-pet-materials` | 37 | 材料 + 炼化 + **10:1 兑换 + 技能指定升级** |
 | `test-date-roll` | 23 | 时间工具 |
 | `test-exercise-rename` | 21 | 动作改名/合并四库联动 |
 | `test-store` | 20 | store 注册表/读写/坏值回落 |
@@ -388,6 +393,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 
 ## 10. 待办 / 已知问题
 
+- [ ] **原有 10 个宠物天赋是空壳**：只有 name/desc，无 hooks/statMods，战斗不生效（v2.1.3 新增的 4 个低阶天赋已带效果）。补齐需改战斗数值 + 同步 `test-pet-codex.js:49` 的 UR 宠物基准断言
 - [ ] **真机验收**：本地测试全绿，但手机端手感/性能（群战 8 倍速、飘字动画、长时间挂机）未全面验证
 - [ ] **敌群数值平衡**：90 关全通需要非常强的角色，曲线可能仍偏陡
 - [x] **🐛 用户可见文案过期**：`page/group-levels.js` 的 `desc` 写「4 敌」，实际每关最多 3 敌 —— **v2.1.2 已修**（连同三处同源过期注释），并加防回归断言

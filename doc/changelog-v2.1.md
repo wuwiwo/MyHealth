@@ -35,6 +35,46 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 
 ---
 
+## v2.1.3
+
+**Date:** 2026-09-11
+
+### 新增功能
+
+- 📊 **宠物属性面板补炼化进度**：详情面板新增炼化进度区，显示 `Lv X / 上限`（上限按稀有度 R50 / SR60 / SSR80 / UR100）、百分比进度条，以及**当前普通石 / 高级石的成功率**（普通石在 Lv≥50 显示「不可用」）。此前 `refineLevel` / `refineStats` 一直有数据，但面板从未渲染，玩家看不到养成进度
+- 🔄 **普通炼化石 10:1 兑换高级炼化石**：`exchangeRefineStones(bag, times)`，材料栏新增「🔄 兑换 10→1」按钮。普通石只在炼化 Lv<50 可用、后期必然死积，兑换给它们一个 sink；余额不足时提示还差多少，不会扣成负数
+- ⚡ **宠物技能可指定升级**：`upgradePetSkill(pet, bag, skillId)`，详情面板每个技能一个升级按钮。消耗 ✨ 灵能，递增（Lv0→1 与 Lv1→2 各 1，之后每级 +1），上限 Lv10。原有的 `useSpirit`（随机升级）保留，UI 改用确定性版本
+- ✨ **宠物天赋槽解锁**：天赋「升级」= 解锁新槽位并从可解锁池挑一个装上，消耗 ✨ 灵能（与技能共用，需取舍），递增（第 1 个额外槽 5，之后 +5）
+  - 槽位上限按稀有度：R2 / SR2 / SSR3 / UR4
+  - 可解锁池 = 本稀有度及以下（R 只能学 R，UR 可学全部 14 个）
+  - 新增 **4 个低阶通用天赋**（坚韧 / 轻捷 / 敏锐 / 活力），供原本 0 天赋的 R/SR 宠物解锁
+
+### 修复
+
+- 天赋加成改用**固定值**而非百分比：R 宠物基础 `def` 只有 5，8% 经四舍五入会变成 0，等于没效果
+
+### 修改文件
+
+- `page/pet-materials.js`（`exchangeRefineStones` / `petSkillUpgradeCost` / `upgradePetSkill` / `petTalentUnlockCost` / `unlockPetTalent`）
+- `page/pet-codex.js`（`PET_TALENT_SLOTS` / `PET_TALENT_POOL` / `petTalentSlotMax` / `petTalentPool` / `petBaseTalentCount` / `getPetTalents` / `setPetTalents` + 4 个新天赋；`createPetUnit` 改读存档天赋）
+- `page/pet-ui.js`（详情面板炼化进度/技能升级/天赋解锁；材料栏兑换按钮）
+- `page/utils.js`（`APP_VERSION` 2.1.2 → 2.1.3）
+- `page/index.html`（cache-busting `?v62` → `?v63`，47 处）
+- `scripts/test-pet-materials.js` / `scripts/test-pet-codex.js`（新增 33 条断言）
+- `README.md` / `doc/changelog-v2.1.md` / `doc/HANDOFF.md`
+
+### 测试
+
+- 26 个测试套件全绿，含设计体系护栏 `test-a11y-tokens.js` 40/40
+- 断言总数 551 → **584**（新增 33 条：兑换比例/余额不足/不扣负数、技能消耗递增与上限、天赋槽位/池范围/越级拒绝/重复拒绝、天赋实际生效）
+
+### ⚠️ 遗留（未处理，需单独排期）
+
+- **原有 10 个宠物天赋仍是「空壳」**：`pet-codex.js` 里 `lucky_pocket` / `dark_eye` / `winter_core` / `holy_guard` / `mirror_field` / `inspiration` / `mind_eye` / `fighter_instinct` / `immovable` / `pressure_field` 只有 `name` + `desc`，**没有 hooks 也没有 statMods，战斗内不生效**。本次按决策「天赋本身不变」未改动它们；新增的 4 个低阶天赋则带 statMods、真正生效
+- 若后续要给这 10 个补效果，会改变战斗数值，并需同步更新 `test-pet-codex.js:49` 的 UR 宠物基准断言（`hp===360 / atk===60`）
+
+---
+
 ## v2.1.1
 
 **Date:** 2026-09-11
@@ -180,3 +220,4 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 | v2.1.0 | 44 | 763 行 game-render.js | 🎨 设计令牌体系 + 移动端/无障碍/WCAG AA 全面改造 |
 | v2.1.1 | 45 | 763 行 game-render.js | 🐞 合入全局 Debug 面板（debug.js）+ 抽屉令牌化/A11y 对齐 |
 | v2.1.2 | 45 | 763 行 game-render.js | 📝 敌群 desc 敌数文案与实际对齐（4 敌→3 敌）+ 修正同源过期注释 |
+| v2.1.3 | 45 | 763 行 game-render.js | 🐾 宠物面板补炼化进度 + 炼化石 10:1 兑换 + 技能指定升级 + 天赋槽解锁 |

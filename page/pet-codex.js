@@ -28,6 +28,53 @@ var PET_CODEX = {
   kirin:{ id:'kirin', name:'圣光麒麟', rarity:'UR', role:'辅助', base:{hp:300,atk:30,def:20,soulAtk:20,soulDef:15,spd:9}, talents:['immovable','pressure_field'], skills:['p_warmight'] }
 };
 
+/* ============ 天赋槽与可解锁池（v2.1.3） ============
+   设计：天赋不分级，「升级」= 解锁新天赋槽，从可解锁池里挑一个装上。
+   槽位上限按稀有度；可解锁池 = 本稀有度及以下（越高稀有度可选范围越广）。 */
+var PET_TALENT_SLOTS = { R: 2, SR: 2, SSR: 3, UR: 4 };
+var PET_RARITY_ORDER = ['R', 'SR', 'SSR', 'UR'];
+var PET_TALENT_POOL = {
+  R:   ['pet_tough', 'pet_quick'],
+  SR:  ['pet_keen', 'pet_vital'],
+  SSR: ['lucky_pocket', 'dark_eye', 'winter_core', 'holy_guard'],
+  UR:  ['mirror_field', 'inspiration', 'mind_eye', 'fighter_instinct', 'immovable', 'pressure_field']
+};
+
+/* 槽位上限 */
+function petTalentSlotMax(rarity) { return PET_TALENT_SLOTS[rarity] || 2; }
+
+/* 可解锁池（本稀有度及以下，去重） */
+function petTalentPool(rarity) {
+  var idx = PET_RARITY_ORDER.indexOf(rarity);
+  if (idx < 0) idx = 0;
+  var out = [];
+  for (var i = 0; i <= idx; i++) {
+    (PET_TALENT_POOL[PET_RARITY_ORDER[i]] || []).forEach(function (id) {
+      if (out.indexOf(id) < 0) out.push(id);
+    });
+  }
+  return out;
+}
+
+/* 图鉴自带（初始）天赋数，用于算「额外解锁了几个槽」 */
+function petBaseTalentCount(speciesId) {
+  var c = PET_CODEX[speciesId];
+  return (c && c.talents) ? c.talents.length : 0;
+}
+
+/* 宠物当前天赋列表：优先读存档上的 talentIds，否则回落到图鉴初始值 */
+function getPetTalents(pet) {
+  if (!pet) return [];
+  if (Array.isArray(pet.talentIds)) return pet.talentIds;
+  var c = PET_CODEX[pet.speciesId];
+  return (c && c.talents) ? c.talents.slice() : [];
+}
+function setPetTalents(pet, ids) {
+  if (!pet) return pet;
+  pet.talentIds = (ids || []).slice();
+  return pet;
+}
+
 /* 生成宠物 Unit（M4-5 用，这里先提供工厂）：
    成熟宠物 → createUnit + 挂天赋/技能，属性含炼化加成 */
 function createPetUnit(petState) {
@@ -55,7 +102,7 @@ function createPetUnit(petState) {
     tags: ['pet', codex.rarity]
   });
   unit._petSpecies = petState.speciesId;
-  attachTalents(unit, codex.talents.slice());
+  attachTalents(unit, getPetTalents(petState));   // v2.1.3: 用存档上的天赋（含已解锁的）
   // 应用天赋静态修正
   for (var k in (unit._talentMods || {})) {
     unit.base[k] = (unit.base[k] || 0) + unit._talentMods[k];
@@ -155,6 +202,19 @@ registerTalent({ id:'immovable', name:'不动如山', desc:'满血时免疫普�
 /* 圣光麒麟：威压领域 */
 registerTalent({ id:'pressure_field', name:'威压领域', desc:'血量>75%时敌方治疗-20%' });
 
+/* ---- v2.1.3 新增：低阶通用天赋（R/SR 宠物可解锁，带实际属性修正）----
+   注：上面 10 个原有天赋目前只有 name/desc（战斗不生效，属已知历史债）；
+   新增的这 4 个带 statMods，是真正生效的。 */
+/* 用固定值而非百分比：R 宠物基础值很低（def 5），百分比会被四舍五入抹成 0 */
+registerTalent({ id:'pet_tough', name:'坚韧', desc:'防御 +2',
+  statMods: function () { return { def: 2 }; } });
+registerTalent({ id:'pet_quick', name:'轻捷', desc:'速度 +1',
+  statMods: function () { return { spd: 1 }; } });
+registerTalent({ id:'pet_keen', name:'敏锐', desc:'攻击 +2',
+  statMods: function () { return { atk: 2 }; } });
+registerTalent({ id:'pet_vital', name:'活力', desc:'生命 +15',
+  statMods: function () { return { hp: 15 }; } });
+
 }
 
 /* 测试/工具暴露 */
@@ -163,10 +223,20 @@ if (typeof window !== 'undefined') {
   window.createPetUnit = createPetUnit;
   window.getPetCodex = getPetCodex;
   window.listPetCodex = listPetCodex;
+  window.petTalentSlotMax = petTalentSlotMax;
+  window.petTalentPool = petTalentPool;
+  window.petBaseTalentCount = petBaseTalentCount;
+  window.getPetTalents = getPetTalents;
+  window.setPetTalents = setPetTalents;
 }
 if (typeof globalThis !== 'undefined') {
   globalThis.PET_CODEX = PET_CODEX;
   globalThis.createPetUnit = createPetUnit;
   globalThis.getPetCodex = getPetCodex;
   globalThis.listPetCodex = listPetCodex;
+  globalThis.petTalentSlotMax = petTalentSlotMax;
+  globalThis.petTalentPool = petTalentPool;
+  globalThis.petBaseTalentCount = petBaseTalentCount;
+  globalThis.getPetTalents = getPetTalents;
+  globalThis.setPetTalents = setPetTalents;
 }

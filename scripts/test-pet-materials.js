@@ -88,6 +88,35 @@ sandbox.addMaterial(bag2, 'feed', 2);
 const fd = sandbox.useFeed(growPet, bag2);
 assert('饲料恢复饥饿', fd.ok === true && growPet.hunger > 50);
 
+// ---- 8. 炼化石兑换（v2.1.3：10 普通 → 1 高级）----
+const bag3 = sandbox.createMaterialBag();
+sandbox.addMaterial(bag3, 'refineNormal', 25);
+const ex1 = sandbox.exchangeRefineStones(bag3, 1);
+assert('兑换 10→1 成功', ex1.ok === true && bag3.refineNormal === 15 && bag3.refineHigh === 1, JSON.stringify(bag3));
+assert('兑换不足失败', sandbox.exchangeRefineStones(bag3, 2).ok === false && bag3.refineNormal === 15);
+const ex3 = sandbox.exchangeRefineStones(bag3, 1);
+assert('再次兑换成功', ex3.ok === true && bag3.refineNormal === 5 && bag3.refineHigh === 2, JSON.stringify(bag3));
+assert('余量不足拒绝', sandbox.exchangeRefineStones(bag3, 1).ok === false && bag3.refineNormal === 5);
+assert('未溢出扣成负数', bag3.refineNormal >= 0);
+
+// ---- 9. 技能指定升级（v2.1.3）----
+const pet3 = sandbox.createPet({ speciesId: 't5', rarity: 'SR', name: '火焰鸡' });
+const bag4 = sandbox.createMaterialBag();
+sandbox.addMaterial(bag4, 'spirit', 50);
+assert('Lv0→1 消耗 1', sandbox.petSkillUpgradeCost(pet3, 'flame') === 1);
+let u1 = sandbox.upgradePetSkill(pet3, bag4, 'flame');
+assert('升级 Lv0→1', u1.ok === true && pet3.skillLevels.flame === 1 && bag4.spirit === 49, JSON.stringify(u1));
+assert('Lv1→2 消耗 1', sandbox.petSkillUpgradeCost(pet3, 'flame') === 1);
+sandbox.upgradePetSkill(pet3, bag4, 'flame');   // → Lv2, 剩 48
+assert('Lv2→3 消耗 2', sandbox.petSkillUpgradeCost(pet3, 'flame') === 2);
+sandbox.upgradePetSkill(pet3, bag4, 'flame');   // 花 2 → Lv3, 剩 46
+assert('递增消耗生效', pet3.skillLevels.flame === 3 && bag4.spirit === 46, 'lv=' + pet3.skillLevels.flame + ' spirit=' + bag4.spirit);
+const bag5 = sandbox.createMaterialBag();
+assert('灵能不足拒绝', sandbox.upgradePetSkill(pet3, bag5, 'flame').ok === false);
+assert('未指定技能拒绝', sandbox.upgradePetSkill(pet3, bag4, '').ok === false);
+pet3.skillLevels.flame = 10;
+assert('达上限拒绝', sandbox.upgradePetSkill(pet3, bag4, 'flame').ok === false);
+
 // ---- 7. 材料月重置 ----
 sandbox.monthlyResetMaterials(bag2);
 assert('月重置清空材料', bag2.nutrition === 0 && bag2.spirit === 0 && bag2.refineHigh === 0 && bag2.feed === 0);

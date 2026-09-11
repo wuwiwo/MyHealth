@@ -24,6 +24,7 @@ function renderPetPanel() {
     +'<span>✨ 灵能 <b style="font-size:var(--fs-base)">'+m.spirit+'</b></span>'
     +'<span>🪨 炼化石 <b style="font-size:var(--fs-base)">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:var(--fs-base)">'+m.refineHigh+'</b></span>'
     +'<span>💎 宝珠碎片 <b style="font-size:var(--fs-base)">'+m.orbShard+'</b></span>'
+    +'<button class="speed-btn" id="petExchange" title="10 个普通炼化石兑换 1 个高级炼化石" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">🔄 兑换 10→1</button>'
     +'</div>'
   // 宠物列表
   if (!d.pets.length) {
@@ -85,6 +86,14 @@ function renderPetPanel() {
     toast(r.msg || r.reason, r.ok ? 's' : 'e')
     renderPetPanel()
   })
+  var exch = document.getElementById('petExchange')
+  if (exch) exch.addEventListener('click', function(){
+    var d5 = getPetStore()
+    var rx = exchangeRefineStones(d5.materials, 1)
+    if (rx.ok) { savePetStore(d5); toast('🔄 '+rx.spent+' 普通炼化石 → '+rx.gained+' 高级炼化石', 's') }
+    else { toast(rx.reason || '兑换失败', 'e') }
+    renderPetPanel()
+  })
   ov.querySelectorAll('[data-pet-op]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var op = btn.getAttribute('data-pet-op')
@@ -95,7 +104,7 @@ function renderPetPanel() {
       if (op === 'feed') { var r = useFeed(pet, d2.materials); toast(r.reason || ('🍖 饥饿+' + r.inc.toFixed(0)), r.ok?'s':'e') }
       if (op === 'nutrition') { var r2 = useNutrition(pet, d2.materials); toast(r2.reason || ('🧪 孵化+' + r2.inc.toFixed(1)+'%'), r2.ok?'s':'e') }
       if (op === 'refine') { var r3 = attemptRefine(pet, d2.materials, 'refineHigh'); toast(r3.reason || ('✨ 炼化 +' + r3.gained + ' ' + r3.stat + '（Lv'+r3.level+'）'), r3.ok?'s':'e') }
-      if (op === 'detail') { renderPetDetail(pet); return }
+      if (op === 'detail') { renderPetDetail(pet, idx); return }
       savePetStore(d2)
       renderPetPanel()
     })
@@ -118,14 +127,33 @@ function renderPetPanel() {
   })
 }
 
-/* 宠物详情（属性/技能/天赋/炼化） */
-function renderPetDetail(pet) {
+/* 宠物详情（属性/炼化/技能/天赋）
+   v2.1.3：补炼化进度条、技能指定升级、天赋槽解锁 */
+function renderPetDetail(pet, idx) {
   var ov = document.getElementById('battleOverlay')
   if (!ov) return
+  var d = getPetStore()
+  var bag = d.materials || {}
   var codex = getPetCodex(pet.speciesId) || {}
-  var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-    +'<button class="speed-btn" id="petDBack" style="padding:2px 8px">← 返回</button>'
-    +'<span style="font-size:var(--fs-base);font-weight:700">'+(codex.name||pet.name)+' <span style="color:var(--purple,#a855f7);font-size:var(--fs-2xs)">'+pet.rarity+'</span></span>'
+  var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
+    +'<button class="speed-btn" id="petDBack" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">←</button>'
+    +'<span style="font-size:var(--fs-lg);font-weight:700">'+(codex.name||pet.name)+' <span style="color:var(--purple);font-size:var(--fs-xs)">'+pet.rarity+'</span></span>'
+    +'<span style="flex:1"></span>'
+    +'<span style="font-size:var(--fs-sm);color:var(--text2)">✨ 灵能 <b>'+(bag.spirit||0)+'</b></span>'
+    +'</div>'
+  // 炼化进度（v2.1.3）
+  var maxLv = refineMaxLevel(pet.rarity)
+  var rl = pet.refineLevel || 0
+  var pct = maxLv ? Math.min(100, Math.round(rl / maxLv * 100)) : 0
+  var rateN = Math.round(refineSuccessRate(pet, 'refineNormal') * 100)
+  var rateH = Math.round(refineSuccessRate(pet, 'refineHigh') * 100)
+  h += '<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">'
+    +'<div style="display:flex;align-items:baseline;gap:6px;font-weight:700;margin-bottom:6px">'
+    +'<span>✨ 炼化</span><span style="font-size:var(--fs-xl);color:var(--brand-fill)">Lv'+rl+'</span>'
+    +'<span style="color:var(--text3)">/ '+maxLv+'</span><span style="flex:1"></span>'
+    +'<span style="color:var(--text3);font-weight:400">'+pct+'%</span></div>'
+    +'<div style="height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:var(--brand-fill);border-radius:4px;transition:width .3s"></div></div>'
+    +'<div style="margin-top:6px;color:var(--text3)">成功率：普通石 '+(rateN ? rateN+'%' : '不可用（Lv≥50）')+'　·　高级石 '+rateH+'%</div>'
     +'</div>'
   // 基础属性（codex + 炼化）
   var b = codex.base || {}
@@ -138,29 +166,80 @@ function renderPetDetail(pet) {
   h += '　💨 速 <b>'+(b.spd||0)+'</b>'
   h += '　👻 魂攻 <b>'+(b.soulAtk||0)+(rs.soulAtk?'<span style="color:var(--green)">+'+rs.soulAtk+'</span>':'')+'</b>'
   h += '</div>'
-  // 技能
-  h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">⚡ 技能</div>'
+  // 技能（v2.1.3：指定技能升级，消耗灵能）
+  h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">'
+  h += '<div style="font-weight:700;margin-bottom:4px">⚡ 技能 <span style="color:var(--text3);font-weight:400">（消耗 ✨ 升级，上限 Lv'+PET_SKILL_MAX_LEVEL+'）</span></div>'
   ;(codex.skills||[]).forEach(function(sid){
     var s = SKILLS[sid]
     if (!s) return
-    var lv = pet.skillLevels ? pet.skillLevels[sid] || 0 : 0
-    h += '<div>'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' '+s.power+'%':'')+' · Lv'+lv+'</span></div>'
+    var slv = pet.skillLevels ? pet.skillLevels[sid] || 0 : 0
+    var cost = petSkillUpgradeCost(pet, sid)
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0">'
+      +'<div style="flex:1">'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' '+s.power+'%':'')+' · Lv'+slv+'</span></div>'
+      +(slv >= PET_SKILL_MAX_LEVEL
+        ? '<span style="color:var(--green);font-size:var(--fs-2xs)">已满级</span>'
+        : '<button class="speed-btn" data-pet-skill="'+sid+'" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">⬆ '+cost+'✨</button>')
+      +'</div>'
   })
+  if (!(codex.skills||[]).length) h += '<div style="color:var(--text3)">（无技能）</div>'
   h += '</div>'
-  // 天赋
-  h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋</div>'
-  ;(codex.talents||[]).forEach(function(tid){
+  // 天赋（v2.1.3：槽位 + 解锁）
+  var curT = getPetTalents(pet)
+  var maxSlot = petTalentSlotMax(pet.rarity)
+  var pool = petTalentPool(pet.rarity).filter(function (id) { return curT.indexOf(id) < 0 })
+  h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px">'
+  h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋 <span style="color:var(--text3);font-weight:400">（槽位 '+curT.length+' / '+maxSlot+'）</span></div>'
+  if (!curT.length) h += '<div style="color:var(--text3)">（暂无天赋）</div>'
+  curT.forEach(function(tid){
     var t = TALENTS[tid]
-    if (!t) return
-    h += '<div>'+t.name+' <span style="color:var(--text3)">· '+t.desc+'</span></div>'
+    h += '<div>'+(t?t.name:tid)+' <span style="color:var(--text3)">· '+(t?t.desc:'')+'</span></div>'
   })
-  if (!(codex.talents||[]).length) h += '<div style="color:var(--text3)">（无天赋）</div>'
+  if (curT.length < maxSlot) {
+    var uc = petTalentUnlockCost(pet)
+    h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">'
+    if (!pool.length) {
+      h += '<div style="color:var(--text3)">无可解锁天赋</div>'
+    } else {
+      h += '<div style="color:var(--text3);margin-bottom:6px">🔓 解锁新槽位（消耗 '+uc+' ✨）</div>'
+      h += '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      pool.forEach(function(tid){
+        var t = TALENTS[tid]
+        h += '<button class="speed-btn" data-pet-talent="'+tid+'" title="'+(t?t.desc:'')+'" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">'+(t?t.name:tid)+'</button>'
+      })
+      h += '</div>'
+    }
+    h += '</div>'
+  }
   h += '</div>'
   ov.innerHTML = h
   var back = document.getElementById('petDBack')
   if (back) back.addEventListener('click', function(){ renderPetPanel() })
+  // 技能升级
+  ov.querySelectorAll('[data-pet-skill]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var sid = btn.getAttribute('data-pet-skill')
+      var d3 = getPetStore()
+      var p3 = d3.pets[idx]
+      if (!p3) return
+      var r = upgradePetSkill(p3, d3.materials, sid)
+      if (r.ok) { savePetStore(d3); toast('⚡ '+((SKILLS[sid]||{}).name||sid)+' → Lv'+r.level+'（-'+r.cost+' ✨）','s') }
+      else { toast(r.reason || '升级失败','e') }
+      renderPetDetail(p3, idx)
+    })
+  })
+  // 天赋解锁
+  ov.querySelectorAll('[data-pet-talent]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var tid = btn.getAttribute('data-pet-talent')
+      var d4 = getPetStore()
+      var p4 = d4.pets[idx]
+      if (!p4) return
+      var r = unlockPetTalent(p4, d4.materials, tid)
+      if (r.ok) { savePetStore(d4); toast('✨ 解锁天赋「'+((TALENTS[tid]||{}).name||tid)+'」（-'+r.cost+' ✨）','s') }
+      else { toast(r.reason || '解锁失败','e') }
+      renderPetDetail(p4, idx)
+    })
+  })
 }
 
 /* 带宠物的敌群试炼 */

@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.2
+> Personal Health Manager — 个人健身健康管理应用 v2.1.3
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -240,5 +240,6 @@ Vercel 项目设置：
 | **v2.1.0** | **2026-09-10** | **🎨 设计体系版本：设计令牌（10 阶字阶/RGB 通道令牌）+ 移动端触控与安全区 + 键盘/读屏无障碍 + 明暗双主题对比度修到 WCAG AA** | `doc/changelog-v2.1.md` |
 | **v2.1.1** | **2026-09-11** | **🐞 Debug 面板合入设计体系线：抽屉令牌化 + A11y 语义 + 缓存版本对齐（v61）** | `doc/changelog-v2.1.md` |
 | **v2.1.2** | **2026-09-11** | **📝 修复敌群关卡文案：g3–g9 的 `desc` 误标「4 敌」，实际每关最多 3 敌（用户可见）+ 修正同源过期注释；缓存版本对齐（v62）** | `doc/changelog-v2.1.md` |
+| **v2.1.3** | **2026-09-11** | **🐾 宠物养成：属性面板补炼化进度（Lv/上限/成功率）、普通炼化石 10:1 兑高级、技能可指定升级（灵能递增，上限 Lv10）、天赋槽解锁（按稀有度 R2/SR2/SSR3/UR4）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.2**（设计规范：`doc/design-tokens-v2.1.md`）
+> 当前版本：**v2.1.3**（设计规范：`doc/design-tokens-v2.1.md`）

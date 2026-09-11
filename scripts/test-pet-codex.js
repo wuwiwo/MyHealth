@@ -75,5 +75,37 @@ sandbox.runGroupBattle(gb, 100);
 assert('宠物参战战斗结束', gb.done === true);
 assert('宠物参与行动', gb.log.some(l => l.unit === '梦幻' || l.unit === '你'), 'units=' + gb.log.map(l=>l.unit).join(','));
 
+// ---- 7. 天赋槽与解锁（v2.1.3）----
+assert('R 槽位上限 2', sandbox.petTalentSlotMax('R') === 2);
+assert('SR 槽位上限 2', sandbox.petTalentSlotMax('SR') === 2);
+assert('SSR 槽位上限 3', sandbox.petTalentSlotMax('SSR') === 3);
+assert('UR 槽位上限 4', sandbox.petTalentSlotMax('UR') === 4);
+assert('R 池仅 R 级', sandbox.petTalentPool('R').length === 2, 'len=' + sandbox.petTalentPool('R').length);
+assert('UR 池含全部 14 个（10 原天赋 + 4 新增低阶）', sandbox.petTalentPool('UR').length === 14, 'len=' + sandbox.petTalentPool('UR').length);
+assert('SSR 池含 R+SR+SSR', sandbox.petTalentPool('SSR').length === 8, 'len=' + sandbox.petTalentPool('SSR').length);
+
+const pr = sandbox.createPet({ speciesId: 'sparkle', rarity: 'R', name: '闪闪星' });
+pr.stage = 'mature';
+assert('R 初始无天赋', sandbox.getPetTalents(pr).length === 0);
+const bagT = sandbox.createMaterialBag();
+sandbox.addMaterial(bagT, 'spirit', 100);
+assert('R 首槽消耗 5', sandbox.petTalentUnlockCost(pr) === 5);
+const un1 = sandbox.unlockPetTalent(pr, bagT, 'pet_tough');
+assert('解锁天赋成功', un1.ok === true && sandbox.getPetTalents(pr).length === 1, JSON.stringify(un1));
+assert('灵能已扣 5', bagT.spirit === 95);
+assert('第二槽消耗 10', sandbox.petTalentUnlockCost(pr) === 10);
+const un2 = sandbox.unlockPetTalent(pr, bagT, 'pet_quick');
+assert('解锁第二槽', un2.ok === true && sandbox.getPetTalents(pr).length === 2, JSON.stringify(un2));
+assert('槽满拒绝', sandbox.unlockPetTalent(pr, bagT, 'pet_keen').ok === false);
+assert('重复天赋拒绝', sandbox.unlockPetTalent(pr, bagT, 'pet_tough').ok === false);
+assert('越级天赋拒绝（R 不能学 UR）', sandbox.unlockPetTalent(sandbox.createPet({ speciesId: 'sparkle', rarity: 'R' }), bagT, 'immovable').ok === false);
+assert('未指定天赋拒绝', sandbox.unlockPetTalent(pr, bagT, '').ok === false);
+
+// 天赋必须真正生效（新天赋带 statMods；R 基础 def=5）
+const unitT = sandbox.createPetUnit(pr);
+assert('天赋进入 Unit', unitT && unitT._talents.length === 2, 'talents=' + (unitT ? unitT._talents.join(',') : 'null'));
+assert('坚韧生效 def 5→7', unitT.base.def === 7, 'def=' + unitT.base.def);
+assert('轻捷生效 spd 5→6', unitT.base.spd === 6, 'spd=' + unitT.base.spd);
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);
