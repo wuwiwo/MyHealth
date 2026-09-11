@@ -1,10 +1,10 @@
 # MyHealth 交接文档 (HANDOFF)
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
-> **生成**：2026-09-02 · **最后更新：2026-09-11（对应 v2.1.1）**
-> **分支**：`main`（本地 = 远端 = `dd46332`）
-> **当前版本**：`APP_VERSION` = `2.1.1` · cache-busting `?v61` · 45 个 `page/*.js` 模块
-> **测试**：26 套件 / 541 断言，全部通过（含 a11y 护栏 40/40）
+> **生成**：2026-09-02 · **最后更新：2026-09-11（对应 v2.1.2）**
+> **分支**：`main`（本地 `37894e8`，领先远端 1 个提交，待推送）
+> **当前版本**：`APP_VERSION` = `2.1.2` · cache-busting `?v62` · 45 个 `page/*.js` 模块
+> **测试**：26 套件 / 551 断言，全部通过（含 a11y 护栏 40/40）
 
 ---
 
@@ -74,10 +74,10 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 
 | 项 | 值 |
 |---|---|
-| 当前版本 | **v2.1.1**（2026-09-11） |
-| HEAD | `dd46332`（merge commit） |
-| 远端 | `origin/main` = 同一提交，已同步 |
-| cache-busting | `?v61`（`page/index.html` 内全部 47 处） |
+| 当前版本 | **v2.1.2**（2026-09-11） |
+| HEAD | `37894e8`（敌群 desc 文案修复 + 版本三项同步） |
+| 远端 | `origin/main` = `190c96b`，本地领先 1 个提交（待推送） |
+| cache-busting | `?v62`（`page/index.html` 内全部 47 处） |
 | 模块数 | 45 个 `page/*.js`（+ 1 个 `page/data/exercises-dataset.js`） |
 | 最大文件 | `page/game-render.js` 763 行，其次 `page/challenge.js` 709 行 |
 
@@ -89,6 +89,7 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 - **v2.0.11** — Debug 面板首版（debug 线分支产物）
 - **v2.1.0** — 🎨 **设计体系版本**（设计令牌 + 移动端触控 + WCAG AA + 护栏测试）
 - **v2.1.1** — 🐞 Debug 面板合入设计体系线（令牌化 + a11y + 冲突合并）
+- **v2.1.2** — 📝 敌群关卡 `desc` 敌数文案与实际对齐（g3–g9 的「4 敌」→「最多 3 敌」）+ 修正同源过期注释 + 加防回归断言
 
 > ⚠️ **v2.0.10/2.0.11 与 v2.1.0 曾分叉**（两条线都改 `index.html`/`utils.js`/`README`/`changelog`），已于 `dd46332` 合并解决。若再见到两条线并行，合并前先看 §8 的冲突回避经验。
 
@@ -246,7 +247,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 - 首关 g1-1 的 atk = **14**，末关 g9-10 的 atk = **353**
 - **每大关第 5 小关为精英（`type: "elite"`）**、**第 10 小关为 Boss（`type: "boss"`）**（如 g1-5 elite、g1-10 boss）
-- ⚠️ **已知不一致**：`g9.desc` 字符串写「高阶试炼（4 敌+魂攻防）」，但实际数据每关最多 3 敌（该描述文案已过期，属用户可见文案 bug，待修）
+- ✅ **v2.1.2 已修**：`desc` 由三元表达式生成，g3–g4 曾写「进阶试炼（最多 4 敌）」、g5–g9 曾写「高阶试炼（4 敌+魂攻防）」，而实际生成上限是 3 敌（Boss 关 = 1 Boss + 2 护卫、精英关 = 1 精英 + 2 杂兵、普通关至多 3）。现文案与数据一致，并由 `test-group-levels.js` 的「`desc` 敌数一致」断言（逐大关比对）锁死防回归
 
 **其他战斗模块**：
 
@@ -301,7 +302,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ---
 
-## 8. 测试（26 套件 / 541 断言，全绿）
+## 8. 测试（26 套件 / 551 断言，全绿）
 
 ```bash
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
@@ -314,7 +315,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `test-challenge-borrow` | 27 | 隐藏挑战顺延/补召/误锁恢复 |
 | `test-skill` | 40 | 25 敌群技能 |
 | `test-pet-codex` | 37 | 图鉴 + 参战 Unit 生成 |
-| `test-group-levels` | 30 | 90 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 |
+| `test-group-levels` | 40 | 90 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / **`desc` 敌数与实际一致** |
 | `test-skills` | 29 | 玩家技能 |
 | `test-enemy` | 26 | 16 天赋 + 编成阶梯 |
 | `test-state-core` | 25 | 状态框架 |
@@ -359,7 +360,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 
 - [ ] **真机验收**：本地测试全绿，但手机端手感/性能（群战 8 倍速、飘字动画、长时间挂机）未全面验证
 - [ ] **敌群数值平衡**：90 关全通需要非常强的角色，曲线可能仍偏陡
-- [ ] **🐛 用户可见文案过期**：`page/group-levels.js` 中 `g9.desc` 写「高阶试炼（4 敌+魂攻防）」，实际每关最多 3 敌。属文案 bug（改这一处即触发版本三项纪律）
+- [x] **🐛 用户可见文案过期**：`page/group-levels.js` 的 `desc` 写「4 敌」，实际每关最多 3 敌 —— **v2.1.2 已修**（连同三处同源过期注释），并加防回归断言
 - [ ] **动作百科媒体**：媒体接线已完成（本地 `page/media/` + `MEDIA_BASE` 可配，见 `config.js`），**待确认 Vercel 部署后可访问**
 - [ ] **云同步健壮性**：Blob 存储的冲突合并策略较简单，多设备并发写入未压测
 - [ ] **Debug 面板扩展**：RNG 回放 / 时间旅行 / 同步日志 / 性能面板（见 §5 末尾）
