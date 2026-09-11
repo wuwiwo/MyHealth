@@ -7,3 +7,4 @@ backup/
 .commandcode/
 .obsidian/
 .git-disabled/
+.tmp-analysis/
