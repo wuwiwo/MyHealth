@@ -52,12 +52,32 @@ function hasSoulOf(lg) {
 }
 assert('g1 最多 2 敌', maxEnemiesOf(1) <= 2, '实际 ' + maxEnemiesOf(1));
 assert('g2 最多 2 敌', maxEnemiesOf(2) <= 2, '实际 ' + maxEnemiesOf(2));
-assert('g3 最多 4 敌', maxEnemiesOf(3) <= 4, '实际 ' + maxEnemiesOf(3));
-assert('g6 最多 4 敌', maxEnemiesOf(6) <= 4, '实际 ' + maxEnemiesOf(6));
+assert('g3 最多 3 敌', maxEnemiesOf(3) <= 3, '实际 ' + maxEnemiesOf(3));
+assert('g6 最多 3 敌', maxEnemiesOf(6) <= 3, '实际 ' + maxEnemiesOf(6));
+assert('g9 最多 3 敌', maxEnemiesOf(9) <= 3, '实际 ' + maxEnemiesOf(9));
 assert('g1 无魂攻防', !hasSoulOf(1));
 assert('g2 无魂攻防', !hasSoulOf(2));
 assert('g3 有魂攻防', hasSoulOf(3));
 assert('g6 有魂攻防', hasSoulOf(6));
+
+// ---- 3.5 desc 文案敌数 == 实际最多敌数（用户可见文案防回归）----
+// desc 由 game-views.js:134/194 直接渲染到关卡选择界面，
+// 曾出现「4 敌+魂攻防」而实际最多 3 敌的文案 bug，故加断言锁死。
+function maxEnemiesOfKey(k) {
+  var max = 0;
+  gl[k].stages.forEach(function (s) { max = Math.max(max, s.enemies.length); });
+  return max;
+}
+function claimedEnemiesOf(k) {
+  var m = (gl[k].desc || '').match(/最多\s*(\d+)\s*敌|（(\d+)\s*敌/);
+  return m ? parseInt(m[1] || m[2], 10) : NaN;
+}
+groupKeys.forEach(function (k) {
+  var actual = maxEnemiesOfKey(k);
+  var claimed = claimedEnemiesOf(k);
+  assert('desc 敌数一致 ' + k, claimed === actual,
+    'desc 声称 ' + claimed + ' 敌，实际最多 ' + actual + ' 敌 — 「' + gl[k].desc + '」');
+});
 
 // ---- 4. 难度递增 ----
 const g1Atk = gl.g1.stages[0].enemies[0].base.atk;

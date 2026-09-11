@@ -3,7 +3,7 @@
    9 大关卡 × 10 小关 = 90 关（程序化生成，难度递进）
    - 每大关第 5 小关 = 精英关；第 10 小关 = Boss 关
    - 大关 1-2：敌人无魂攻/魂防，最多 2 只
-   - 大关 3-6：敌人最多 4 只（含魂攻/魂防）
+   - 大关 3-9：敌人最多 3 只（含魂攻/魂防）
    - 属性随大关/小关递增
    纯数据生成。
    ============================================ */
@@ -80,7 +80,7 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
 function genStageEnemies(lg, st) {
   var isElite = (st === 5);
   var isBoss = (st === 10);
-  var maxEnemies = lg <= 2 ? 2 : 4;   // 大关 1-2 最多 2，3-6 最多 4
+  var maxEnemies = lg <= 2 ? 2 : 3;   // 大关 1-2 最多 2，3-9 最多 3（实际生成：Boss/精英 3、普通关至多 3）
   var enemies = [];
 
   if (isBoss) {
@@ -102,7 +102,7 @@ function genStageEnemies(lg, st) {
   return enemies;
 }
 
-/* 生成全部 6 大关 × 10 小关 */
+/* 生成全部 9 大关 × 10 小关 */
 var GROUP_LEVELS = {};
 (function () {
   for (var lg = 1; lg <= 9; lg++) {
@@ -119,7 +119,7 @@ var GROUP_LEVELS = {};
     GROUP_LEVELS['g' + lg] = {
       id: 'g' + lg,
       name: GROUP_STAGE_NAMES[lg],
-      desc: lg <= 2 ? '基础试炼（最多 2 敌）' : (lg >= 5 ? '高阶试炼（4 敌+魂攻防）' : '进阶试炼（最多 4 敌）'),
+      desc: lg <= 2 ? '基础试炼（最多 2 敌）' : (lg >= 5 ? '高阶试炼（最多 3 敌+魂攻防）' : '进阶试炼（最多 3 敌+魂攻防）'),
       stages: stages
     };
   }
