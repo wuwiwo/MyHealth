@@ -189,7 +189,17 @@ document.addEventListener('click',function(e){
     document.querySelectorAll('.speed-btn').forEach(b=>b.classList.remove('active'))
     el.classList.add('active');_battleSpeed=parseInt(el.dataset.speed);return
   }
-  if(el.classList.contains('modal-overlay')){el.classList.remove('open');return}
+  // v2.1.6：命中模态遮罩必须走**真正的关闭**（移除元素 + 解锁滚动）。
+  // 旧实现只 classList.remove('open') → 遮罩变 display:none 但 body 仍是 position:fixed，
+  // 页面从此永久无法滚动。现在由 openModal 托管的模态调 _close()；
+  // data-no-auto-close 的（如隐藏挑战小游戏进行中）跳过，交给调用方自己管。
+  if(el.classList.contains('modal-overlay')&&el.dataset.modalManaged){
+    if(!el.dataset.noAutoClose){
+      if(typeof el._close==='function')el._close()
+      else if(el.parentNode)el.remove()
+    }
+    return
+  }
 
   if(st&&el.classList.contains('sp-btn')){
     const dir=el.dataset.d;const isTgt=st==='strTgt'

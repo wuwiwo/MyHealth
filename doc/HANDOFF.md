@@ -2,11 +2,11 @@
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
 > **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
-> **生成**：2026-09-02 · **最后更新**：2026-09-11（对应 **v2.1.5**）
+> **生成**：2026-09-02 · **最后更新**：2026-09-11（对应 **v2.1.6**）
 > **分支**：`main` —— 提交号变动频繁，**以 `git log --oneline -5` 实时输出为准**，本文档不写死
 > ⚠️ **`git status` 的 ahead/behind 在本环境会失真**（本地远端引用不更新）—— **判断"推没推"必须用 `git ls-remote`**，详见 **§0.2.1**
-> **当前版本**：`APP_VERSION` = `2.1.5` · cache-busting `?v65` · 45 个 `page/*.js` 模块
-> **测试**：27 套件全部通过（含 a11y 护栏 40/40）
+> **当前版本**：`APP_VERSION` = `2.1.6` · cache-busting `?v66` · 45 个 `page/*.js` 模块
+> **测试**：28 套件 / 638 断言，全部通过（含 a11y 护栏 40/40）
 
 ---
 
@@ -169,12 +169,12 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 
 | 项 | 值 |
 |---|---|
-| 当前版本 | **v2.1.5**（2026-09-11） |
+| 当前版本 | **v2.1.6**（2026-09-11） |
 | HEAD / 远端 | **不写死** —— 用 `git log --oneline -1` 与 `git ls-remote origin refs/heads/main` 实时取（⚠️ **别信 `git status` 的 ahead 数**，见 §0.2.1） |
-| cache-busting | `?v65`（`page/index.html` 内全部 47 处；改 JS/CSS 必升） |
+| cache-busting | `?v66`（`page/index.html` 内全部 47 处；改 JS/CSS 必升） |
 | 模块数 | 45 个 `page/*.js`（+ 1 个 `page/data/exercises-dataset.js`） |
 | 最大文件 | `page/game-render.js` 763 行，其次 `page/challenge.js` 709 行 |
-| 测试 | 27 套件全绿（见 §8） |
+| 测试 | 28 套件 / 638 断言全绿（见 §8） |
 
 **其他分支**（远端存在，均落后于 main）：`feat/action-dataset`、`feat/uiux-batch1`、`feat/v2-m2a`、`feat/v2-m2a-rest`、`fix/version-sync`。
 
@@ -188,6 +188,7 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 - **v2.1.3** — 🐾 宠物养成：属性面板补炼化进度 / 炼化石 10:1 兑换 / 技能指定升级 / 天赋槽解锁
 - **v2.1.4** — 🐾 天赋回退为固有专属（修跨宠物共享）/ 宠物·技能面板补可滚动容器 / 修顶部横向溢出 38px / 浅色按钮改深橙底白字
 - **v2.1.5** — ⚔️ 命中·闪避系统（基础 95%）+ 10 个宠物专属天赋接入实战 + 修敌人可抽到宠物天赋
+- **v2.1.6** — 🔒 修「页面有时无法滚动」：模态滚动锁泄漏（兜底 observer 改各自持有 + 全局点击改真关闭）+ 隐藏挑战小游戏点背景不再卡死
 
 > ⚠️ **v2.0.10/2.0.11 与 v2.1.0 曾分叉**（两条线都改 `index.html`/`utils.js`/`README`/`changelog`），已于 `dd46332` 合并解决。若再见到两条线并行，合并前先看 §8 的冲突回避经验。
 
@@ -405,7 +406,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ---
 
-## 8. 测试（27 套件，全绿）
+## 8. 测试（28 套件 / 638 断言，全绿）
 
 ```bash
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
@@ -414,6 +415,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | 套件 | 断言 | 覆盖 |
 |---|---|---|
 | `test-a11y-tokens` | 40 | 🛡️ **设计体系护栏**（见 §4.3） |
+| `test-scroll-lock` | 13 | 🔒 **模态滚动锁必须归零**（防「页面无法滚动」，见 §12 第 10 条） |
 | `test-page-load` | 27 | 页面加载链冒烟（校验 index.html 挂载了全部模块 + 骨架容器）——**接线事故防线** |
 | `test-challenge-borrow` | 27 | 隐藏挑战顺延/补召/误锁恢复 |
 | `test-skill` | 40 | 25 敌群技能 |
@@ -513,3 +515,8 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 7. **群战与隐藏挑战的技能点是两条独立代码路径**，调数值时别只改一处。
 8. **两条线并行开发易分叉**（v2.0.10/11 vs v2.1.0）：都改 `index.html`/`utils.js`/`README`/`changelog` 必冲突。解决经验：`index.html` 用 `git checkout --theirs` 取远端结构，再用 sed/脚本**重放自己的增量改动**（比手抠冲突块快且不会丢远端的改造）；changelog 用脚本按「远端行 + 本地行 + 本地章节 + 远端章节」重组。
 9. **`git status` 的 ahead/behind 不可信**（2026-09-11 实测）：沙箱会**静默丢弃 git 对 `.git/refs/remotes/**` 的写入** —— `git fetch` 打印 `xxx..yyy main -> origin/main`、`git update-ref` 返回 exit=0、reflog 都写了，**但 ref 文件就是不落盘**；于是 git 回退去读 `packed-refs` 的旧值，`git status` 长期误报「ahead 24」（本地引用其实停在 v2.0.9）。**判断"推没推"一律用 `git ls-remote origin refs/heads/main`**（直连远端，不读本地引用）。完整对照实验与修复手法见 **§0.2.1**。
+10. **模态关掉后页面滚不动**（2026-09-11 修复，v2.1.6）：`openModal` 锁滚动的方式是给 `body` 加 `position:fixed`，**只要有一条路径没解锁，`body` 就永久 fixed，整页再也无法滚动，用户只能刷新**。两条高危写法别再写：
+    - ❌ 只 `classList.remove('open')` 就算关闭 —— 遮罩只是 `display:none`，锁还在（`app.js` 的全局点击处理器就是这个 bug，且 `closest('[id]')` 会让**所有带 id 的模态**都命中）
+    - ❌ 兜底 `MutationObserver` 用**共享全局**变量 —— 嵌套模态时第二个拿不到兜底，且前一个模态的 `close()` 会掐断后一个的 observer
+    - ✅ 正解：observer 每个模态各自持有；`close()` 幂等且只断自己的；关闭一律走 `_close()`（`utils.js` 已实现，模态带 `data-modal-managed` 标记）
+    - ✅ 防回归：`scripts/test-scroll-lock.js` 断言 `_scrollLockCount()` 最终为 0。改这块代码时务必跑它

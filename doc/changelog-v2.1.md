@@ -8,6 +8,33 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 
 ---
 
+## v2.1.6
+
+**Date:** 2026-09-11
+
+### 修复
+
+- 🔒 **修复「页面有时无法滚动」（线上偶发）**：`openModal` 用 `body{position:fixed}` 锁滚动，但存在两条漏解锁路径，`body` 一旦卡在 `position:fixed` 就**永久无法滚动，只能刷新页面**
+  - **根因 1 — 兜底 observer 是共享全局 `_mo`**：`if(window.MutationObserver&&!_mo)` 使嵌套模态中的第二个**拿不到兜底**；且 `close()` 里无差别的 `_mo.disconnect()` 会掐断**属于另一个模态**的 observer → `_scrollLock` 计数不回落
+  - **根因 2 — 全局点击处理器只摘 class**：`app.js` 里 `el.classList.remove('open')` 只让遮罩 `display:none`，**既不移除元素也不解锁滚动**；而 `closest('button,[id],...')` 让**所有带 `id` 的模态**（共 10 处）都会命中这条残废路径
+- 🎮 **隐藏挑战小游戏点背景不再卡死**：游戏进行中（`ticking===true`）点背景，弹窗自己的处理器为了保护对局**故意不关闭**，但全局处理器仍会把 `open` 摘掉 → **弹窗隐形、游戏继续跑、结算结果渲染进隐藏弹窗** → 用户既看不到结果也点不到关闭 → 页面永久冻结。现加 `data-no-auto-close` 标记，游戏结束后自动解除
+
+### 修改文件
+
+- `page/utils.js`（兜底 observer 改为**每个模态各自持有**；`close()` 幂等且只断自己的 observer；新增 `_scrollLockCount()` 供测试断言；`openModal` 给模态打 `data-modal-managed` 标记）
+- `page/app.js`（命中 `.modal-overlay` 时改为调 `_close()` 真正关闭，而不是只摘 class；尊重 `data-no-auto-close`）
+- `page/challenge.js`（小游戏弹窗加 `data-no-auto-close`，`endChallenge()` 里解除）
+- `scripts/test-scroll-lock.js`（**新增**，13 断言）
+- `page/utils.js`（`APP_VERSION` 2.1.5 → 2.1.6）· `page/index.html`（`?v65` → `?v66`，47 处）
+- `README.md` / `doc/changelog-v2.1.md` / `doc/HANDOFF.md`
+
+### 测试
+
+- **28 个套件全绿**（27 → 28，新增 `test-scroll-lock.js`），含设计体系护栏 40/40
+- ★ **反向验证**：把 `utils.js` 临时还原成修复前的共享 `_mo` 实现，新测试**失败 4 条**（`count=2` / `count=1` 卡住），确认断言非空转、且诊断的根因真实存在；还原后 13/13 通过
+
+---
+
 ## v2.1.5
 
 **Date:** 2026-09-11
@@ -326,3 +353,4 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 | v2.1.3 | 45 | 763 行 game-render.js | 🐾 宠物面板补炼化进度 + 炼化石 10:1 兑换 + 技能指定升级 + 天赋槽解锁 |
 | v2.1.4 | 45 | 763 行 game-render.js | 🐾 天赋回退为固有专属（修跨宠物共享）+ 宠物/技能面板补可滚动容器 + 修顶部横向溢出 + 浅色按钮改深橙白字 |
 | v2.1.5 | 45 | 763 行 game-render.js | ⚔️ 命中/闪避系统 + 10 个宠物专属天赋接入实战 + 修敌人可抽到宠物天赋 |
+| v2.1.6 | 45 | 763 行 game-render.js | 🔒 修「页面永久无法滚动」：模态滚动锁泄漏（observer 改各自持有 + 全局关闭改真关闭） |

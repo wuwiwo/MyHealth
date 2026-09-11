@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.1.5';
+const APP_VERSION = '2.1.6';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -74,8 +74,13 @@ setTimeout(()=>{o.classList.add('out');setTimeout(()=>{if(o.parentNode)o.remove(
    opts.noBackdrop —— 调用方自行管理关闭（遮罩点击不关）。
    返回的 modal 上挂 _close()，供调用方主动关闭并正确解锁滚动。 */
 
-/* 滚动锁定：引用计数支持嵌套模态；_mo 兜底防止外部直接 modal.remove() 导致页面永久冻结 */
-let _scrollLock=0,_scrollY=0,_mo=null
+/* 滚动锁定：引用计数支持嵌套模态。
+   ★ v2.1.6 修复「页面永久无法滚动」：
+   兜底 observer 原先是共享全局 `_mo`，导致 ① 嵌套时第二个模态拿不到兜底；
+   ② A 的 close() 会无差别 disconnect 掉属于 B 的 observer。
+   任一模态因此漏解锁 → _scrollLock 卡住 → body 永久 position:fixed。
+   现改为**每个模态各自持有** observer，且 close() 幂等。 */
+let _scrollLock=0,_scrollY=0
 function _lockScroll(){
   if(_scrollLock++>0)return
   _scrollY=window.scrollY||document.documentElement.scrollTop||0
@@ -88,19 +93,25 @@ function _unlockScroll(){
   document.body.style.position='';document.body.style.top='';document.body.style.width=''
   window.scrollTo(0,_scrollY)
 }
+/* 仅供测试断言：模态全部关闭后必须回落到 0 */
+function _scrollLockCount(){return _scrollLock}
 function openModal(html,id,opts){
   const modal=document.createElement('div');modal.className='modal-overlay open'
   modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true')
+  modal.dataset.modalManaged='1'   // 标记：由 openModal 托管，全局点击处理器才能代管关闭
   if(id)modal.id=id
   if(html!=null)modal.innerHTML=html
   document.body.appendChild(modal)
 
   const prevFocus=document.activeElement
   _lockScroll()
+  let closed=false, mo=null
 
   function close(){
+    if(closed)return   // 幂等：自身处理器与 app.js 全局兜底可能重复调用，避免重复解锁
+    closed=true
     document.removeEventListener('keydown',onKey)
-    if(_mo){_mo.disconnect();_mo=null}
+    if(mo){mo.disconnect();mo=null}   // 只断自己持有的 observer
     if(modal.parentNode)modal.remove()
     _unlockScroll()
     if(prevFocus&&prevFocus.focus&&document.contains(prevFocus))prevFocus.focus()
@@ -114,12 +125,10 @@ function openModal(html,id,opts){
     if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
     else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
   }
-  // 兜底：调用方若直接 modal.remove()，滚动锁必须照样解除
-  if(window.MutationObserver&&!_mo){
-    _mo=new MutationObserver(function(){
-      if(!modal.isConnected){if(_mo){_mo.disconnect();_mo=null}_unlockScroll();document.removeEventListener('keydown',onKey)}
-    })
-    _mo.observe(document.body,{childList:true})
+  // 兜底：调用方若直接 modal.remove()（不经 _close），滚动锁必须照样解除
+  if(window.MutationObserver){
+    mo=new MutationObserver(function(){ if(!modal.isConnected)close() })
+    mo.observe(document.body,{childList:true})
   }
   document.addEventListener('keydown',onKey)
   if(!(opts&&opts.noBackdrop)){

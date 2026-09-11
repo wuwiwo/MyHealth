@@ -410,6 +410,10 @@ function startHiddenChallenge(hotBuff){
   }
   
   var modal=openModal(null,'challengeModal',{noBackdrop:true})
+  // v2.1.6：游戏进行中禁止任何"点背景隐藏"（app.js 的全局兜底也要跳过）。
+  // 旧行为：点背景只摘 open class → 弹窗隐形、游戏继续跑、结果渲染进隐藏弹窗、
+  // body 永久 position:fixed → 整页无法滚动。结束后在 endChallenge 里解除该标记。
+  modal.dataset.noAutoClose='1'
   var h='<div class="modal-sheet wide">'
     +'<div class="modal-handle"></div>'
     +'<div class="modal-title">🔬 隐藏挑战</div>'
@@ -486,6 +490,8 @@ function startHiddenChallenge(hotBuff){
   function endChallenge(){
     state.ticking=false
     if(state.timer){clearInterval(state.timer);state.timer=null}
+    // v2.1.6：游戏已结束，解除"禁止点背景关闭"标记，让结算界面可正常关闭
+    if(modal)delete modal.dataset.noAutoClose
     if(attackBtn)attackBtn.disabled=true
     // Calculate bonus: total damage → reward
     var dmg=state.totalDamage
