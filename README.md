@@ -103,30 +103,21 @@ page/
 ├── package.json
 └── vercel.json
 doc/
-├── README-v1.0.md       版本说明 v1.0
-├── project-analysis-v1.0.md
-├── code-review-v1.0.md
-├── code-review-v1.5.md
-├── roadmap-v1.1.md
-├── roadmap-v1.6.md
-├── changelog-v1.3.md
-├── changelog-v1.4.md
-├── changelog-v1.5.md
-├── changelog-v1.6.md
-├── changelog-v1.7.md
-├── changelog-v1.8.md
-├── changelog-v1.9.md
-├── HANDOFF.md  ← 🤝 AI/开发者交接文档（立即上手：环境/纪律/模块/测试/待办）
-├── changelog-v2.1.md  ← 最新版本日志
-├── design-tokens-v2.1.md  ← 设计规范（唯一权威：令牌/对比度/触控/无障碍）
-├── changelog-v2.0.md
-├── design-v2.0.md       v2.0 设计文档（技能/宠物/宝珠）
-├── design-uiux-adjustments.md  v2.0 UI/UX 调整设计
-├── plan-v2.0-implementation.md v2.0 实施计划
-├── v2.0问题回答与补充.md      v2.0 设计问答与裁决记录
-└── plans/
-    ├── plan-20260827-m2a-kickoff.md     M2a 起步计划（权威版）
-    └── plan-20260827-action-dataset.md  动作数据集接入计划
+├── HANDOFF.md  ← 🤝 AI/开发者交接文档（环境/纪律/模块/测试/待办/踩坑）
+├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
+├── design-v2.0.md          v2.0 玩法设计（玩家技能/宠物/宝珠/多对多敌群）
+├── 2.0 敌群设计.md          敌群内容层设计（天赋/技能/编成）
+├── mechanics-biopsy-v2.0.4.md  🔬 机制解构结论（战斗决策数/经济通胀/防御轴失效）
+├── changelog-v1.3 ~ v1.9.md、v1.10、v1.11、v2.0、v2.1.md   版本日志（v2.1 为最新）
+└── archive/  📦 历史归档（使命已完成，仅供追溯）
+    ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
+    ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
+    ├── plan-v2.0-implementation.md                  v2.0 实施计划
+    ├── design-uiux-adjustments.md                   v2.0 前 UI/UX 调整清单
+    ├── v2.0问题回答与补充.md                        v2.0 设计问答（已并入 design-v2.0）
+    └── plans/
+        ├── plan-20260827-m2a-kickoff.md             M2a 起步计划
+        └── plan-20260827-action-dataset.md          动作数据集接入计划
 ```
 
 ---
@@ -182,7 +173,7 @@ Vercel 项目设置：
 
 | 版本 | 日期 | 摘要 | 文档 |
 |------|------|------|------|
-| v1.0 | 2026-06 | 初始版本：4 Tab + RPG战斗 + Vercel Blob同步 | `doc/README-v1.0.md` |
+| v1.0 | 2026-06 | 初始版本：4 Tab + RPG战斗 + Vercel Blob同步 | —（v1.0 文档已清理）|
 | v1.1 | 2026-06-14 | Store模块提取、文件拆分（1→10文件）、架构重构 | — |
 | v1.2 | 2026-06-14 | PR追踪、属性日志、关卡记录、训练统计、有氧计划 | — |
 | v1.3 | 2026-06-14 | 有氧强度、自定义运动类型、关卡预览、Profile子Tab | `doc/changelog-v1.3.md` |

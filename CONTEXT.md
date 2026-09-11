@@ -221,7 +221,7 @@ game-views.js / game-render.js / debug.js → UI 层，末尾加载
 |------|----------|
 | 样式 / 令牌 / 无障碍（**写样式前必读**） | `doc/design-tokens-v2.1.md` |
 | v2.0 玩法设计：玩家技能 / 宠物 / 多对多敌群 | `doc/design-v2.0.md`（含 OQ 裁决表） |
-| v2.0 实施路线、模块边界、数据结构 | `doc/plan-v2.0-implementation.md` |
+| v2.0 实施路线、模块边界、数据结构 | `doc/archive/plan-v2.0-implementation.md`（已归档） |
 | 敌群内容层：天赋 / 技能 / 编成梯度 | `doc/2.0 敌群设计.md` |
 | 机制结构性结论：战斗层决策数、经济通胀、防御轴失效 | `doc/mechanics-biopsy-v2.0.4.md` |
 | 各版本变更明细 | `doc/changelog-v*.md` |
