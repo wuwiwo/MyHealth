@@ -1,6 +1,7 @@
 # MyHealth 交接文档 (HANDOFF)
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
+> **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
 > **生成**：2026-09-02 · **最后更新：2026-09-11（对应 v2.1.2）**
 > **分支**：`main`（本地 `37894e8`，领先远端 1 个提交，待推送）
 > **当前版本**：`APP_VERSION` = `2.1.2` · cache-busting `?v62` · 45 个 `page/*.js` 模块
@@ -19,10 +20,38 @@ cd page && python3 -m http.server 8801
 
 `page/` 就是 Vercel 的部署根目录。也可直接访问线上：<https://my-health-six.vercel.app/>
 
-### 0.2 ⚠️ 本项目的 git 有特殊封装（重要，先读这段）
+### 0.2 ⚠️ 先判定 git 环境，再动手（重要，第一件事就读这段）
 
-本仓库的工作树位于 **Android SAF 挂载目录**（`/var/minis/mounts/_ai/MyHealth`）。SAF 桥接层有缺陷：git 写 loose object 时先建临时文件再 rename，跨层 rename 会失败，报
-`unable to write file .git/objects/...: No such file or directory`。
+本仓库存在**两种截然不同的工作环境**，用错 git 方式会直接失败。
+**本节是写给接手的 AI / 开发者的判定规则**——如果交接指令里写了「务必用 `myhealth-git`」，也请先跑完下面的判定再决定，**不要照抄**。
+
+**第一步：判定当前环境**（整段复制执行）
+
+```bash
+# 条件 A：Android SAF 挂载目录是否存在
+test -d /var/minis/mounts/_ai/MyHealth && echo "A: SAF 挂载存在" || echo "A: 无"
+# 条件 B：wrapper 是否已安装
+command -v myhealth-git >/dev/null 2>&1 && echo "B: wrapper 存在" || echo "B: 无"
+```
+
+**第二步：按结果选工具**
+
+| 判定 | 环境 | 该用什么 |
+|---|---|---|
+| A ✅ 且 B ✅ | Android SAF 挂载环境 | **必须用 `myhealth-git`**（见下方专用说明） |
+| A ❌ 或 B ❌（任一不满足） | 普通 Linux / Windows | **直接用 `git`** —— 这就是正确做法 |
+
+> 🚨 **最常见误区**：看到本文档或交接指令写「用 `myhealth-git`」，就在任何机器上一路照抄，然后花大量时间找一个根本不存在的 wrapper。
+>
+> **2026-09-11 实测案例**：Windows 机器上 `/var/minis/mounts/_ai/MyHealth` **不存在**（`/var` 目录本身就没有），`myhealth-git` **也未安装**（PATH、`~/.workbuddy/bin`、`~/bin`、`~/.local/bin`、项目 `scripts/`、shell 配置全查无）。
+> 该环境工作树在 `E:\dd\Documents\hanako\Health`，**直接用原生 `git` 是正确的**，不是违规、不是偷懒。
+>
+> 反过来也成立：在 Android 端若不用 wrapper，`git commit` 会报
+> `unable to write file .git/objects/...: No such file or directory`。
+
+**Android SAF 环境专用说明**（仅当判定为 A✅B✅ 才需要看）
+
+工作树位于 **Android SAF 挂载目录**（`/var/minis/mounts/_ai/MyHealth`）。SAF 桥接层有缺陷：git 写 loose object 时先建临时文件再 rename，跨层 rename 会失败，报上面的错误。
 
 **解决办法**：git 元数据已迁到本地文件系统，工作树仍在挂载目录。
 
@@ -41,7 +70,8 @@ myhealth-git log --oneline -5
 ```
 
 - 挂载目录里的 `.git` 已改名 `.git-disabled`（备份，已加 .gitignore）——**不要删除**
-- **在普通 Linux / Windows 机器上直接用 `git` 即可**，上面的封装只是本机 Android 环境的适配
+- **在普通 Linux / Windows 机器上直接用 `git` 即可**，上面的封装只是 Android 端环境的适配，与代码无关
+- ⚠️ wrapper 是**环境产物，不在仓库里**：`myhealth-git` 由 Android 端自行放到 `/usr/local/bin/`，仓库中搜不到它属正常，不代表丢失
 - 提交身份：`wuio-pc <wangdunhao@foxmail.com>`；远端 `git@github.com:wuwiwo/MyHealth.git`（SSH）
 - 偶发推送失败 `Could not read from remote repository`——SSH 本身正常（`ssh -T git@github.com` 可验证），**重试即可**，属网络抖动，不要折腾 key
 
@@ -404,6 +434,6 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 3. **CSS 令牌自引用**（v2.1.0 事故）：`--blue: var(--blue)` 导致深色主题整个 `--blue` 失效，且不报错。护栏 §4.3 规则 1 已防。
 4. **静默 catch**：护栏规则 8 扫的是 catch **体内**文本，注释写在括号外面不算，必须写在体内。
 5. **JS 内联硬编码字号**：护栏规则 5 会拦，一律 `var(--fs-*)`。硬编码 hex 颜色虽不报错，但浅色主题下会不协调 —— **用令牌**。
-6. **SAF 挂载 git 写失败** → 用 `myhealth-git` wrapper（见 §0.2）。
+6. **git 工具选错**（`myhealth-git` vs `git`）：看到文档/指令写「用 `myhealth-git`」就在任何机器上照抄 → 在 Windows/Linux 上根本找不到它，白花时间。**先按 §0.2 跑两步判定**（SAF 挂载目录存在？wrapper 已安装？），两个都是才用 wrapper，否则直接用 `git`。2026-09-11 已在 Windows 端踩过一次（详见 §0.2 的实测案例）。
 7. **群战与隐藏挑战的技能点是两条独立代码路径**，调数值时别只改一处。
 8. **两条线并行开发易分叉**（v2.0.10/11 vs v2.1.0）：都改 `index.html`/`utils.js`/`README`/`changelog` 必冲突。解决经验：`index.html` 用 `git checkout --theirs` 取远端结构，再用 sed/脚本**重放自己的增量改动**（比手抠冲突块快且不会丢远端的改造）；changelog 用脚本按「远端行 + 本地行 + 本地章节 + 远端章节」重组。
