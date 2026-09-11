@@ -15,7 +15,11 @@ const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const files = ['levels.js','unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js'];
-const sandbox = { Math, JSON, console };
+// v2.1.5：群战引入 5% 基础命中率，测试须用确定性随机才稳定（否则偶发落空）
+// 注意 Math 的属性不可枚举，必须用 Object.create 继承而非 Object.assign 拷贝
+const deterministicMath = Object.create(Math);
+deterministicMath.random = function () { return 0.5; };
+const sandbox = { Math: deterministicMath, JSON, console };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 files.forEach(f => vm.runInContext(load(f), sandbox));

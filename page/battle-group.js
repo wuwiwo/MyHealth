@@ -10,6 +10,70 @@
 var STATUS_NAMES = { sleep:'睡眠', poison:'中毒', freeze:'冰冻', flinch:'畏缩', wet:'潮湿', charging:'蓄力', possessed:'幽魂附身', doomed:'末日', armorbroken:'破甲', slow:'减速', souldown:'魂防降低', lastworded:'遗言诅咒', sleepy:'哈欠' };
 function getStatusName(id){ return STATUS_NAMES[id] || id; }
 
+/* ============ 命中 / 闪避（v2.1.5 引入） ============
+   设计文档本就要求命中率机制（技能「闪耀：敌方命中率 -0%~40%」「打湿：提高对其命中率 0%~30%」），
+   此前只有文案没有判定，这里补上，并让天赋「漆黑之眼 / 心眼」落地。
+   公式：命中率 = BASE_HIT_RATE + 自身命中修正(_accMod) − 目标闪避(_eva)，clamp 到 [5%, 100%]。
+   现有单位默认 _accMod=0 / _eva=0，所以仅受那 5% 基础未命中影响。 */
+var BASE_HIT_RATE = 0.95;
+
+/* 计算实际命中率（含天赋 hook：guaranteedHit / noAccPenalty） */
+function groupHitChance(actor, target) {
+  var td = talentDispatch(actor, 'onBeforeHit', { target: target });
+  var guaranteed = false, noPenalty = false;
+  td.mutations.forEach(function (m) {
+    if (m.key === 'guaranteedHit') guaranteed = true;
+    if (m.key === 'noAccPenalty') noPenalty = true;
+  });
+  if (guaranteed) return 1;                       // 漆黑之眼：必定命中
+  var acc = BASE_HIT_RATE + (actor._accMod || 0);
+  if (noPenalty) acc = Math.max(BASE_HIT_RATE, acc);   // 心眼：命中率不会被降低
+  acc -= (target._eva || 0);
+  return Math.max(0.05, Math.min(1, acc));
+}
+
+/* 命中判定 */
+function groupRollHit(gb, actor, target) {
+  return gb.rng() < groupHitChance(actor, target);
+}
+
+/* 多单位天赋调度（光环类：凛冬之核/威压领域/圣光守护） */
+function talentAura(units, hook, ctx) {
+  var out = { skipAction: false, mutations: [], events: [] };
+  (units || []).forEach(function (u) {
+    if (!u || u.hp <= 0) return;
+    var r = talentDispatch(u, hook, ctx);
+    if (r.skipAction) out.skipAction = true;
+    out.mutations = out.mutations.concat(r.mutations);
+    out.events = out.events.concat(r.events);
+  });
+  return out;
+}
+
+/* 天赋暴击判定（斗者本能）：返回 {chance, mult} */
+function talentCrit(actor) {
+  var td = talentDispatch(actor, 'onBeforeCrit', {});
+  var chance = 0, mult = 1.5;
+  td.mutations.forEach(function (m) {
+    if (m.key === 'critChance') chance = Math.max(chance, m.value);
+    if (m.key === 'critMult') mult = m.value;
+  });
+  return { chance: chance, mult: mult };
+}
+
+/* 伤害结算前的通用处理：目标阵营的「圣光守护」分担 + 天赋承伤修正
+   返回 {dmg, events}，dmg 已扣掉被队友分担的部分 */
+function applyAllyDamageShare(gb, target, dmg, events) {
+  var mates = (target.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) {
+    return u.hp > 0 && u.id !== target.id;
+  });
+  var res = talentAura(mates, 'onAllyDamage', { target: target, amount: dmg });
+  var share = 0;
+  res.mutations.forEach(function (m) { if (m.key === 'damageShare') share += m.value; });
+  res.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  return share > 0 ? Math.max(1, dmg - share) : dmg;
+}
+
 /* createGroupBattle({allies:[Unit], enemies:[Unit], rng?}) → group battle 状态
    allies/enemies 是 unit.js 的 Unit 数组 */
 function createGroupBattle(opts) {
@@ -85,6 +149,11 @@ function selectTargets(gb, actor, skillDef) {
 function normalAttack(gb, actor, target) {
   var events = [];
   if (!target || target.hp <= 0) return events;
+  // 命中判定（v2.1.5）
+  if (!groupRollHit(gb, actor, target)) {
+    events.push({ msg: '💨 ' + (actor.name || '单位') + ' 的攻击落空（' + target.name + ' 闪避）', targetId: target.id });
+    return events;
+  }
   // 普攻伤害（同原公式）
   var dmg = Math.max(1, actor.base.atk - Math.floor(target.base.def / 2) + Math.floor(gb.rng() * 4) + 1);
   // 天赋 hook: 利刃加成 / 多目标惩罚 / 末日减半
@@ -99,11 +168,18 @@ function normalAttack(gb, actor, target) {
     if (m.key === 'reflectFlat') { target.hp = Math.max(0, target.hp - dmg); actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 粗糙皮肤反伤 ' + m.value }); }
     if (m.key === 'dmgTakenBoost') dmg = Math.floor(dmg * (1 + m.value));
     if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * 0.7);
+    if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));   // 不动如山：满血受伤 -50%
   });
   // 玩家暴击技能（取高）
   if (actor.side === 'ally' && typeof playerCritHook === 'function') {
     var critDmg = playerCritHook(actor, dmg);
     if (critDmg > dmg) { dmg = critDmg; events.push({ msg: '💥 暴击！' }); }
+  }
+  // 天赋暴击（斗者本能：普攻 25% 暴击 / 150% 伤害）
+  var tc = talentCrit(actor);
+  if (tc.chance > 0 && gb.rng() < tc.chance) {
+    dmg = Math.floor(dmg * tc.mult);
+    events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + tc.mult });
   }
   // 玩家受击：瞩目计数
   if (target.side === 'ally' && target._spotTauntTurn) {
@@ -114,6 +190,8 @@ function normalAttack(gb, actor, target) {
     var blockDmg = playerBlockHook(target, dmg);
     if (blockDmg < dmg) { dmg = blockDmg; events.push({ msg: '🛡️ ' + target.name + ' 格挡！' }); }
   }
+  // 圣光守护：队友分担伤害（目标少受，分担者自己掉血）
+  dmg = applyAllyDamageShare(gb, target, dmg, events);
   target.hp = Math.max(0, target.hp - dmg);
   events.push({ msg: (actor.name || '单位') + ' 攻击 → ' + dmg + ' 伤害', targetId: target.id });
   // 嗜血：造成伤害恢复
@@ -138,10 +216,20 @@ function castSkill(gb, actor, skillId) {
       dmgResult.hits.forEach(function (h) {
         var t = gb.units.find(function (u) { return u.id === h.targetId; });
         if (t && t.hp > 0) {
+          // 命中判定（v2.1.5）
+          if (!groupRollHit(gb, actor, t)) {
+            events.push({ msg: '💨 ' + (actor.name || '') + ' 的 ' + def.name + ' 落空（' + t.name + ' 闪避）', targetId: t.id });
+            return;
+          }
           // 天赋修正（利刃等）
           var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: h.amount, isPhysical: h.dmgType === 'physical', attacker: actor, target: t });
           var dmg = h.amount;
           td.mutations.forEach(function (m) { if (m.key === 'dmgBoost') dmg = Math.floor(dmg * (1 + m.value)); });
+          // 天赋暴击（斗者本能）
+          var tc2 = talentCrit(actor);
+          if (tc2.chance > 0 && gb.rng() < tc2.chance) { dmg = Math.floor(dmg * tc2.mult); events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + tc2.mult }); }
+          // 圣光守护：队友分担
+          dmg = applyAllyDamageShare(gb, t, dmg, events);
           t.hp = Math.max(0, t.hp - dmg);
           events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + dmg + ' 伤害', targetId: t.id });
           // 蓄力重击：蓄力状态
@@ -166,11 +254,18 @@ function castSkill(gb, actor, skillId) {
   fx.statusApps.forEach(function (sa) {
     var t = gb.units.find(function (u) { return u.id === sa.unitId; });
     if (t && t.hp > 0) {
-      // 朴实：免疫状态
-      var plain = talentDispatch(t, 'onBeforeStatus', {});
-      if (!plain.skipAction) {
+      var grade = sa.grade || 1;
+      // 朴实：免疫状态；不动如山：满血免疫普通~高级
+      var selfGuard = talentDispatch(t, 'onBeforeStatus', { statusId: sa.id, grade: grade });
+      // 阵营光环守卫（凛冬之核：我方全体免疫冰冻）
+      var mates = (t.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return u.hp > 0; });
+      var auraGuard = talentAura(mates, 'onAllyStatus', { statusId: sa.id, grade: grade, target: t });
+      if (!selfGuard.skipAction && !auraGuard.skipAction) {
         applyStatus(t, { id: sa.id, duration: sa.duration, source: actor });
         events.push({ msg: '🌀 ' + actor.name + ' → ' + t.name + ' 施加 ' + getStatusName(sa.id) + '(' + sa.id + ')' });
+      } else {
+        var blocked = selfGuard.events.concat(auraGuard.events);
+        events.push({ msg: blocked.length ? blocked[0].msg : ('🛡️ ' + t.name + ' 免疫 ' + getStatusName(sa.id)) });
       }
     }
   });
@@ -180,8 +275,21 @@ function castSkill(gb, actor, skillId) {
       // 末日阻断治疗
       var doom = dispatch(t, 'onHeal', {});
       if (!doom.skipAction) {
-        t.hp = Math.min(t.base.hp, t.hp + h.amount);
-        events.push({ msg: '💚 ' + t.name + ' 治疗 +' + h.amount });
+        var amount = h.amount;
+        // 镜像结界：受我方辅助 +25% / 受敌方辅助 -25%（ctx.source 为施法者）
+        var th = talentDispatch(t, 'onBeforeHeal', { amount: amount, source: actor, isSupport: true });
+        th.mutations.forEach(function (m) {
+          if (m.key === 'healBoost') amount = Math.floor(amount * (1 + m.value));
+          if (m.key === 'healReduce') amount = Math.floor(amount * (1 - m.value));
+        });
+        // 威压领域：血量>75% 时敌方全体治疗效果 -20%
+        var foes = (t.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; });
+        var pf = talentAura(foes, 'onFoeHeal', { target: t, amount: amount });
+        pf.mutations.forEach(function (m) { if (m.key === 'healReduce') amount = Math.floor(amount * (1 - m.value)); });
+        pf.events.forEach(function (e) { events.push({ msg: e.msg }); });
+        if (amount < 0) amount = 0;
+        t.hp = Math.min(t.base.hp, t.hp + amount);
+        events.push({ msg: '💚 ' + t.name + ' 治疗 +' + amount });
       } else events.push({ msg: '🌑 ' + t.name + ' 末日阻断治疗' });
     }
   });
@@ -232,7 +340,7 @@ function groupUnitTurn(gb, actor) {
     ps.forEach(function (e) { events.push({ msg: e.msg }); });
   }
   // 天赋 onTurnStart
-  var ts = talentDispatch(actor, 'onTurnStart', { turn: turn, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies });
+  var ts = talentDispatch(actor, 'onTurnStart', { turn: turn, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies });
   ts.events.forEach(function (e) { events.push({ msg: e.msg }); });
 
   // 状态 onTurnStart（哈欠→睡眠等）
@@ -299,13 +407,19 @@ function groupUnitTurn(gb, actor) {
   // 天赋 onAfterAction / onTurnEnd
   var ae = talentDispatch(actor, 'onAfterAction', {});
   ae.events.forEach(function (e) { events.push({ msg: e.msg }); });
-  var te = talentDispatch(actor, 'onTurnEnd', { turn: turn });
+  var te = talentDispatch(actor, 'onTurnEnd', { turn: turn, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies });
   te.events.forEach(function (e) { events.push({ msg: e.msg }); });
   var se = dispatch(actor, 'onTurnEnd', { turn: turn });
   se.events.forEach(function (e) { events.push({ msg: e.msg }); });
 
   // 技能冷却递减
   tickSkillCooldowns(actor);
+
+  // 命中/闪避修正倒计时（闪耀 / 打湿）
+  if (actor._hitModTurns > 0) {
+    actor._hitModTurns--;
+    if (actor._hitModTurns === 0) { actor._accMod = 0; actor._eva = 0; }
+  }
 
   return events;
 }

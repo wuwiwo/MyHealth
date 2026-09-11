@@ -16,7 +16,19 @@ const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const files = ['date-roll.js','levels.js','group-levels.js','unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js','terrain.js','ai.js','pets.js','pet-materials.js','pet-codex.js','skills.js','player-skill-hooks.js'];
-const sb = { Math, JSON, console, Date };
+// v2.1.5：群战引入 5% 基础命中率，测试改用可复现伪随机（mulberry32）
+// 不能用恒定 0.5 —— 本套件断言依赖概率分支（暴击 225%、气势如虹），钉死会让分支永不触发
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const deterministicMath = Object.create(Math);
+deterministicMath.random = mulberry32(20260911);
+const sb = { Math: deterministicMath, JSON, console, Date };
 sb.window = sb;
 vm.createContext(sb);
 files.forEach(f => vm.runInContext(load(f), sb));

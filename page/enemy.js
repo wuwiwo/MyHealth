@@ -64,7 +64,11 @@ function createEnemyUnit(opts) {
 
 /* 从注册表随机抽 N 个不重复天赋 */
 function pickRandomTalents(n) {
-  var ids = Object.keys(TALENTS);
+  // 排除宠物专属天赋（petOnly）——否则敌人会抽到「漆黑之眼」「圣光守护」这类宠物天赋
+  var ids = Object.keys(TALENTS).filter(function (id) {
+    var t = TALENTS[id];
+    return t && !t.petOnly;
+  });
   var picked = [];
   var pool = ids.slice();
   for (var i = 0; i < n && pool.length; i++) {

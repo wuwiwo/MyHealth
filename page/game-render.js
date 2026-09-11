@@ -541,9 +541,18 @@ function groupVictoryReward(gb) {
   ]
   if (enemyCount >= 3) drops.push({ type: 'refineNormal', n: 1 })
   if (enemyCount >= 4) drops.push({ type: 'spirit', n: 1 + Math.floor(Math.random() * 2) })
+  // 幸运口袋（小负鼠天赋）：队伍中带此天赋者，胜利结算 35% 几率追加一份材料
+  var lucky = (gb && gb.allies ? gb.allies : []).filter(function (u) {
+    return u._talents && u._talents.indexOf('lucky_pocket') > -1
+  })
+  if (lucky.length && Math.random() < 0.35) {
+    var bonusPool = [{ type: 'nutrition', n: 1 }, { type: 'feed', n: 1 }, { type: 'spirit', n: 1 }]
+    var bp = bonusPool[Math.floor(Math.random() * bonusPool.length)]
+    drops.push({ type: bp.type, n: bp.n + 1, lucky: true })
+  }
   drops.forEach(function (d) {
     grantMaterial(d.type, d.n)
-    msgs.push(getMaterialName(d.type) + ' +' + d.n)
+    msgs.push((d.lucky ? '🍀 ' : '') + getMaterialName(d.type) + ' +' + d.n)
   })
   return { msg: msgs.join(' · ') }
 }

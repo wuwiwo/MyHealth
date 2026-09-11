@@ -8,6 +8,63 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 
 ---
 
+## v2.1.5
+
+**Date:** 2026-09-11
+
+### 新增功能
+
+- ⚔️ **命中 / 闪避系统**（设计文档本就要求，此前只有文案没有判定）：战斗不再是无条件命中
+  - `BASE_HIT_RATE = 0.95` 基础命中率；命中率 = 基础 + 自身命中修正(`_accMod`) − 目标闪避(`_eva`)，clamp 到 `[5%, 100%]`
+  - 未命中在战斗日志显示「💨 XX 的攻击落空（YY 闪避）」
+  - 修正来源：宠物技能「闪耀」敌方命中 −40%、「打湿」使目标更易被命中 +30%，均持续 2 回合
+  - 影响范围：**仅群战引擎**（`battle-group.js`）。单敌 `battle.js`（主线 117 关）**未改动**，行为不变
+- 🐾 **10 个宠物专属天赋全部接入实际战斗效果**（v2.1.3 遗留的空壳，对照 `design-v2.0.md` §2.6 实现）
+
+| 天赋 | 宠物 | 效果 | 落地机制 |
+|------|------|------|----------|
+| 漆黑之眼 | 黑暗鸦 | 攻击必定命中 | `onBeforeHit` → `guaranteedHit` |
+| 心眼 | 无念熊 | 命中率不会被降低 | `onBeforeHit` → `noAccPenalty` |
+| 斗者本能 | 无念熊 | 普攻 25% 暴击 / 150% 伤害 | `onBeforeCrit` → 通用暴击 |
+| 凛冬之核 | 小冰晶 | 自身在场时我方全体免疫冰冻 | `onAllyStatus` → 阵营光环守卫 |
+| 圣光守护 | 光之精灵 | 血量>50% 时承担队友 20% 伤害 | `onAllyDamage` → `damageShare` |
+| 镜像结界 | 梦幻 | 受我方辅助 +25% / 受敌方辅助 −25% | `onBeforeHeal` → `healBoost` |
+| 灵感涌动 | 梦幻 | 每回合开始随机 1 名友方魂攻 +20%（本回合内） | `onTurnStart` / `onTurnEnd` 临时改 `base.soulAtk` |
+| 不动如山 | 圣光麒麟 | 满血免疫普通~高级负面（grade ≤ 2）+ 受伤 −50% | `onBeforeStatus` / `onDamage` → `dmgTakenReduce` |
+| 威压领域 | 圣光麒麟 | 血量>75% 时敌方全体治疗 −20% | `onFoeHeal` → `healReduce` |
+| 幸运口袋 | 小负鼠 | 胜利结算 35% 几率追加一份材料 | `game-render.js` 的 `groupVictoryReward()` |
+
+### 修复
+
+- 🔒 **敌人会随机抽到宠物专属天赋**：`enemy.js` 的 `pickRandomTalents()` 用 `Object.keys(TALENTS)` 抽取，而宠物天赋注册在同一张表里 —— 敌人可能被装上「圣光守护」「幸运口袋」。现给 10 个宠物天赋加 `petOnly` 标记并在抽取时过滤
+- 🔧 **「闪耀」「打湿」此前只有文案**：`p_shine` 只 push 一条日志、`p_drench` 的「提高对其命中率」从未实现，现改为真实写入命中修正
+
+### 修改文件
+
+- `page/battle-group.js`（命中/闪避判定 + 通用暴击 + `talentAura` 光环调度 + 圣光守护分担 + 治疗修正 + 命中修正倒计时）
+- `page/pet-codex.js`（10 个天赋接入 hooks + `petOnly` 标记；闪耀/打湿改真实效果）
+- `page/enemy.js`（`pickRandomTalents` 过滤 petOnly）
+- `page/game-render.js`（幸运口袋接入结算掉落）
+- `page/utils.js`（`APP_VERSION` 2.1.4 → 2.1.5）
+- `page/index.html`（cache-busting `?v64` → `?v65`，47 处）
+- 新增 `scripts/test-pet-talents.js`（45 条断言）
+- `scripts/test-group-battle.js` / `test-group-levels.js` / `test-pet-codex.js` / `test-pet-store.js` / `test-player-skills.js` / `test-spotlight.js` / `test-terrain.js`（注入确定性随机，消除 5% 命中率带来的 flaky）
+- `README.md` / `doc/changelog-v2.1.md` / `doc/HANDOFF.md`
+
+### 测试
+
+- **27 个测试套件全绿**（新增 `test-pet-talents.js`），含设计体系护栏 40/40
+- 新增 45 条断言：命中率计算（基础/修正/闪避/下限）、10 个天赋的 hook 行为、petOnly 隔离（连抽 300 次不泄漏）、端到端普攻伤害分担
+- ★ **测试稳定性改造**：引入 5% 基础命中率后，所有跑群战的测试改用**确定性随机**。注意 `Math` 的属性**不可枚举**，必须用 `Object.create(Math)` + 覆盖 `random`，`Object.assign({}, Math)` 会丢掉 `min`/`floor` 等全部方法
+- ★ `test-player-skills` 与 `test-terrain` 需用 **mulberry32 伪随机**而非恒定 0.5：前者断言依赖概率分支（暴击 225%、气势如虹）会永不触发；后者恒定值会让场地战斗**不收敛**（实测 45s 超时）
+
+### ⚠️ 影响与遗留
+
+- **战斗数值影响**：基础命中率 95% 使群战双方期望伤害均降约 5%、回合数略增。当前所有单位 `_eva` / `_accMod` 默认 0；如需调平衡改 `battle-group.js` 的 `BASE_HIT_RATE` 一处即可
+- 单敌引擎（`battle.js`，主线 21 章 117 关）**不含命中判定**，与群战行为不同；要不要统一是独立议题
+
+---
+
 ## v2.1.4
 
 **Date:** 2026-09-11
@@ -268,3 +325,4 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 | v2.1.2 | 45 | 763 行 game-render.js | 📝 敌群 desc 敌数文案与实际对齐（4 敌→3 敌）+ 修正同源过期注释 |
 | v2.1.3 | 45 | 763 行 game-render.js | 🐾 宠物面板补炼化进度 + 炼化石 10:1 兑换 + 技能指定升级 + 天赋槽解锁 |
 | v2.1.4 | 45 | 763 行 game-render.js | 🐾 天赋回退为固有专属（修跨宠物共享）+ 宠物/技能面板补可滚动容器 + 修顶部横向溢出 + 浅色按钮改深橙白字 |
+| v2.1.5 | 45 | 763 行 game-render.js | ⚔️ 命中/闪避系统 + 10 个宠物专属天赋接入实战 + 修敌人可抽到宠物天赋 |

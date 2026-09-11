@@ -14,7 +14,19 @@ const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const files = ['unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js','terrain.js'];
-const sandbox = { Math, JSON, console };
+// v2.1.5：群战引入 5% 基础命中率，测试改用可复现伪随机（mulberry32）
+// 注意：不可用恒定 0.5 —— 场地战斗会长时间不收敛（实测 45s 超时）
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const deterministicMath = Object.create(Math);
+deterministicMath.random = mulberry32(20260911);
+const sandbox = { Math: deterministicMath, JSON, console };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 files.forEach(f => vm.runInContext(load(f), sandbox));

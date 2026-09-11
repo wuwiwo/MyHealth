@@ -26,7 +26,10 @@ function makeStore() {
 }
 
 const files = ['date-roll.js','levels.js','unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js','pets.js','pet-materials.js','pet-codex.js'];
-const sb = { Math, JSON, console, Date, store: makeStore() };
+// v2.1.5：群战引入 5% 基础命中率，测试用确定性随机保持稳定（Math 属性不可枚举，须 Object.create 继承）
+const deterministicMath = Object.create(Math);
+deterministicMath.random = function () { return 0.5; };
+const sb = { Math: deterministicMath, JSON, console, Date, store: makeStore() };
 sb.window = sb;
 vm.createContext(sb);
 files.forEach(f => vm.runInContext(load(f), sb));

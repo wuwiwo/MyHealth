@@ -87,13 +87,13 @@ function listPetCodex() { return Object.keys(PET_CODEX); }
 /* ============ 宠物专属技能注册（复用 SKILLS 机制） ============ */
 if (typeof registerSkill === 'function') {
 
-/* R：闪耀（蓄力后全场降命中） */
+/* R：闪耀（敌方全体命中率 -40%，2 回合） */
 registerSkill({ id:'p_shine', name:'闪耀', type:'support', target:'all', cooldown:4,
-  effects:[function(c,ts,r){ r.events.push({msg:'✨ 闪耀: 敌方命中降低'}); }] });
+  effects:[function(c,ts,r){ ts.forEach(function(t){ t._accMod = (t._accMod || 0) - 0.4; t._hitModTurns = 2; }); r.events.push({msg:'✨ 闪耀: 敌方命中率 -40%'}); }] });
 
-/* R：打湿（复用状态） */
+/* R：打湿（目标受击更容易命中 +30%，并施加潮湿） */
 registerSkill({ id:'p_drench', name:'打湿', type:'support', target:'random1', cooldown:5,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ r.statusApps.push({unitId:t.id,id:'wet',duration:2,chance:1,grade:2}); }); }] });
+  effects:[function(c,ts,r){ ts.forEach(function(t){ t._eva = (t._eva || 0) - 0.3; t._hitModTurns = 2; r.statusApps.push({unitId:t.id,id:'wet',duration:2,chance:1,grade:2}); }); }] });
 
 /* R：睡觉（自愈+睡眠） */
 registerSkill({ id:'p_sleep', name:'睡觉', type:'support', target:'self', cooldown:4,
@@ -141,35 +141,87 @@ registerSkill({ id:'p_warmight', name:'战意灌注', type:'support', target:'al
 /* ============ 宠物专属天赋注册（复用 TALENTS 机制） ============ */
 if (typeof registerTalent === 'function') {
 
-/* 小负鼠：幸运口袋（战斗结算额外材料） */
-registerTalent({ id:'lucky_pocket', name:'幸运口袋', desc:'战斗胜利结算几率获得随机额外材料' });
+/* ---- 宠物专属天赋（v2.1.5 起真实生效）
+   petOnly 标记 = 不会被 enemy.js 的 pickRandomTalents 抽给敌人 ---- */
 
-/* 黑暗鸦：漆黑之眼（必定命中） */
-registerTalent({ id:'dark_eye', name:'漆黑之眼', desc:'自身攻击必定命中' });
+/* 小负鼠：幸运口袋 —— 结算期生效，见 game-render.js 的 groupVictoryReward() */
+registerTalent({ id:'lucky_pocket', name:'幸运口袋', desc:'战斗胜利结算几率获得随机额外材料', petOnly:true });
 
-/* 小冰晶：凛冬之核（我方免疫冰冻） */
-registerTalent({ id:'winter_core', name:'凛冬之核', desc:'自身在场时我方全体免疫冰冻' });
+/* 黑暗鸦：漆黑之眼 —— 必定命中 */
+registerTalent({ id:'dark_eye', name:'漆黑之眼', desc:'自身攻击必定命中', petOnly:true,
+  hooks: { onBeforeHit: function () { return { mutations: [{ key:'guaranteedHit', value:true }] }; } } });
 
-/* 光之精灵：圣光守护（分担伤害） */
-registerTalent({ id:'holy_guard', name:'圣光守护', desc:'血量>50%时承担队友20%伤害' });
+/* 小冰晶：凛冬之核 —— 自身在场时我方全体免疫冰冻 */
+registerTalent({ id:'winter_core', name:'凛冬之核', desc:'自身在场时我方全体免疫冰冻', petOnly:true,
+  hooks: { onAllyStatus: function (unit, ctx) {
+    if (ctx.statusId === 'freeze') {
+      return { skipAction:true, events: [{ msg:'❄️ 凛冬之核: ' + (ctx.target ? ctx.target.name : '我方') + ' 免疫冰冻' }] };
+    }
+  } } });
 
-/* 梦幻：镜像结界 */
-registerTalent({ id:'mirror_field', name:'镜像结界', desc:'受我方辅助+25%，受敌方辅助-25%' });
+/* 光之精灵：圣光守护 —— 血量>50% 时承担队友 20% 伤害 */
+registerTalent({ id:'holy_guard', name:'圣光守护', desc:'血量>50%时承担队友20%伤害', petOnly:true,
+  hooks: { onAllyDamage: function (unit, ctx) {
+    if (unit.hp > unit.base.hp * 0.5 && ctx.amount > 0) {
+      var share = Math.max(1, Math.floor(ctx.amount * 0.2));
+      unit.hp = Math.max(0, unit.hp - share);
+      return { mutations: [{ key:'damageShare', value: share }], events: [{ msg:'✨ 圣光守护: ' + unit.name + ' 分担 ' + share }] };
+    }
+  } } });
 
-/* 梦幻：灵感涌动 */
-registerTalent({ id:'inspiration', name:'灵感涌动', desc:'每回合开始随机友方魂攻+20%' });
+/* 梦幻：镜像结界 —— 受我方辅助效果 +25%，受敌方辅助效果 -25% */
+registerTalent({ id:'mirror_field', name:'镜像结界', desc:'受我方辅助+25%，受敌方辅助-25%', petOnly:true,
+  hooks: { onBeforeHeal: function (unit, ctx) {
+    if (!ctx.isSupport) return;
+    var fromAlly = ctx.source && ctx.source.side === unit.side;
+    return { mutations: [{ key:'healBoost', value: fromAlly ? 0.25 : -0.25 }] };
+  } } });
 
-/* 无念熊：心眼 */
-registerTalent({ id:'mind_eye', name:'心眼', desc:'自身命中率不会被降低' });
+/* 梦幻：灵感涌动 —— 每回合开始随机 1 名友方魂攻 +20%（持续到本回合结束） */
+registerTalent({ id:'inspiration', name:'灵感涌动', desc:'每回合开始随机友方魂攻+20%', petOnly:true,
+  hooks: {
+    onTurnStart: function (unit, ctx) {
+      var mates = (ctx.allyUnits || []).filter(function (u) { return u.hp > 0; });
+      if (!mates.length) return;
+      var t = mates[Math.floor(Math.random() * mates.length)];
+      if (!t._inspireBoost) t._inspireOrig = t.base.soulAtk || 0;
+      t.base.soulAtk = Math.floor((t._inspireOrig || 0) * 1.2);
+      t._inspireBoost = true;
+      return { events: [{ msg:'✨ 灵感涌动: ' + t.name + ' 魂攻 +20%' }] };
+    },
+    onTurnEnd: function (unit, ctx) {
+      (ctx.allyUnits || []).forEach(function (u) {
+        if (u && u._inspireBoost) { u.base.soulAtk = u._inspireOrig; u._inspireBoost = false; }
+      });
+    }
+  } });
 
-/* 无念熊：斗者本能 */
-registerTalent({ id:'fighter_instinct', name:'斗者本能', desc:'普攻25%暴击，暴击150%伤害' });
+/* 无念熊：心眼 —— 自身命中率不会被降低 */
+registerTalent({ id:'mind_eye', name:'心眼', desc:'自身命中率不会被降低', petOnly:true,
+  hooks: { onBeforeHit: function () { return { mutations: [{ key:'noAccPenalty', value:true }] }; } } });
 
-/* 圣光麒麟：不动如山 */
-registerTalent({ id:'immovable', name:'不动如山', desc:'满血时免疫普通~高级负面，受伤-50%' });
+/* 无念熊：斗者本能 —— 普攻 25% 暴击，暴击 150% 伤害 */
+registerTalent({ id:'fighter_instinct', name:'斗者本能', desc:'普攻25%暴击，暴击150%伤害', petOnly:true,
+  hooks: { onBeforeCrit: function () { return { mutations: [{ key:'critChance', value:0.25 }, { key:'critMult', value:1.5 }] }; } } });
 
-/* 圣光麒麟：威压领域 */
-registerTalent({ id:'pressure_field', name:'威压领域', desc:'血量>75%时敌方治疗-20%' });
+/* 圣光麒麟：不动如山 —— 满血时免疫普通~高级负面，且受到伤害 -50% */
+registerTalent({ id:'immovable', name:'不动如山', desc:'满血时免疫普通~高级负面，受伤-50%', petOnly:true,
+  hooks: {
+    onBeforeStatus: function (unit, ctx) {
+      if (unit.hp >= unit.base.hp && (!ctx.grade || ctx.grade <= 2)) {
+        return { skipAction:true, events: [{ msg:'🛡️ 不动如山: ' + unit.name + ' 免疫' + (ctx.statusId || '负面') }] };
+      }
+    },
+    onDamage: function (unit) {
+      if (unit.hp >= unit.base.hp) return { mutations: [{ key:'dmgTakenReduce', value:0.5 }] };
+    }
+  } });
+
+/* 圣光麒麟：威压领域 —— 血量>75% 时敌方全体治疗效果 -20% */
+registerTalent({ id:'pressure_field', name:'威压领域', desc:'血量>75%时敌方治疗-20%', petOnly:true,
+  hooks: { onFoeHeal: function (unit) {
+    if (unit.hp > unit.base.hp * 0.75) return { mutations: [{ key:'healReduce', value:0.2 }] };
+  } } });
 
 }
 
