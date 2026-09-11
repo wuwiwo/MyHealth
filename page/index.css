@@ -332,6 +332,19 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .panel-overlay{position:fixed;inset:0;z-index:var(--z-panel);background:var(--bg);display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .panel-overlay.open{display:block}
 .panel-inner{max-width:var(--mw);margin:0 auto;padding:calc(var(--sp-4) + var(--sat)) var(--pad-screen) calc(var(--sp-8) + var(--sab))}
+/* v2.1.7 关卡选择：大关卡片 + 进度条
+   状态用「文字标签 + 颜色」双重表达，不靠颜色单独传达（WCAG 1.4.1） */
+.gl-group-card{display:flex;flex-direction:column;gap:6px;text-align:left;padding:12px;min-height:76px;border-radius:var(--rad-md)}
+.gl-group-top{display:flex;align-items:baseline;gap:8px}
+.gl-group-name{flex:1;min-width:0;font-size:var(--fs-md);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gl-group-count{font-size:var(--fs-xs);color:var(--text2);font-variant-numeric:tabular-nums;flex-shrink:0}
+.gl-group-desc{font-size:var(--fs-2xs);color:var(--text3);line-height:1.4}
+.gl-bar{height:4px;background:var(--surface-3);border-radius:var(--rad-full);overflow:hidden}
+.gl-bar-fill{height:100%;background:var(--brand-fill);border-radius:var(--rad-full);transition:width var(--dur-2) var(--ease-out)}
+.gl-bar-fill.done{background:var(--green)}
+.gl-group-state{font-size:var(--fs-2xs);color:var(--text3)}
+.gl-group-card.state-locked .gl-group-name{color:var(--text3)}
+.gl-group-card.state-done .gl-group-state{color:var(--green)}
 .battle-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--bd);flex-shrink:0;gap:8px;flex-wrap:wrap;row-gap:8px}
 .battle-level{font-size:var(--fs-md);font-weight:700}
 .battle-speed{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}
@@ -481,6 +494,34 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .ch-attack-btn.pulse{animation:chPulse .3s ease}
 .ch-attack-btn:disabled{opacity:.5;pointer-events:none}
 @keyframes chPulse{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+/* v2.1.7 群战动效：补齐 JS 引用但 CSS 从未定义的三个动画（此前飘字/气泡/受击全是"写了没效果"） */
+@keyframes floatUp{0%{opacity:0;transform:translateY(6px) scale(.9)}25%{opacity:1;transform:translateY(0) scale(1.12)}100%{opacity:0;transform:translateY(-26px) scale(1)}}
+@keyframes bubblePop{0%{opacity:0;transform:translateX(-50%) scale(.85)}60%{opacity:1;transform:translateX(-50%) scale(1.04)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
+@keyframes gbHit{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}45%{transform:translateX(5px)}70%{transform:translateX(-3px)}}
+@keyframes gbLowPulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes gbWin{0%{opacity:0;transform:scale(.9)}100%{opacity:1;transform:scale(1)}}
+/* v2.1.7 群战单位卡：状态用类名表达，便于统一维护与无障碍 */
+.gb-unit{position:relative;transition:border-color var(--dur-1) var(--ease-std),box-shadow var(--dur-1) var(--ease-std)}
+.gb-unit.gb-hit{animation:gbHit .4s var(--ease-std)}
+.gb-unit.gb-low .gb-hp-fill{animation:gbLowPulse 1.2s ease-in-out infinite}
+/* 阵亡用灰度 + 删除线，不用低透明度（opacity 会让文字低于对比度要求） */
+.gb-unit.gb-dead{filter:grayscale(1)}
+.gb-unit.gb-dead .gb-name{text-decoration:line-through;color:var(--text3)}
+.gb-hp-wrap{height:16px;background:var(--surface-3);border-radius:var(--rad-full);overflow:hidden;position:relative;margin-bottom:6px}
+.gb-hp-fill{height:100%;border-radius:var(--rad-full);transition:width var(--dur-2) var(--ease-out)}
+.gb-hp-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:600;color:var(--text)}
+.gb-badge{font-size:var(--fs-2xs);padding:2px 6px;border-radius:var(--rad-full);background:var(--surface-2);border:1px solid var(--bd);white-space:nowrap}
+.gb-badge.cd{color:var(--orange);border-color:var(--orange)}
+.gb-badge.ready{color:var(--green);border-color:var(--green)}
+.gb-badge.st{background:var(--surface-2)}
+/* 行动顺序条：一眼看清接下来谁出手 */
+.gb-order{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:6px 2px;margin-bottom:8px;-webkit-overflow-scrolling:touch}
+.gb-order-chip{flex-shrink:0;font-size:var(--fs-2xs);padding:4px 8px;border-radius:var(--rad-full);background:var(--surface-2);border:1px solid var(--bd);white-space:nowrap}
+.gb-order-chip.now{border-color:var(--orange);color:var(--orange);font-weight:700}
+.gb-order-chip.ally{color:var(--green)}
+.gb-order-chip.enemy{color:var(--red)}
+.gb-ctrl{position:sticky;top:0;z-index:5;background:var(--bg);padding-bottom:8px}
+.gb-win{animation:gbWin .3s var(--ease-out)}
 .ch-hits{max-height:100px;overflow-y:auto;font-size:var(--fs-xs);margin-top:8px}
 .ch-hit{padding:2px 0;color:var(--text2)}
 .ch-hit.crit{color:var(--yellow);font-weight:700}

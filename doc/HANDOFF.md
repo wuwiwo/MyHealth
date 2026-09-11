@@ -2,11 +2,11 @@
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
 > **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
-> **生成**：2026-09-02 · **最后更新**：2026-09-11（对应 **v2.1.6**）
+> **生成**：2026-09-02 · **最后更新**：2026-09-11（对应 **v2.1.7**）
 > **分支**：`main` —— 提交号变动频繁，**以 `git log --oneline -5` 实时输出为准**，本文档不写死
 > ⚠️ **`git status` 的 ahead/behind 在本环境会失真**（本地远端引用不更新）—— **判断"推没推"必须用 `git ls-remote`**，详见 **§0.2.1**
-> **当前版本**：`APP_VERSION` = `2.1.6` · cache-busting `?v66` · 45 个 `page/*.js` 模块
-> **测试**：28 套件 / 638 断言，全部通过（含 a11y 护栏 40/40）
+> **当前版本**：`APP_VERSION` = `2.1.7` · cache-busting `?v67` · 45 个 `page/*.js` 模块
+> **测试**：28 套件 / 648 断言，全部通过（含 a11y 护栏 40/40）
 
 ---
 
@@ -169,7 +169,7 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 
 | 项 | 值 |
 |---|---|
-| 当前版本 | **v2.1.6**（2026-09-11） |
+| 当前版本 | **v2.1.7**（2026-09-11） |
 | HEAD / 远端 | **不写死** —— 用 `git log --oneline -1` 与 `git ls-remote origin refs/heads/main` 实时取（⚠️ **别信 `git status` 的 ahead 数**，见 §0.2.1） |
 | cache-busting | `?v66`（`page/index.html` 内全部 47 处；改 JS/CSS 必升） |
 | 模块数 | 45 个 `page/*.js`（+ 1 个 `page/data/exercises-dataset.js`） |
@@ -188,6 +188,7 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 - **v2.1.3** — 🐾 宠物养成：属性面板补炼化进度 / 炼化石 10:1 兑换 / 技能指定升级 / 天赋槽解锁
 - **v2.1.4** — 🐾 天赋回退为固有专属（修跨宠物共享）/ 宠物·技能面板补可滚动容器 / 修顶部横向溢出 38px / 浅色按钮改深橙底白字
 - **v2.1.5** — ⚔️ 命中·闪避系统（基础 95%）+ 10 个宠物专属天赋接入实战 + 修敌人可抽到宠物天赋
+- **v2.1.7** — 🗺️ 敌群扩至 12 大关 120 关 + 大关外侧进度 + 战斗 UI 四项优化
 - **v2.1.6** — 🔒 修「页面有时无法滚动」：模态滚动锁泄漏（兜底 observer 改各自持有 + 全局点击改真关闭）+ 隐藏挑战小游戏点背景不再卡死
 
 > ⚠️ **v2.0.10/2.0.11 与 v2.1.0 曾分叉**（两条线都改 `index.html`/`utils.js`/`README`/`changelog`），已于 `dd46332` 合并解决。若再见到两条线并行，合并前先看 §8 的冲突回避经验。
@@ -337,12 +338,13 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ### 6.3 敌群多对多战斗
 
-**`group-levels.js`** —— **9 大关 × 10 小关 = 90 关**，程序化生成（`GROUP_LEVELS` 是 `{g1..g9}` 对象，每大关含 `stages[10]`）。实测数据：
+**`group-levels.js`** —— **12 大关 × 10 小关 = 120 关**，程序化生成（`GROUP_LEVELS` 是 `{g1..g9}` 对象，每大关含 `stages[10]`）。实测数据：
 
 | 大关 | 名称 | 最多敌数 | 魂攻防 | 最高 atk |
 |---|---|---|---|---|
 | g1 / g2 | 森林 / 山丘 | 2 | 无 | — |
 | g3–g9 | 洞穴 / 遗迹 / 深渊 / 王座 / 天穹 / 冥府 / 神域 | 3 | 有 | g9-10 = **353** |
+| g10–g12 | 混沌 / 虚无 / 终焉 | 3 | 有 | g12-10 = **449** |
 
 - 首关 g1-1 的 atk = **14**，末关 g9-10 的 atk = **353**
 - **每大关第 5 小关为精英（`type: "elite"`）**、**第 10 小关为 Boss（`type: "boss"`）**（如 g1-5 elite、g1-10 boss）
@@ -406,7 +408,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ---
 
-## 8. 测试（28 套件 / 638 断言，全绿）
+## 8. 测试（28 套件 / 648 断言，全绿）
 
 ```bash
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
@@ -421,7 +423,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `test-skill` | 40 | 25 敌群技能 |
 | `test-pet-codex` | 53 | 图鉴 + 参战 Unit 生成 + **天赋固有专属（防跨宠物回归）** |
 | `test-pet-talents` | 45 | 10 个专属天赋 hook + 命中/闪避 + petOnly 隔离 + 端到端伤害分担 |
-| `test-group-levels` | 40 | 90 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / **`desc` 敌数与实际一致** |
+| `test-group-levels` | 40 | 120 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / **`desc` 敌数与实际一致** |
 | `test-skills` | 29 | 玩家技能 |
 | `test-enemy` | 26 | 16 天赋 + 编成阶梯 |
 | `test-state-core` | 25 | 状态框架 |

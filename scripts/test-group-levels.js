@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/* 敌群关卡重构测试：9 大关 × 10 小关 = 90 关
-   1) 9 大关，每关 10 小关
+/* 敌群关卡重构测试：12 大关 × 10 小关 = 120 关
+   1) 12 大关，每关 10 小关
    2) 第 5 小关精英、第 10 小关 Boss
    3) 大关 1-2 无魂攻防、最多 2 敌；大关 3-9 最多 3 敌（含魂攻/魂防）
    4) 难度递增
@@ -28,10 +28,10 @@ function assert(name, cond, detail) {
   else { fail++; console.log(' ✗ ' + name + (detail ? ' — ' + detail : '')); }
 }
 
-// ---- 1. 9 大关 × 10 小关 ----
+// ---- 1. 12 大关 × 10 小关 ----
 const gl = sandbox.GROUP_LEVELS;
 const groupKeys = Object.keys(gl);
-assert('9 大关', groupKeys.length === 9, '实际 ' + groupKeys.length);
+assert('12 大关', groupKeys.length === 12, '实际 ' + groupKeys.length);
 groupKeys.forEach(k => assert('大关 ' + k + ' 有 10 小关', (gl[k].stages || []).length === 10, '实际 ' + (gl[k].stages||[]).length));
 
 // ---- 2. 第 5 小关精英、第 10 小关 Boss ----
@@ -108,15 +108,18 @@ assert('g6-10 Boss 战斗结束', r6.done === true, 'winner=' + r6.winner);
 const r9 = fightStage('g9-10', { hp: 8000, atk: 500, def: 250, spd: 14, soulAtk: 250, soulDef: 150 });
 assert('g9-10 Boss 战斗结束', r9.done === true, 'winner=' + r9.winner);
 
-// ---- 6. 全 90 关遍历不崩 ----
+// ---- 6. 全 120 关遍历不崩（大关数由数据派生，扩关后自动跟随）----
 let crash = 0;
-for (let lg = 1; lg <= 9; lg++) {
-  for (let st = 1; st <= 10; st++) {
-    try { fightStage('g'+lg+'-'+st, { hp: 3000, atk: 200, def: 100, spd: 12, soulAtk: 100, soulDef: 60 }); }
-    catch (e) { crash++; console.log('  崩溃 g'+lg+'-'+st + ': ' + e.message); }
-  }
-}
-assert('90 关遍历无崩溃', crash === 0, crash + ' 崩溃');
+let stageCount = 0;
+groupKeys.forEach(function (gk) {
+  (gl[gk].stages || []).forEach(function (s) {
+    stageCount++;
+    try { fightStage(s.id, { hp: 4000, atk: 300, def: 160, spd: 12, soulAtk: 160, soulDef: 100 }); }
+    catch (e) { crash++; console.log('  崩溃 ' + s.id + ': ' + e.message); }
+  });
+});
+assert('120 关总数正确', stageCount === 120, '实际 ' + stageCount);
+assert('120 关遍历无崩溃', crash === 0, crash + ' 崩溃');
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

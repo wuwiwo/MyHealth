@@ -127,13 +127,15 @@ function showGroupStages(groupId) {
   if (!glv) return
   var v = document.getElementById('gameBattleView')
   if (!v) return
-  var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
-    +'<button class="speed-btn" id="groupBack" style="padding:10px 12px;min-height:44px;font-size:var(--fs-base)">← 返回</button>'
+  // v2.1.7：大关内页也直接显示本大关进度（外侧看不到进度是历史痛点）
+  var pg = groupClearedCount(groupId)
+  var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'
+    +'<button class="speed-btn" id="groupBack" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">←</button>'
     +'<span style="font-size:var(--fs-lg);font-weight:700">'+glv.name+'</span>'
-    +'<span style="flex:1"></span>'
-    +'<span style="font-size:var(--fs-xs);color:var(--text3)">'+glv.desc+'</span>'
+    +'<span class="gl-group-count">'+pg.cleared+'/'+pg.total+'</span>'
     +'</div>'
-  h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">'
+  h += '<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">'+glv.desc+'</div>'
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:8px">'
   glv.stages.forEach(function (st) {
     var cleared = isGroupStageCleared(st.id)
     var unlocked = isGroupStageUnlocked(st.id)
@@ -149,7 +151,8 @@ function showGroupStages(groupId) {
       btnStyle = 'border-color:' + color + ';color:' + color
     } else {
       statusHtml = '<span style="font-size:var(--fs-2xs)">🔒 未解锁</span>'
-      btnStyle = 'opacity:.35'
+      // v2.1.7：原 opacity:.35 让"未解锁"文字几乎不可读，放宽到 .6 并弱化文字色
+      btnStyle = 'opacity:.6;color:var(--text3)'
     }
     h += '<button class="speed-btn" data-stage="'+st.id+'" '+(unlocked && !cleared ? '' : 'disabled')+' style="padding:12px 4px;min-height:56px;font-size:var(--fs-sm);border-radius:10px;'+btnStyle+';display:flex;flex-direction:column;align-items:center">'
       +'<span style="font-size:var(--fs-lg)">'+icon+'</span>'
@@ -185,13 +188,26 @@ function renderBattleView() {
     +'<div style="flex:1;background:var(--bg2);border:1px solid var(--green-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--green)">'+wkStatus+'</div><div style="font-size:var(--fs-xs);color:var(--text3)">状态</div></div>'
     +'</div></div>'
 
-  // 敌群战斗（6 大关 × 10 小关）
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">👥 敌群试炼 <span style="font-size:var(--fs-xs);color:var(--text3)">6 大关 · 每关 10 小关</span></div>'
+  // 敌群战斗（v2.1.7：12 大关 × 10 小关；文案与进度均由数据派生，不再写死）
+  var gStats = groupProgressStats()
+  var gKeys = Object.keys(GROUP_LEVELS || {})
+  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">👥 敌群试炼'
+    +' <span style="font-size:var(--fs-xs);color:var(--text3)">'+gKeys.length+' 大关 · 每关 10 小关 · 已通关 '+gStats.cleared+'/'+gStats.total+'</span></div>'
   h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">'
-  Object.entries(GROUP_LEVELS || {}).forEach(function ([k, glv]) {
-    h += '<button class="speed-btn" data-group="'+glv.id+'" style="padding:14px 10px;font-size:var(--fs-base);min-height:56px;border-radius:12px;text-align:left;display:flex;flex-direction:column">'
-      +'<span style="font-size:var(--fs-md);font-weight:600">'+glv.name+'</span>'
-      +'<span style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">'+glv.desc+'</span>'
+  gKeys.forEach(function (k) {
+    var glv = GROUP_LEVELS[k]
+    var pg = groupClearedCount(glv.id)
+    var pct = pg.total ? Math.round(pg.cleared / pg.total * 100) : 0
+    var stateText = pg.state === 'done' ? '✅ 已通关' : pg.state === 'progress' ? '⚔️ 进行中' : '🔒 未开启'
+    h += '<button class="speed-btn gl-group-card state-'+pg.state+'" data-group="'+glv.id+'"'
+      +' aria-label="'+glv.name+'，已通关 '+pg.cleared+' / '+pg.total+'，'+stateText+'">'
+      +'<span class="gl-group-top">'
+      +'<span class="gl-group-name">'+glv.name+'</span>'
+      +'<span class="gl-group-count">'+pg.cleared+'/'+pg.total+'</span>'
+      +'</span>'
+      +'<span class="gl-group-desc">'+glv.desc+'</span>'
+      +'<span class="gl-bar"><span class="gl-bar-fill'+(pg.state==='done'?' done':'')+'" style="width:'+pct+'%"></span></span>'
+      +'<span class="gl-group-state">'+stateText+'</span>'
       +'</button>'
   })
   h += '</div>'

@@ -1,6 +1,6 @@
 /* ============================================
    MyHealth — Enemy Group Progress (敌群解锁)
-   敌群试炼线性解锁：g1-1 → g1-2 → ... → g9-10
+   敌群试炼线性解锁：g1-1 → g1-2 → ... → g12-10（大关数由 group-levels.js 决定）
    通关的关卡锁定（不可重打），胜利解锁下一关。
    进度存 dh-group-progress（store 注册表）。
    纯逻辑 + store。
@@ -38,10 +38,11 @@ function stageOrderKey(stageId) {
 
 /* 全部小关 id（按顺序） */
 function allStageIds() {
+  // v2.1.7：由 GROUP_LEVELS 派生，不再硬编码大关数（此前写死 9，扩关后会漏）
   var ids = [];
-  for (var lg = 1; lg <= 9; lg++) {
-    for (var st = 1; st <= 10; st++) ids.push('g' + lg + '-' + st);
-  }
+  Object.keys(GROUP_LEVELS || {}).forEach(function (gk) {
+    (GROUP_LEVELS[gk].stages || []).forEach(function (s) { ids.push(s.id) });
+  });
   return ids;
 }
 
@@ -83,7 +84,20 @@ function markGroupStageCleared(stageId) {
 /* 进度统计 */
 function groupProgressStats() {
   var d = getGroupProgress();
-  return { cleared: d.cleared.length, total: 90, clearedStages: d.cleared };
+  // v2.1.7：total 由 allStageIds 派生（此前写死 90，扩到 12 大关后会算错）
+  return { cleared: d.cleared.length, total: allStageIds().length, clearedStages: d.cleared };
+}
+
+/* 单个大关的通关情况（v2.1.7：供关卡选择界面外侧展示进度）
+   返回 { cleared, total, unlocked, state }  state: 'locked' | 'progress' | 'done' */
+function groupClearedCount(groupId) {
+  var glv = (typeof GROUP_LEVELS !== 'undefined') ? GROUP_LEVELS[groupId] : null;
+  var stages = (glv && glv.stages) || [];
+  var cleared = stages.filter(function (s) { return isGroupStageCleared(s.id) }).length;
+  var total = stages.length;
+  var unlocked = total ? isGroupStageUnlocked(stages[0].id) : false;
+  var state = cleared >= total && total ? 'done' : (unlocked ? 'progress' : 'locked');
+  return { cleared: cleared, total: total, unlocked: unlocked, state: state };
 }
 
 /* 测试/工具暴露 */
@@ -94,6 +108,7 @@ if (typeof window !== 'undefined') {
   window.isGroupStageUnlocked = isGroupStageUnlocked;
   window.markGroupStageCleared = markGroupStageCleared;
   window.groupProgressStats = groupProgressStats;
+  window.groupClearedCount = groupClearedCount;
   window.allStageIds = allStageIds;
 }
 if (typeof globalThis !== 'undefined') {
@@ -103,5 +118,6 @@ if (typeof globalThis !== 'undefined') {
   globalThis.isGroupStageUnlocked = isGroupStageUnlocked;
   globalThis.markGroupStageCleared = markGroupStageCleared;
   globalThis.groupProgressStats = groupProgressStats;
+  globalThis.groupClearedCount = groupClearedCount;
   globalThis.allStageIds = allStageIds;
 }

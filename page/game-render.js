@@ -564,7 +564,8 @@ function renderGroupOverlay(show){
   if(show)ov.classList.add('open')
   if(!_groupBattle){ov.classList.remove('open');return}
   var gb=_groupBattle
-  var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;min-height:44px">'
+  // v2.1.7：控制条改为 sticky（滚到单位区也能随时调速/关闭）
+  var h='<div class="gb-ctrl" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;min-height:44px">'
     +'<button class="speed-btn" id="gbClose" style="padding:8px 10px;min-height:44px;min-width:44px">✕</button>'
     +'<span style="font-size:var(--fs-base);font-weight:700">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
     +'<span style="flex:1"></span>'
@@ -575,6 +576,8 @@ function renderGroupOverlay(show){
     // 手动：推进一回合按钮
     +(_groupMode==='manual'?'<button class="speed-btn" id="gbStep" style="padding:8px 14px;min-height:44px;border-color:var(--green);color:var(--green)">⏭️ 下一回合</button>':'')
     +'</div>'
+  // v2.1.7：行动顺序条（此前完全看不到"接下来谁出手"）
+  h += renderGroupOrder(gb)
   // 我方
   h+='<div style="margin-bottom:4px;font-size:var(--fs-xs);color:var(--green);display:flex;align-items:center;gap:6px"><span>🟢 我方</span>'
   gb.allies.forEach(function(u){
@@ -586,14 +589,20 @@ function renderGroupOverlay(show){
   h+='<div style="margin:8px 0 4px;font-size:var(--fs-xs);color:var(--red)">🔴 敌方</div>'
   gb.enemies.forEach(function(u){h+=renderGroupUnit(u,'enemy')})
   // 战斗日志（全部保留，分回合显示，可复制）
+  // v2.1.7：默认只渲染最近 8 条，减少移动端滚动距离，可一键展开
   var curTurn = null
-  h+='<div style="margin-top:12px;display:flex;align-items:center;gap:8px">'
+  var allLogs = gb.log || []
+  var logs = _gbLogAll ? allLogs : allLogs.slice(-8)
+  h+='<div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
     +'<span style="font-size:var(--fs-base);font-weight:700">📜 战斗日志</span>'
+    +(_gbLogAll?'':'<span style="font-size:var(--fs-2xs);color:var(--text3)">仅最近 8 条</span>')
     +'<span style="flex:1"></span>'
+    +(allLogs.length>8?'<button class="speed-btn" id="gbLogToggle" style="padding:6px 10px;min-height:36px;font-size:var(--fs-xs)">'+(_gbLogAll?'🔼 收起':'🔽 展开全部('+allLogs.length+')')+'</button>':'')
     +'<button class="speed-btn" id="gbCopyLog" style="padding:6px 10px;min-height:36px;font-size:var(--fs-xs)">📋 复制</button>'
     +'</div>'
   h+='<div id="gbLogBox" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.8;color:var(--text3);max-height:300px;overflow-y:auto;border:1px solid var(--bg2);border-radius:10px;padding:10px 12px;overscroll-behavior:contain">'
-  gb.log.forEach(function(l){
+  if(_gbLogAll&&allLogs.length>8)h+='<div style="color:var(--text3);margin-bottom:4px">… 共 '+allLogs.length+' 条</div>'
+  logs.forEach(function(l){
     if(l.turn!==curTurn){
       curTurn=l.turn
       h+='<div style="font-weight:700;color:var(--orange);margin:6px 0 3px">—— 回合 '+l.turn+' ——</div>'
@@ -642,6 +651,14 @@ function renderGroupOverlay(show){
       var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('📋 日志已复制','s')
     }
   })
+  // v2.1.7：日志展开/收起
+  var logToggle=document.getElementById('gbLogToggle')
+  if(logToggle)logToggle.addEventListener('click',function(){
+    _gbLogAll=!_gbLogAll
+    renderGroupOverlay(false)
+    var lb=document.getElementById('gbLogBox')
+    if(lb)lb.scrollTop=lb.scrollHeight
+  })
   // 单位点击：看详情
   ov.querySelectorAll('.gb-unit').forEach(function(el){
     el.addEventListener('click',function(){
@@ -660,39 +677,73 @@ function renderGroupOverlay(show){
   }
 }
 
+/* 行动顺序条：取当前行动队列，列出接下来最多 5 个出手单位（v2.1.7） */
+var _gbLogAll=false
+function renderGroupOrder(gb){
+  var q = gb && gb._stepQueue
+  if(!q || !q.length) return ''
+  var idx = gb._stepIdx || 0
+  var out='<div class="gb-order" role="list" aria-label="行动顺序">'
+  var shown=0
+  for(var i=idx;i<q.length&&shown<5;i++){
+    var u=q[i]
+    if(!u||u.hp<=0)continue
+    out+='<span class="gb-order-chip '+u.side+(shown===0?' now':'')+'" role="listitem">'
+      +(shown===0?'▶ ':'')+u.name+'</span>'
+    shown++
+  }
+  out+='</div>'
+  return out
+}
+
 /* 渲染单个群战单位（可点击：详情；触摸区 ≥44px）
    信息层次：名称/血条/状态/技能冷却 */
 function renderGroupUnit(u,side){
   var hpPct=u.hp<=0?0:Math.round(u.hp/u.base.hp*100)
   var color=side==='ally'?'var(--green)':'var(--red)'
-  var statusIcons=(u.statuses||[]).map(function(s){return statusIcon(s.id)}).join('')
+  // v2.1.7：状态图标带剩余回合；阵亡改灰度+删除线（原 opacity:.35 文字不可读）
+  var statusHtml=(u.statuses||[]).map(function(s){
+    var ic=statusIcon(s.id)
+    if(!ic)return ''
+    var d=(s.duration!=null&&s.duration>0)?s.duration:''
+    return '<span class="gb-badge st" title="'+s.id+'">'+ic+(d?' '+d:'')+'</span>'
+  }).join('')
   var talentTag=u._talents&&u._talents.length?'<span style="font-size:var(--fs-xs);color:var(--purple,#a855f7)">✨×'+u._talents.length+'</span>':''
-  var skillTag=u.skills&&u.skills.length?'<span style="font-size:var(--fs-xs);color:var(--blue)">⚡×'+u.skills.length+'</span>':''
-  var anim=u.hp<=0?'opacity:.35':''
+  // v2.1.7：技能冷却直接上卡片（原先只有 ×N，要进详情才知道能不能放）
+  var skillBadge=''
+  if(u.skills&&u.skills.length&&typeof skillCooldownLeft==='function'){
+    var cds=u.skills.map(function(sid){return skillCooldownLeft(u,sid)})
+    var minCd=Math.min.apply(null,cds)
+    skillBadge = minCd>0 ? '<span class="gb-badge cd">⏳ '+minCd+'</span>' : '<span class="gb-badge ready">⚡ 就绪</span>'
+  }
+  var dead=u.hp<=0
+  var low=!dead&&hpPct<=25
+  var cls='gb-unit'+(dead?' gb-dead':'')+(low?' gb-low':'')
+  var barColor=dead?'var(--text3)':hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)'
   // 行动高亮
   var acting = (_groupActing===u.id)?'border-color:var(--orange);box-shadow:0 0 12px rgba(249,115,22,.3);background:rgba(249,115,22,.08)':''
   // 属性直显
   var soulTxt = (u.base.soulAtk>0||u.base.soulDef>0)?'<span style="font-size:var(--fs-xs);color:var(--purple,#a855f7)">👻'+u.base.soulAtk+' 🔮'+u.base.soulDef+'</span>':''
-  return '<div class="gb-unit" data-uid="'+u.id+'" style="border:1px solid var(--bg2);border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--bg2);'+acting+';'+anim+'">'
+  return '<div class="'+cls+'" data-uid="'+u.id+'" style="border:1px solid var(--bg2);border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--bg2);'+acting+'">'
     // 第一行：名称 + 状态 + 天赋/技能标记
-    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-    +'<span style="flex:1;font-size:var(--fs-lg);color:'+color+';font-weight:700">'+u.name+'</span>'
-    +'<span style="display:inline-flex;gap:4px;font-size:var(--fs-base)">'+statusIcons+'</span>'
-    +talentTag+skillTag
+    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">'
+    +'<span class="gb-name" style="flex:1;min-width:0;font-size:var(--fs-lg);color:'+color+';font-weight:700">'+u.name+'</span>'
+    +statusHtml
+    +talentTag+skillBadge
     +'</div>'
-    // 第二行：血条（大）
-    +'<div style="height:16px;background:var(--bg2);border-radius:8px;overflow:hidden;position:relative;margin-bottom:6px;border:1px solid var(--bg2)">'
-    +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+';transition:width .3s ease;border-radius:8px"></div>'
-    +'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);color:var(--text3);font-weight:600">'+u.hp+'/'+u.base.hp+'</span>'
+    // 第二行：血条（大）+ 数值与百分比
+    +'<div class="gb-hp-wrap">'
+    +'<div class="gb-hp-fill" style="width:'+hpPct+'%;background:'+barColor+'"></div>'
+    +'<span class="gb-hp-text">'+Math.max(0,u.hp)+'/'+u.base.hp+'　'+hpPct+'%</span>'
     +'</div>'
-    // 第三行：属性直显 + 冷却 + 提示
+    // 第三行：属性直显 + 提示
     +'<div style="display:flex;align-items:center;gap:10px;font-size:var(--fs-sm)">'
     +'<span>⚔️ <b>'+u.base.atk+'</b></span>'
     +'<span>🛡️ <b>'+u.base.def+'</b></span>'
     +'<span>💨 <b>'+u.base.spd+'</b></span>'
     +soulTxt
     +'<span style="flex:1"></span>'
-    +'<span style="font-size:var(--fs-xs);color:var(--text3)">👆 详情</span>'
+    +(dead?'<span style="font-size:var(--fs-xs);color:var(--text3)">💀 已阵亡</span>':'<span style="font-size:var(--fs-xs);color:var(--text3)">👆 详情</span>')
     +'</div>'
     +'</div>'
 }
