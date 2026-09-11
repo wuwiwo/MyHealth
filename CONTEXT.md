@@ -69,7 +69,7 @@
 | `exercises` | Array | 动作库：`[{ id, name, type, ratio, intensity, emoji, hasDist, description, eqWeight, unit }]`。eqWeight=自重动作等效重量(null=哑铃动作)，unit='rep'|'sec' |
 | `refine` | Object | 炼魂系统：`{ points, totalEarned, unlocked, upgrades: { F:{atk,def,hp,soulAtk,soulDef}, ... } }`。每月重置 |
 
-> **新增（feat/v2-m2a 分支，未合 main）**：`store.js` 已升级 schema 注册表（`registerSchema`/`migrate`/`validate`），见「模块边界」的 store.js 说明。动作数据集（`feat/action-dataset` 分支）新增 `data/exercises-dataset.js`（全局 `window.EX_DATASET`，1324 条只读百科）+ `page/ex-dataset.js` 查询层 + 动作对象 `dsId` 字段（可选关联，老存档免迁移）。
+> **架构升级（已合入 main，v2.0.0 起）**：`store.js` 已升级 schema 注册表（`registerSchema`/`migrate`/`validate`），见「模块边界」的 store.js 说明。动作数据集新增 `data/exercises-dataset.js`（全局 `window.EX_DATASET`，1324 条只读百科）+ `page/ex-dataset.js` 查询层 + 动作对象 `dsId` 字段（可选关联，老存档免迁移）。
 
 ### 同步数据格式（`sync.js:46-50`）
 
@@ -103,7 +103,7 @@ page/
 └── api/data.mjs    → Vercel Serverless 同步接口
 ```
 
-### v2.0 新增模块（M1-M6，f 分支 feat/v2-m2a-rest）
+### v2.0 新增模块（M1-M6，已合入 main）
 
 ```
 ├── date-roll.js      → 日期键纯函数（dateKey/monthKey/daysBetween）
@@ -117,7 +117,7 @@ page/
 ├── battle.js         → 单敌战斗引擎（含 rng 注缝 mulberry32）
 ├── battle-group.js   → 多对多群战引擎（行动队列/单步/天赋技能状态场地）
 ├── terrain.js        → 6 场地（沙暴/雪天/酷暑/雨天/反转/毒气）
-├── group-levels.js   → 敌群 6 大关×10 小关（60 关程序化生成）
+├── group-levels.js   → 敌群 9 大关×10 小关（90 关程序化生成，第 5 关精英/第 10 关 Boss，最多 3 敌）
 ├── group-progress.js → 敌群线性解锁（通关解锁下一关）
 ├── ai.js             → 敌人 AI 策略
 ├── pets.js           → 宠物生命周期（蛋→成熟）
@@ -130,17 +130,22 @@ page/
 ├── skill-store.js    → dh-skills-v1 持久化
 ├── skill-ui.js       → 技能面板 UI
 ├── orbs.js           → 宝珠系统（5类型×4品质 合成/升级/装配）
-└── game-views.js     → 挑战页三视图（培养/战斗/记录）
+├── game-views.js     → 挑战页三视图（培养/战斗/记录）
 └── debug.js          → 全局 Debug 面板（FAB+抽屉五分区，错误捕获）
 ```
 
 ### v2.0 store keys
 
-| Key | 用途 |
-|-----|------|
-| dh-pets-v1 | 宠物（pets/materials/materialLog/challengeWeek）|
-| dh-skills-v1 | 玩家技能（points/levels/loadout/slotsUnlocked）|
-| dh-groupProgress | 敌群通关进度（cleared）|
+> 物理键名 = `dh-` + 逻辑名 + `-v<schema 版本>`（`store.js` 的 `physKey`）。
+
+| Key（物理） | 逻辑名 | 用途 |
+|-----|-----|------|
+| dh-pets-v1 | `pets` | 宠物（pets/materials/materialLog/challengeWeek）|
+| dh-skills-v1 | `skills` | 玩家技能（points/levels/loadout/slotsUnlocked）|
+| dh-groupProgress-v1 | `groupProgress` | 敌群通关进度（cleared）|
+| dh-challenge-v1 | `challenge` | 隐藏挑战存档 |
+
+详细键表见 `doc/HANDOFF.md` §7。
 
 ### 依赖方向
 
@@ -163,7 +168,7 @@ sync.js → store.js, app.js
 - `stats.js` / `battle.js` / `date-roll.js` / `monthly-reset.js` / `ex-dataset.js` 不操作 DOM 和 store
 - 各 `tab-*.js` 负责 UI 渲染，调用 app.js 的 API 读写数据
 - `utils.js` 的 `getAllCardioTypes()` 从 exercises 库读取，回退到旧 cardioTypes store
-- **加载顺序（index.html）**：utils → store → app → stats → levels → battle → date-roll → monthly-reset → config → ex-dataset → tab-*（新模块必须按此依赖序引入）
+- **加载顺序（index.html）**：以 `page/index.html` 底部脚本顺序为唯一事实来源，完整列表见 `doc/HANDOFF.md` §3。关键点：`store.js` 最先（其余模块要用它），`utils.js` 早于所有依赖 `APP_VERSION`/日期工具的模块，`debug.js` 最后（挂在 `init()` 前）。新模块必须按其依赖关系插在合适位置。
 
 ## 架构决策
 
