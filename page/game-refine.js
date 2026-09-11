@@ -13,7 +13,7 @@ function showRefineDialog(){
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🔮 炼魂系统</div>';
   // Points
   h+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:10px">';
-  h+='<div style="font-size:.75rem;color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:1rem">'+(refine.points||0)+'</b> <span style="color:var(--text3);font-size:.65rem">（本月已获得 '+(refine.totalEarned||0)+'）</span></div>';
+  h+='<div style="font-size:var(--fs-xs);color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:var(--fs-lg)">'+(refine.points||0)+'</b> <span style="color:var(--text3);font-size:var(--fs-3xs)">（本月已获得 '+(refine.totalEarned||0)+'）</span></div>';
   h+='</div>';
   if(!curGrade){
     h+='<div style="text-align:center;padding:20px;color:var(--green);font-weight:700">🎉 所有等级已满！</div>';
@@ -29,16 +29,16 @@ function showRefineDialog(){
   var gradeColor={F:'var(--text3)',E:'var(--text2)',D:'var(--green)',C:'var(--blue)',B:'var(--purple)',A:'var(--orange)',R:'var(--red)',SR:'#fbbf24',SSR:'#f0f'}[curGrade]||'var(--text)';
   h+='<div style="background:var(--bg);border:2px solid '+gradeColor+';border-radius:var(--r);padding:12px 14px;margin-bottom:12px">';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-  h+='<span style="font-size:1.3rem;font-weight:900;color:'+gradeColor+'">'+curGrade+'</span>';
-  h+='<span style="font-size:.72rem;color:var(--text3)">成功率 '+Math.round(g.successRate*100)+'%</span>';
+  h+='<span style="font-size:var(--fs-xl);font-weight:900;color:'+gradeColor+'">'+curGrade+'</span>';
+  h+='<span style="font-size:var(--fs-xs);color:var(--text3)">成功率 '+Math.round(g.successRate*100)+'%</span>';
   h+='</div>';
-  h+='<div style="font-size:.7rem;color:var(--text2);margin-bottom:4px">进度: '+prog.total+'/'+prog.max+' ('+prog.percent+'%)</div>';
+  h+='<div style="font-size:var(--fs-2xs);color:var(--text2);margin-bottom:4px">进度: '+prog.total+'/'+prog.max+' ('+prog.percent+'%)</div>';
   h+='<div style="height:8px;background:var(--bg3);border-radius:var(--rp);overflow:hidden"><div style="height:100%;width:'+prog.percent+'%;background:'+gradeColor+';border-radius:var(--rp);transition:width .3s"></div></div>';
   h+='</div>';
   // Stats detail
   var u=(refine.upgrades&&refine.upgrades[curGrade])||{atk:0,def:0,hp:0,soulAtk:0,soulDef:0};
   var statIcons={atk:'⚔️',def:'🛡️',hp:'❤️',soulAtk:'👻',soulDef:'🔮'};
-  h+='<div style="font-size:.7rem;color:var(--text3);margin-bottom:6px">当前等级强化（'+curGrade+'级，满级'+g.maxLevel+'）：</div>';
+  h+='<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">当前等级强化（'+curGrade+'级，满级'+g.maxLevel+'）：</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">';
   REFINE_STATS.forEach(function(stat){
     var lv=u[stat]||0;
@@ -48,21 +48,21 @@ function showRefineDialog(){
     var perLevel=Math.round(g[stat]*100)/100;
     var unit=stat==='hp'?'Hp':'';
     h+='<div style="background:var(--bg);border:1px solid '+(maxed?'var(--green)':'var(--bd)')+';border-radius:var(--rs);padding:8px 10px">';
-    h+='<div style="font-size:.7rem;color:var(--text2)">'+statIcons[stat]+' '+statName(stat)+'</div>';
-    h+='<div style="font-size:.85rem;font-weight:700;color:'+(maxed?'var(--green)':'var(--text)')+'">Lv.'+lv+'/'+g.maxLevel+(maxed?' ✅':'')+'</div>';
-    h+='<div style="font-size:.6rem;color:var(--text3)">'+bonusVal+unit+' (每级'+perLevel+unit+')</div>';
+    h+='<div style="font-size:var(--fs-2xs);color:var(--text2)">'+statIcons[stat]+' '+statName(stat)+'</div>';
+    h+='<div style="font-size:var(--fs-base);font-weight:700;color:'+(maxed?'var(--green)':'var(--text)')+'">Lv.'+lv+'/'+g.maxLevel+(maxed?' ✅':'')+'</div>';
+    h+='<div style="font-size:var(--fs-3xs);color:var(--text3)">'+bonusVal+unit+' (每级'+perLevel+unit+')</div>';
     h+='</div>';
   });
   h+='</div>';
   // Bonus summary
-  h+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:.68rem;color:var(--text2)">';
+  h+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:var(--fs-2xs);color:var(--text2)">';
   h+='总加成: ⚔️+'+Math.floor(bonus.atk)+' 🛡️+'+Math.floor(bonus.def)+' ❤️+'+Math.floor(bonus.hp)+' 👻+'+Math.floor(bonus.soulAtk)+' 🔮+'+Math.floor(bonus.soulDef);
   h+='</div>';
   // Batch buttons
   var points=refine.points||0;
   function batchBtn(count,label){
     var dis=points<count;
-    var style='flex:1;padding:12px;font-size:.85rem;'+(count>1?'background:var(--bg3);color:var(--text);border:1px solid var(--bd);':'')+(dis?';opacity:.4;pointer-events:none':'');
+    var style='flex:1;padding:12px;font-size:var(--fs-base);'+(count>1?'background:var(--bg3);color:var(--text);border:1px solid var(--bd);':'')+(dis?';opacity:.4;pointer-events:none':'');
     return '<button class="sb-btn" data-a="refineBatch" data-count="'+count+'" style="'+style+'"'+(dis?' data-disabled="1"':'')+'>'+label+'</button>';
   }
   h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
@@ -72,8 +72,8 @@ function showRefineDialog(){
   h+='</div>';
   // Results log
   if(_refineLog.length){
-    h+='<div style="font-size:.65rem;color:var(--text3);margin-bottom:4px">炼化记录：</div>';
-    h+='<div id="refineLog" style="max-height:120px;overflow-y:auto;font-size:.65rem;margin-bottom:12px">';
+    h+='<div style="font-size:var(--fs-3xs);color:var(--text3);margin-bottom:4px">炼化记录：</div>';
+    h+='<div id="refineLog" style="max-height:120px;overflow-y:auto;font-size:var(--fs-3xs);margin-bottom:12px">';
     _refineLog.slice(-30).forEach(function(entry){
       h+='<div style="padding:2px 0;color:'+(entry.success?'var(--green)':'var(--text3)')+'">'+entry.msg+'</div>';
     });

@@ -31,7 +31,7 @@ function renderPeriodCard(stats,strVol,carDur,carEff){
 
   var dateRange=p.start.slice(5).replace('-','/')+' ~ '+p.end.slice(5).replace('-','/')+' ('+p.days+'天)'
   card.innerHTML='<div class="period-card">'
-    +'<div class="period-hdr"><span>🗓️ 本旬目标 · '+p.name+' <span style="font-size:.6rem;color:var(--text3)">'+dateRange+'</span></span><span class="period-stamp">结算预告</span></div>'
+    +'<div class="period-hdr"><span>🗓️ 本旬目标 · '+p.name+' <span style="font-size:var(--fs-3xs);color:var(--text3)">'+dateRange+'</span></span><span class="period-stamp">结算预告</span></div>'
     +'<div class="period-row"><span class="period-lbl">训练天数</span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div><span class="period-val" style="color:'+dayColor+'">'+stats.periodDays+'/6天</span></div>'
     +'<div class="period-row"><span class="period-lbl">训练容量</span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div><span class="period-val" style="color:'+volColor+'">'+Math.round(stats.periodVol)+'/'+p.volThreshold+'kg</span></div>'
     +'<div class="period-settle">⚖️ '+settle+'</div>'
@@ -68,9 +68,9 @@ function renderGame(){
 
   var periodItemHtml;
   if(!stats.periodEnabled){
-    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v" style="color:var(--text3);font-size:.72rem">7月启用</div><div class="gs-l" style="font-size:.6rem">旬奖励待启用</div></div>';
+    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v" style="color:var(--text3);font-size:var(--fs-xs)">7月启用</div><div class="gs-l" style="font-size:var(--fs-3xs)">旬奖励待启用</div></div>';
   }else{
-    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.periodDays+'<span style="font-size:.6rem">/6天</span>'+(stats.permBonusAtk>0?' <span style="font-size:.6rem;color:var(--green)">+'+stats.permBonusAtk+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:.6rem;color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:.6rem">'+p.name+' · '+wkStatus+'</div></div>';
+    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.periodDays+'<span style="font-size:var(--fs-3xs)">/6天</span>'+(stats.permBonusAtk>0?' <span style="font-size:var(--fs-3xs);color:var(--green)">+'+stats.permBonusAtk+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:var(--fs-3xs);color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:var(--fs-3xs)">'+p.name+' · '+wkStatus+'</div></div>';
   }
   // v2.0 三视图接管后旧属性条容器已移除（培养视图角色卡替代）；保留渲染逻辑以防回滚
   var _gsBar=document.getElementById('gameStatsBar')
@@ -82,8 +82,8 @@ function renderGame(){
     '<div class="gs-item"><div class="gs-v" style="color:var(--purple)">'+stats.soulDef+'</div><div class="gs-l">🔮 魂防</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+getGame().cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
     periodItemHtml+
-    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:.6rem">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
-    (stats.refineUnlocked?'<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="refineBtn" title="炼魂系统" style="font-size:.75rem">🔮</button></div>':'')
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:var(--fs-3xs)">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
+    (stats.refineUnlocked?'<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="refineBtn" title="炼魂系统" style="font-size:var(--fs-xs)">🔮</button></div>':'')
   renderPeriodCard(stats,strVol,carDur,carEff)
   _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,carEff:carEff,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,permBonusAtk:stats.permBonusAtk,permBonusDef:stats.permBonusDef,lastPeriodDays:stats.lastPeriodDays,thisPeriodDays:stats.periodDays,period:p,soulAtk:stats.soulAtk,soulDef:stats.soulDef,refineUnlocked:stats.refineUnlocked,refinePoints:stats.refinePoints,refineBonus:stats.refineBonus}
   trackStats(stats,{strVol:strVol,carDur:carDur,carEff:carEff})
@@ -95,9 +95,9 @@ function renderGame(){
     var gameContent=document.getElementById('gameContent')
     if(gameContent&&!document.getElementById('penaltyBanner')){
       var banner=document.createElement('div');banner.id='penaltyBanner'
-      banner.style='background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:.8rem'
+      banner.style='background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)'
       var pen=calculatePeriodPenalty(stats.lastPeriodDays)
-      banner.innerHTML='<span style="font-size:1.2rem">⚠️</span><span style="flex:1;color:var(--red)">上'+stats.lastPeriodName+'只练了 '+stats.lastPeriodDays+' 天，永久扣除攻击 -'+pen.atkPen+'，防御 -'+pen.defPen+'。本旬练满 6 天可避免下旬惩罚。</span><button class="speed-btn" id="dismissPenalty" style="border-color:var(--red);color:var(--red);padding:4px 12px">知道了</button>'
+      banner.innerHTML='<span style="font-size:var(--fs-xl)">⚠️</span><span style="flex:1;color:var(--red)">上'+stats.lastPeriodName+'只练了 '+stats.lastPeriodDays+' 天，永久扣除攻击 -'+pen.atkPen+'，防御 -'+pen.defPen+'。本旬练满 6 天可避免下旬惩罚。</span><button class="speed-btn" id="dismissPenalty" style="border-color:var(--red);color:var(--red);padding:4px 12px">知道了</button>'
       gameContent.parentNode.insertBefore(banner,gameContent)
       setTimeout(function(){
         var btn=document.getElementById('dismissPenalty')
@@ -115,7 +115,7 @@ function renderGame(){
   if(oldGuide)oldGuide.remove()
   if(!localStorage.getItem('dh-game-guide-done')){
     var guide=document.createElement('div');guide.id='gameGuide'
-    guide.style='background:var(--bg2);border:1px solid var(--orange-g);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;font-size:.72rem;line-height:1.7'
+    guide.style='background:var(--bg2);border:1px solid var(--orange-g);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;font-size:var(--fs-xs);line-height:1.7'
     guide.innerHTML='<div style="font-weight:700;color:var(--orange);margin-bottom:6px">🎮 游戏规则</div>'
       +'<div>💪 力量训练 → <b>攻击/生命</b> ｜ 🏃 有氧训练 → <b>防御/生命</b></div>'
       +'<div>🗓️ 每旬（10天）练满 6 天且容量达标 → 永久属性奖励</div>'
@@ -132,7 +132,7 @@ function renderGame(){
   let h=''
   // 关卡列表视图：返回按钮（从战斗视图进入时）
   if (gc._levelViewOpen) {
-    h+='<div style="margin-bottom:10px"><button class="speed-btn" id="lvBack" style="padding:10px 16px;min-height:44px;font-size:14px">← 返回战斗</button></div>'
+    h+='<div style="margin-bottom:10px"><button class="speed-btn" id="lvBack" style="padding:10px 16px;min-height:44px;font-size:var(--fs-base)">← 返回战斗</button></div>'
   }
   Object.entries(LEVELS).forEach(([k,ch])=>{
     h+='<div class="chapter-hdr">📖 '+ch.name+'</div><div class="lv-grid">'
@@ -312,22 +312,22 @@ function showLevelPreview(id){
   var h='<div class="modal-sheet"><div class="modal-handle"></div>'
     +'<div class="modal-title">'+lv.id+' '+lv.npc+(lv.boss?' 👑':'')+(cleared?' ✅':':')+'</div>'
     +'<div class="stats-grid" style="margin-bottom:12px">'
-    +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:var(--orange)">⚔️ '+lv.atk+'</div><div class="sc-l">攻击</div></div>'
-    +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:var(--blue)">🛡️ '+lv.def+'</div><div class="sc-l">防御</div></div>'
-    +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:var(--green)">❤️ '+lv.hp+'</div><div class="sc-l">生命</div></div>'
-    +'<div class="sc"><div class="sc-v" style="font-size:1rem;color:'+rateColor+'">'+rate+'%</div><div class="sc-l">胜率(50次模拟)</div></div>'
+    +'<div class="sc"><div class="sc-v" style="font-size:var(--fs-lg);color:var(--orange)">⚔️ '+lv.atk+'</div><div class="sc-l">攻击</div></div>'
+    +'<div class="sc"><div class="sc-v" style="font-size:var(--fs-lg);color:var(--blue)">🛡️ '+lv.def+'</div><div class="sc-l">防御</div></div>'
+    +'<div class="sc"><div class="sc-v" style="font-size:var(--fs-lg);color:var(--green)">❤️ '+lv.hp+'</div><div class="sc-l">生命</div></div>'
+    +'<div class="sc"><div class="sc-v" style="font-size:var(--fs-lg);color:'+rateColor+'">'+rate+'%</div><div class="sc-l">胜率(50次模拟)</div></div>'
     +'</div>'
   if((lv.soulAtk||0)>0||(lv.soulDef||0)>0){
     h+='<div class="stats-grid" style="margin-bottom:12px">'
-      +'<div class="sc"><div class="sc-v" style="font-size:.9rem;color:var(--purple)">👻 '+(lv.soulAtk||0)+'</div><div class="sc-l">魂攻击</div></div>'
-      +'<div class="sc"><div class="sc-v" style="font-size:.9rem;color:var(--purple)">🔮 '+(lv.soulDef||0)+'</div><div class="sc-l">魂防御</div></div>'
+      +'<div class="sc"><div class="sc-v" style="font-size:var(--fs-base);color:var(--purple)">👻 '+(lv.soulAtk||0)+'</div><div class="sc-l">魂攻击</div></div>'
+      +'<div class="sc"><div class="sc-v" style="font-size:var(--fs-base);color:var(--purple)">🔮 '+(lv.soulDef||0)+'</div><div class="sc-l">魂防御</div></div>'
       +'</div>'
   }
 
   // Boss affix info
   if(lv.boss){
     var affixes=BOSS_AFFIXES.map(function(a){return a.name+': '+a.desc})
-    h+='<div style="background:rgba(249,115,22,.08);border:1px solid var(--orange-g);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:.72rem;color:var(--text2)">'
+    h+='<div style="background:rgba(249,115,22,.08);border:1px solid var(--orange-g);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text2)">'
       +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">👑 Boss 词缀'+(lv.dualAffix?' (随机2种·机制叠加)':' (随机1种)')+'</div>'
       +affixes.map(function(a){return'<div style="padding:2px 0">• '+a+'</div>'}).join('')
       +(lv.dualAffix?'<div style="margin-top:4px;color:var(--yellow)">⚠️ 本 BOSS 同时携带 2 条词条，效果叠加</div>':'')
@@ -336,7 +336,7 @@ function showLevelPreview(id){
 
   // Player stats comparison
   var soulStr=(stats.soulAtk>0||stats.soulDef>0)?' 👻'+stats.soulAtk+' 🔮'+stats.soulDef:'';
-  h+='<div style="font-size:.72rem;color:var(--text3);text-align:center;margin-bottom:4px">你的属性: ⚔️'+stats.atk+' 🛡️'+stats.def+' ❤️'+stats.hp+soulStr+'</div>'
+  h+='<div style="font-size:var(--fs-xs);color:var(--text3);text-align:center;margin-bottom:4px">你的属性: ⚔️'+stats.atk+' 🛡️'+stats.def+' ❤️'+stats.hp+soulStr+'</div>'
 
   h+='<div class="modal-actions">'
     +'<button class="m-btn-cancel" id="lvCancel">关闭</button>'
@@ -473,7 +473,7 @@ function playAttackFeedback(gb, step) {
       setTimeout(function(){ targetCard.classList.remove('gb-hit') }, 500)
       var float = document.createElement('div')
       float.textContent = '-' + m[1]
-      float.style = 'position:absolute;top:4px;right:10px;color:var(--red);font-size:20px;font-weight:800;z-index:5;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.5)'
+      float.style = 'position:absolute;top:4px;right:10px;color:var(--red);font-size:var(--fs-xl);font-weight:800;z-index:5;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.5)'
       // 卡片需相对定位
       targetCard.style.position = 'relative'
       targetCard.appendChild(float)
@@ -490,7 +490,7 @@ function showSkillBubble(bubble) {
   if (old) old.remove()
   var el = document.createElement('div')
   el.id = 'skillBubble'
-  el.style = 'position:absolute;left:50%;top:38%;transform:translateX(-50%);background:rgba(15,23,42,.92);border:2px solid var(--orange);border-radius:16px;padding:10px 18px;font-size:15px;font-weight:600;color:#fff;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.3);animation:bubblePop .3s ease;max-width:80%;text-align:center;pointer-events:none'
+  el.style = 'position:absolute;left:50%;top:38%;transform:translateX(-50%);background:rgba(15,23,42,.92);border:2px solid var(--orange);border-radius:16px;padding:10px 18px;font-size:var(--fs-md);font-weight:600;color:#fff;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.3);animation:bubblePop .3s ease;max-width:80%;text-align:center;pointer-events:none'
   el.innerHTML = bubble.text
   ov.appendChild(el)
   // 气泡自动消失（3 秒）
@@ -557,7 +557,7 @@ function renderGroupOverlay(show){
   var gb=_groupBattle
   var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;min-height:44px">'
     +'<button class="speed-btn" id="gbClose" style="padding:8px 10px;min-height:44px;min-width:44px">✕</button>'
-    +'<span style="font-size:.85rem;font-weight:700">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
+    +'<span style="font-size:var(--fs-base);font-weight:700">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
     +'<span style="flex:1"></span>'
     // 手动/自动切换
     +'<button class="speed-btn" id="gbMode" style="padding:8px 10px;min-height:44px;'+( _groupMode==='manual'?'border-color:var(--orange);color:var(--orange)':'')+'">'+(_groupMode==='manual'?'✋ 手动':'🤖 自动')+'</button>'
@@ -567,23 +567,23 @@ function renderGroupOverlay(show){
     +(_groupMode==='manual'?'<button class="speed-btn" id="gbStep" style="padding:8px 14px;min-height:44px;border-color:var(--green);color:var(--green)">⏭️ 下一回合</button>':'')
     +'</div>'
   // 我方
-  h+='<div style="margin-bottom:4px;font-size:.72rem;color:var(--green);display:flex;align-items:center;gap:6px"><span>🟢 我方</span>'
+  h+='<div style="margin-bottom:4px;font-size:var(--fs-xs);color:var(--green);display:flex;align-items:center;gap:6px"><span>🟢 我方</span>'
   gb.allies.forEach(function(u){
-    if(u._petSpecies)h+='<span style="font-size:.6rem;color:var(--purple,#a855f7);background:var(--bg2);padding:1px 6px;border-radius:8px">🐾 宠物</span>'
+    if(u._petSpecies)h+='<span style="font-size:var(--fs-3xs);color:var(--purple,#a855f7);background:var(--bg2);padding:1px 6px;border-radius:8px">🐾 宠物</span>'
   })
   h+='</div>'
   gb.allies.forEach(function(u){h+=renderGroupUnit(u,'ally')})
   // 敌方
-  h+='<div style="margin:8px 0 4px;font-size:.72rem;color:var(--red)">🔴 敌方</div>'
+  h+='<div style="margin:8px 0 4px;font-size:var(--fs-xs);color:var(--red)">🔴 敌方</div>'
   gb.enemies.forEach(function(u){h+=renderGroupUnit(u,'enemy')})
   // 战斗日志（全部保留，分回合显示，可复制）
   var curTurn = null
   h+='<div style="margin-top:12px;display:flex;align-items:center;gap:8px">'
-    +'<span style="font-size:14px;font-weight:700">📜 战斗日志</span>'
+    +'<span style="font-size:var(--fs-base);font-weight:700">📜 战斗日志</span>'
     +'<span style="flex:1"></span>'
-    +'<button class="speed-btn" id="gbCopyLog" style="padding:6px 10px;min-height:36px;font-size:12px">📋 复制</button>'
+    +'<button class="speed-btn" id="gbCopyLog" style="padding:6px 10px;min-height:36px;font-size:var(--fs-xs)">📋 复制</button>'
     +'</div>'
-  h+='<div id="gbLogBox" style="margin-top:6px;font-size:12px;line-height:1.8;color:var(--text3);max-height:300px;overflow-y:auto;border:1px solid var(--bg2);border-radius:10px;padding:10px 12px;overscroll-behavior:contain">'
+  h+='<div id="gbLogBox" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.8;color:var(--text3);max-height:300px;overflow-y:auto;border:1px solid var(--bg2);border-radius:10px;padding:10px 12px;overscroll-behavior:contain">'
   gb.log.forEach(function(l){
     if(l.turn!==curTurn){
       curTurn=l.turn
@@ -657,33 +657,33 @@ function renderGroupUnit(u,side){
   var hpPct=u.hp<=0?0:Math.round(u.hp/u.base.hp*100)
   var color=side==='ally'?'var(--green)':'var(--red)'
   var statusIcons=(u.statuses||[]).map(function(s){return statusIcon(s.id)}).join('')
-  var talentTag=u._talents&&u._talents.length?'<span style="font-size:12px;color:var(--purple,#a855f7)">✨×'+u._talents.length+'</span>':''
-  var skillTag=u.skills&&u.skills.length?'<span style="font-size:12px;color:var(--blue)">⚡×'+u.skills.length+'</span>':''
+  var talentTag=u._talents&&u._talents.length?'<span style="font-size:var(--fs-xs);color:var(--purple,#a855f7)">✨×'+u._talents.length+'</span>':''
+  var skillTag=u.skills&&u.skills.length?'<span style="font-size:var(--fs-xs);color:var(--blue)">⚡×'+u.skills.length+'</span>':''
   var anim=u.hp<=0?'opacity:.35':''
   // 行动高亮
   var acting = (_groupActing===u.id)?'border-color:var(--orange);box-shadow:0 0 12px rgba(249,115,22,.3);background:rgba(249,115,22,.08)':''
   // 属性直显
-  var soulTxt = (u.base.soulAtk>0||u.base.soulDef>0)?'<span style="font-size:12px;color:var(--purple,#a855f7)">👻'+u.base.soulAtk+' 🔮'+u.base.soulDef+'</span>':''
+  var soulTxt = (u.base.soulAtk>0||u.base.soulDef>0)?'<span style="font-size:var(--fs-xs);color:var(--purple,#a855f7)">👻'+u.base.soulAtk+' 🔮'+u.base.soulDef+'</span>':''
   return '<div class="gb-unit" data-uid="'+u.id+'" style="border:1px solid var(--bg2);border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--bg2);'+acting+';'+anim+'">'
     // 第一行：名称 + 状态 + 天赋/技能标记
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-    +'<span style="flex:1;font-size:16px;color:'+color+';font-weight:700">'+u.name+'</span>'
-    +'<span style="display:inline-flex;gap:4px;font-size:14px">'+statusIcons+'</span>'
+    +'<span style="flex:1;font-size:var(--fs-lg);color:'+color+';font-weight:700">'+u.name+'</span>'
+    +'<span style="display:inline-flex;gap:4px;font-size:var(--fs-base)">'+statusIcons+'</span>'
     +talentTag+skillTag
     +'</div>'
     // 第二行：血条（大）
     +'<div style="height:16px;background:var(--bg2);border-radius:8px;overflow:hidden;position:relative;margin-bottom:6px;border:1px solid var(--bg2)">'
     +'<div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)')+';transition:width .3s ease;border-radius:8px"></div>'
-    +'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text3);font-weight:600">'+u.hp+'/'+u.base.hp+'</span>'
+    +'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);color:var(--text3);font-weight:600">'+u.hp+'/'+u.base.hp+'</span>'
     +'</div>'
     // 第三行：属性直显 + 冷却 + 提示
-    +'<div style="display:flex;align-items:center;gap:10px;font-size:13px">'
+    +'<div style="display:flex;align-items:center;gap:10px;font-size:var(--fs-sm)">'
     +'<span>⚔️ <b>'+u.base.atk+'</b></span>'
     +'<span>🛡️ <b>'+u.base.def+'</b></span>'
     +'<span>💨 <b>'+u.base.spd+'</b></span>'
     +soulTxt
     +'<span style="flex:1"></span>'
-    +'<span style="font-size:12px;color:var(--text3)">👆 详情</span>'
+    +'<span style="font-size:var(--fs-xs);color:var(--text3)">👆 详情</span>'
     +'</div>'
     +'</div>'
 }
@@ -694,17 +694,17 @@ function renderGroupDetail(u){
   if(!ov)return
   var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
     +'<button class="speed-btn" id="gbDetailBack" style="padding:2px 8px">← 返回</button>'
-    +'<span style="font-size:.9rem;font-weight:700">'+(u.name||'单位')+'</span>'
-    +'<span style="font-size:.65rem;color:var(--text3)">'+u.side+' · Lv'+u.level+'</span>'
+    +'<span style="font-size:var(--fs-base);font-weight:700">'+(u.name||'单位')+'</span>'
+    +'<span style="font-size:var(--fs-3xs);color:var(--text3)">'+u.side+' · Lv'+u.level+'</span>'
     +'</div>'
   // 属性
-  h+='<div style="font-size:.72rem;line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
+  h+='<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
   h+='<div style="font-weight:700;margin-bottom:4px">📊 属性</div>'
   h+='❤️ HP <b>'+u.hp+'</b>/'+u.base.hp+'　⚔️ 攻 <b>'+u.base.atk+'</b>　🛡️ 防 <b>'+u.base.def+'</b>'
   h+='　💨 速 <b>'+u.base.spd+'</b>'+(u.base.soulAtk?'　👻 魂攻 <b>'+u.base.soulAtk+'</b>':'')+(u.base.soulDef?'　🔮 魂防 <b>'+u.base.soulDef+'</b>':'')
   h+='</div>'
   // 技能（兼容：敌群技能 u.skills + 玩家技能 _playerSkills）
-  h+='<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
+  h+='<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
   h+='<div style="font-weight:700;margin-bottom:4px">⚡ 技能</div>'
   var skillShown = false
   if(u.skills&&u.skills.length){
@@ -729,7 +729,7 @@ function renderGroupDetail(u){
   if(!skillShown)h+='<div style="color:var(--text3)">（无技能，普通攻击）</div>'
   h+='</div>'
   // 天赋
-  h+='<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
+  h+='<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
   h+='<div style="font-weight:700;margin-bottom:4px">✨ 天赋</div>'
   if(!u._talents||!u._talents.length){h+='<div style="color:var(--text3)">（无天赋）</div>'}
   else{
@@ -741,7 +741,7 @@ function renderGroupDetail(u){
   }
   h+='</div>'
   // 状态
-  h+='<div style="font-size:.72rem;line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px">'
+  h+='<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px">'
   h+='<div style="font-weight:700;margin-bottom:4px">🌀 状态</div>'
   if(!u.statuses||!u.statuses.length){h+='<div style="color:var(--text3)">（无状态）</div>'}
   else{

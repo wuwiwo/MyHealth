@@ -90,7 +90,7 @@
 
   /* Bak a raw value (ruling: keep old data readable for rollback) */
   function bakRaw(phys, raw) {
-    try { localStorage.setItem(phys + '-bak', raw); } catch (_e) {}
+    try { localStorage.setItem(phys + '-bak', raw); } catch (_e) { console.warn('[store] 备份写入失败，回滚链可能不完整', _e) }
   }
 
   /* Read + migrate chain for a not-yet-cached key.
@@ -106,7 +106,7 @@
       try { parsed = JSON.parse(raw); }
       catch (e) {
         bakRaw(phys, raw);
-        try { localStorage.removeItem(phys); } catch (_e) {}
+        try { localStorage.removeItem(phys); } catch (_e) { /* 忽略：旧键清理失败不影响迁移结果 */ }
         _migLog.push({ key: name, from: ver, to: ver, ok: false, reason: 'corrupt-json' });
         return { value: reg && reg.defaultValue ? reg.defaultValue() : null, ok: false, reason: 'corrupt-json' };
       }
@@ -130,8 +130,8 @@
         try {
           localStorage.setItem(physKey(name, target), JSON.stringify(data));
           bakRaw(phys, raw);
-          try { localStorage.removeItem(phys); } catch (_e) {}
-        } catch (_e2) {}
+          try { localStorage.removeItem(phys); } catch (_e) { /* 忽略：旧键清理失败不影响迁移结果 */ }
+        } catch (_e2) { console.warn('[store] 迁移写入失败，但已标记为成功', _e2) }
         _migLog.push({ key: name, from: v0, to: target, ok: true });
       }
       return { value: data, ok: true };
@@ -161,9 +161,9 @@
         } else {
           // Corrupted value — bak it so consumers fall back to defaults
           bakRaw(k, localStorage.getItem(k));
-          try { localStorage.removeItem(k); } catch (_e) {}
+          try { localStorage.removeItem(k); } catch (_e) { /* 忽略：损坏值清理失败不影响读取 */ }
         }
-      } catch (e) {}
+      } catch (e) { console.warn('[store] 启动加载异常，该 key 走默认值', e) }
     }
   })();
 
@@ -171,7 +171,7 @@
   function notifyQuota() {
     try {
       if (window.toast) toast('存储空间不足，请导出备份后清理旧数据','e');
-    } catch(e) {}
+    } catch(e) { /* 忽略：toast 不可用时不阻断存储流程 */ }
   }
 
   window.store = {
@@ -206,7 +206,7 @@
      */
     set: function(name, value) {
       if (!validValue(name, value)) {
-        try { console.error('[store] set rejected: schema validation failed for "' + name + '"'); } catch (_e) {}
+        try { console.error('[store] set rejected: schema validation failed for "' + name + '"'); } catch (_e) { /* 忽略：日志输出失败不影响校验结果 */ }
         return false;
       }
       _cache[name] = value;

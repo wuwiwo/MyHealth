@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.0.11';
+const APP_VERSION = '2.1.1';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -35,16 +35,16 @@ function renderMd(src){
     var line=lines[i];
     if(/^#\s+/.test(line)){
       if(inList){html+='</ul>';inList=false}
-      html+='<div style="font-weight:700;font-size:.9rem;margin:6px 0 4px">'+escInline(line.replace(/^#\s+/,''))+'</div>';
+      html+='<div style="font-weight:700;font-size:var(--fs-base);margin:6px 0 4px">'+escInline(line.replace(/^#\s+/,''))+'</div>';
     }else if(/^-\s+/.test(line)){
       if(!inList){html+='<ul style="margin:4px 0;padding-left:18px;list-style:disc">';inList=true}
-      html+='<li style="font-size:.78rem;line-height:1.6">'+escInline(line.replace(/^-\s+/,''))+'</li>';
+      html+='<li style="font-size:var(--fs-sm);line-height:1.6">'+escInline(line.replace(/^-\s+/,''))+'</li>';
     }else if(/^\s*$/.test(line)){
       if(inList){html+='</ul>';inList=false}
       html+='<div style="height:6px"></div>';
     }else{
       if(inList){html+='</ul>';inList=false}
-      html+='<div style="font-size:.78rem;line-height:1.6;margin:2px 0">'+escInline(line)+'</div>';
+      html+='<div style="font-size:var(--fs-sm);line-height:1.6;margin:2px 0">'+escInline(line)+'</div>';
     }
   }
   if(inList)html+='</ul>';
@@ -58,24 +58,85 @@ function mdFirstLine(src){
 }
 
 /* ========== TOAST ========== */
-let _tt=null;function toast(m,t){const c=document.getElementById('toastC')
+/* P0-9：每条独立计时（原来单例 timer + innerHTML='' 会让连发的两条互相截断），
+   最多同屏 3 条，role=status 供读屏播报。 */
+function toast(m,t){const c=document.getElementById('toastC')
 if(!c)return;const o=document.createElement('div');o.className='toast'+(t?' toast-'+t:'')
+o.setAttribute('role','status');o.setAttribute('aria-live','polite')
 o.textContent=(t==='s'?'✅':t==='e'?'😅':'💪')+' '+m;c.appendChild(o)
-clearTimeout(_tt);_tt=setTimeout(()=>c.innerHTML='',2200)}
+while(c.children.length>3)c.removeChild(c.firstChild)
+setTimeout(()=>{o.classList.add('out');setTimeout(()=>{if(o.parentNode)o.remove()},220)},2000)}
 
 /* ========== MODAL ========== */
 /* Create an overlay modal, append to body, return the element.
-   Overlay click (on the backdrop itself) dismisses it, unless
-   opts.noBackdrop is set (caller manages closing manually). */
+   P0-11 增强：role=dialog / aria-modal、ESC 关闭、焦点陷阱、body 滚动锁定、
+   关闭后焦点归还触发元素。调用方零改动。
+   opts.noBackdrop —— 调用方自行管理关闭（遮罩点击不关）。
+   返回的 modal 上挂 _close()，供调用方主动关闭并正确解锁滚动。 */
+
+/* 滚动锁定：引用计数支持嵌套模态；_mo 兜底防止外部直接 modal.remove() 导致页面永久冻结 */
+let _scrollLock=0,_scrollY=0,_mo=null
+function _lockScroll(){
+  if(_scrollLock++>0)return
+  _scrollY=window.scrollY||document.documentElement.scrollTop||0
+  document.body.style.position='fixed';document.body.style.top=(-_scrollY)+'px';document.body.style.width='100%'
+}
+function _unlockScroll(){
+  if(_scrollLock===0)return
+  if(--_scrollLock>0)return
+  _scrollLock=0
+  document.body.style.position='';document.body.style.top='';document.body.style.width=''
+  window.scrollTo(0,_scrollY)
+}
 function openModal(html,id,opts){
   const modal=document.createElement('div');modal.className='modal-overlay open'
+  modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true')
   if(id)modal.id=id
   if(html!=null)modal.innerHTML=html
   document.body.appendChild(modal)
-  if(!(opts&&opts.noBackdrop)){
-    modal.addEventListener('click',e=>{if(e.target===e.currentTarget)modal.remove()})
+
+  const prevFocus=document.activeElement
+  _lockScroll()
+
+  function close(){
+    document.removeEventListener('keydown',onKey)
+    if(_mo){_mo.disconnect();_mo=null}
+    if(modal.parentNode)modal.remove()
+    _unlockScroll()
+    if(prevFocus&&prevFocus.focus&&document.contains(prevFocus))prevFocus.focus()
   }
+  function onKey(e){
+    if(e.key==='Escape'){close();return}
+    if(e.key!=='Tab')return
+    const f=modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')
+    if(!f.length)return
+    const first=f[0],last=f[f.length-1]
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+  }
+  // 兜底：调用方若直接 modal.remove()，滚动锁必须照样解除
+  if(window.MutationObserver&&!_mo){
+    _mo=new MutationObserver(function(){
+      if(!modal.isConnected){if(_mo){_mo.disconnect();_mo=null}_unlockScroll();document.removeEventListener('keydown',onKey)}
+    })
+    _mo.observe(document.body,{childList:true})
+  }
+  document.addEventListener('keydown',onKey)
+  if(!(opts&&opts.noBackdrop)){
+    modal.addEventListener('click',e=>{if(e.target===e.currentTarget)close()})
+  }
+  setTimeout(function(){const f=modal.querySelector('button,input,[tabindex]');if(f)f.focus()},50)
+  modal._close=close
   return modal
+}
+
+/* ========== EMPTY STATE ========== */
+/* 统一空态工厂，避免各页面 innerHTML='' 留白 */
+function emptyHtml(emoji,title,sub,cta){
+  return '<div class="empty"><span class="empty-e">'+(emoji||'📭')+'</span>'
+    +'<div class="empty-t">'+title+'</div>'
+    +(sub?'<div class="empty-s">'+sub+'</div>':'')
+    +(cta||'')+'</div>'
 }
 
 /* ========== CELEBRATE ========== */
@@ -89,10 +150,17 @@ c.appendChild(s);o.appendChild(c)}
 document.body.appendChild(o);setTimeout(()=>o.remove(),3500)}
 
 /* ========== THEME ========== */
-function getTheme(){return store.get('theme')||'dark'}
-function setTheme(t){const d=t==='dark';document.documentElement.setAttribute('data-theme',d?'':'light')
-var btn=document.getElementById('themeToggle');if(btn)btn.textContent=d?'🌙':'☀️';store.set('theme',t)}
-function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
+/* P0-10：三态 system / dark / light，默认跟随系统。
+   旧存档里存的是 'dark' / 'light' 字符串，对新逻辑同样成立，无需迁移。 */
+var _sysMq=window.matchMedia?window.matchMedia('(prefers-color-scheme: light)'):null
+function getTheme(){return store.get('theme')||'system'}
+function effTheme(){var t=getTheme();return t==='system'?(_sysMq&&_sysMq.matches?'light':'dark'):t}
+function setTheme(t){store.set('theme',t)
+const d=effTheme()==='dark';document.documentElement.setAttribute('data-theme',d?'':'light')
+var btn=document.getElementById('themeToggle')
+if(btn){btn.textContent=d?'🌙':'☀️';btn.setAttribute('aria-label','切换主题，当前'+(d?'深色':'浅色'))}}
+function toggleTheme(){setTheme(effTheme()==='dark'?'light':'dark')}
+if(_sysMq&&_sysMq.addEventListener)_sysMq.addEventListener('change',function(){if(getTheme()==='system')setTheme('system')})
 
 /* ========== EXERCISE LIBRARY (data layer in app.js) ========== */
 /* getExercises/saveExercises/getExerciseMap/getStrengthExercises/getCardioExercises

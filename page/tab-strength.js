@@ -34,10 +34,10 @@ function renderTodaySnapshot(){
   var periodLabel=period.name+' ('+period.start.slice(5).replace('-','/')+'~'+period.end.slice(5).replace('-','/')+')'
 
   el.innerHTML='<div class="snap-card">'
-    +'<div class="snap-row"><span class="snap-lbl">📅 本周</span><span class="snap-val">'+weekCount+'<span style="font-size:.6rem">/7天</span></span><div class="snap-bar"><div class="snap-fill wk" style="width:'+weekPct+'%"></div></div>'+(weekCount>=4?'<span style="color:var(--green);font-size:.65rem">🏅 达标</span>':'<span style="color:var(--text3);font-size:.65rem">还差'+(4-weekCount>0?4-weekCount:0)+'天</span>')+'</div>'
-    +'<div class="snap-row"><span class="snap-lbl">🗓️ '+periodLabel+'</span><span class="snap-val" style="color:'+dayColor+'">'+periodDays+'<span style="font-size:.6rem">/6天</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div>'+(periodDays>=6?'<span style="color:var(--green);font-size:.65rem">🎯 达标</span>':'<span style="color:var(--text3);font-size:.65rem">还差'+(6-periodDays)+'天</span>')+'</div>'
-    +'<div class="snap-row"><span class="snap-lbl">🏋️ 旬容量</span><span class="snap-val" style="color:'+volColor+'">'+Math.round(periodVol)+'<span style="font-size:.6rem">/'+period.volThreshold+'</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div>'+(volPct>=100?'<span style="color:var(--green);font-size:.65rem">💯 超额</span>':'<span style="color:var(--text3);font-size:.65rem">'+Math.max(0,Math.round(period.volThreshold-periodVol))+'kg</span>')+'</div>'
-    +'<div class="snap-foot">'+statusHtml+' <span style="color:var(--text3);font-size:.65rem">· 满4天获周奖励，满6天获旬奖励</span></div>'
+    +'<div class="snap-row"><span class="snap-lbl">📅 本周</span><span class="snap-val">'+weekCount+'<span style="font-size:var(--fs-3xs)">/7天</span></span><div class="snap-bar"><div class="snap-fill wk" style="width:'+weekPct+'%"></div></div>'+(weekCount>=4?'<span style="color:var(--green);font-size:var(--fs-3xs)">🏅 达标</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">还差'+(4-weekCount>0?4-weekCount:0)+'天</span>')+'</div>'
+    +'<div class="snap-row"><span class="snap-lbl">🗓️ '+periodLabel+'</span><span class="snap-val" style="color:'+dayColor+'">'+periodDays+'<span style="font-size:var(--fs-3xs)">/6天</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div>'+(periodDays>=6?'<span style="color:var(--green);font-size:var(--fs-3xs)">🎯 达标</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">还差'+(6-periodDays)+'天</span>')+'</div>'
+    +'<div class="snap-row"><span class="snap-lbl">🏋️ 旬容量</span><span class="snap-val" style="color:'+volColor+'">'+Math.round(periodVol)+'<span style="font-size:var(--fs-3xs)">/'+period.volThreshold+'</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div>'+(volPct>=100?'<span style="color:var(--green);font-size:var(--fs-3xs)">💯 超额</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">'+Math.max(0,Math.round(period.volThreshold-periodVol))+'kg</span>')+'</div>'
+    +'<div class="snap-foot">'+statusHtml+' <span style="color:var(--text3);font-size:var(--fs-3xs)">· 满4天获周奖励，满6天获旬奖励</span></div>'
     +'</div>'
 }
 
@@ -124,7 +124,7 @@ function renderStrStats(){
   var exCount={}
   we.forEach(function(e){exCount[e.exercise]=(exCount[e.exercise]||0)+1})
   var fav=Object.keys(exCount).sort(function(a,b){return exCount[b]-exCount[a]})[0]||'—'
-  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span style="font-size:.6rem"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+v+'<span style="font-size:.6rem"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v" style="font-size:.75rem">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
+  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span style="font-size:var(--fs-3xs)"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+v+'<span style="font-size:var(--fs-3xs)"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v" style="font-size:var(--fs-xs)">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
 }
 function getWeekStr(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(store.get('strength')||{entries:[]}).entries.filter(e=>e.date>=toDate(m))}
 
@@ -135,7 +135,7 @@ function renderMissed(){
   for(let i=6;i>=0;i--){const t=new Date(d);t.setDate(t.getDate()-i);allDates.push(toDate(t))}
   const activeDays=new Set((store.get('strength')||{entries:[]}).entries.map(e=>e.date))
   const missed=allDates.filter(dd=>!activeDays.has(dd)&&dd<=today())
-  if(!missed.length){c.innerHTML='<div style="font-size:.75rem;color:var(--text3);padding:8px 0">✅ 最近 7 天全勤！</div>';return}
+  if(!missed.length){c.innerHTML='<div style="font-size:var(--fs-xs);color:var(--text3);padding:8px 0">✅ 最近 7 天全勤！</div>';return}
   c.innerHTML=missed.map(dd=>{
     const note=getMissed()[dd]||''
     const isRest=note.indexOf('🛌')===0
@@ -165,7 +165,7 @@ function openMakeupDialog(dateStr){
     +'<div style="margin-bottom:12px">'
   plans.forEach(function(p,i){
     var tags=p.exercises.map(function(e){return e.exercise}).slice(0,5).join('、')
-    h+='<div class="ec" style="cursor:pointer;margin-bottom:8px" data-pick="'+p.id+'"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><span style="font-size:.7rem;color:var(--text3)">'+p.exercises.length+' 组</span></div></div><div class="ec-prog"><div style="font-size:.7rem;color:var(--text2)">'+tags+'</div></div></div>'
+    h+='<div class="ec" style="cursor:pointer;margin-bottom:8px" data-pick="'+p.id+'"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><span style="font-size:var(--fs-2xs);color:var(--text3)">'+p.exercises.length+' 组</span></div></div><div class="ec-prog"><div style="font-size:var(--fs-2xs);color:var(--text2)">'+tags+'</div></div></div>'
   })
   h+='</div><div class="modal-actions"><button class="m-btn-cancel" id="muCancel">取消</button></div></div>'
   modal.innerHTML=h;void modal
@@ -198,7 +198,7 @@ function renderStrPlans(){
   }
   c.innerHTML=plans.map(p=>{
     const tags=p.exercises.map(e=>e.exercise).slice(0,6)
-    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="editPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="startPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(n=>'<span style="font-size:.7rem;background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>').join('')+'</div></div></div>'
+    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="editPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="startPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(n=>'<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>').join('')+'</div></div></div>'
   }).join('')
   c.innerHTML+='<button class="add-btn" id="strNewPlan" style="margin-top:8px">＋ 新建计划</button>'
 }
@@ -211,7 +211,7 @@ function openPlanEditor(editId){
   var plan=editId?getPlans().find(function(p){return p.id===editId}):null
   _peEditing=plan?JSON.parse(JSON.stringify(plan)):{exercises:[]}
   var modal=openModal(null,'peModal')
-  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(editId?'✏️ 编辑计划':'📋 新建计划')+'</div><div class="fg"><label class="fl">计划名称</label><input class="fi" id="peName" value="'+(plan?plan.name:'')+'" placeholder="计划名称"></div><div class="fg"><label class="fl">动作列表</label><div id="peExList"></div><button class="add-btn" id="peAddEx" style="margin-top:4px;padding:10px">＋ 添加动作</button></div><div class="modal-actions"><button class="m-btn-cancel" id="peCancel">取消</button><button class="m-btn-save" id="peSave">保存</button></div></div>'
+  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(editId?'✏️ 编辑计划':'📋 新建计划')+'</div><div class="fg"><label class="fl" for="peName">计划名称</label><input class="fi" id="peName" value="'+(plan?plan.name:'')+'" placeholder="计划名称"></div><div class="fg"><span class="fl" id="lbl-st-g1">动作列表</span><div id="peExList" role="group" aria-labelledby="lbl-st-g1"></div><button class="add-btn" id="peAddEx" style="margin-top:4px;padding:10px">＋ 添加动作</button></div><div class="modal-actions"><button class="m-btn-cancel" id="peCancel">取消</button><button class="m-btn-save" id="peSave">保存</button></div></div>'
   void modal
   renderPeList()
 }
@@ -219,11 +219,11 @@ function openPlanEditor(editId){
 function renderPeList(){
   var el=document.getElementById('peExList');if(!el)return
   if(!_peEditing.exercises.length){
-    el.innerHTML='<div style="font-size:.78rem;color:var(--text3);padding:12px 0;text-align:center">还没有动作，点击下方添加</div>'
+    el.innerHTML='<div style="font-size:var(--fs-sm);color:var(--text3);padding:12px 0;text-align:center">还没有动作，点击下方添加</div>'
     return
   }
   el.innerHTML=_peEditing.exercises.map(function(ex,i){
-    return '<div class="ec" style="padding:10px;margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+(i+1)+'. '+ex.exercise+'</div><div class="ec-actions"><button class="ec-act" data-a="peExEdit" data-idx="'+i+'">✏️</button><button class="ec-act" data-a="peExDel" data-idx="'+i+'">🗑️</button></div></div><div style="font-size:.72rem;color:var(--text2);margin-top:4px">'+ex.weight+' kg × '+ex.targetReps+' 次 · 休息 '+ex.restSeconds+'s</div></div>'
+    return '<div class="ec" style="padding:10px;margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+(i+1)+'. '+ex.exercise+'</div><div class="ec-actions"><button class="ec-act" data-a="peExEdit" data-idx="'+i+'">✏️</button><button class="ec-act" data-a="peExDel" data-idx="'+i+'">🗑️</button></div></div><div style="font-size:var(--fs-xs);color:var(--text2);margin-top:4px">'+ex.weight+' kg × '+ex.targetReps+' 次 · 休息 '+ex.restSeconds+'s</div></div>'
   }).join('')
 }
 
@@ -237,12 +237,12 @@ function showPeExForm(idx){
     form.style='background:var(--bg);border:1px solid var(--bd);border-radius:var(--rs);padding:12px;margin-bottom:8px'
     el.insertBefore(form,document.getElementById('peAddEx'))
   }
-  form.innerHTML='<div class="fg"><label class="fl">动作</label><select class="fi" id="peExName">'
+  form.innerHTML='<div class="fg"><label class="fl" for="peExName">动作</label><select class="fi" id="peExName">'
     +getStrengthExercises().map(function(s){return'<option value="'+s.name+'"'+(s.name===ex.exercise?' selected':'')+'>'+s.name+'</option>'}).join('')
     +'</select></div>'
-    +'<div class="fg"><label class="fl">重量 (kg)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExWDown">−</button><span class="sp-val" id="peExWeight">'+ex.weight+'</span><button class="sp-btn" id="peExWUp">+</button></div></div>'
-    +'<div class="fg"><label class="fl">目标次数</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExRDown">−</button><span class="sp-val" id="peExReps">'+ex.targetReps+'</span><button class="sp-btn" id="peExRUp">+</button></div></div>'
-    +'<div class="fg"><label class="fl">休息 (秒)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="peExSDown">−</button><span class="sp-val" id="peExRest">'+ex.restSeconds+'</span><button class="sp-btn" id="peExSUp">+</button></div></div>'
+    +'<div class="fg"><span class="fl" id="lbl-st-g2">重量 (kg)</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-st-g2"><button class="sp-btn" id="peExWDown">−</button><span class="sp-val" id="peExWeight">'+ex.weight+'</span><button class="sp-btn" id="peExWUp">+</button></div></div>'
+    +'<div class="fg"><span class="fl" id="lbl-st-g3">目标次数</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-st-g3"><button class="sp-btn" id="peExRDown">−</button><span class="sp-val" id="peExReps">'+ex.targetReps+'</span><button class="sp-btn" id="peExRUp">+</button></div></div>'
+    +'<div class="fg"><span class="fl" id="lbl-st-g4">休息 (秒)</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-st-g4"><button class="sp-btn" id="peExSDown">−</button><span class="sp-val" id="peExRest">'+ex.restSeconds+'</span><button class="sp-btn" id="peExSUp">+</button></div></div>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="peExCancel">取消</button><button class="m-btn-save" id="peExConfirm">✅ 确定</button></div>'
   form.scrollIntoView({behavior:'smooth'})
 }
@@ -260,13 +260,13 @@ function showWoExercise(){
   const overlay=document.createElement('div');overlay.id='woOverlay';overlay.className='battle-overlay open'
   overlay.innerHTML='<div class="battle-hdr"><div class="battle-level">'+_woPlan.name+'</div><div class="battle-level">'+( _woIdx+1)+'/'+_woPlan.exercises.length+'</div><button class="speed-btn" id="woClose">✕</button></div>'
     +'<div class="battle-arena" style="flex-direction:column;gap:12px"><div class="workout-exercise" style="text-align:center">'
-    +'<div style="font-size:2.2rem;font-weight:800">'+ex.exercise+'</div>'
-    +'<div style="font-size:.9rem;color:var(--text2);margin:4px 0 16px">'+ex.weight+' kg · 目标 '+ex.targetReps+' 次</div>'
+    +'<div style="font-size:var(--fs-3xl);font-weight:800">'+ex.exercise+'</div>'
+    +'<div style="font-size:var(--fs-base);color:var(--text2);margin:4px 0 16px">'+ex.weight+' kg · 目标 '+ex.targetReps+' 次</div>'
     +'<div style="font-family:var(--font);font-size:4rem;font-weight:900;color:var(--orange)" id="woRepsDisp">'+_woReps+'</div>'
-    +'<div style="font-size:.75rem;color:var(--text3);letter-spacing:1px">实际次数</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--text3);letter-spacing:1px">实际次数</div>'
     +'<div style="display:flex;gap:24px;justify-content:center;margin:16px 0">'
-    +'<button class="speed-btn" id="woRepsD" style="width:56px;height:56px;border-radius:50%;font-size:2rem">−</button>'
-    +'<button class="speed-btn" id="woRepsU" style="width:56px;height:56px;border-radius:50%;font-size:2rem">+</button></div>'
+    +'<button class="speed-btn" id="woRepsD" style="width:56px;height:56px;border-radius:50%;font-size:var(--fs-3xl)">−</button>'
+    +'<button class="speed-btn" id="woRepsU" style="width:56px;height:56px;border-radius:50%;font-size:var(--fs-3xl)">+</button></div>'
     +'<button class="sb-btn" id="woDone" style="max-width:300px">✅ 完成</button></div></div>'
   document.body.appendChild(overlay)
   document.getElementById('woRepsD').addEventListener('click',()=>{_woReps=Math.max(0,_woReps-1);document.getElementById('woRepsDisp').textContent=_woReps})
@@ -289,9 +289,9 @@ function showWoRest(sec){
   _woRest=sec
   const el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
   if(!el)return
-  el.innerHTML='<div style="text-align:center"><div style="font-size:.8rem;color:var(--text3);letter-spacing:1px;margin-bottom:8px">休息</div>'
+  el.innerHTML='<div style="text-align:center"><div style="font-size:var(--fs-sm);color:var(--text3);letter-spacing:1px;margin-bottom:8px">休息</div>'
     +'<div style="font-size:5rem;font-weight:900;color:var(--orange)" id="woRestDisp">'+sec+'s</div>'
-    +'<div style="font-size:.8rem;color:var(--text2);margin:12px 0">下一组: '+_woPlan.exercises[_woIdx].exercise+'</div>'
+    +'<div style="font-size:var(--fs-sm);color:var(--text2);margin:12px 0">下一组: '+_woPlan.exercises[_woIdx].exercise+'</div>'
     +'<button class="speed-btn" id="woSkipRest">跳过 →</button></div>'
   _woTimer=setInterval(()=>{_woRest--;if(_woRest<=0){clearInterval(_woTimer);_woTimer=null;showWoExercise();return}
     var rd=document.getElementById('woRestDisp');if(rd)rd.textContent=_woRest+'s'},1000)
@@ -302,9 +302,9 @@ function showWoSummary(){
   const total=_woDone.reduce((s,d)=>s+d.actualReps,0),vol=sumVolume(_woDone,getExerciseMap())
   const el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
   if(!el)return
-  el.innerHTML='<div style="text-align:center"><div style="font-size:2.5rem;margin-bottom:4px">🎉</div><div style="font-size:1.5rem;font-weight:800;margin-bottom:12px">训练完成！</div>'
-    +_woDone.map(d=>'<div style="font-size:.8rem;color:var(--text2)">'+d.exercise+' '+d.weight+'kg × '+d.actualReps+'/'+d.targetReps+(d.actualReps>=d.targetReps?' ✅':'')+'</div>').join('')
-    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:1.5rem;font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:.65rem;color:var(--text3)">总次数</div></div><div><div style="font-size:1.5rem;font-weight:800;color:var(--blue)">'+vol+'</div><div style="font-size:.65rem;color:var(--text3)">总容量</div></div></div>'
+  el.innerHTML='<div style="text-align:center"><div style="font-size:var(--fs-hero);margin-bottom:4px">🎉</div><div style="font-size:var(--fs-2xl);font-weight:800;margin-bottom:12px">训练完成！</div>'
+    +_woDone.map(d=>'<div style="font-size:var(--fs-sm);color:var(--text2)">'+d.exercise+' '+d.weight+'kg × '+d.actualReps+'/'+d.targetReps+(d.actualReps>=d.targetReps?' ✅':'')+'</div>').join('')
+    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总次数</div></div><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--blue)">'+vol+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总容量</div></div></div>'
     +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
   document.getElementById('woFinish').addEventListener('click',()=>{
     _woDone.forEach(d=>{addStr({date:today(),exercise:d.exercise,weight:d.weight,targetReps:d.targetReps,actualReps:d.actualReps})})
@@ -321,14 +321,14 @@ function openStrEdit(entry){
   var unitLabel=(entry.unit||exDef.unit||'rep')==='sec'?'秒数':'次数';
   var unitSuffix=(entry.unit||exDef.unit||'rep')==='sec'?'秒':'次';
   const modal=openModal(null,'strEditModal')
-  var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">✏️ 编辑记录</div><div class="fg"><label class="fl">动作</label><input class="fi" id="seEx" value="'+entry.exercise+'"></div>';
+  var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">✏️ 编辑记录</div><div class="fg"><label class="fl" for="seEx">动作</label><input class="fi" id="seEx" value="'+entry.exercise+'"></div>';
   if(isEq){
     var eqW=entry.eqWeight!=null?entry.eqWeight:exDef.eqWeight;
-    h+='<div class="fg"><label class="fl">等效重量</label><div style="font-size:.85rem;color:var(--text2);padding:8px 0">⚖️ '+eqW+'kg/'+unitSuffix+'</div></div>';
+    h+='<div class="fg"><span class="fl" id="lbl-st-g5">等效重量</span><div style="font-size:var(--fs-base);color:var(--text2);padding:8px 0" role="group" aria-labelledby="lbl-st-g5">⚖️ '+eqW+'kg/'+unitSuffix+'</div></div>';
   }else{
-    h+='<div class="fg"><label class="fl">重量 (kg)</label><div class="weight-grid" id="seWeight"></div></div>';
+    h+='<div class="fg"><span class="fl" id="lbl-st-g6">重量 (kg)</span><div class="weight-grid" id="seWeight" role="group" aria-labelledby="lbl-st-g6"></div></div>';
   }
-  h+='<div class="fg"><label class="fl">'+unitLabel+'</label><div class="reps-row"><div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" id="seTD">−</button><span class="sp-val" id="seTV">'+entry.targetReps+'</span><button class="sp-btn" id="seTU">+</button></div></div><div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" id="seAD">−</button><span class="sp-val" id="seAV">'+entry.actualReps+'</span><button class="sp-btn" id="seAU">+</button></div></div></div></div><div class="modal-actions"><button class="m-btn-cancel" id="seCancel">取消</button><button class="m-btn-save" id="seSave">💾 保存</button></div></div>';
+  h+='<div class="fg"><span class="fl" id="lbl-st-g7">'+unitLabel+'</span><div class="reps-row" role="group" aria-labelledby="lbl-st-g7"><div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" id="seTD">−</button><span class="sp-val" id="seTV">'+entry.targetReps+'</span><button class="sp-btn" id="seTU">+</button></div></div><div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" id="seAD">−</button><span class="sp-val" id="seAV">'+entry.actualReps+'</span><button class="sp-btn" id="seAU">+</button></div></div></div></div><div class="modal-actions"><button class="m-btn-cancel" id="seCancel">取消</button><button class="m-btn-save" id="seSave">💾 保存</button></div></div>';
   modal.innerHTML=h;void modal
   var selW=entry.weight||0;
   if(!isEq){buildWtGrid(modal.querySelector('#seWeight'),selW,w=>selW=w,true)}
@@ -439,12 +439,12 @@ function openStrExPicker(){
     var linked=(typeof EXD!=='undefined'&&EXD.ready()&&ex.dsId)?EXD.get(ex.dsId):null;
     var m=linked?EXD.mediaUrls(linked.img):null;
     h+='<button type="button" class="ec" data-pickex="'+ex.name+'" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer;border:1px solid var(--bd);border-radius:12px;background:var(--bg2)">'
-      +(m?'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:1px solid var(--bd)">':'<div style="width:56px;height:56px;border-radius:10px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px">💪</div>')
+      +(m?'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:1px solid var(--bd)">':'<div style="width:56px;height:56px;border-radius:10px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl)">💪</div>')
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:.9rem;font-weight:700;color:var(--text1)">'+(linked?linked.zh:ex.name)+'</div>'
+      +'<div style="font-size:var(--fs-base);font-weight:700;color:var(--text1)">'+(linked?linked.zh:ex.name)+'</div>'
       +(linked?'<div style="margin-top:2px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+tagHtml(linked.target,'cat')+'</div>':'')
       +'</div>'
-      +'<span style="font-size:.65rem;color:var(--text3)"></span>'
+      +'<span style="font-size:var(--fs-3xs);color:var(--text3)"></span>'
       +'</button>';
   });
   h+='</div></div>';

@@ -21,7 +21,7 @@ function renderCar(){
       var ct=getAllCardioTypes().find(function(x){return x.id===e.type})||{emoji:'🏃',name:'运动'}
       var ts=e.createdAt?new Date(e.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''
       var intLabel=e.intensity?INTENSITY_LEVELS.find(function(x){return x.id===e.intensity})||{emoji:''}:{emoji:''}
-      return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+ct.emoji+' '+ct.name+' '+intLabel.emoji+'</div><div class="ec-actions"><button class="ec-act" data-a="carDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span>⏱️ '+e.duration+' 分钟</span>'+(e.distance>0?'<span>📏 '+e.distance+' km</span>':'')+'</div></div>'+(e.note?'<div style="font-size:.7rem;color:var(--text2);margin-top:4px">💬 '+e.note+'</div>':'')+'</div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+      return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+ct.emoji+' '+ct.name+' '+intLabel.emoji+'</div><div class="ec-actions"><button class="ec-act" data-a="carDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span>⏱️ '+e.duration+' 分钟</span>'+(e.distance>0?'<span>📏 '+e.distance+' km</span>':'')+'</div></div>'+(e.note?'<div style="font-size:var(--fs-2xs);color:var(--text2);margin-top:4px">💬 '+e.note+'</div>':'')+'</div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
     }).join('')
   }
   renderCarStats()
@@ -135,10 +135,10 @@ function initCardioTypes(){
 function showCustomCardioDialog(){
   var modal=openModal()
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">＋ 自定义运动类型</div>'
-    +'<div class="fg"><label class="fl">名称</label><input class="fi" id="ccName" placeholder="如: 瑜伽"></div>'
-    +'<div class="fg"><label class="fl">图标</label><input class="fi" id="ccEmoji" placeholder="如: 🧘"></div>'
-    +'<div class="fg"><label class="fl">默认强度</label><div class="car-types" id="ccIntensity"></div></div>'
-    +'<div class="fg" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ccHasDist"><label class="fl" style="margin:0">有距离统计</label></div>'
+    +'<div class="fg"><label class="fl" for="ccName">名称</label><input class="fi" id="ccName" placeholder="如: 瑜伽"></div>'
+    +'<div class="fg"><label class="fl" for="ccEmoji">图标</label><input class="fi" id="ccEmoji" placeholder="如: 🧘"></div>'
+    +'<div class="fg"><span class="fl" id="lbl-c-g1">默认强度</span><div class="car-types" id="ccIntensity" role="group" aria-labelledby="lbl-c-g1"></div></div>'
+    +'<div class="fg" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ccHasDist"><label class="fl" for="ccHasDist" style="margin:0">有距离统计</label></div>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="ccCancel">取消</button><button class="m-btn-save" id="ccSave">💾 保存</button></div></div>'
   void modal
   var ccInt=2
@@ -172,10 +172,10 @@ function showCardioSegForm(idx){
   var modal=openModal(null,'cpSegModal')
   var ctOpts=getAllCardioTypes().map(function(t){return'<option value="'+t.id+'"'+(t.id===seg.type?' selected':'')+'>'+t.emoji+' '+t.name+'</option>'}).join('')
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(idx!==null?'编辑训练段':'添加训练段')+'</div>'
-    +'<div class="fg"><label class="fl">运动类型</label><select class="fi" id="cpSegType">'+ctOpts+'</select></div>'
-    +'<div class="fg"><label class="fl">时长 (分钟)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="cpSegDDown">−</button><span class="sp-val" id="cpSegDur">'+seg.duration+'</span><button class="sp-btn" id="cpSegDUp">+</button></div></div>'
-    +'<div class="fg"><label class="fl">强度</label><div class="car-types" id="cpSegInt"></div></div>'
-    +'<div class="fg"><label class="fl">休息 (秒)</label><div class="stepper" style="max-width:160px"><button class="sp-btn" id="cpSegRDown">−</button><span class="sp-val" id="cpSegRest">'+seg.restSeconds+'</span><button class="sp-btn" id="cpSegRUp">+</button></div></div>'
+    +'<div class="fg"><label class="fl" for="cpSegType">运动类型</label><select class="fi" id="cpSegType">'+ctOpts+'</select></div>'
+    +'<div class="fg"><span class="fl" id="lbl-c-g2">时长 (分钟)</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-c-g2"><button class="sp-btn" id="cpSegDDown">−</button><span class="sp-val" id="cpSegDur">'+seg.duration+'</span><button class="sp-btn" id="cpSegDUp">+</button></div></div>'
+    +'<div class="fg"><span class="fl" id="lbl-c-g3">强度</span><div class="car-types" id="cpSegInt" role="group" aria-labelledby="lbl-c-g3"></div></div>'
+    +'<div class="fg"><span class="fl" id="lbl-c-g4">休息 (秒)</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-c-g4"><button class="sp-btn" id="cpSegRDown">−</button><span class="sp-val" id="cpSegRest">'+seg.restSeconds+'</span><button class="sp-btn" id="cpSegRUp">+</button></div></div>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="cpSegCancel">取消</button><button class="m-btn-save" id="cpSegConfirm">✅ 确定</button></div></div>'
   void modal
   var csInt=seg.intensity||2
@@ -215,7 +215,7 @@ function renderCardioPlans(){
       var ct=getAllCardioTypes().find(function(x){return x.id===s.type})||{emoji:'🏃',name:s.type}
       return ct.emoji+s.duration+'min'
     }).slice(0,6)
-    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="startCardioPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delCardioPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:.7rem;background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>'
+    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="startCardioPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delCardioPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>'
   }).join('')
   c.innerHTML+='<button class="add-btn" id="carNewPlan" style="margin-top:8px">＋ 新建有氧计划</button>'
 }
@@ -225,7 +225,7 @@ function openCardioPlanEditor(editId){
   var plan=editId?getCardioPlans().find(function(p){return p.id===editId}):null
   _cpEditing=plan?JSON.parse(JSON.stringify(plan)):{segments:[]}
   var modal=openModal(null,'cpModal')
-  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(editId?'✏️ 编辑有氧计划':'📋 新建有氧计划')+'</div><div class="fg"><label class="fl">计划名称</label><input class="fi" id="cpName" value="'+(plan?plan.name:'')+'" placeholder="如: 晨跑"></div><div class="fg"><label class="fl">训练段</label><div id="cpSegList"></div><button class="add-btn" id="cpAddSeg" style="margin-top:4px;padding:10px">＋ 添加训练段</button></div><div class="modal-actions"><button class="m-btn-cancel" id="cpCancel">取消</button><button class="m-btn-save" id="cpSave">保存</button></div></div>'
+  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">'+(editId?'✏️ 编辑有氧计划':'📋 新建有氧计划')+'</div><div class="fg"><label class="fl" for="cpName">计划名称</label><input class="fi" id="cpName" value="'+(plan?plan.name:'')+'" placeholder="如: 晨跑"></div><div class="fg"><span class="fl" id="lbl-c-g5">训练段</span><div id="cpSegList" role="group" aria-labelledby="lbl-c-g5"></div><button class="add-btn" id="cpAddSeg" style="margin-top:4px;padding:10px">＋ 添加训练段</button></div><div class="modal-actions"><button class="m-btn-cancel" id="cpCancel">取消</button><button class="m-btn-save" id="cpSave">保存</button></div></div>'
   void modal
   renderCpSegList()
 }
@@ -233,12 +233,12 @@ function openCardioPlanEditor(editId){
 function renderCpSegList(){
   var el=document.getElementById('cpSegList');if(!el)return
   if(!_cpEditing.segments.length){
-    el.innerHTML='<div style="font-size:.78rem;color:var(--text3);padding:12px 0;text-align:center">还没有训练段，点击下方添加</div>'
+    el.innerHTML='<div style="font-size:var(--fs-sm);color:var(--text3);padding:12px 0;text-align:center">还没有训练段，点击下方添加</div>'
     return
   }
   el.innerHTML=_cpEditing.segments.map(function(seg,i){
     var ct=getAllCardioTypes().find(function(x){return x.id===seg.type})||{emoji:'🏃',name:seg.type}
-    return '<div class="ec" style="padding:10px;margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+(i+1)+'. '+ct.emoji+' '+ct.name+'</div><div class="ec-actions"><button class="ec-act" data-a="cpSegEdit" data-idx="'+i+'">✏️</button><button class="ec-act" data-a="cpSegDel" data-idx="'+i+'">🗑️</button></div></div><div style="font-size:.72rem;color:var(--text2);margin-top:4px">'+seg.duration+' 分钟 · 强度×'+seg.intensity+' · 休息'+seg.restSeconds+'s</div></div>'
+    return '<div class="ec" style="padding:10px;margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+(i+1)+'. '+ct.emoji+' '+ct.name+'</div><div class="ec-actions"><button class="ec-act" data-a="cpSegEdit" data-idx="'+i+'">✏️</button><button class="ec-act" data-a="cpSegDel" data-idx="'+i+'">🗑️</button></div></div><div style="font-size:var(--fs-xs);color:var(--text2);margin-top:4px">'+seg.duration+' 分钟 · 强度×'+seg.intensity+' · 休息'+seg.restSeconds+'s</div></div>'
   }).join('')
 }
 
@@ -257,9 +257,9 @@ function showCardioSegment(){
   var overlay=document.createElement('div');overlay.id='woOverlay';overlay.className='battle-overlay open'
   overlay.innerHTML='<div class="battle-hdr"><div class="battle-level">'+_woPlan.name+'</div><div class="battle-level">'+( _woIdx+1)+'/'+_woPlan.segments.length+'</div><button class="speed-btn" id="woClose">✕</button></div>'
     +'<div class="battle-arena" style="flex-direction:column;gap:12px"><div style="text-align:center">'
-    +'<div style="font-size:2.2rem;font-weight:800">'+ct.emoji+' '+ct.name+'</div>'
-    +'<div style="font-size:.9rem;color:var(--text2);margin:4px 0 16px">'+seg.duration+' 分钟 · 强度×'+seg.intensity+'</div>'
-    +'<div style="font-size:.75rem;color:var(--text3);margin-bottom:16px">完成此段训练后点击按钮</div>'
+    +'<div style="font-size:var(--fs-3xl);font-weight:800">'+ct.emoji+' '+ct.name+'</div>'
+    +'<div style="font-size:var(--fs-base);color:var(--text2);margin:4px 0 16px">'+seg.duration+' 分钟 · 强度×'+seg.intensity+'</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:16px">完成此段训练后点击按钮</div>'
     +'<button class="sb-btn" id="woDone" style="max-width:300px">✅ 完成此段</button></div></div>'
   document.body.appendChild(overlay)
   document.getElementById('woDone').addEventListener('click',function(){completeCardioSegment()})
@@ -281,9 +281,9 @@ function showCardioRest(sec){
   _woRest=sec
   var el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
   if(!el)return
-  el.innerHTML='<div style="text-align:center"><div style="font-size:.8rem;color:var(--text3);letter-spacing:1px;margin-bottom:8px">休息</div>'
+  el.innerHTML='<div style="text-align:center"><div style="font-size:var(--fs-sm);color:var(--text3);letter-spacing:1px;margin-bottom:8px">休息</div>'
     +'<div style="font-size:5rem;font-weight:900;color:var(--orange)" id="woRestDisp">'+sec+'s</div>'
-    +'<div style="font-size:.8rem;color:var(--text2);margin:12px 0">下一段</div>'
+    +'<div style="font-size:var(--fs-sm);color:var(--text2);margin:12px 0">下一段</div>'
     +'<button class="speed-btn" id="woSkipRest">跳过 →</button></div>'
   _woTimer=setInterval(function(){_woRest--;if(_woRest<=0){clearInterval(_woTimer);_woTimer=null;showCardioSegment();return}
     var rd=document.getElementById('woRestDisp');if(rd)rd.textContent=_woRest+'s'},1000)
@@ -294,12 +294,12 @@ function showCardioSummary(){
   var total=_woDone.reduce(function(s,d){return s+d.duration},0)
   var el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
   if(!el)return
-  el.innerHTML='<div style="text-align:center"><div style="font-size:2.5rem;margin-bottom:4px">🎉</div><div style="font-size:1.5rem;font-weight:800;margin-bottom:12px">有氧训练完成！</div>'
+  el.innerHTML='<div style="text-align:center"><div style="font-size:var(--fs-hero);margin-bottom:4px">🎉</div><div style="font-size:var(--fs-2xl);font-weight:800;margin-bottom:12px">有氧训练完成！</div>'
     +_woDone.map(function(d,i){
       var ct=getAllCardioTypes().find(function(x){return x.id===d.type})||{emoji:'🏃',name:d.type}
-      return '<div style="font-size:.8rem;color:var(--text2)">'+ct.emoji+' '+ct.name+' '+d.duration+'分钟 · 强度×'+d.intensity+'</div>'
+      return '<div style="font-size:var(--fs-sm);color:var(--text2)">'+ct.emoji+' '+ct.name+' '+d.duration+'分钟 · 强度×'+d.intensity+'</div>'
     }).join('')
-    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:1.5rem;font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:.65rem;color:var(--text3)">总分钟</div></div></div>'
+    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总分钟</div></div></div>'
     +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
   document.getElementById('woFinish').addEventListener('click',function(){
     _woDone.forEach(function(d){addCar({date:today(),type:d.type,duration:d.duration,intensity:d.intensity,distance:0,note:''})})

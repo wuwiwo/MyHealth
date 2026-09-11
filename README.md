@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.0.11
+> Personal Health Manager — 个人健身健康管理应用 v2.1.1
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -114,7 +114,9 @@ doc/
 ├── changelog-v1.7.md
 ├── changelog-v1.8.md
 ├── changelog-v1.9.md
-├── changelog-v2.0.md  ← 最新版本日志
+├── changelog-v2.1.md  ← 最新版本日志
+├── design-tokens-v2.1.md  ← 设计规范（唯一权威：令牌/对比度/触控/无障碍）
+├── changelog-v2.0.md
 ├── design-v2.0.md       v2.0 设计文档（技能/宠物/宝珠）
 ├── design-uiux-adjustments.md  v2.0 UI/UX 调整设计
 ├── plan-v2.0-implementation.md v2.0 实施计划
@@ -229,8 +231,10 @@ Vercel 项目设置：
 | **v2.0.6** | **2026-09-02** | **动作改名/合并四库联动迁移（修正不规范命名如「抬举」→「肩推」）+ 关卡列表跨视图漏显修复** | `doc/changelog-v2.0.md` |
 | **v2.0.7** | **2026-09-02** | **补召结算不锁今日名额：补召打完当天仍可正常召唤（applyChallengeSettle 分型记账）** | `doc/changelog-v2.0.md` |
 | **v2.0.8** | **2026-09-02** | **补召误锁存档自助恢复入口（v2.0.7 部署前打完补召的用户解锁今日资格）** | `doc/changelog-v2.0.md` |
-| **v2.0.9** | **2026-09-06** | **宠物阶级实时归一化 + 动作改名/合并修复（炼化入口回归训练视图）+ 群战测试 90 关扩容** | `doc/changelog-v2.0.md` |
+| **v2.0.9** | **2026-09-03** | **敌群扩容 6→9 大关（60→90 关）+ 难度曲线重平衡 + 炼魂入口回归 + 宠物阶段实时归一化 + hook 路径修复** | `doc/changelog-v2.0.md` |
 | **v2.0.10** | **2026-09-06** | **敌群通关技能点 100→10（1/10），周递增倍率不变（隐藏挑战数值不动）** | `doc/changelog-v2.0.md` |
 | **v2.0.11** | **2026-09-06** | **全局 Debug 面板：全 tab FAB+抽屉五分区（概览/存储/属性经济/挑战/错误捕获），挑战页内嵌诊断保留** | `doc/changelog-v2.0.md` |
+| **v2.1.0** | **2026-09-10** | **🎨 设计体系版本：设计令牌（10 阶字阶/RGB 通道令牌）+ 移动端触控与安全区 + 键盘/读屏无障碍 + 明暗双主题对比度修到 WCAG AA** | `doc/changelog-v2.1.md` |
+| **v2.1.1** | **2026-09-11** | **🐞 Debug 面板合入设计体系线：抽屉令牌化 + A11y 语义 + 缓存版本对齐（v61）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.0.11**
+> 当前版本：**v2.1.1**（设计规范：`doc/design-tokens-v2.1.md`）
