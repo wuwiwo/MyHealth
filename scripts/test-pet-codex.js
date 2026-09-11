@@ -75,37 +75,35 @@ sandbox.runGroupBattle(gb, 100);
 assert('宠物参战战斗结束', gb.done === true);
 assert('宠物参与行动', gb.log.some(l => l.unit === '梦幻' || l.unit === '你'), 'units=' + gb.log.map(l=>l.unit).join(','));
 
-// ---- 7. 天赋槽与解锁（v2.1.3）----
-assert('R 槽位上限 2', sandbox.petTalentSlotMax('R') === 2);
-assert('SR 槽位上限 2', sandbox.petTalentSlotMax('SR') === 2);
-assert('SSR 槽位上限 3', sandbox.petTalentSlotMax('SSR') === 3);
-assert('UR 槽位上限 4', sandbox.petTalentSlotMax('UR') === 4);
-assert('R 池仅 R 级', sandbox.petTalentPool('R').length === 2, 'len=' + sandbox.petTalentPool('R').length);
-assert('UR 池含全部 14 个（10 原天赋 + 4 新增低阶）', sandbox.petTalentPool('UR').length === 14, 'len=' + sandbox.petTalentPool('UR').length);
-assert('SSR 池含 R+SR+SSR', sandbox.petTalentPool('SSR').length === 8, 'len=' + sandbox.petTalentPool('SSR').length);
+// ---- 7. 天赋固有专属（v2.1.4 按 design-v2.0.md §2.6 回退「槽位解锁」）----
+// 每只宠物的天赋固定为图鉴定义值：不可解锁、不可跨宠物装配。
+const T = id => sandbox.getPetTalents(sandbox.createPet({ speciesId: id, rarity: sandbox.getPetCodex(id).rarity }));
+assert('R 闪闪星无天赋', T('sparkle').length === 0);
+assert('SR 火焰鸡无天赋', T('flamechick').length === 0);
+assert('SSR 小负鼠=幸运口袋', JSON.stringify(T('possum')) === '["lucky_pocket"]', JSON.stringify(T('possum')));
+assert('SSR 黑暗鸦=漆黑之眼', JSON.stringify(T('darkcrow')) === '["dark_eye"]', JSON.stringify(T('darkcrow')));
+assert('SSR 小冰晶=凛冬之核', JSON.stringify(T('icecrystal')) === '["winter_core"]', JSON.stringify(T('icecrystal')));
+assert('SSR 光之精灵=圣光守护', JSON.stringify(T('lightspirit')) === '["holy_guard"]', JSON.stringify(T('lightspirit')));
+assert('UR 梦幻双天赋', JSON.stringify(T('dream')) === '["mirror_field","inspiration"]', JSON.stringify(T('dream')));
+assert('UR 无念熊双天赋', JSON.stringify(T('nonebear')) === '["mind_eye","fighter_instinct"]', JSON.stringify(T('nonebear')));
+assert('UR 圣光麒麟双天赋', JSON.stringify(T('kirin')) === '["immovable","pressure_field"]', JSON.stringify(T('kirin')));
 
-const pr = sandbox.createPet({ speciesId: 'sparkle', rarity: 'R', name: '闪闪星' });
-pr.stage = 'mature';
-assert('R 初始无天赋', sandbox.getPetTalents(pr).length === 0);
-const bagT = sandbox.createMaterialBag();
-sandbox.addMaterial(bagT, 'spirit', 100);
-assert('R 首槽消耗 5', sandbox.petTalentUnlockCost(pr) === 5);
-const un1 = sandbox.unlockPetTalent(pr, bagT, 'pet_tough');
-assert('解锁天赋成功', un1.ok === true && sandbox.getPetTalents(pr).length === 1, JSON.stringify(un1));
-assert('灵能已扣 5', bagT.spirit === 95);
-assert('第二槽消耗 10', sandbox.petTalentUnlockCost(pr) === 10);
-const un2 = sandbox.unlockPetTalent(pr, bagT, 'pet_quick');
-assert('解锁第二槽', un2.ok === true && sandbox.getPetTalents(pr).length === 2, JSON.stringify(un2));
-assert('槽满拒绝', sandbox.unlockPetTalent(pr, bagT, 'pet_keen').ok === false);
-assert('重复天赋拒绝', sandbox.unlockPetTalent(pr, bagT, 'pet_tough').ok === false);
-assert('越级天赋拒绝（R 不能学 UR）', sandbox.unlockPetTalent(sandbox.createPet({ speciesId: 'sparkle', rarity: 'R' }), bagT, 'immovable').ok === false);
-assert('未指定天赋拒绝', sandbox.unlockPetTalent(pr, bagT, '').ok === false);
+// ★ 防回归：即便存档里被塞入别的宠物的专属天赋，也必须一律忽略
+// （v2.1.3 的池化实现曾让一只 SSR 同时挂着 凛冬之核 + 漆黑之眼 + 圣光守护）
+const tainted = sandbox.createPet({ speciesId: 'darkcrow', rarity: 'SSR' });
+tainted.talentIds = ['dark_eye', 'winter_core', 'holy_guard'];
+tainted.stage = 'mature';
+const taintedTalents = sandbox.getPetTalents(tainted);
+assert('存档上的跨宠物天赋被忽略（防回归）', JSON.stringify(taintedTalents) === '["dark_eye"]', JSON.stringify(taintedTalents));
+const taintedUnit = sandbox.createPetUnit(tainted);
+assert('进入战斗的也只有本体天赋', taintedUnit._talents.length === 1 && taintedUnit._talents[0] === 'dark_eye', taintedUnit._talents.join(','));
 
-// 天赋必须真正生效（新天赋带 statMods；R 基础 def=5）
-const unitT = sandbox.createPetUnit(pr);
-assert('天赋进入 Unit', unitT && unitT._talents.length === 2, 'talents=' + (unitT ? unitT._talents.join(',') : 'null'));
-assert('坚韧生效 def 5→7', unitT.base.def === 7, 'def=' + unitT.base.def);
-assert('轻捷生效 spd 5→6', unitT.base.spd === 6, 'spd=' + unitT.base.spd);
+// 解锁相关接口应已彻底移除（防止有残留调用方）
+assert('unlockPetTalent 已移除', typeof sandbox.unlockPetTalent === 'undefined');
+assert('petTalentUnlockCost 已移除', typeof sandbox.petTalentUnlockCost === 'undefined');
+assert('petTalentPool 已移除', typeof sandbox.petTalentPool === 'undefined');
+assert('petTalentSlotMax 已移除', typeof sandbox.petTalentSlotMax === 'undefined');
+assert('setPetTalents 已移除', typeof sandbox.setPetTalents === 'undefined');
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

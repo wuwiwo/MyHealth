@@ -8,6 +8,52 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 
 ---
 
+## v2.1.4
+
+**Date:** 2026-09-11
+
+### 修复
+
+- 🐾 **宠物天赋被跨宠物共享（设计错误，对照 `doc/design-v2.0.md` §2.6 回退）**：v2.1.3 引入的「按稀有度开池解锁天赋」允许宠物从同级池里挑天赋，结果**一只 SSR 宠物能同时装上凛冬之核 + 漆黑之眼 + 圣光守护**——这三个分别是小冰晶 / 黑暗鸦 / 光之精灵的**专属天赋**。设计文档明确天赋是宠物固有被动，不可跨宠物装配。现已整块回退：
+  - `getPetTalents()` 恒取图鉴定义值；**存档上的 `talentIds` 一律忽略**（旧存档里被塞入的错误天赋自动失效，无需数据迁移）
+  - 移除 `PET_TALENT_SLOTS` / `PET_TALENT_POOL` / `PET_RARITY_ORDER` / `petTalentPool` / `petTalentSlotMax` / `petBaseTalentCount` / `setPetTalents`（`pet-codex.js`）与 `PET_TALENT_UNLOCK_COST` / `petTalentUnlockCost` / `unlockPetTalent`（`pet-materials.js`）
+  - 详情面板天赋区改为**只读展示**（「固有 N 个」），不再有「🔓 解锁新槽位」按钮与候选天赋
+  - 同步移除 v2.1.3 新增的 4 个通用天赋（坚韧 / 轻捷 / 敏锐 / 活力）——它们只为池化机制而设，机制回退后成为死代码
+  - 现在的天赋分布：R/SR 无天赋，SSR 单天赋（小负鼠=幸运口袋 / 黑暗鸦=漆黑之眼 / 小冰晶=凛冬之核 / 光之精灵=圣光守护），UR 双天赋
+- 📱 **宠物 / 技能面板内容超出后无法滚动**：两处面板复用了战斗专用的 `.battle-overlay`（`position:fixed;inset:0` + flex 列布局，**无 `overflow-y`**）。v2.1.3 给宠物详情塞入炼化进度 / 技能升级 / 天赋区后内容远超一屏，**超出部分既看不到也滚不到**。现新增独立容器 `#panelOverlay`（`.panel-overlay`：`overflow-y:auto` + `-webkit-overflow-scrolling:touch` + `overscroll-behavior:contain`）供宠物与技能面板使用；战斗 overlay 保持原样，零影响
+- 📐 **顶部横向溢出 38px**：`.app-header::before` 的装饰光晕（`right:-10%` + 280px 宽）撑大了文档 `scrollWidth`——390 视口下实测 **413**。配合 `body{overflow-x:hidden}` 会被裁切，在 iOS 上还可能引起页面横向拖动。给 `.app-header` 加 `overflow:hidden` 后 `scrollWidth` 回到 390
+- 🎨 **浅色主题整体偏暗 + 实心按钮「橙底黑字」不好看**：
+  - 浅色 `--text2` 由 `#44403c` 回调至 `#57534e`（v2.0.9 取值；对比度 7.62:1，仍远超 AA 的 4.5:1）
+  - 浅色实心按钮改为**深橙底 + 白字**：`--brand-fill:#C2410C` / `--brand-fill-d:#9A3412` / `--on-brand:#ffffff`（**5.18:1** 达 AA），替代原先的亮橙 `#F97316` + 近黑 `#1c1917`
+  - 深色主题令牌**未改动**
+  - 注：`--text3`（浅色 `#6f6862`）是 AA 边界值（对 `--surface-2` 仅 5.02:1），**无法再调亮**，因此未动；如需恢复 v2.0.9 的轻盈观感须放宽对比度标准
+
+### 修改文件
+
+- `page/pet-codex.js`（移除槽位/池机制；`getPetTalents` 改为恒定固有值；删除 4 个通用天赋与 `window`/`globalThis` 暴露项）
+- `page/pet-materials.js`（移除天赋解锁三件套及其暴露项）
+- `page/pet-ui.js`（改用 `#panelOverlay` + `.panel-inner`；天赋区改为只读展示；删除天赋解锁事件）
+- `page/skill-ui.js`（改用 `#panelOverlay` + `.panel-inner`）
+- `page/index.html`（新增 `#panelOverlay` 容器；cache-busting `?v63` → `?v64`，47 处含 `index.css?v64`）
+- `page/index.css`（新增 `.panel-overlay` / `.panel-inner` / `--z-panel`；`.app-header` 加 `overflow:hidden`；浅色 `--text2` 与品牌实心色覆盖）
+- `page/utils.js`（`APP_VERSION` 2.1.3 → 2.1.4）
+- `scripts/test-pet-codex.js`（第 7 节由「天赋槽与解锁」改写为「天赋固有专属 + 防回归 + 接口已移除」）
+- `README.md` / `doc/changelog-v2.1.md`
+
+### 测试
+
+- 26 个测试套件全绿，含设计体系护栏 `test-a11y-tokens.js` **40/40**；断言合计 **580**
+- 新增 **防回归断言**：给黑暗鸦的存档强行塞入 `['dark_eye','winter_core','holy_guard']`，断言 `getPetTalents()` 只返回 `["dark_eye"]`、且 `createPetUnit()` 得到的 `_talents` 也只有 1 个
+- 新增 9 条「天赋归属」断言，逐只核对 SSR/UR 的天赋与设计文档一致
+- 新增 5 条「接口已移除」断言（`unlockPetTalent` / `petTalentUnlockCost` / `petTalentPool` / `petTalentSlotMax` / `setPetTalents` 均为 `undefined`），防止有残留调用方
+- 浏览器实测：390×844 视口下 `document.scrollWidth` 由 **413 → 390**（横向溢出消除）；`#panelOverlay` 注入 2000px 内容后 `overflowY=auto`、`scrollTop` 可达 1541（确认可滚动）
+
+### ⚠️ 遗留（未处理，需单独排期）
+
+- 原有 10 个专属天赋仍是「空壳」（只有 `name`/`desc`，无 hooks/statMods，战斗内不生效）。补效果会改变战斗数值，并需同步 `test-pet-codex.js` 的 UR 基准断言（`hp===360 / atk===60`）
+
+---
+
 ## v2.1.2
 
 **Date:** 2026-09-11
@@ -221,3 +267,4 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 | v2.1.1 | 45 | 763 行 game-render.js | 🐞 合入全局 Debug 面板（debug.js）+ 抽屉令牌化/A11y 对齐 |
 | v2.1.2 | 45 | 763 行 game-render.js | 📝 敌群 desc 敌数文案与实际对齐（4 敌→3 敌）+ 修正同源过期注释 |
 | v2.1.3 | 45 | 763 行 game-render.js | 🐾 宠物面板补炼化进度 + 炼化石 10:1 兑换 + 技能指定升级 + 天赋槽解锁 |
+| v2.1.4 | 45 | 763 行 game-render.js | 🐾 天赋回退为固有专属（修跨宠物共享）+ 宠物/技能面板补可滚动容器 + 修顶部横向溢出 + 浅色按钮改深橙白字 |

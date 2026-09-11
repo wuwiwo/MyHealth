@@ -7,7 +7,7 @@
 
 /* 宠物面板 overlay（新版式：卡片/大按钮/12px+） */
 function renderPetPanel() {
-  var ov = document.getElementById('battleOverlay')
+  var ov = document.getElementById('panelOverlay')
   if (!ov) return
   var d = getPetStore()
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
@@ -68,7 +68,7 @@ function renderPetPanel() {
     h += '</div>'
     h += '<div style="margin-top:8px"><button class="speed-btn" id="petStartBattle" style="padding:4px 16px;border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button></div>'
   }
-  ov.innerHTML = h
+  ov.innerHTML = '<div class="panel-inner">' + h + '</div>'
   ov.classList.add('open')
 
   // 事件
@@ -128,9 +128,10 @@ function renderPetPanel() {
 }
 
 /* 宠物详情（属性/炼化/技能/天赋）
-   v2.1.3：补炼化进度条、技能指定升级、天赋槽解锁 */
+   v2.1.3：补炼化进度条、技能指定升级
+   v2.1.4：天赋改为固有展示（按 design-v2.0.md §2.6 回退「槽位解锁」） */
 function renderPetDetail(pet, idx) {
-  var ov = document.getElementById('battleOverlay')
+  var ov = document.getElementById('panelOverlay')
   if (!ov) return
   var d = getPetStore()
   var bag = d.materials || {}
@@ -183,35 +184,18 @@ function renderPetDetail(pet, idx) {
   })
   if (!(codex.skills||[]).length) h += '<div style="color:var(--text3)">（无技能）</div>'
   h += '</div>'
-  // 天赋（v2.1.3：槽位 + 解锁）
+  // 天赋（固有专属，design-v2.0.md §2.6：不可解锁、不可跨宠物装配）
   var curT = getPetTalents(pet)
-  var maxSlot = petTalentSlotMax(pet.rarity)
-  var pool = petTalentPool(pet.rarity).filter(function (id) { return curT.indexOf(id) < 0 })
   h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋 <span style="color:var(--text3);font-weight:400">（槽位 '+curT.length+' / '+maxSlot+'）</span></div>'
-  if (!curT.length) h += '<div style="color:var(--text3)">（暂无天赋）</div>'
+  h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋 <span style="color:var(--text3);font-weight:400">（固有 '+curT.length+' 个）</span></div>'
+  if (!curT.length) h += '<div style="color:var(--text3)">该稀有度暂无天赋</div>'
   curT.forEach(function(tid){
     var t = TALENTS[tid]
     h += '<div>'+(t?t.name:tid)+' <span style="color:var(--text3)">· '+(t?t.desc:'')+'</span></div>'
   })
-  if (curT.length < maxSlot) {
-    var uc = petTalentUnlockCost(pet)
-    h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">'
-    if (!pool.length) {
-      h += '<div style="color:var(--text3)">无可解锁天赋</div>'
-    } else {
-      h += '<div style="color:var(--text3);margin-bottom:6px">🔓 解锁新槽位（消耗 '+uc+' ✨）</div>'
-      h += '<div style="display:flex;gap:6px;flex-wrap:wrap">'
-      pool.forEach(function(tid){
-        var t = TALENTS[tid]
-        h += '<button class="speed-btn" data-pet-talent="'+tid+'" title="'+(t?t.desc:'')+'" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">'+(t?t.name:tid)+'</button>'
-      })
-      h += '</div>'
-    }
-    h += '</div>'
-  }
   h += '</div>'
-  ov.innerHTML = h
+  ov.innerHTML = '<div class="panel-inner">' + h + '</div>'
+  ov.classList.add('open')   // 防御：直接调用详情时也能显示（原先依赖 panel 已打开）
   var back = document.getElementById('petDBack')
   if (back) back.addEventListener('click', function(){ renderPetPanel() })
   // 技能升级
@@ -225,19 +209,6 @@ function renderPetDetail(pet, idx) {
       if (r.ok) { savePetStore(d3); toast('⚡ '+((SKILLS[sid]||{}).name||sid)+' → Lv'+r.level+'（-'+r.cost+' ✨）','s') }
       else { toast(r.reason || '升级失败','e') }
       renderPetDetail(p3, idx)
-    })
-  })
-  // 天赋解锁
-  ov.querySelectorAll('[data-pet-talent]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var tid = btn.getAttribute('data-pet-talent')
-      var d4 = getPetStore()
-      var p4 = d4.pets[idx]
-      if (!p4) return
-      var r = unlockPetTalent(p4, d4.materials, tid)
-      if (r.ok) { savePetStore(d4); toast('✨ 解锁天赋「'+((TALENTS[tid]||{}).name||tid)+'」（-'+r.cost+' ✨）','s') }
-      else { toast(r.reason || '解锁失败','e') }
-      renderPetDetail(p4, idx)
     })
   })
 }

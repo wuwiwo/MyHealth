@@ -7,7 +7,7 @@
 
 /* 技能面板 overlay（新版式：卡片/大按钮/12px+） */
 function renderSkillPanel() {
-  var ov = document.getElementById('battleOverlay')
+  var ov = document.getElementById('panelOverlay')
   if (!ov) return
   var st = getSkillState()
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
@@ -51,7 +51,7 @@ function renderSkillPanel() {
       +'</div>'
       +'</div>'
   })
-  ov.innerHTML = h
+  ov.innerHTML = '<div class="panel-inner">' + h + '</div>'
   ov.classList.add('open')
 
   var closeBtn = document.getElementById('skillClose')

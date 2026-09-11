@@ -49,7 +49,7 @@
   --sh-3:0 -4px 20px rgba(0,0,0,.30);--sh-brand:0 2px 8px var(--orange-g);
   --shadow:var(--sh-1);--shadow-lg:var(--sh-2);
   /* ---- Z-index（数值沿用现有，零视觉风险） ---- */
-  --z-decor:1;--z-content:5;--z-sticky:10;--z-battle:50;
+  --z-decor:1;--z-content:5;--z-sticky:10;--z-battle:50;--z-panel:52;
   --z-fab:55;--z-modal:80;--z-share:100;--z-toast:999;
   /* ---- Motion ---- */
   --dur-1:120ms;--dur-2:200ms;--dur-3:300ms;--dur-4:600ms;
@@ -67,7 +67,9 @@
   --chip-a:.10;
   --bg:#fafaf9;--surface:#ffffff;--surface-2:#f5f5f4;--surface-3:#e7e5e4;
   --bd:#e7e5e4;--bd-l:#d6d3d1;
-  --text:#1c1917;--text1:#1c1917;--text2:#44403c;--text3:#6f6862;
+  --text:#1c1917;--text1:#1c1917;--text2:#57534e;--text3:#6f6862;
+  /* 浅色实心按钮：深橙底 + 白字（替代亮橙+近黑，观感更清爽，5.18:1 仍达 AA） */
+  --brand-fill:#C2410C;--brand-fill-d:#9A3412;--on-brand:#ffffff;
   --overlay:rgba(0,0,0,.55);
   --sh-1:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
   --sh-2:0 4px 16px rgba(0,0,0,.08);
@@ -90,7 +92,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 #app{max-width:var(--mw);margin:0 auto;padding:0 var(--pad-screen) calc(var(--sp-6) + var(--sab));position:relative}
 
 /* Header */
-.app-header{background:var(--surface);margin:0 calc(-1 * var(--pad-screen)) 0;position:relative;border-bottom:2px solid var(--orange);box-shadow:var(--shadow)}
+.app-header{background:var(--surface);margin:0 calc(-1 * var(--pad-screen)) 0;position:relative;border-bottom:2px solid var(--orange);box-shadow:var(--shadow);overflow:hidden}
 .app-header::before{content:'';position:absolute;top:-60%;right:-10%;width:280px;height:280px;background:radial-gradient(circle,var(--orange-g) 0%,transparent 70%);border-radius:50%;pointer-events:none}
 .header-inner{padding:16px 16px 12px;position:relative;z-index:1}
 .header-top{display:flex;align-items:center;justify-content:space-between}
@@ -326,6 +328,10 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 /* Battle */
 .battle-overlay{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column}
 .battle-overlay.open{display:flex}
+/* 全屏可滚动面板（宠物/技能培养）：battle-overlay 为战斗 flex 布局且不可滚动，勿复用 */
+.panel-overlay{position:fixed;inset:0;z-index:var(--z-panel);background:var(--bg);display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.panel-overlay.open{display:block}
+.panel-inner{max-width:var(--mw);margin:0 auto;padding:calc(var(--sp-4) + var(--sat)) var(--pad-screen) calc(var(--sp-8) + var(--sab))}
 .battle-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--bd);flex-shrink:0;gap:8px;flex-wrap:wrap;row-gap:8px}
 .battle-level{font-size:var(--fs-md);font-weight:700}
 .battle-speed{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}

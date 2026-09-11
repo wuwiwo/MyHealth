@@ -126,35 +126,9 @@ function upgradePetSkill(pet, bag, skillId) {
   return { ok: true, skillId: skillId, level: lv + 1, cost: cost };
 }
 
-/* 天赋槽解锁：基础消耗 5 灵能，每多解锁一个槽 +5 */
-var PET_TALENT_UNLOCK_COST = 5;
-
-/* 下一个天赋槽的灵能消耗（按已额外解锁的槽位数递增） */
-function petTalentUnlockCost(pet) {
-  var cur = (typeof getPetTalents === 'function') ? getPetTalents(pet) : (pet && pet.talentIds) || [];
-  var base = (typeof petBaseTalentCount === 'function') ? petBaseTalentCount(pet && pet.speciesId) : 0;
-  var extra = Math.max(0, cur.length - base);
-  return PET_TALENT_UNLOCK_COST * (extra + 1);
-}
-
-/* 解锁一个天赋槽并学习指定天赋（消耗灵能）
-   依赖 pet-codex.js 的 getPetTalents / setPetTalents / petTalentSlotMax / petTalentPool */
-function unlockPetTalent(pet, bag, talentId) {
-  if (!pet) return { ok: false, reason: '宠物不存在' };
-  if (typeof getPetTalents !== 'function') return { ok: false, reason: '图鉴模块未加载' };
-  var cur = getPetTalents(pet);
-  var maxSlot = petTalentSlotMax(pet.rarity);
-  if (cur.length >= maxSlot) return { ok: false, reason: '天赋槽已满（' + cur.length + '/' + maxSlot + '）' };
-  if (cur.indexOf(talentId) > -1) return { ok: false, reason: '已拥有该天赋' };
-  if (petTalentPool(pet.rarity).indexOf(talentId) < 0) return { ok: false, reason: '该天赋不在可解锁池' };
-  var cost = petTalentUnlockCost(pet);
-  if (!bag || (bag.spirit || 0) < cost) {
-    return { ok: false, reason: '灵能不足（需 ' + cost + '，现有 ' + (bag.spirit || 0) + '）' };
-  }
-  bag.spirit -= cost;
-  setPetTalents(pet, cur.concat([talentId]));
-  return { ok: true, talentId: talentId, cost: cost, slots: getPetTalents(pet).length, maxSlot: maxSlot };
-}
+/* 天赋为宠物**固有专属**被动（design-v2.0.md §2.6），不存在解锁/装配接口。
+   v2.1.3 的 PET_TALENT_UNLOCK_COST / petTalentUnlockCost / unlockPetTalent
+   因「专属天赋被跨宠物共享」的设计错误已整块移除。 */
 
 /* 使用宠物灵能：随机提升一个宠物技能 1 级 */
 function useSpirit(pet, bag, skillIds) {
@@ -207,8 +181,6 @@ if (typeof window !== 'undefined') {
   window.exchangeRefineStones = exchangeRefineStones;
   window.petSkillUpgradeCost = petSkillUpgradeCost;
   window.upgradePetSkill = upgradePetSkill;
-  window.petTalentUnlockCost = petTalentUnlockCost;
-  window.unlockPetTalent = unlockPetTalent;
   window.useSpirit = useSpirit;
   window.useNutrition = useNutrition;
   window.useFeed = useFeed;
@@ -224,8 +196,6 @@ if (typeof globalThis !== 'undefined') {
   globalThis.exchangeRefineStones = exchangeRefineStones;
   globalThis.petSkillUpgradeCost = petSkillUpgradeCost;
   globalThis.upgradePetSkill = upgradePetSkill;
-  globalThis.petTalentUnlockCost = petTalentUnlockCost;
-  globalThis.unlockPetTalent = unlockPetTalent;
   globalThis.useSpirit = useSpirit;
   globalThis.useNutrition = useNutrition;
   globalThis.useFeed = useFeed;
