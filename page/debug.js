@@ -20,8 +20,8 @@
     if (errs.length > 30) errs.pop();
   });
 
-  var SECS = [['ov', '概览'], ['st', '存储'], ['at', '属性·经济'], ['ch', '挑战'], ['er', '错误']];
-  var state = { open: false, sec: 'ov', openKey: null };
+  var SECS = [['ov', '概览'], ['st', '存储'], ['at', '属性·经济'], ['ba', '⚖️ 平衡'], ['ch', '挑战'], ['er', '错误']];
+  var state = { open: false, sec: 'ov', openKey: null, bal: null };
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   /* 非 JSON 值原样打印即可，不是错误 */
@@ -101,6 +101,145 @@
     return pre(L.join('\n'));
   }
 
+  /* --- ⚖️ 战斗平衡体检（v2.1.8） ---
+     玩家属性由真实训练数据驱动、无上界；敌人是写死的绝对曲线。
+     本区把两者放到同一张表里：属性来源拆解 + 全 120 关敌人上限 + 逐大关实战模拟。 */
+  function balPlayerStats() {
+    return tryFn(function () { return getGameStats(); }, null);
+  }
+  function balEnemyCaps() {
+    var max = { atk: 0, def: 0, hp: 0 };
+    try {
+      Object.keys(GROUP_LEVELS).forEach(function (gk) {
+        (GROUP_LEVELS[gk].stages || []).forEach(function (st) {
+          (st.enemies || []).forEach(function (e) {
+            var b = e.base || {};
+            if (b.atk > max.atk) max.atk = b.atk;
+            if (b.def > max.def) max.def = b.def;
+            if (b.hp > max.hp) max.hp = b.hp;
+          });
+        });
+      });
+    } catch (e) { /* 忽略：关卡模块未加载时上限保持 0，面板照样出 */ }
+    return max;
+  }
+  function balSources(s) {
+    var L = [];
+    L.push(tryFn(function () {
+      var now = new Date();
+      var ms = toDate(new Date(now.getFullYear(), now.getMonth(), 1));
+      var strE = ((store.get('strength') || { entries: [] }).entries || []).filter(function (e) { return e.date >= ms; });
+      var carE = ((store.get('cardio') || { entries: [] }).entries || []).filter(function (e) { return e.date >= ms; });
+      var v = sumVolume(strE, getExerciseMap()), d = sumDuration(carE), f = sumEffectiveDuration(carE, getCardioTypeMap());
+      return '本月训练: 容量 ' + Math.round(v) + 'kg → 攻 +' + (10 + Math.floor(v / 20)) + '、血 +' + Math.floor(v / 10)
+        + ' ｜ 有氧 ' + d + 'min → 防 +' + (10 + Math.floor(f / 15)) + '、血 +' + Math.floor(d / 3);
+    }, '本月训练: ⚠ 读取失败'));
+    L.push(tryFn(function () {
+      var r = getRefine();
+      if (!r || !r.unlocked) return '炼魂: 未解锁';
+      var rb = calculateRefineBonus(r.upgrades);
+      return '炼魂: 点数 ' + (r.points || 0) + ' → 攻 +' + Math.floor(rb.atk) + '、防 +' + Math.floor(rb.def)
+        + '、血 +' + Math.floor(rb.hp) + '、魂攻 +' + Math.floor(rb.soulAtk) + '、魂防 +' + Math.floor(rb.soulDef);
+    }, '炼魂: ⚠ 读取失败'));
+    L.push(tryFn(function () {
+      var p = (typeof getBattleReadyPets === 'function') ? getBattleReadyPets() : [];
+      return '可战宠物: ' + p.length + ' 只' + (p.length ? '（' + p.slice(0, 3).map(function (x) { return x.name || x.speciesId; }).join('、') + '）' : '');
+    }, '宠物: ⚠ 读取失败'));
+    L.push(tryFn(function () {
+      var st = groupProgressStats();
+      return '敌群进度: ' + st.cleared + '/' + st.total + ' 已通关';
+    }, '进度: ⚠ 读取失败'));
+    if (s) L.push('最终属性: 攻 ' + s.atk + ' · 防 ' + s.def + ' · 血 ' + s.hp + ' · 魂攻 ' + (s.soulAtk || 0) + ' · 魂防 ' + (s.soulDef || 0));
+    return L.join('\n');
+  }
+  function balDiag(s) {
+    if (!s) return '（属性未初始化）';
+    var c = balEnemyCaps(), L = [];
+    L.push('全 ' + (Object.keys(GROUP_LEVELS).length * 10) + ' 关敌人上限: 攻 ' + c.atk + ' · 防 ' + c.def + ' · 血 ' + c.hp);
+    var pDmg = Math.max(1, s.atk - Math.floor(c.def / 2));
+    L.push('你打最硬敌人: 单次 ≈ ' + pDmg + ' → 约 ' + Math.ceil(c.hp / pDmg) + ' 下');
+    var eDmg = Math.max(1, c.atk - Math.floor(s.def / 2));
+    L.push('最硬敌人打你: 单次 ≈ ' + eDmg + ' → 约 ' + Math.ceil(s.hp / eDmg) + ' 下才倒');
+    if (eDmg <= 1) L.push('⚠️ 你防御/2 = ' + Math.floor(s.def / 2) + ' ≥ 敌人最高攻击 ' + c.atk + ' → 伤害被 max(1,…) 兜底，敌人永远只打 1 点');
+    else if (s.hp / eDmg > 40) L.push('⚠️ 敌人要 ' + Math.ceil(s.hp / eDmg) + ' 下才能打倒你，战斗已无张力');
+    if ((s.soulAtk || 0) > 0) L.push('⚠️ 敌群战斗不读魂攻/魂防（battle-group.js 零引用），你的魂攻 ' + s.soulAtk + ' 在敌群里无效');
+    return L.join('\n');
+  }
+  /* 用真实战斗引擎模拟（纯逻辑，不碰存档） */
+  function balSim(trials) {
+    trials = trials || 5;
+    var s = balPlayerStats();
+    if (!s) return null;
+    var base = { hp: s.hp, atk: s.atk, def: s.def, spd: 10, soulAtk: s.soulAtk || 0, soulDef: s.soulDef || 0 };
+    var petUnits = [];
+    try {
+      var petIds = (typeof _petBattlePicks !== 'undefined' && _petBattlePicks && _petBattlePicks.length) ? _petBattlePicks
+        : (typeof autoPickPets === 'function' ? autoPickPets(2) : []);
+      if (typeof createPetUnitsForBattle === 'function') petUnits = createPetUnitsForBattle(petIds, 2) || [];
+    } catch (e) { petUnits = []; console.warn('[debug] 体检未能构建宠物，按 0 宠模拟', e); }
+    var out = [];
+    Object.keys(GROUP_LEVELS).forEach(function (gk) {
+      var st = (GROUP_LEVELS[gk].stages || [])[9];   // 每大关第 10 关 = Boss 关
+      if (!st) return;
+      var w = 0, ts = 0, hpSum = 0;
+      for (var i = 0; i < trials; i++) {
+        try {
+          var allies = [createUnit({ id: 'p', side: 'ally', name: '你', base: Object.assign({}, base) })]
+            .concat(petUnits.map(function (u, k) { return u.clone ? u.clone() : u; }));
+          var foes = (st.enemies || []).map(function (ec, j) {
+            return createEnemyUnit({ id: 'e' + j, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base });
+          });
+          var gb = createGroupBattle({ allies: allies, enemies: foes });
+          var t = 0;
+          while (!gb.done && t < 300) { groupBattleStep(gb); t++; }
+          var tot = allies.reduce(function (a, u) { return a + (u.base.hp || 0); }, 0);
+          var lft = allies.reduce(function (a, u) { return a + Math.max(0, u.hp || 0); }, 0);
+          if (gb.winner === 'ally') { w++; ts += t; hpSum += tot ? lft / tot * 100 : 0; }
+        } catch (e) { /* 忽略：单场异常不阻断整体体检，该场按失败计 */ }
+      }
+      out.push({
+        g: gk, n: (st.enemies || []).length,
+        atk: (st.enemies[0] && st.enemies[0].base.atk) || 0,
+        hp: (st.enemies[0] && st.enemies[0].base.hp) || 0,
+        win: Math.round(w / trials * 100),
+        turn: w ? (ts / w).toFixed(1) : '—',
+        left: w ? Math.round(hpSum / w) : 0
+      });
+    });
+    return { pets: petUnits.length, rows: out };
+  }
+  function secBa() {
+    var s = balPlayerStats();
+    var h = pre(balSources(s) + '\n\n' + balDiag(s));
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+      + '<span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.runBalance()">▶ 跑体检（12 大关 Boss 各 5 场）</span>'
+      + '<span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.copyBalance()">复制报告</span></div>';
+    if (state.bal && state.bal.rows) {
+      var rows = state.bal.rows.map(function (r) {
+        var verdict = r.win === 100 && r.left >= 90 ? '碾压' : r.win >= 80 ? '偏易' : r.win >= 40 ? '有张力' : r.win > 0 ? '偏难' : '打不过';
+        return r.g + ' 敌' + r.n + '(攻' + r.atk + '/血' + r.hp + ')  胜' + r.win + '%  ' + r.turn + '回合  剩血' + r.left + '%  ' + verdict;
+      }).join('\n');
+      h += '<div style="font-size:var(--fs-3xs);color:var(--text3);margin-top:2px">带 ' + state.bal.pets + ' 只宠物 · 目标区间：胜率 40~80%、剩血 &lt;60%</div>';
+      h += pre(rows);
+    }
+    return h;
+  }
+  /* 一键复制的纯文本报告（供开发/AI 分析） */
+  function balReport() {
+    var s = balPlayerStats(), L = [];
+    L.push('APP_VERSION: ' + (window.APP_VERSION || '?'));
+    L.push('[属性] ' + (s ? ('攻' + s.atk + ' 防' + s.def + ' 血' + s.hp + ' 魂攻' + (s.soulAtk || 0) + ' 魂防' + (s.soulDef || 0)) : '未初始化'));
+    L.push('[来源]\n' + balSources(s));
+    L.push('[诊断]\n' + balDiag(s));
+    if (state.bal && state.bal.rows) {
+      L.push('[模拟] 带' + state.bal.pets + '宠 · 每关5场');
+      state.bal.rows.forEach(function (r) {
+        L.push('  ' + r.g + ' 敌' + r.n + ' 攻' + r.atk + ' 血' + r.hp + ' → 胜' + r.win + '% ' + r.turn + '回合 剩血' + r.left + '%');
+      });
+    }
+    return L.join('\n');
+  }
+
   function secCh() {
     var on = !!window.__debugChallenge;
     var btn = 'role="button" tabindex="0" aria-pressed="' + (on ? 'true' : 'false') + '" style="color:' + (on ? 'var(--green)' : 'var(--text3)') + ';text-decoration:underline;cursor:pointer;min-height:var(--touch-min);display:inline-flex;align-items:center"';
@@ -147,7 +286,12 @@
         + (act ? ';background:var(--surface-3);color:var(--text);font-weight:700' : ';color:var(--text3)') + '">'
         + s[1] + (s[0] === 'er' && errs.length ? ' (' + errs.length + ')' : '') + '</span>';
     }).join('');
-    var body = state.sec === 'ov' ? secOv() : state.sec === 'st' ? secSt() : state.sec === 'at' ? secAt() : state.sec === 'ch' ? secCh() : secEr();
+    var body = state.sec === 'ov' ? secOv()
+      : state.sec === 'st' ? secSt()
+      : state.sec === 'at' ? secAt()
+      : state.sec === 'ba' ? secBa()
+      : state.sec === 'ch' ? secCh()
+      : secEr();
     drawer.innerHTML =
       '<div class="modal-sheet">'
       + '<div class="modal-handle"></div>'
@@ -204,6 +348,16 @@
       for (var i = 0; i < ls.length; i++) out[ls.key(i)] = ls.getItem(ls.key(i));
       var txt = j(out);
       if (window.toast) toast('已复制 ' + ls.length + ' 个键（' + bytes(txt.length * 2) + '）', 's');
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function (e) { console.warn('[debug] 剪贴板不可用', e); });
+    },
+    runBalance: function () {
+      state.bal = balSim(5);
+      render();
+      if (window.toast) toast(state.bal ? '体检完成' : '体检失败：属性未初始化', state.bal ? 's' : 'e');
+    },
+    copyBalance: function () {
+      var txt = balReport();
+      if (window.toast) toast('已复制平衡报告（' + bytes(txt.length * 2) + '）', 's');
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function (e) { console.warn('[debug] 剪贴板不可用', e); });
     },
     toggleInline: function () {
