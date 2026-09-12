@@ -220,10 +220,14 @@ function startGroupTrialWithPets(groupId, petIds) {
   var stats = getGameStats()
   var player = createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:stats.hp,atk:stats.atk,def:stats.def,spd:10,soulAtk:stats.soulAtk||0,soulDef:stats.soulDef||0}})
   var petUnits = createPetUnitsForBattle(petIds, 2)
-  var enemies = glv.enemies.map(function(ec,i){
+  var allies = [player].concat(petUnits)
+  // v2.1.9 难度锚定：按我方阵容反推敌人属性（固定曲线降为下限）
+  var gStage = (glv.stages || [])[0]
+  var cfgList = (typeof anchorStageEnemies === 'function' && gStage) ? anchorStageEnemies(groupId, gStage, allies) : glv.enemies
+  var enemies = cfgList.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })
-  _groupBattle = createGroupBattle({ allies:[player].concat(petUnits), enemies:enemies })
+  _groupBattle = createGroupBattle({ allies:allies, enemies:enemies })
   _groupMode='auto';_groupSpeed=1;_groupDetail=null
   renderGroupOverlay(true)
   toast('👥 '+glv.name+' 开始！'+(petUnits.length?'（带 '+petUnits.length+' 宠物）':''),'s')

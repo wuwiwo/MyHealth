@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.8
+> Personal Health Manager — 个人健身健康管理应用 v2.1.9
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -240,4 +240,6 @@ Vercel 项目设置：
 
 | **v2.1.8** | **2026-09-13** | **⚖️ 战斗平衡体检：Debug 面板新增「⚖️ 平衡」分区（属性来源拆解 / 碾压诊断 / 12 大关 Boss 实战模拟 / 一键复制报告）+ 命令行扫描器 `scripts/balance-sim.js`；查明魂攻魂防未接入敌群战斗、固定减法伤害越顶后归零两个结构问题；缓存版本对齐（v68）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.8**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.9** | **2026-09-13** | **🎯 敌群难度锚定：敌人属性改由参战我方阵容反推（固定曲线降为下限），解决「玩家属性无上界 → 敌人每击恒定 1 点 → 战斗没体验感」。实测攻 2500 与攻 6000 的玩家跑出相同难度曲线；g12-10 剩血从 89% 降到 20%；新增 test-group-anchor.js（17 断言）；缓存版本对齐（v69）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.9**（设计规范：`doc/design-tokens-v2.1.md`）

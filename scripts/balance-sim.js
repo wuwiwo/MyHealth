@@ -37,8 +37,9 @@ function makeSandbox(seed) {
   return sb;
 }
 
-/* 跑一场：返回 {win, turns, hpLeftPct} */
-function simulate(sb, playerBase, stage, petCount, maxTurns) {
+/* 跑一场：返回 {win, turns, hpLeftPct}
+   groupId 传入 + 未加 --no-anchor 时，走 v2.1.9 的「按我方阵容反推敌人属性」 */
+function simulate(sb, playerBase, stage, petCount, maxTurns, groupId) {
   const player = sb.createUnit({ id: 'player', side: 'ally', name: '你', base: Object.assign({ spd: 10 }, playerBase) });
   const allies = [player];
   for (let i = 0; i < (petCount || 0); i++) {
@@ -48,7 +49,9 @@ function simulate(sb, playerBase, stage, petCount, maxTurns) {
       base: { hp: Math.floor(playerBase.hp * 0.5), atk: Math.floor(playerBase.atk * 0.4), def: Math.floor(playerBase.def * 0.8), spd: 8 }
     }));
   }
-  const enemies = (stage.enemies || []).map(function (ec, i) {
+  const useAnchor = !argv.includes('--no-anchor') && groupId && typeof sb.anchorStageEnemies === 'function';
+  const cfg = useAnchor ? sb.anchorStageEnemies(groupId, stage, allies) : (stage.enemies || []);
+  const enemies = cfg.map(function (ec, i) {
     return sb.createEnemyUnit({ id: 'enemy-' + i, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base });
   });
   const gb = sb.createGroupBattle({ allies: allies, enemies: enemies });
@@ -60,11 +63,11 @@ function simulate(sb, playerBase, stage, petCount, maxTurns) {
 }
 
 /* 对某关跑 N 次，返回统计 */
-function evalStage(playerBase, stage, trials, petCount) {
+function evalStage(playerBase, stage, trials, petCount, groupId) {
   let wins = 0, turnSum = 0, hpSum = 0;
   for (let i = 0; i < trials; i++) {
     const sb = makeSandbox(20260911 + i);
-    const r = simulate(sb, playerBase, stage, petCount);
+    const r = simulate(sb, playerBase, stage, petCount, undefined, groupId);
     if (r.win) { wins++; turnSum += r.turns; hpSum += r.hpLeftPct; }
   }
   return {
@@ -92,12 +95,12 @@ if (argv.includes('--atk')) {
   };
   const sb0 = makeSandbox(1);
   console.log('玩家 攻' + base.atk + ' 防' + base.def + ' 血' + base.hp + ' 魂攻' + base.soulAtk + ' 魂防' + base.soulDef + ' · 宠物' + PETS);
-  console.log('大关  敌人(Boss关)                     胜率  回合  剩血%');
+  console.log('大关  敌人(Boss关)                     胜率  行动步数 剩血%');
   Object.keys(sb0.GROUP_LEVELS).forEach(function (gk) {
     const g = sb0.GROUP_LEVELS[gk];
     const st = g.stages[9];
     const e = st.enemies[0].base;
-    const r = evalStage(base, st, TRIALS, PETS);
+    const r = evalStage(base, st, TRIALS, PETS, gk);
     console.log(
       gk.padEnd(5) +
       ('atk' + e.atk + ' def' + e.def + ' hp' + e.hp + ' ×' + st.enemies.length).padEnd(32) +
@@ -118,8 +121,8 @@ if (argv.includes('--atk')) {
     const def = 10 + Math.floor(200 / 15);
     const hp = 100 + Math.floor(vol / 10) + Math.floor(200 / 3);
     const base = { atk: atk, def: def, hp: hp, soulAtk: 0, soulDef: 0 };
-    const a = evalStage(base, s610, TRIALS, PETS);
-    const b = evalStage(base, s1210, TRIALS, PETS);
+    const a = evalStage(base, s610, TRIALS, PETS, 'g6');
+    const b = evalStage(base, s1210, TRIALS, PETS, 'g12');
     console.log(
       String(vol).padStart(8) + String(atk).padStart(6) + String(def).padStart(6) + String(hp).padStart(7) +
       ('   ' + a.winRate + '% / ' + a.avgTurns + ' / ' + a.avgHpLeft + '%').padEnd(24) +

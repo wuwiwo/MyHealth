@@ -392,13 +392,17 @@ function startGroupTrial(groupId){
   if (typeof attachPlayerSkills === 'function' && typeof getSkillState === 'function') {
     attachPlayerSkills(player, getSkillState())
   }
-  var enemies=glv.enemies.map(function(ec,i){
-    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
-  })
   // 默认带宠物：优先 _petBattlePicks，否则自动带成熟宠物
   var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(2)
   var petUnits = createPetUnitsForBattle(petIds, 2)
-  _groupBattle=createGroupBattle({allies:[player].concat(petUnits),enemies:enemies})
+  var allies = [player].concat(petUnits)
+  // v2.1.9 难度锚定：先有我方阵容，再按它反推敌人属性（固定曲线降为下限）
+  var anchorG = String(stage ? String(groupId).split('-')[0] : groupId)
+  var cfgList = (typeof anchorStageEnemies === 'function') ? anchorStageEnemies(anchorG, glv, allies) : glv.enemies
+  var enemies=cfgList.map(function(ec,i){
+    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
+  })
+  _groupBattle=createGroupBattle({allies:allies,enemies:enemies})
   // 模式/速度持久化（记住上次选择）
   _groupMode=localStorage.getItem('dh-group-mode')||'auto'
   _groupSpeed=parseInt(localStorage.getItem('dh-group-speed')||'1',10)||1

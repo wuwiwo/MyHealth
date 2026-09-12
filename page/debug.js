@@ -181,12 +181,15 @@
     Object.keys(GROUP_LEVELS).forEach(function (gk) {
       var st = (GROUP_LEVELS[gk].stages || [])[9];   // 每大关第 10 关 = Boss 关
       if (!st) return;
-      var w = 0, ts = 0, hpSum = 0;
+      var w = 0, ts = 0, hpSum = 0, lastCfg = null;
       for (var i = 0; i < trials; i++) {
         try {
           var allies = [createUnit({ id: 'p', side: 'ally', name: '你', base: Object.assign({}, base) })]
             .concat(petUnits.map(function (u, k) { return u.clone ? u.clone() : u; }));
-          var foes = (st.enemies || []).map(function (ec, j) {
+          // v2.1.9：与实战一致，走难度锚定
+          var cfg = (typeof anchorStageEnemies === 'function') ? anchorStageEnemies(gk, st, allies) : (st.enemies || []);
+          lastCfg = cfg;
+          var foes = cfg.map(function (ec, j) {
             return createEnemyUnit({ id: 'e' + j, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base });
           });
           var gb = createGroupBattle({ allies: allies, enemies: foes });
@@ -197,10 +200,13 @@
           if (gb.winner === 'ally') { w++; ts += t; hpSum += tot ? lft / tot * 100 : 0; }
         } catch (e) { /* 忽略：单场异常不阻断整体体检，该场按失败计 */ }
       }
+      var n = (lastCfg || st.enemies || []).length;
+      var totAtk = 0, totHp = 0;
+      (lastCfg || []).forEach(function (c) { totAtk += (c.base && c.base.atk) || 0; totHp += (c.base && c.base.hp) || 0; });
       out.push({
-        g: gk, n: (st.enemies || []).length,
-        atk: (st.enemies[0] && st.enemies[0].base.atk) || 0,
-        hp: (st.enemies[0] && st.enemies[0].base.hp) || 0,
+        g: gk, n: n,
+        atk: totAtk,
+        hp: totHp,
         win: Math.round(w / trials * 100),
         turn: w ? (ts / w).toFixed(1) : '—',
         left: w ? Math.round(hpSum / w) : 0
@@ -217,9 +223,9 @@
     if (state.bal && state.bal.rows) {
       var rows = state.bal.rows.map(function (r) {
         var verdict = r.win === 100 && r.left >= 90 ? '碾压' : r.win >= 80 ? '偏易' : r.win >= 40 ? '有张力' : r.win > 0 ? '偏难' : '打不过';
-        return r.g + ' 敌' + r.n + '(攻' + r.atk + '/血' + r.hp + ')  胜' + r.win + '%  ' + r.turn + '回合  剩血' + r.left + '%  ' + verdict;
+        return r.g + ' 敌' + r.n + ' 总攻' + r.atk + ' 总血' + r.hp + '  胜' + r.win + '%  ' + r.turn + ' 步  剩血' + r.left + '%  ' + verdict;
       }).join('\n');
-      h += '<div style="font-size:var(--fs-3xs);color:var(--text3);margin-top:2px">带 ' + state.bal.pets + ' 只宠物 · 目标区间：胜率 40~80%、剩血 &lt;60%</div>';
+      h += '<div style="font-size:var(--fs-3xs);color:var(--text3);margin-top:2px">带 ' + state.bal.pets + ' 只宠物 · 已计入 v2.1.9 难度锚定 · 目标：胜率 40~90%、剩血随关递减</div>';
       h += pre(rows);
     }
     return h;
