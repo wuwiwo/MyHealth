@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.9
+> Personal Health Manager — 个人健身健康管理应用 v2.1.10
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -242,4 +242,6 @@ Vercel 项目设置：
 
 | **v2.1.9** | **2026-09-13** | **🎯 敌群难度锚定：敌人属性改由参战我方阵容反推（固定曲线降为下限），解决「玩家属性无上界 → 敌人每击恒定 1 点 → 战斗没体验感」。实测攻 2500 与攻 6000 的玩家跑出相同难度曲线；g12-10 剩血从 89% 降到 20%；新增 test-group-anchor.js（17 断言）；缓存版本对齐（v69）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.9**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.10** | **2026-09-13** | **⚔️ 敌群独立属性空间：玩家在敌群里只继承 60% 属性（固定敌人曲线重新可用 → 练得更多才能推更高关）；宠物按稀有度放大 12~26 倍（此前基础 atk 15~20 只占团队 1%，纯摆设）；魂攻魂防接入敌群战斗（此前 battle-group.js 零引用，炼魂一半投入是废的）；Boss 天赋/技能改为按关卡 id 确定性生成且只用高级池（不再抽到懒惰/慢启动这类自我削弱）；新增 test-group-inherit.js（25 断言）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.10**（设计规范：`doc/design-tokens-v2.1.md`）

@@ -23,17 +23,84 @@ var ENEMY_NAMES = {
   boss: ['Boss·战争领主','Boss·暗龙','Boss·深渊之主','Boss·火焰王','Boss·冰霜巨人','Boss·混沌魔']
 };
 
+/* ============ v2.1.10：敌群专属属性空间 ============
+   玩家真实属性由「月容量 + 旬累积奖励×3 + 挑战血 + 炼魂」驱动、无上界，
+   直接进敌群会把敌人压成 1 点伤害。改为：敌群战斗里玩家只继承一定比例。
+   宠物同步放大（否则基础 atk 15~20 在玩家面前等于摆设）。 */
+var GROUP_INHERIT = 0.60;                                  // 玩家在敌群中继承的属性比例
+var PET_GROUP_SCALE = { R: 12, SR: 16, SSR: 20, UR: 26 };   // 宠物按稀有度放大到同量级
+var PET_GROUP_REFINE = 1.5;                                // 宠物炼化加成在敌群中的额外权重
+
+/* 按真实属性算出敌群战斗属性（玩家） */
+function inheritGroupStats(stats, ratio) {
+  var r = (ratio == null ? GROUP_INHERIT : ratio);
+  var out = {
+    atk: Math.max(1, Math.floor((stats.atk || 0) * r)),
+    def: Math.max(1, Math.floor((stats.def || 0) * r)),
+    hp: Math.max(1, Math.floor((stats.hp || 0) * r)),
+    soulAtk: Math.floor((stats.soulAtk || 0) * r),
+    soulDef: Math.floor((stats.soulDef || 0) * r)
+  };
+  // 魂防下限 = 自身防御的一半。炼魂普遍只堆魂攻不堆魂防（实测玩家魂攻 385 / 魂防 69），
+  // 没有下限的话魂伤会把只堆魂攻的号打穿。
+  out.soulDef = Math.max(out.soulDef, Math.floor(out.def * 0.5));
+  return out;
+}
+/* 宠物放大到与玩家同量级（就地改 base，仅在敌群参战时调用） */
+function boostPetForGroup(unit) {
+  if (!unit || !unit.base) return unit;
+  var tag = ((unit.tags || [])[1] || 'R');
+  var k = PET_GROUP_SCALE[tag] || PET_GROUP_SCALE.R;
+  ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].forEach(function (s) {
+    if (unit.base[s] != null) unit.base[s] = Math.max(1, Math.floor(unit.base[s] * k));
+  });
+  // 宠物同样给魂防下限，否则被敌人魂攻打全额
+  unit.base.soulDef = Math.max(unit.base.soulDef || 0, Math.floor((unit.base.def || 0) * 0.5));
+  unit.hp = unit.base.hp;
+  return unit;
+}
+
+/* ============ 确定性随机 ============
+   此前 genEnemyCfg 用 Math.random()，每次页面加载把 120 关的敌人天赋/技能全部重摇，
+   同一关不同 session 难度天差地别（实测 g7-10 胜率 40% 而 g12-10 100%）。
+   改为按 (大关, 小关, 槽位) 播种，同一关永远是同一套配置。 */
+function groupHash(lg, st, slot) {
+  var h = (lg * 7919 + st * 104729 + (slot || 0) * 31) >>> 0;
+  h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995) >>> 0; h ^= h >>> 15;
+  return h >>> 0;
+}
+function groupRng(seed) {
+  var a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ============ 天赋 / 技能分级池 ============
+   Boss 与精英只从「高级」池抽取：lazy（懒惰）/ slowstart（慢启动）是自我削弱，
+   bite（咬击）是最基础的技能 —— 抽到这些会让 Boss 名不副实。 */
+var TALENTS_HIGH = ['blade', 'vigor', 'bloodthirst', 'regen', 'roughskin', 'vengeance', 'magicmirror', 'magicshield', 'intimidate'];
+var TALENTS_LOW = ['lazy', 'slowstart'];
+var SKILLS_HIGH = ['charge', 'spikes', 'blizzard', 'armorbreak', 'blackmist', 'possess', 'deepfreeze'];
+var SKILLS_LOW = ['bite', 'snowball', 'shrink', 'yawn', 'drench'];
+
 /* 生成单个敌人配置 */
 function genEnemyCfg(lg, st, slot, isElite, isBoss) {
-  // 平衡曲线：g1 弱（新号可过），g6 对中后期玩家有挑战（攻 200-400 玩家可打）
-  var lvScale = 1 + (lg - 1) * 0.8 + (st - 1) * 0.16;   // g6-10 Boss: 1+4+1.44=6.44
+  // v2.1.10：玩家在敌群里只继承 25%，固定曲线相应上调斜率（0.8→1.0 / 0.16→0.20），
+  //          让后续关卡持续加压 —— 练得更多才能推更高关
+  var lvScale = 1 + (lg - 1) * 0.9 + (st - 1) * 0.18;
   var hasSoul = lg >= 3;
   var tier = isBoss ? 'boss' : isElite ? 'elite2' : (st % 3 === 0 ? 'elite1' : 'minion');
+  // 确定性随机：同一关永远生成同一套配置（不再每次刷新重摇）
+  var rng = groupRng(groupHash(lg, st, slot) + (isBoss ? 101 : isElite ? 202 : 303));
 
   // 属性基础（适中）
   var atk = Math.floor((isBoss ? 40 : isElite ? 26 : 14) * lvScale);
-  var def = Math.floor((isBoss ? 28 : isElite ? 18 : 8) * lvScale * 0.85);
-  var hp = Math.floor((isBoss ? 600 : isElite ? 320 : 160) * lvScale);
+  var def = Math.floor((isBoss ? 24 : isElite ? 15 : 7) * lvScale * 0.85);
+  var hp = Math.floor((isBoss ? 450 : isElite ? 240 : 120) * lvScale);
   var spd = 3 + Math.floor(lvScale * 1.8);
 
   var cfg = {
@@ -42,36 +109,35 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
     base: { atk: atk, def: def, hp: hp, spd: Math.min(12, spd) }
   };
   if (hasSoul) {
-    cfg.base.soulAtk = Math.floor((isBoss ? 28 : 14) * lvScale);
-    cfg.base.soulDef = Math.floor((isBoss ? 18 : 9) * lvScale);
+    cfg.base.soulAtk = Math.floor((isBoss ? 16 : 8) * lvScale);
+    cfg.base.soulDef = Math.floor((isBoss ? 12 : 6) * lvScale);
   }
-  // 精英/Boss 带天赋
+  // 天赋：Boss / 精英一律从「高级」池抽（不含 lazy / slowstart 这类自我削弱）
   var talents = [];
+  var tpool = TALENTS_HIGH.slice();
   if (isBoss) {
-    var bossTalents = ['blade','vigor','bloodthirst','regen','roughskin','vengeance'];
-    var n = 2 + (lg % 3);   // 2-4 天赋
-    for (var i = 0; i < n && bossTalents.length; i++) {
-      var idx = Math.floor(Math.random() * bossTalents.length);
-      talents.push(bossTalents[idx]); bossTalents.splice(idx, 1);
+    var n = 2 + (lg % 2);   // 2-3 天赋（收敛波动，避免某些关被永久钉死在地狱档）
+    for (var i = 0; i < n && tpool.length; i++) {
+      var idx = Math.floor(rng() * tpool.length);
+      talents.push(tpool[idx]); tpool.splice(idx, 1);
     }
   } else if (isElite || tier === 'elite1') {
-    var eTalents = ['blade','vigor','bloodthirst','regen','lazy','slowstart'];
-    talents.push(eTalents[Math.floor(Math.random() * eTalents.length)]);
-    if (isElite && Math.random() < 0.5) talents.push(eTalents[Math.floor(Math.random() * eTalents.length)]);
+    talents.push(tpool[Math.floor(rng() * tpool.length)]);
+    if (isElite && rng() < 0.5) talents.push(tpool[Math.floor(rng() * tpool.length)]);
   }
   if (talents.length) cfg.talents = talents;
-  // 技能（精英/Boss 带）
+  // 技能：Boss / 精英从「高级」池抽；杂兵才可能拿低级技能
   var skills = [];
+  var sp = (isBoss || isElite || tier === 'elite1' ? SKILLS_HIGH : SKILLS_LOW).slice();
   if (isBoss) {
-    var pool = ['charge','bite','spikes','blizzard','armorbreak','blackmist'];
-    var sn = 2 + Math.floor(Math.random() * 2);   // 2-3 技能
-    for (var j = 0; j < sn && pool.length; j++) {
-      var si = Math.floor(Math.random() * pool.length);
-      skills.push(pool[si]); pool.splice(si, 1);
+    var sn = 2;   // 固定 2 个高级技能（此前 2~3 个让关卡难度波动过大）
+    for (var j = 0; j < sn && sp.length; j++) {
+      var si = Math.floor(rng() * sp.length);
+      skills.push(sp[si]); sp.splice(si, 1);
     }
   } else if (isElite || tier === 'elite1') {
-    skills.push(Math.random() < 0.5 ? 'charge' : 'bite');
-    if (isElite && Math.random() < 0.5) skills.push('spikes');
+    skills.push(sp[Math.floor(rng() * sp.length)]);
+    if (isElite && rng() < 0.5) skills.push('spikes');
   }
   if (skills.length) cfg.skills = skills;
   return cfg;
@@ -154,6 +220,9 @@ var GROUP_LEVELS = {};
    纯函数，无 DOM / store 依赖。
    ============================================ */
 var GROUP_ANCHOR = {
+  enabled: false,   // v2.1.10：改用「比例继承 + 固定曲线」，锚定与它冲突
+                    // （锚定是尺度无关的，玩家缩小敌人也跟着缩小 → 净效果为零）。
+                    // 保留实现与测试，需要时把这里改回 true 即可重新启用。
   defRatio: 0.30,   // 敌人防御 = 我方人均攻击 × 30%
   atkStart: 0.05,   // 首关：全场我方掉血 5%
   atkEnd: 0.55,     // 末关：全场我方掉血 55%（实测落点 ~75%，余量留给技能/暴击/状态方差）
@@ -266,6 +335,14 @@ if (typeof window !== 'undefined') {
   window.GROUP_ANCHOR = GROUP_ANCHOR;
   window.groupAnchorT = groupAnchorT;
   window.anchorStageEnemies = anchorStageEnemies;
+  window.GROUP_INHERIT = GROUP_INHERIT;
+  window.PET_GROUP_SCALE = PET_GROUP_SCALE;
+  window.TALENTS_HIGH = TALENTS_HIGH;
+  window.SKILLS_HIGH = SKILLS_HIGH;
+  window.inheritGroupStats = inheritGroupStats;
+  window.boostPetForGroup = boostPetForGroup;
+  window.groupHash = groupHash;
+  window.groupRng = groupRng;
 }
 if (typeof globalThis !== 'undefined') {
   globalThis.GROUP_LEVELS = GROUP_LEVELS;
@@ -273,4 +350,12 @@ if (typeof globalThis !== 'undefined') {
   globalThis.GROUP_ANCHOR = GROUP_ANCHOR;
   globalThis.groupAnchorT = groupAnchorT;
   globalThis.anchorStageEnemies = anchorStageEnemies;
+  globalThis.GROUP_INHERIT = GROUP_INHERIT;
+  globalThis.PET_GROUP_SCALE = PET_GROUP_SCALE;
+  globalThis.TALENTS_HIGH = TALENTS_HIGH;
+  globalThis.SKILLS_HIGH = SKILLS_HIGH;
+  globalThis.inheritGroupStats = inheritGroupStats;
+  globalThis.boostPetForGroup = boostPetForGroup;
+  globalThis.groupHash = groupHash;
+  globalThis.groupRng = groupRng;
 }

@@ -66,6 +66,16 @@ assert('集火残血目标', target5.id === 'weak', 'target=' + (target5&&target
 // 注：群战栈(ai/skill/enemy)仍直接用 Math.random，单次战斗可能无技能施放。
 // 断言意图=「AI 会施放技能」→ 多次试验取并集消除 flaky。
 let anySkill = false, allDone = true;
+// v2.1.10：敌人技能改从「高级池」按关卡 id 确定性生成，固定的技能名白名单会误判。
+// 改成从该关敌人实际携带的技能取名字，断言意图不变（AI 会施放技能）。
+const skillNames = [];
+if (sandbox.getGroupStage) {
+  (sandbox.getGroupStage('g3-3').enemies || []).forEach(function (ec) {
+    (ec.skills || []).forEach(function (s) {
+      skillNames.push((sandbox.SKILLS && sandbox.SKILLS[s] && sandbox.SKILLS[s].name) || s);
+    });
+  });
+}
 for (let trial = 0; trial < 5; trial++) {
   const player = sandbox.createUnit({ id:'player', side:'ally', name:'🧑 你', base:{hp:1500,atk:100,def:50,spd:10} });
   const g3Stage = sandbox.getGroupStage ? sandbox.getGroupStage('g3-3') : null;
@@ -75,10 +85,11 @@ for (let trial = 0; trial < 5; trial++) {
   const gb6 = sandbox.createGroupBattle({ allies:[player], enemies:g3Enemies });
   sandbox.runGroupBattle(gb6, 100);
   if (!(gb6.done === true && (gb6.winner==='ally'||gb6.winner==='enemy'))) allDone = false;
-  if (JSON.stringify(gb6.log).match(/冲撞|咬击|黑气|地刺|治疗|破甲/)) anySkill = true;
+  const logStr = JSON.stringify(gb6.log);
+  if (skillNames.some(function (n) { return logStr.indexOf(n) >= 0; }) || logStr.indexOf('bubble') >= 0) anySkill = true;
 }
 assert('AI 全战斗跑通', allDone, '有未完成的战斗');
-assert('AI 战斗有技能施放', anySkill, '5 次试验均无技能施放');
+assert('AI 战斗有技能施放', anySkill, '5 次试验均无技能施放（该关技能：' + skillNames.join('/') + '）');
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

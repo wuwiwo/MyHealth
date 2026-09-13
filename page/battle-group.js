@@ -194,6 +194,17 @@ function normalAttack(gb, actor, target) {
   dmg = applyAllyDamageShare(gb, target, dmg, events);
   target.hp = Math.max(0, target.hp - dmg);
   events.push({ msg: (actor.name || '单位') + ' 攻击 → ' + dmg + ' 伤害', targetId: target.id });
+  /* v2.1.10 魂攻/魂防接入敌群战斗。
+     此前 battle-group.js 对 soulAtk / soulDef 是零引用 —— 只有单敌 battle.js 用了，
+     导致炼魂一半投入（满级 魂攻 +3770 / 魂防 +1798）在 120 关敌群里完全是废属性。
+     规则与单敌一致：目标有魂防则 rollDamage(soulAtk, soulDef, 4)，无魂防则吃全额。 */
+  var sAtk = actor.base.soulAtk || 0;
+  if (sAtk > 0 && target.hp > 0) {
+    var sDef = target.base.soulDef || 0;
+    var sDmg = sDef > 0 ? Math.max(1, sAtk - Math.floor(sDef / 2) + Math.floor(gb.rng() * 4) + 1) : sAtk;
+    target.hp = Math.max(0, target.hp - sDmg);
+    events.push({ msg: '👻 魂攻击 → ' + sDmg + ' 魂伤害', targetId: target.id });
+  }
   // 嗜血：造成伤害恢复
   var bt = talentDispatch(actor, 'onAfterDamage', { dealt: dmg, target: target });
   bt.events.forEach(function (e) { events.push({ msg: e.msg }); });

@@ -149,7 +149,14 @@
       var st = groupProgressStats();
       return '敌群进度: ' + st.cleared + '/' + st.total + ' 已通关';
     }, '进度: ⚠ 读取失败'));
-    if (s) L.push('最终属性: 攻 ' + s.atk + ' · 防 ' + s.def + ' · 血 ' + s.hp + ' · 魂攻 ' + (s.soulAtk || 0) + ' · 魂防 ' + (s.soulDef || 0));
+    if (s) {
+      L.push('最终属性: 攻 ' + s.atk + ' · 防 ' + s.def + ' · 血 ' + s.hp + ' · 魂攻 ' + (s.soulAtk || 0) + ' · 魂防 ' + (s.soulDef || 0));
+      L.push(tryFn(function () {
+        var ig = inheritGroupStats(s);
+        return '敌群参战属性（继承 ' + Math.round((typeof GROUP_INHERIT !== 'undefined' ? GROUP_INHERIT : 0) * 100) + '%）: '
+          + '攻 ' + ig.atk + ' · 防 ' + ig.def + ' · 血 ' + ig.hp + ' · 魂攻 ' + ig.soulAtk + ' · 魂防 ' + ig.soulDef;
+      }, '敌群参战属性: ⚠ 读取失败'));
+    }
     return L.join('\n');
   }
   function balDiag(s) {
@@ -176,7 +183,11 @@
       var petIds = (typeof _petBattlePicks !== 'undefined' && _petBattlePicks && _petBattlePicks.length) ? _petBattlePicks
         : (typeof autoPickPets === 'function' ? autoPickPets(2) : []);
       if (typeof createPetUnitsForBattle === 'function') petUnits = createPetUnitsForBattle(petIds, 2) || [];
+      // v2.1.10：宠物在敌群里会按稀有度放大，体检要一起算进去
+      if (typeof boostPetForGroup === 'function') petUnits.forEach(boostPetForGroup);
     } catch (e) { petUnits = []; console.warn('[debug] 体检未能构建宠物，按 0 宠模拟', e); }
+    // v2.1.10：玩家在敌群里只继承一定比例，用继承后的属性模拟
+    var gBase = (typeof inheritGroupStats === 'function') ? inheritGroupStats(base) : base;
     var out = [];
     Object.keys(GROUP_LEVELS).forEach(function (gk) {
       var st = (GROUP_LEVELS[gk].stages || [])[9];   // 每大关第 10 关 = Boss 关
@@ -184,7 +195,7 @@
       var w = 0, ts = 0, hpSum = 0, lastCfg = null;
       for (var i = 0; i < trials; i++) {
         try {
-          var allies = [createUnit({ id: 'p', side: 'ally', name: '你', base: Object.assign({}, base) })]
+          var allies = [createUnit({ id: 'p', side: 'ally', name: '你', base: Object.assign({}, gBase) })]
             .concat(petUnits.map(function (u, k) { return u.clone ? u.clone() : u; }));
           // v2.1.9：与实战一致，走难度锚定
           var cfg = (typeof anchorStageEnemies === 'function') ? anchorStageEnemies(gk, st, allies) : (st.enemies || []);

@@ -387,18 +387,22 @@ function startGroupTrial(groupId){
     toast('该关卡已通关 ✅','e'); return
   }
   var stats=getGameStats()
-  var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:stats.hp,atk:stats.atk,def:stats.def,spd:10,soulAtk:stats.soulAtk||0,soulDef:stats.soulDef||0}})
+  // v2.1.10：敌群是独立属性空间 —— 玩家只继承一定比例，避免裸属性把敌人压成 1 点
+  var gs=(typeof inheritGroupStats==='function')?inheritGroupStats(stats):stats
+  var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:gs.hp,atk:gs.atk,def:gs.def,spd:10,soulAtk:gs.soulAtk||0,soulDef:gs.soulDef||0}})
   // 挂载玩家技能（装备的技能生效）
   if (typeof attachPlayerSkills === 'function' && typeof getSkillState === 'function') {
     attachPlayerSkills(player, getSkillState())
   }
   // 默认带宠物：优先 _petBattlePicks，否则自动带成熟宠物
   var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(2)
+  // 宠物放大到与玩家同量级，否则基础 atk 15~20 等于摆设
   var petUnits = createPetUnitsForBattle(petIds, 2)
+  if (typeof boostPetForGroup === 'function') petUnits.forEach(boostPetForGroup)
   var allies = [player].concat(petUnits)
-  // v2.1.9 难度锚定：先有我方阵容，再按它反推敌人属性（固定曲线降为下限）
   var anchorG = String(stage ? String(groupId).split('-')[0] : groupId)
-  var cfgList = (typeof anchorStageEnemies === 'function') ? anchorStageEnemies(anchorG, glv, allies) : glv.enemies
+  // 锚定默认关闭（见 GROUP_ANCHOR.enabled），开启时按我方阵容反推敌人属性
+  var cfgList = (typeof anchorStageEnemies === 'function' && GROUP_ANCHOR && GROUP_ANCHOR.enabled) ? anchorStageEnemies(anchorG, glv, allies) : glv.enemies
   var enemies=cfgList.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })

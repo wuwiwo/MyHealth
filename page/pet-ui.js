@@ -218,12 +218,14 @@ function startGroupTrialWithPets(groupId, petIds) {
   var glv = (GROUP_LEVELS||{})[groupId]
   if (!glv) { toast('敌群关卡不存在','e'); return }
   var stats = getGameStats()
-  var player = createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:stats.hp,atk:stats.atk,def:stats.def,spd:10,soulAtk:stats.soulAtk||0,soulDef:stats.soulDef||0}})
+  // v2.1.10：敌群是独立属性空间，玩家只继承一定比例
+  var gs = (typeof inheritGroupStats === 'function') ? inheritGroupStats(stats) : stats
+  var player = createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:gs.hp,atk:gs.atk,def:gs.def,spd:10,soulAtk:gs.soulAtk||0,soulDef:gs.soulDef||0}})
   var petUnits = createPetUnitsForBattle(petIds, 2)
+  if (typeof boostPetForGroup === 'function') petUnits.forEach(boostPetForGroup)
   var allies = [player].concat(petUnits)
-  // v2.1.9 难度锚定：按我方阵容反推敌人属性（固定曲线降为下限）
   var gStage = (glv.stages || [])[0]
-  var cfgList = (typeof anchorStageEnemies === 'function' && gStage) ? anchorStageEnemies(groupId, gStage, allies) : glv.enemies
+  var cfgList = (typeof anchorStageEnemies === 'function' && gStage && GROUP_ANCHOR && GROUP_ANCHOR.enabled) ? anchorStageEnemies(groupId, gStage, allies) : glv.enemies
   var enemies = cfgList.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })

@@ -78,7 +78,10 @@ assert('t 随关卡单调递增', (function () {
 const st6 = sb.GROUP_LEVELS.g6.stages[9];
 const beforeAtk = st6.enemies[0].base.atk;
 const beforeHp = st6.enemies[0].base.hp;
-const alliesA = makeAllies(sb, { hp: 3000, atk: 1000, def: 300 }, 2);
+// ⚠️ 必须用「强队」：弱队会触发 hpFloor = min(fHp, allyDps×maxRounds) 兜底，
+//    兜底一生效预期回合数 R 就被钉住，敌人血量/攻击不再随玩家线性变化（实测会跑出 2.2× / 1.6×）。
+//    v2.1.10 抬高固定曲线后这个效应更明显，所以这里统一用强队测。
+const alliesA = makeAllies(sb, { hp: 12000, atk: 4000, def: 1200 }, 2);
 const cfg6 = sb.anchorStageEnemies('g6', st6, alliesA);
 assert('不修改原关卡配置', st6.enemies[0].base.atk === beforeAtk && st6.enemies[0].base.hp === beforeHp,
   beforeAtk + '→' + st6.enemies[0].base.atk);
@@ -120,8 +123,8 @@ assert('难度指标（总攻 × 总血）随大关递增', (function () {
 //      用两支「都不触发 maxRounds 血量兜底」的强队测：玩家属性翻倍，敌人属性也应翻倍
 //      ⚠️ 弱队不能用于此项 —— hpFloor = min(fHp, allyDps×maxRounds) 会改变预期回合数 R，
 //         R 一变，攻击就不是线性了（这是兜底机制的预期行为）
-const strongA = makeAllies(sb, { hp: 6000, atk: 2000, def: 600 }, 2);
-const strongB = makeAllies(sb, { hp: 12000, atk: 4000, def: 1200 }, 2);
+const strongA = alliesA;
+const strongB = makeAllies(sb, { hp: 24000, atk: 8000, def: 2400 }, 2);
 const ta = totals(sb.anchorStageEnemies('g12', sb.GROUP_LEVELS.g12.stages[9], strongA));
 const tb = totals(sb.anchorStageEnemies('g12', sb.GROUP_LEVELS.g12.stages[9], strongB));
 [['攻击', 'atk'], ['防御', 'def'], ['生命', 'hp']].forEach(function (p) {

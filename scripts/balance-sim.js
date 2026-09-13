@@ -6,7 +6,7 @@
  *
  * 用法：
  *   node scripts/balance-sim.js                      # 默认扫描
- *   node scripts/balance-sim.js --atk 800 --def 60 --hp 1800 --pets 2
+ *   node scripts/balance-sim.js --atk 800 --def 60 --hp 1800 --pets 2 --pets-rarity SR,SSR
  *                                                    # 指定属性，逐关模拟
  */
 'use strict';
@@ -39,17 +39,32 @@ function makeSandbox(seed) {
 
 /* 跑一场：返回 {win, turns, hpLeftPct}
    groupId 传入 + 未加 --no-anchor 时，走 v2.1.9 的「按我方阵容反推敌人属性」 */
+/* 参战宠物稀有度，默认 SR + SSR（对应清脆鸟 + 小冰晶） */
+const petArg = (function () { const i = process.argv.indexOf('--pets-rarity'); return i >= 0 ? process.argv[i + 1] : 'SR,SSR'; })();
+/* 宠物代表值（图鉴基础 × 稀有度放大系数，见 group-levels.js PET_GROUP_SCALE） */
+const PET_BASE = { R: { atk: 12, def: 8, hp: 120 }, SR: { atk: 15, def: 10, hp: 150 }, SSR: { atk: 20, def: 15, hp: 200 }, UR: { atk: 28, def: 22, hp: 280 } };
+const PET_SCALE = { R: 12, SR: 16, SSR: 20, UR: 26 };
+function petStats(rarity) {
+  const b = PET_BASE[rarity] || PET_BASE.SR, k = PET_SCALE[rarity] || PET_SCALE.SR;
+  return { atk: b.atk * k, def: b.def * k, hp: b.hp * k, spd: 8 };
+}
+
 function simulate(sb, playerBase, stage, petCount, maxTurns, groupId) {
-  const player = sb.createUnit({ id: 'player', side: 'ally', name: '你', base: Object.assign({ spd: 10 }, playerBase) });
+  // v2.1.10：玩家在敌群里只继承一定比例
+  const gs = (typeof sb.inheritGroupStats === 'function') ? sb.inheritGroupStats(playerBase) : playerBase;
+  const player = sb.createUnit({ id: 'player', side: 'ally', name: '你', base: Object.assign({ spd: 10 }, gs) });
+  const rarities = String(petArg).split(',').filter(Boolean);
   const allies = [player];
   for (let i = 0; i < (petCount || 0); i++) {
-    // 粗略的宠物替身：不引入 pets 模块依赖，用中等宠物量级
+    const p = petStats(rarities[i] || 'SR');
     allies.push(sb.createUnit({
       id: 'pet-' + i, side: 'ally', name: '宠' + i,
-      base: { hp: Math.floor(playerBase.hp * 0.5), atk: Math.floor(playerBase.atk * 0.4), def: Math.floor(playerBase.def * 0.8), spd: 8 }
+      base: { hp: p.hp, atk: p.atk, def: p.def, spd: p.spd }
     }));
   }
-  const useAnchor = !argv.includes('--no-anchor') && groupId && typeof sb.anchorStageEnemies === 'function';
+  // v2.1.10：锚定默认关闭（GROUP_ANCHOR.enabled=false），只有显式 --anchor 才启用
+  const useAnchor = argv.includes('--anchor') && groupId && typeof sb.anchorStageEnemies === 'function'
+    && (!sb.GROUP_ANCHOR || sb.GROUP_ANCHOR.enabled !== false || argv.includes('--force-anchor'));
   const cfg = useAnchor ? sb.anchorStageEnemies(groupId, stage, allies) : (stage.enemies || []);
   const enemies = cfg.map(function (ec, i) {
     return sb.createEnemyUnit({ id: 'enemy-' + i, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base });
