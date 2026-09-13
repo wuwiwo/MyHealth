@@ -225,7 +225,7 @@ function startGroupTrialWithPets(groupId, petIds) {
   if (typeof boostPetForGroup === 'function') petUnits.forEach(boostPetForGroup)
   var allies = [player].concat(petUnits)
   var gStage = (glv.stages || [])[0]
-  var cfgList = (typeof anchorStageEnemies === 'function' && gStage && GROUP_ANCHOR && GROUP_ANCHOR.enabled) ? anchorStageEnemies(groupId, gStage, allies) : glv.enemies
+  var cfgList = (typeof groupStageEnemies === 'function' && gStage) ? groupStageEnemies(groupId, gStage, allies) : glv.enemies
   var enemies = cfgList.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })

@@ -402,7 +402,7 @@ function startGroupTrial(groupId){
   var allies = [player].concat(petUnits)
   var anchorG = String(stage ? String(groupId).split('-')[0] : groupId)
   // 锚定默认关闭（见 GROUP_ANCHOR.enabled），开启时按我方阵容反推敌人属性
-  var cfgList = (typeof anchorStageEnemies === 'function' && GROUP_ANCHOR && GROUP_ANCHOR.enabled) ? anchorStageEnemies(anchorG, glv, allies) : glv.enemies
+  var cfgList = (typeof groupStageEnemies === 'function') ? groupStageEnemies(anchorG, glv, allies) : glv.enemies
   var enemies=cfgList.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })

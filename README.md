@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.11
+> Personal Health Manager — 个人健身健康管理应用 v2.1.12
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -246,4 +246,6 @@ Vercel 项目设置：
 
 | **v2.1.11** | **2026-09-13** | **⛩️ 新增 g13~g15 超限试炼（星陨/洪荒/永夜），关卡 120→150：g13+ 叠加超线性加压，实测当前属性三关全灭，g13/g14/g15 分别需再练 +40%/+140%/+260% 才能通关；测试关卡数改为由数据派生；缓存版本对齐（v71）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.11**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.12** | **2026-09-13** | **🐞 修「平衡报告说打不过但实际已通关」：Debug 体检漏改锚定开关、魂攻警告过期、诊断误用裸属性；新增单一入口 groupStageEnemies() 从结构上杜绝再分叉；缓存版本对齐（v72）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.12**（设计规范：`doc/design-tokens-v2.1.md`）

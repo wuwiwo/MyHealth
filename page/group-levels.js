@@ -335,6 +335,18 @@ function anchorStageEnemies(groupId, stage, allies) {
   });
 }
 
+/* ★ 取「这一关实战真正使用的敌人配置」的唯一入口。
+   v2.1.10 起改成比例继承后锚定默认关闭（GROUP_ANCHOR.enabled=false），
+   但 debug 面板体检漏改、仍无条件走锚定 → 体检比实战强 ~25%，
+   出现「模拟 g5~g12 全 0% 而实际已全通关」的矛盾报告（v2.1.12 修）。
+   → 所有调用点（实战 2 处 + debug 体检 1 处）必须统一走这里，别再各自判断。 */
+function groupStageEnemies(groupId, stage, allies) {
+  if (GROUP_ANCHOR && GROUP_ANCHOR.enabled && typeof anchorStageEnemies === 'function') {
+    return anchorStageEnemies(groupId, stage, allies);
+  }
+  return (stage && stage.enemies) || [];
+}
+
 /* 便捷：按小关 id 取配置 */
 function getGroupStage(stageId) {
   for (var lg in GROUP_LEVELS) {
@@ -351,6 +363,7 @@ if (typeof window !== 'undefined') {
   window.GROUP_ANCHOR = GROUP_ANCHOR;
   window.groupAnchorT = groupAnchorT;
   window.anchorStageEnemies = anchorStageEnemies;
+  window.groupStageEnemies = groupStageEnemies;
   window.GROUP_INHERIT = GROUP_INHERIT;
   window.PET_GROUP_SCALE = PET_GROUP_SCALE;
   window.TALENTS_HIGH = TALENTS_HIGH;
@@ -366,6 +379,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.GROUP_ANCHOR = GROUP_ANCHOR;
   globalThis.groupAnchorT = groupAnchorT;
   globalThis.anchorStageEnemies = anchorStageEnemies;
+  globalThis.groupStageEnemies = groupStageEnemies;
   globalThis.GROUP_INHERIT = GROUP_INHERIT;
   globalThis.PET_GROUP_SCALE = PET_GROUP_SCALE;
   globalThis.TALENTS_HIGH = TALENTS_HIGH;

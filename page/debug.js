@@ -162,14 +162,18 @@
   function balDiag(s) {
     if (!s) return '（属性未初始化）';
     var c = balEnemyCaps(), L = [];
+    // v2.1.12：敌群是独立属性空间，诊断必须用「继承后」的属性，不能用裸属性
+    // （此前用 s.atk/s.def/s.hp 算，与实战差 1/0.6 倍，结论完全失真）
+    var gs = (typeof inheritGroupStats === 'function') ? inheritGroupStats(s) : s;
     L.push('全 ' + (Object.keys(GROUP_LEVELS).length * 10) + ' 关敌人上限: 攻 ' + c.atk + ' · 防 ' + c.def + ' · 血 ' + c.hp);
-    var pDmg = Math.max(1, s.atk - Math.floor(c.def / 2));
-    L.push('你打最硬敌人: 单次 ≈ ' + pDmg + ' → 约 ' + Math.ceil(c.hp / pDmg) + ' 下');
-    var eDmg = Math.max(1, c.atk - Math.floor(s.def / 2));
-    L.push('最硬敌人打你: 单次 ≈ ' + eDmg + ' → 约 ' + Math.ceil(s.hp / eDmg) + ' 下才倒');
-    if (eDmg <= 1) L.push('⚠️ 你防御/2 = ' + Math.floor(s.def / 2) + ' ≥ 敌人最高攻击 ' + c.atk + ' → 伤害被 max(1,…) 兜底，敌人永远只打 1 点');
-    else if (s.hp / eDmg > 40) L.push('⚠️ 敌人要 ' + Math.ceil(s.hp / eDmg) + ' 下才能打倒你，战斗已无张力');
-    if ((s.soulAtk || 0) > 0) L.push('⚠️ 敌群战斗不读魂攻/魂防（battle-group.js 零引用），你的魂攻 ' + s.soulAtk + ' 在敌群里无效');
+    var pDmg = Math.max(1, gs.atk - Math.floor(c.def / 2));
+    L.push('你（敌群 ' + gs.atk + ' 攻）打最硬敌人: 单次 ≈ ' + pDmg + ' → 约 ' + Math.ceil(c.hp / pDmg) + ' 下');
+    var eDmg = Math.max(1, c.atk - Math.floor(gs.def / 2));
+    L.push('最硬敌人打你（敌群 ' + gs.def + ' 防）: 单次 ≈ ' + eDmg + ' → 约 ' + Math.ceil(gs.hp / eDmg) + ' 下才倒');
+    if (eDmg <= 1) L.push('⚠️ 你敌群防御/2 = ' + Math.floor(gs.def / 2) + ' ≥ 敌人最高攻击 ' + c.atk + ' → 伤害被 max(1,…) 兜底，敌人永远只打 1 点');
+    else if (gs.hp / eDmg > 40) L.push('⚠️ 敌人要 ' + Math.ceil(gs.hp / eDmg) + ' 下才能打倒你，战斗已无张力');
+    // v2.1.10 已把魂攻/魂防接入敌群，这条警告不再适用
+    if ((gs.soulAtk || 0) > 0) L.push('魂攻 ' + gs.soulAtk + ' / 魂防 ' + gs.soulDef + '（v2.1.10 起敌群已生效，每次攻击附带魂伤）');
     return L.join('\n');
   }
   /* 用真实战斗引擎模拟（纯逻辑，不碰存档） */
@@ -197,8 +201,10 @@
         try {
           var allies = [createUnit({ id: 'p', side: 'ally', name: '你', base: Object.assign({}, gBase) })]
             .concat(petUnits.map(function (u, k) { return u.clone ? u.clone() : u; }));
-          // v2.1.9：与实战一致，走难度锚定
-          var cfg = (typeof anchorStageEnemies === 'function') ? anchorStageEnemies(gk, st, allies) : (st.enemies || []);
+          // v2.1.12：与实战一致 —— 锚定默认关闭（GROUP_ANCHOR.enabled=false），
+          // 此前这里无条件调用 anchorStageEnemies，导致体检结果比实战强 ~25%，
+          // 出现「模拟 g5~g12 全 0% 但实际已全通关」的矛盾报告
+          var cfg = (typeof groupStageEnemies === 'function') ? groupStageEnemies(gk, st, allies) : (st.enemies || []);
           lastCfg = cfg;
           var foes = cfg.map(function (ec, j) {
             return createEnemyUnit({ id: 'e' + j, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base });
@@ -236,7 +242,7 @@
         var verdict = r.win === 100 && r.left >= 90 ? '碾压' : r.win >= 80 ? '偏易' : r.win >= 40 ? '有张力' : r.win > 0 ? '偏难' : '打不过';
         return r.g + ' 敌' + r.n + ' 总攻' + r.atk + ' 总血' + r.hp + '  胜' + r.win + '%  ' + r.turn + ' 步  剩血' + r.left + '%  ' + verdict;
       }).join('\n');
-      h += '<div style="font-size:var(--fs-3xs);color:var(--text3);margin-top:2px">带 ' + state.bal.pets + ' 只宠物 · 已计入 v2.1.9 难度锚定 · 目标：胜率 40~90%、剩血随关递减</div>';
+      h += '<div style="font-size:var(--fs-3xs);color:var(--text3);margin-top:2px">带 ' + state.bal.pets + ' 只宠物 · 敌群参战属性已按继承 ' + Math.round((typeof GROUP_INHERIT !== 'undefined' ? GROUP_INHERIT : 1) * 100) + '% 计算 · 宠物已按稀有度放大 · 锚定' + (typeof GROUP_ANCHOR !== 'undefined' && GROUP_ANCHOR.enabled ? '开' : '关') + '</div>';
       h += pre(rows);
     }
     return h;

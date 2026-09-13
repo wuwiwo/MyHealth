@@ -152,5 +152,21 @@ assert('魂攻对无魂防目标打全额 +50', soulVsNone - noSoul === 50, '实
 assert('魂防生效后伤害回落（+43）', soulVsDef - noSoul === 43, '实增 ' + (soulVsDef - noSoul));
 assert('魂伤不低于 1（不会退化成无效）', soulVsDef > noSoul);
 
+// ---- 7. 单一入口：实战与 debug 体检必须走同一个函数 ----
+// v2.1.12 修过的分叉 bug：debug 面板漏改判断、仍无条件走锚定，
+// 结果「模拟 g5~g12 全 0% 而实际已全通关」。这里钉死两者一致。
+(function () {
+  const allies = [sb.createUnit({ id: 'p', side: 'ally', name: '你', base: Object.assign({ spd: 10 }, g) })];
+  const stage = sb.GROUP_LEVELS.g7.stages[9];
+  const raw = JSON.stringify(stage.enemies);
+  assert('锚定关闭时 groupStageEnemies 直接返回原关卡配置',
+    JSON.stringify(sb.groupStageEnemies('g7', stage, allies)) === raw);
+  sb.GROUP_ANCHOR.enabled = true;
+  const anchored = JSON.stringify(sb.groupStageEnemies('g7', stage, allies));
+  sb.GROUP_ANCHOR.enabled = false;   // 还原
+  assert('锚定开启时改走 anchorStageEnemies（结果与原配置不同）', anchored !== raw, anchored.slice(0, 60));
+  assert('还原后回到原配置', JSON.stringify(sb.groupStageEnemies('g7', stage, allies)) === raw);
+})();
+
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 process.exit(fail === 0 ? 0 : 1);
