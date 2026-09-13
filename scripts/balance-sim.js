@@ -16,7 +16,9 @@ const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const files = ['levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'skill.js', 'enemy.js',
-  'battle.js', 'group-levels.js', 'battle-group.js'];
+  'ai.js', 'terrain.js', 'battle.js', 'group-levels.js', 'battle-group.js'];
+// v2.1.16：必须加载 ai.js（否则敌人不会放技能）与 terrain.js（否则场地不生效），
+// 缺这两个会让测量结果显著偏乐观
 
 function makeSandbox(seed) {
   // mulberry32：确定性伪随机（不能用恒定值，否则依赖概率的分支永不触发）

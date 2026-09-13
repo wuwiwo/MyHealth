@@ -99,7 +99,12 @@ function groupRng(seed) {
    bite（咬击）是最基础的技能 —— 抽到这些会让 Boss 名不副实。 */
 var TALENTS_HIGH = ['blade', 'vigor', 'bloodthirst', 'regen', 'roughskin', 'vengeance', 'magicmirror', 'magicshield', 'intimidate'];
 /* v2.1.13：Boss / 精英的「其他词条」池（伤害减免之外的可选词条） */
-var TALENTS_EXTRA = ['extra_act', 'aoe_guard', 'skill_guard', 'grow_atk', 'grow_def', 'doom_call'];
+var TALENTS_EXTRA = ['extra_act', 'aoe_guard', 'skill_guard', 'grow_atk', 'grow_def', 'doom_call',
+  // v2.1.16：这 3 个天赋代码完整、引擎可达，但此前不在任何池里 → 实战永远见不到
+  'flutter',     // 振翅：每回合按初始速度提速
+  'plain',       // 朴实
+  'multitarget'  // 多目标：普攻额外打 1 个目标、伤害降低
+];
 var GROUP_EXTRA_COUNT = { boss: 2, elite: 1 };   // 其他词条个数上限（+ 固定减伤 = 3 / 2）
 function pickExtraTalents(arr, n, rng) {
   var pool = TALENTS_EXTRA.slice();
@@ -119,8 +124,11 @@ function groupTerrainFor(lg) {
   return getTerrain(ids[Math.floor(r * ids.length)]);
 }
 var TALENTS_LOW = ['lazy', 'slowstart'];
-var SKILLS_HIGH = ['charge', 'spikes', 'blizzard', 'armorbreak', 'blackmist', 'possess', 'deepfreeze'];
-var SKILLS_LOW = ['bite', 'snowball', 'shrink', 'yawn', 'drench'];
+var SKILLS_HIGH = ['charge', 'spikes', 'blizzard', 'armorbreak', 'blackmist', 'possess', 'deepfreeze',
+  // v2.1.16：这 7 个技能代码完整但此前不在任何池里 → 实战永远见不到
+  'taunt', 'empower', 'bulwark', 'cleanse', 'drainbuff', 'stardust', 'clearfog'
+];
+var SKILLS_LOW = ['bite', 'snowball', 'shrink', 'yawn', 'drench', 'surprise'];   // v2.1.16 击掌奇袭入池
 
 /* 生成单个敌人配置 */
 function genEnemyCfg(lg, st, slot, isElite, isBoss) {
