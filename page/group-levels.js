@@ -42,7 +42,7 @@ var ENEMY_NAMES = {
    玩家真实属性由「月容量 + 旬累积奖励×3 + 挑战血 + 炼魂」驱动、无上界，
    直接进敌群会把敌人压成 1 点伤害。改为：敌群战斗里玩家只继承一定比例。
    宠物同步放大（否则基础 atk 15~20 在玩家面前等于摆设）。 */
-var GROUP_INHERIT = 0.60;                                  // 玩家在敌群中继承的属性比例
+var GROUP_INHERIT = 0.50;                                  // 玩家在敌群中继承的属性比例
 var PET_GROUP_SCALE = { R: 12, SR: 16, SSR: 20, UR: 26 };   // 宠物按稀有度放大到同量级
 var PET_GROUP_REFINE = 1.5;                                // 宠物炼化加成在敌群中的额外权重
 
@@ -98,6 +98,26 @@ function groupRng(seed) {
    Boss 与精英只从「高级」池抽取：lazy（懒惰）/ slowstart（慢启动）是自我削弱，
    bite（咬击）是最基础的技能 —— 抽到这些会让 Boss 名不副实。 */
 var TALENTS_HIGH = ['blade', 'vigor', 'bloodthirst', 'regen', 'roughskin', 'vengeance', 'magicmirror', 'magicshield', 'intimidate'];
+/* v2.1.13：Boss / 精英的「其他词条」池（伤害减免之外的可选词条） */
+var TALENTS_EXTRA = ['extra_act', 'aoe_guard', 'skill_guard', 'grow_atk', 'grow_def', 'doom_call'];
+var GROUP_EXTRA_COUNT = { boss: 2, elite: 1 };   // 其他词条个数上限（+ 固定减伤 = 3 / 2）
+function pickExtraTalents(arr, n, rng) {
+  var pool = TALENTS_EXTRA.slice();
+  for (var i = 0; i < n && pool.length; i++) {
+    var idx = Math.floor(rng() * pool.length);
+    arr.push(pool[idx]); pool.splice(idx, 1);
+  }
+}
+/* 场地：每个大关一个主题场地，g3 起生效（terrain.js 在本文件之前加载） */
+var GROUP_TERRAIN_FROM = 3;
+function groupTerrainFor(lg) {
+  if (lg < GROUP_TERRAIN_FROM) return null;
+  if (typeof getTerrain !== 'function' || typeof TERRAINS === 'undefined') return null;
+  var ids = Object.keys(TERRAINS || {});
+  if (!ids.length) return null;
+  var r = groupRng(groupHash(lg, 0, 7) + 909)();
+  return getTerrain(ids[Math.floor(r * ids.length)]);
+}
 var TALENTS_LOW = ['lazy', 'slowstart'];
 var SKILLS_HIGH = ['charge', 'spikes', 'blizzard', 'armorbreak', 'blackmist', 'possess', 'deepfreeze'];
 var SKILLS_LOW = ['bite', 'snowball', 'shrink', 'yawn', 'drench'];
@@ -115,7 +135,7 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
   // 属性基础（适中）
   var atk = Math.floor((isBoss ? 40 : isElite ? 26 : 14) * lvScale);
   var def = Math.floor((isBoss ? 24 : isElite ? 15 : 7) * lvScale * 0.85);
-  var hp = Math.floor((isBoss ? 450 : isElite ? 240 : 120) * lvScale);
+  var hp = Math.floor((isBoss ? 270 : isElite ? 180 : 120) * lvScale);   // v2.1.13：Boss 减伤40%/精英25% 等效血量 ×1.67/×1.33，血量反向补偿，避免已通关的关卡变成打不过
   var spd = 3 + Math.floor(lvScale * 1.8);
 
   var cfg = {
@@ -128,17 +148,14 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
     cfg.base.soulDef = Math.floor((isBoss ? 12 : 6) * lvScale);
   }
   // 天赋：Boss / 精英一律从「高级」池抽（不含 lazy / slowstart 这类自我削弱）
+  // v2.1.13：Boss = 伤害减免40% + 最多 2 个其他词条；精英 = 25% + 最多 1 个
   var talents = [];
-  var tpool = TALENTS_HIGH.slice();
   if (isBoss) {
-    var n = 2 + (lg % 2);   // 2-3 天赋（收敛波动，避免某些关被永久钉死在地狱档）
-    for (var i = 0; i < n && tpool.length; i++) {
-      var idx = Math.floor(rng() * tpool.length);
-      talents.push(tpool[idx]); tpool.splice(idx, 1);
-    }
+    talents.push('cut_boss');
+    pickExtraTalents(talents, GROUP_EXTRA_COUNT.boss, rng);
   } else if (isElite || tier === 'elite1') {
-    talents.push(tpool[Math.floor(rng() * tpool.length)]);
-    if (isElite && rng() < 0.5) talents.push(tpool[Math.floor(rng() * tpool.length)]);
+    talents.push('cut_elite');
+    pickExtraTalents(talents, GROUP_EXTRA_COUNT.elite, rng);
   }
   if (talents.length) cfg.talents = talents;
   // 技能：Boss / 精英从「高级」池抽；杂兵才可能拿低级技能
@@ -367,6 +384,8 @@ if (typeof window !== 'undefined') {
   window.GROUP_INHERIT = GROUP_INHERIT;
   window.PET_GROUP_SCALE = PET_GROUP_SCALE;
   window.TALENTS_HIGH = TALENTS_HIGH;
+  window.TALENTS_EXTRA = TALENTS_EXTRA;
+  window.groupTerrainFor = groupTerrainFor;
   window.SKILLS_HIGH = SKILLS_HIGH;
   window.inheritGroupStats = inheritGroupStats;
   window.boostPetForGroup = boostPetForGroup;
@@ -383,6 +402,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.GROUP_INHERIT = GROUP_INHERIT;
   globalThis.PET_GROUP_SCALE = PET_GROUP_SCALE;
   globalThis.TALENTS_HIGH = TALENTS_HIGH;
+  globalThis.TALENTS_EXTRA = TALENTS_EXTRA;
+  globalThis.groupTerrainFor = groupTerrainFor;
   globalThis.SKILLS_HIGH = SKILLS_HIGH;
   globalThis.inheritGroupStats = inheritGroupStats;
   globalThis.boostPetForGroup = boostPetForGroup;

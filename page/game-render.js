@@ -406,7 +406,11 @@ function startGroupTrial(groupId){
   var enemies=cfgList.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })
-  _groupBattle=createGroupBattle({allies:allies,enemies:enemies})
+  // v2.1.13 场地：每个大关一个主题场地（g3 起）
+  var lgNum = parseInt(String(anchorG).replace(/[^0-9]/g, ''), 10) || 1
+  var terrain = (typeof groupTerrainFor === 'function') ? groupTerrainFor(lgNum) : null
+  if (terrain) toast('场地：' + terrain.name + ' — ' + (terrain.desc || ''), 's')
+  _groupBattle=createGroupBattle({allies:allies,enemies:enemies,terrain:terrain})
   // 模式/速度持久化（记住上次选择）
   _groupMode=localStorage.getItem('dh-group-mode')||'auto'
   _groupSpeed=parseInt(localStorage.getItem('dh-group-speed')||'1',10)||1

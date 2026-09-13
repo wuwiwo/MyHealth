@@ -163,7 +163,7 @@ function normalAttack(gb, actor, target) {
     if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
     if (m.key === 'dmgDealtHalf') dmg = Math.floor(dmg / 2);
   });
-  var td2 = talentDispatch(target, 'onDamage', { attacker: actor, amount: dmg, isPhysical: true, isPlayerAttack: false });
+  var td2 = talentDispatch(target, 'onDamage', { attacker: actor, amount: dmg, isPhysical: true, isPlayerAttack: false, isSkill: false, isAoe: false, fromPlayer: actor.side === 'ally' });
   td2.mutations.forEach(function (m) {
     if (m.key === 'reflectFlat') { target.hp = Math.max(0, target.hp - dmg); actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 粗糙皮肤反伤 ' + m.value }); }
     if (m.key === 'dmgTakenBoost') dmg = Math.floor(dmg * (1 + m.value));
@@ -236,6 +236,10 @@ function castSkill(gb, actor, skillId) {
           var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: h.amount, isPhysical: h.dmgType === 'physical', attacker: actor, target: t });
           var dmg = h.amount;
           td.mutations.forEach(function (m) { if (m.key === 'dmgBoost') dmg = Math.floor(dmg * (1 + m.value)); });
+          // v2.1.13：目标侧减伤词条（伤害减免 / 抗扩散 / 抗技法）。
+          // 此前技能伤害只派发攻击方，导致减伤类词条对技能完全无效。
+          var tdg = talentDispatch(t, 'onDamage', { isPlayerAttack: false, amount: dmg, isPhysical: h.dmgType === 'physical', attacker: actor, target: t, isSkill: true, isAoe: targets.length > 1, fromPlayer: actor.side === 'ally' });
+          tdg.mutations.forEach(function (m) { if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value)); });
           // 天赋暴击（斗者本能）
           var tc2 = talentCrit(actor);
           if (tc2.chance > 0 && gb.rng() < tc2.chance) { dmg = Math.floor(dmg * tc2.mult); events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + tc2.mult }); }
@@ -418,7 +422,7 @@ function groupUnitTurn(gb, actor) {
   // 天赋 onAfterAction / onTurnEnd
   var ae = talentDispatch(actor, 'onAfterAction', {});
   ae.events.forEach(function (e) { events.push({ msg: e.msg }); });
-  var te = talentDispatch(actor, 'onTurnEnd', { turn: turn, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies });
+  var te = talentDispatch(actor, 'onTurnEnd', { turn: turn, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies });
   te.events.forEach(function (e) { events.push({ msg: e.msg }); });
   var se = dispatch(actor, 'onTurnEnd', { turn: turn });
   se.events.forEach(function (e) { events.push({ msg: e.msg }); });
@@ -446,11 +450,25 @@ function groupBattleTick(gb) {
     }
   }
   gb.turn++;
+  // v2.1.13 场地：回合开始结算
+  if (gb.terrain && gb.terrain.onTurnStart) {
+    var ts3 = gb.terrain.onTurnStart(gb);
+    if (ts3 && ts3.events) gb.events = gb.events.concat(ts3.events);
+  }
   var queue = buildActionQueue(gb);
   queue.forEach(function (u) {
     if (gb.done) return;
     if (u.hp <= 0) return;
     var evts = groupUnitTurn(gb, u);
+    // v2.1.13 天赋「疾影」：本回合额外行动 1 次
+    var exRes2 = talentDispatch(u, 'onAfterAction', { turn: gb.turn });
+    var wantExtra2 = false;
+    exRes2.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra2 = true; });
+    exRes2.events.forEach(function (e) { evts.push({ msg: e.msg }); });
+    if (wantExtra2 && !gb.done && u.hp > 0
+        && (u.side === 'ally' ? gb.enemies : gb.allies).some(function (a) { return a.hp > 0; })) {
+      evts = evts.concat(groupUnitTurn(gb, u));
+    }
     gb.events = gb.events.concat(evts);
     gb.log.push({ turn: gb.turn, unit: u.name, events: evts });
     // 检查胜负
@@ -483,6 +501,11 @@ function groupBattleStep(gb) {
     gb.turn++;
     gb._stepQueue = buildActionQueue(gb);
     gb._stepIdx = 0;
+    // v2.1.13 场地：回合开始结算（此前只接线了 onTurnEnd，开场类场地不生效）
+    if (gb.terrain && gb.terrain.onTurnStart) {
+      var ts2 = gb.terrain.onTurnStart(gb);
+      if (ts2 && ts2.events) gb.events = gb.events.concat(ts2.events);
+    }
   }
   // 跳过死亡单位
   while (gb._stepIdx < gb._stepQueue.length && gb._stepQueue[gb._stepIdx].hp <= 0) gb._stepIdx++;
@@ -503,6 +526,15 @@ function groupBattleStep(gb) {
   var actor = gb._stepQueue[gb._stepIdx];
   gb._stepIdx++;
   var evts = groupUnitTurn(gb, actor);
+  // v2.1.13 天赋「疾影」：本回合额外行动 1 次
+  var exRes = talentDispatch(actor, 'onAfterAction', { turn: gb.turn });
+  var wantExtra = false;
+  exRes.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra = true; });
+  exRes.events.forEach(function (e) { evts.push({ msg: e.msg }); });
+  if (wantExtra && !gb.done && actor.hp > 0
+      && (actor.side === 'ally' ? gb.enemies : gb.allies).some(function (u) { return u.hp > 0; })) {
+    evts = evts.concat(groupUnitTurn(gb, actor));
+  }
   gb.events = gb.events.concat(evts);
   gb.log.push({ turn: gb.turn, unit: actor.name, events: evts });
   // 胜负检查

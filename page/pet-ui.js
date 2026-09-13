@@ -229,7 +229,9 @@ function startGroupTrialWithPets(groupId, petIds) {
   var enemies = cfgList.map(function(ec,i){
     return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
   })
-  _groupBattle = createGroupBattle({ allies:allies, enemies:enemies })
+  var lgNum2 = parseInt(String(groupId).replace(/[^0-9]/g, ''), 10) || 1
+  var terrain2 = (typeof groupTerrainFor === 'function') ? groupTerrainFor(lgNum2) : null
+  _groupBattle = createGroupBattle({ allies:allies, enemies:enemies, terrain:terrain2 })
   _groupMode='auto';_groupSpeed=1;_groupDetail=null
   renderGroupOverlay(true)
   toast('👥 '+glv.name+' 开始！'+(petUnits.length?'（带 '+petUnits.length+' 宠物）':''),'s')

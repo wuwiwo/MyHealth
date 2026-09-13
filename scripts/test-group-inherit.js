@@ -14,7 +14,7 @@ const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const files = ['levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'skill.js', 'enemy.js',
-  'battle.js', 'group-levels.js', 'battle-group.js'];
+  'terrain.js', 'battle.js', 'group-levels.js', 'battle-group.js'];   // terrain 必须在 group-levels 之前
 
 function makeSandbox(seed) {
   let a = (seed || 1) >>> 0;
@@ -44,13 +44,16 @@ const sb = makeSandbox(20260913);
 // ---- 1. 玩家比例继承 ----
 const real = { atk: 2036, def: 678, hp: 14714, soulAtk: 385, soulDef: 69 };
 const g = sb.inheritGroupStats(real);
-assert('玩家继承 60%：攻 2036 → ' + g.atk, g.atk === 1221, String(g.atk));
-assert('玩家继承 60%：防 678 → ' + g.def, g.def === 406, String(g.def));
-assert('玩家继承 60%：血 14714 → ' + g.hp, g.hp === 8828, String(g.hp));
-assert('魂攻继承 385 → ' + g.soulAtk, g.soulAtk === 231, String(g.soulAtk));
-// 魂防有下限 = 自身防御一半：炼魂普遍只堆魂攻（385 vs 69），没下限会被魂伤打穿
-assert('魂防有下限（69→24 被抬到 ' + g.soulDef + '）', g.soulDef === 203, String(g.soulDef));
-assert('继承比例可配置（50%）', sb.inheritGroupStats(real, 0.5).atk === 1018);
+const RI = sb.GROUP_INHERIT;                      // 断言由配置派生，改比例不会误报
+const PCT = Math.round(RI * 100);
+assert('玩家继承 ' + PCT + '%：攻 2036 → ' + g.atk, g.atk === Math.floor(2036 * RI), String(g.atk));
+assert('玩家继承 ' + PCT + '%：防 678 → ' + g.def, g.def === Math.floor(678 * RI), String(g.def));
+assert('玩家继承 ' + PCT + '%：血 14714 → ' + g.hp, g.hp === Math.floor(14714 * RI), String(g.hp));
+assert('魂攻继承 385 → ' + g.soulAtk, g.soulAtk === Math.floor(385 * RI), String(g.soulAtk));
+// 魂防下限 = 自身防御一半：炼魂普遍只堆魂攻（385 vs 69），没下限会被魂伤打穿
+assert('魂防有下限（69→' + Math.floor(69 * RI) + ' 被抬到 ' + g.soulDef + '）',
+  g.soulDef === Math.max(Math.floor(69 * RI), Math.floor(g.def * 0.5)), String(g.soulDef));
+assert('继承比例可配置（100%）', sb.inheritGroupStats(real, 1).atk === 2036);
 assert('属性太小也不退化到 0', sb.inheritGroupStats({ atk: 2, def: 0, hp: 0 }).atk >= 1);
 
 // ---- 2. 宠物放大 ----
@@ -60,14 +63,16 @@ function petUnit(sb, rarity, base) {
 }
 const chirp = petUnit(sb, 'SR', { atk: 15, def: 10, hp: 150, spd: 6 });   // 清脆鸟
 const ice = petUnit(sb, 'SSR', { atk: 20, def: 15, hp: 200, spd: 8 });    // 小冰晶
-assert('清脆鸟(SR) 攻 15 → ' + chirp.base.atk, chirp.base.atk === 240, String(chirp.base.atk));
-assert('小冰晶(SSR) 攻 20 → ' + ice.base.atk, ice.base.atk === 400, String(ice.base.atk));
-assert('宠物血量同步放大并回满', ice.base.hp === 4000 && ice.hp === 4000, ice.base.hp + '/' + ice.hp);
-assert('宠物也有魂防下限（不再被魂攻打全额）', chirp.base.soulDef === 80, String(chirp.base.soulDef));
-// 存在感：两只宠物合计输出应达到玩家（继承后）的 45% 以上 —— 此前宠物 atk 15/20 只占 1%，纯摆设
+const gScale = (sb.PET_GROUP_SCALE || {}).SR || 16;
+const iScale = (sb.PET_GROUP_SCALE || {}).SSR || 20;
+assert('清脆鸟(SR) 攻 15 → ' + chirp.base.atk, chirp.base.atk === 15 * gScale, String(chirp.base.atk));
+assert('小冰晶(SSR) 攻 20 → ' + ice.base.atk, ice.base.atk === 20 * iScale, String(ice.base.atk));
+assert('宠物血量同步放大并回满', ice.base.hp === 200 * iScale && ice.hp === ice.base.hp);
+assert('宠物也有魂防下限（不再被魂攻打全额）', chirp.base.soulDef === Math.floor(chirp.base.def * 0.5), String(chirp.base.soulDef));
+// 存在感：两只宠物合计输出应达到玩家（继承后）的 45% 以上
 assert('两只宠物合计攻 ' + (chirp.base.atk + ice.base.atk) + ' ≥ 玩家 ' + g.atk + ' 的 45%',
   (chirp.base.atk + ice.base.atk) >= g.atk * 0.45, (chirp.base.atk + ice.base.atk) + ' vs ' + g.atk);
-assert('未知稀有度回退到 R 档', petUnit(sb, 'XX', { atk: 15, hp: 150 }).base.atk === 180);
+assert('未知稀有度回退到 R 档', petUnit(sb, 'XX', { atk: 15, hp: 150 }).base.atk === 15 * ((sb.PET_GROUP_SCALE || {}).R || 12));
 
 // ---- 3. 敌人配置确定性（不同 Math 种子下应完全一致）----
 const sb2 = makeSandbox(987654321);
@@ -86,7 +91,7 @@ for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
 assert(checked + ' 关配置与 Math 种子无关', same && checked === Object.keys(sb.GROUP_LEVELS).length * 10, '比对 ' + checked + ' 关');
 
 // ---- 4. Boss / 精英只用高级池 ----
-const HIGH_T = sb.TALENTS_HIGH || [];
+const HIGH_T = (sb.TALENTS_HIGH || []).concat(['cut_boss', 'cut_elite'], sb.TALENTS_EXTRA || []);   // v2.1.13 起 Boss/精英改走新词条第
 const HIGH_S = sb.SKILLS_HIGH || [];
 const LOW_T = ['lazy', 'slowstart'];
 let bossBad = [], lowUsed = [];
@@ -102,7 +107,7 @@ for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
     });
   });
 }
-assert('Boss 天赋/技能全部来自高级池', bossBad.length === 0, bossBad.slice(0, 5).join(','));
+assert('Boss 天赋/技能全部来自高级池（含 v2.1.13 新词条）', bossBad.length === 0, bossBad.slice(0, 5).join(','));
 assert('Boss 不再抽到 lazy / slowstart 自我削弱', lowUsed.length === 0, lowUsed.join(','));
 const anyBoss = sb.GROUP_LEVELS.g12.stages[9].enemies[0];
 assert('Boss 至少 2 天赋 + 2 技能',
@@ -167,6 +172,64 @@ assert('魂伤不低于 1（不会退化成无效）', soulVsDef > noSoul);
   assert('锚定开启时改走 anchorStageEnemies（结果与原配置不同）', anchored !== raw, anchored.slice(0, 60));
   assert('还原后回到原配置', JSON.stringify(sb.groupStageEnemies('g7', stage, allies)) === raw);
 })();
+
+// ---- 8. v2.1.13 敌群词条与场地 ----
+const bossT = sb.GROUP_LEVELS.g7.stages[9].enemies[0].talents || [];   // Boss 关
+const eliteT = sb.GROUP_LEVELS.g7.stages[4].enemies[0].talents || [];  // 精英关
+assert('Boss 固定带伤害减免·大', bossT.indexOf('cut_boss') >= 0, JSON.stringify(bossT));
+assert('精英固定带伤害减免·中', eliteT.indexOf('cut_elite') >= 0, JSON.stringify(eliteT));
+assert('Boss 词条 ≤ 3（含固定减伤）', bossT.length <= 3 && bossT.length >= 2, JSON.stringify(bossT));
+assert('精英词条 ≤ 2（含固定减伤）', eliteT.length <= 2 && eliteT.length >= 1, JSON.stringify(eliteT));
+assert('其他词条都来自 TALENTS_EXTRA', (function () {
+  const ex = sb.TALENTS_EXTRA || [];
+  return bossT.concat(eliteT).every(function (t) { return t.indexOf('cut_') === 0 || ex.indexOf(t) >= 0; });
+})());
+assert('词条 id 全部存在', bossT.concat(eliteT).every(function (t) { return !!sb.TALENTS[t]; }));
+
+/* 减伤生效验证：同一目标，带 cut_boss 时受到的普攻伤害应为 ~60% */
+function hitWith(talents) {
+  const atk = sb.createUnit({ id: 'a', side: 'ally', name: '攻', base: { hp: 999, atk: 1000, def: 10, spd: 5 } });
+  const tgt = sb.createUnit({ id: 't', side: 'enemy', name: '靶', base: { hp: 99999, atk: 1, def: 0, spd: 1 } });
+  if (talents && sb.attachTalents) sb.attachTalents(tgt, talents);
+  const gb = sb.createGroupBattle({ allies: [atk], enemies: [tgt] });
+  gb.rng = function () { return 0.5; };
+  sb.normalAttack(gb, atk, tgt);
+  return 99999 - tgt.hp;
+}
+const plain = hitWith(null);
+const withCut = hitWith(['cut_boss']);
+assert('伤害减免·大 生效（' + plain + ' → ' + withCut + '，约 60%）',
+  Math.abs(withCut / plain - 0.6) < 0.05, (withCut / plain).toFixed(3));
+const withElite = hitWith(['cut_elite']);
+assert('伤害减免·中 生效（约 75%）', Math.abs(withElite / plain - 0.75) < 0.05, (withElite / plain).toFixed(3));
+// 抗扩散只对 AOE 生效：普攻不是 AOE，所以不该额外减伤（防误判）
+const stacked = hitWith(['cut_boss', 'aoe_guard']);
+assert('抗扩散不影响普攻（只对 AOE 生效）', stacked === withCut, stacked + ' vs ' + withCut);
+// 直接派发验证 isAoe 分支
+(function () {
+  const tgt = sb.createUnit({ id: 'ta', side: 'enemy', name: '靶', base: { hp: 9999, atk: 1, def: 0, spd: 1 } });
+  sb.attachTalents(tgt, ['aoe_guard']);
+  const single = sb.TALENTS.aoe_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isAoe: false });
+  const aoe = sb.TALENTS.aoe_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isAoe: true });
+  assert('抗扩散：非 AOE 不减伤', !single);
+  assert('抗扩散：AOE 减伤 30%', aoe && aoe.mutations[0].value === 0.30);
+  // 抗技法：只对角色技能生效
+  const sg1 = sb.TALENTS.skill_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isSkill: true, fromPlayer: true });
+  const sg2 = sb.TALENTS.skill_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isSkill: true, fromPlayer: false });
+  assert('抗技法：角色技能减伤 50%', sg1 && sg1.mutations[0].value === 0.50);
+  assert('抗技法：敌方技能不减伤', !sg2);
+})();
+
+/* 场地：g3 起每个大关一个主题场地，且确定性 */
+assert('g1/g2 无场地', !sb.groupTerrainFor(1) && !sb.groupTerrainFor(2));
+assert('g3+ 有场地', !!sb.groupTerrainFor(3) && !!sb.groupTerrainFor(15));
+assert('同一大关场地确定', (function () {
+  for (let lg = 3; lg <= 15; lg++) {
+    const a = sb.groupTerrainFor(lg), b = sb.groupTerrainFor(lg);
+    if (!a || !b || a.id !== b.id) return false;
+  }
+  return true;
+})());
 
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 process.exit(fail === 0 ? 0 : 1);

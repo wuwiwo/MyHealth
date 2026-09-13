@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.12
+> Personal Health Manager — 个人健身健康管理应用 v2.1.13
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -248,4 +248,6 @@ Vercel 项目设置：
 
 | **v2.1.12** | **2026-09-13** | **🐞 修「平衡报告说打不过但实际已通关」：Debug 体检漏改锚定开关、魂攻警告过期、诊断误用裸属性；新增单一入口 groupStageEnemies() 从结构上杜绝再分叉；缓存版本对齐（v72）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.12**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.13** | **2026-09-13** | **🛡️ 敌群继承降为 50%；Boss/精英固定伤害减免 40%/25%（Boss 最多 3 词条、精英最多 2 词条）；新增 6 个其他词条（疾影额外行动 / 抗扩散 / 抗技法 / 战意高涨 / 铁壁 / 终末宣告）；实装场地效果（6 种场地按大关分配，g3 起）；敌人血量反向补偿避免已通关关卡变成打不过；缓存版本对齐（v73）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.13**（设计规范：`doc/design-tokens-v2.1.md`）
