@@ -56,23 +56,46 @@ function pickSkill(unit) {
 
 /* 计算技能伤害（返回给 battle 应用）：
    攻击类：power% × 攻击/魂攻
-   返回 {type:'damage', targetIds:[], amount, dmgType, ignoreDef?} */
+   v2.1.15 三处接线：
+     · 属性改走 effectiveStat —— 破甲 / 潮湿 / 攻击提升 这些状态修正此前"算了没人用"
+     · skill.stackPower：叠层加成（雪球：每层 +30%，6 层 = 300%，与设计文档一致）
+     · skill.procBoost：概率强化（咬击：30% 概率本次伤害 +25%）
+   返回 {type:'damage', hits:[], proc?, procMult?} */
 function calcSkillDamage(skill, caster, targets, ctx) {
   if (!skill || skill.type !== 'attack') return null;
-  var atk = skill.dmgType === 'soul' ? (caster.base.soulAtk || 0) : caster.base.atk;
-  var base = Math.floor(atk * (skill.power || 1) / 100);
+  ctx = ctx || {};
+  var atk = skill.dmgType === 'soul' ? effectiveStat(caster, 'soulAtk') : effectiveStat(caster, 'atk');
+  var power = skill.power || 1;
+  /* 叠层加成按「百分点」累加，不是乘法：雪球设计写的是
+     120% → 每层 +30% → 满层 300%（120 + 6×30），乘法会得到 120×1.3^6 ≈ 579%。
+     caster[key] 是**本次施放前**已累计的层数，所以首次施放 n=0 → 保持 120%。 */
+  if (skill.stackPower) {
+    var n = Math.max(0, caster[skill.stackPower.key] || 0);
+    power += n * (skill.stackPower.perPoints || 0);
+  }
+  var mult = 1;
+  var proc = false;
+  if (skill.procBoost) {
+    var roll = (typeof ctx.rng === 'function') ? ctx.rng() : Math.random();
+    if (roll < skill.procBoost.chance) { mult *= (1 + skill.procBoost.value); proc = true; }
+  }
+  var base = Math.floor(atk * power / 100 * mult);
   var out = [];
   targets.forEach(function (t) {
+    var def = effectiveStat(t, 'def');
+    var sdef = effectiveStat(t, 'soulDef');
     var dmg;
     if (skill.dmgType === 'soul') {
-      dmg = t.base.soulDef > 0 ? Math.max(1, base - Math.floor(t.base.soulDef / 2)) : base;
+      dmg = sdef > 0 ? Math.max(1, base - Math.floor(sdef / 2)) : base;
     } else {
-      dmg = Math.max(1, base - Math.floor(t.base.def / 2));
+      dmg = Math.max(1, base - Math.floor(def / 2));
     }
     if (skill.ignoreDef) dmg = base;
     out.push({ targetId: t.id, amount: dmg, dmgType: skill.dmgType || 'physical' });
   });
-  return { type: 'damage', hits: out };
+  var res = { type: 'damage', hits: out };
+  if (proc) { res.proc = true; res.procMult = 1 + skill.procBoost.value; }
+  return res;
 }
 
 /* 技能施放后的效果数据（状态附加/增益/治疗等），battle 应用
@@ -92,12 +115,11 @@ function applySkillEffects(skill, caster, targets, ctx) {
 registerSkill({ id: 'charge', name: '冲撞', type: 'attack', target: 'random1', power: 200, dmgType: 'physical', cooldown: 2 });
 registerSkill({
   id: 'bite', name: '咬击', type: 'attack', target: 'random1', power: 180, dmgType: 'physical', cooldown: 2,
-  effects: [function (c, ts, r) {
-    /* v2.1.14：原文案「咬击: 伤害提升25%」在引擎里没有对应实现
-       —— applySkillEffects 在伤害结算之后才执行，无法回改本次伤害。
-       文案已改为不承诺未实装的数值；是否实装 +25% 留给设计决定（改动会影响平衡）。 */
-    if (Math.random() < 0.3) { r.events.push({ msg: '🦷 ' + (c.name || '单位') + ' 咬击：狠狠咬下一口' }); }
-  }]
+  /* v2.1.15：设计文档里的「30% 概率本次伤害 +25%」真正实装。
+     此前写在 effects 里是行不通的 —— applySkillEffects 在伤害结算**之后**才执行，
+     没法回改本次伤害，所以那句文案一直是空头承诺。
+     现在改由 calcSkillDamage 在算伤害时掷骰（走 gb.rng，保证战斗可复现）。 */
+  procBoost: { chance: 0.3, value: 0.25 }
 });
 registerSkill({
   id: 'surprise', name: '击掌奇袭', type: 'attack', target: 'random1', power: 190, dmgType: 'physical', cooldown: 4, priority: 1,
@@ -140,11 +162,14 @@ registerSkill({
 });
 registerSkill({
   id: 'snowball', name: '雪球', type: 'attack', target: 'random1', power: 120, dmgType: 'soul', cooldown: 2,
+  /* v2.1.15：层数真正加成伤害（此前只累计并打日志，伤害恒定 120%）。
+     设计文档：初始 120%，每次发动 +30%，满 6 层 300%（= 120 + 6×30）。 */
+  stackPower: { key: '_snowStacks', perPoints: 30 },
   effects: [function (c, ts, r) {
     // 每次发动下次提升 30%，最大叠加 6 次（300%）
     c._snowStacks = (c._snowStacks || 0) + 1;
     if (c._snowStacks > 6) c._snowStacks = 6;
-    r.events.push({ msg: '❄️ ' + (c.name || '单位') + ' 雪球：蓄力层数 ' + c._snowStacks + '/6' });
+    r.events.push({ msg: '❄️ ' + (c.name || '单位') + ' 雪球：蓄力层数 ' + c._snowStacks + '/6（下次威力 ' + (120 + c._snowStacks * 30) + '%）' });
   }]
 });
 registerSkill({
@@ -158,8 +183,9 @@ registerSkill({
 registerSkill({
   id: 'chargeup', name: '蓄力重击', type: 'attack', target: 'random1', power: 400, dmgType: 'physical', cooldown: 3,
   effects: [function (c, ts, r) {
-    // 本回合进入蓄力（承伤+25%），下回合结算 400%
-    c._charging = true;
+    /* 本回合进入蓄力（承伤 +25%），下回合结算 400%
+       v2.1.15：不再写 c._charging —— 承伤与「蓄力完成」都改由 charging 状态承担
+       （onExpire 置 _chargeReady，battle-group 读它），避免两个标记各说各话。 */
     r.events.push({ msg: '🔋 ' + (c.name || '单位') + ' 蓄力重击：进入蓄力（承伤 +25%，下回合结算 400%）' });
   }]
 });
@@ -184,8 +210,11 @@ registerSkill({
 registerSkill({
   id: 'shrink', name: '变小', type: 'support', target: 'self', cooldown: 2,
   effects: [function (c, ts, r) {
-    c._dodge = Math.min(50, (c._dodge || 0) + 10);
-    r.events.push({ msg: '💨 ' + (c.name || '单位') + ' 变小：闪避 +' + c._dodge + '%（上限 50%）' });
+    /* v2.1.15：闪避真正生效。此前累加的是 _dodge，而 groupHitChance 读的是 _eva —— 白写。
+       这里用 _evaPerm（常驻闪避）而不是 _eva（限时闪避），
+       否则会被 groupUnitTurn 里「_hitModTurns 到期 → _eva 归零」顺手清掉。 */
+    c._evaPerm = Math.min(0.5, (c._evaPerm || 0) + 0.10);
+    r.events.push({ msg: '💨 ' + (c.name || '单位') + ' 变小：闪避 +' + Math.round(c._evaPerm * 100) + '%（上限 50%）' });
   }]
 });
 registerSkill({
@@ -234,9 +263,31 @@ registerSkill({
 registerSkill({
   id: 'drainbuff', name: '摄取', type: 'support', target: 'random1', cooldown: 4,
   effects: [function (c, ts, r) {
-    ts.forEach(function (t) {
-      r.events.push({ msg: '🩸 ' + (c.name || '单位') + ' 摄取 → ' + ts.map(function (t) { return t.name; }).join('、') + '：目标增益减半' });
+    /* v2.1.15：真正窃取增益（此前只 push 一句文案，什么都没发生）。
+       目标身上每个增益状态的时长减半，被削掉的攻击加成折算给自身（3 回合）。
+       简化说明：设计文档的「自身提升降低的效果」按攻击加成口径折算，
+       其他属性（防/魂防）的增益只做时长减半、不折算 —— 避免一个技能同时改四项属性。 */
+    var t = ts && ts[0];
+    if (!t) return;
+    var drained = 0, names = [];
+    (t.statuses || []).slice().forEach(function (st) {
+      if (typeof isPositiveStatus !== 'function' || !isPositiveStatus(st.id)) return;
+      var def = (typeof getStatusDef === 'function') ? getStatusDef(st.id) : null;
+      st.duration = Math.max(1, Math.floor((st.duration || 1) / 2));
+      names.push((def && def.name) || st.id);
+      var n = Math.max(1, st.stacks || 1);
+      if (def && def.statModsPct && def.statModsPct.atk) drained += def.statModsPct.atk * n;
+      if (st.modsPct && st.modsPct.atk) drained += st.modsPct.atk * n;
     });
+    if (typeof syncStatusDerived === 'function') syncStatusDerived(t);
+    if (drained > 0) {
+      applyStatus(c, { id: 'atkup', duration: 3, modsPct: { atk: drained } });
+      if (typeof syncStatusDerived === 'function') syncStatusDerived(c);
+    }
+    r.events.push({ msg: '🩸 ' + (c.name || '单位') + ' 摄取 → ' + t.name + '：' +
+      (names.length
+        ? ('增益时长减半【' + names.join('、') + '】' + (drained > 0 ? ('，自身攻击 +' + Math.round(drained * 100) + '% 3 回合') : '（无可折算的攻击加成）'))
+        : '目标身上没有增益') });
   }]
 });
 registerSkill({
@@ -249,7 +300,12 @@ registerSkill({
   id: 'cleanse', name: '净化', type: 'support', target: 'ally1', cooldown: 3,
   effects: [function (c, ts, r) {
     ts.forEach(function (t) {
-      r.events.push({ msg: '✨ ' + (c.name || '单位') + ' 净化 → ' + t.name + '：解除负面并治疗' });
+      /* v2.1.15：真正解除普通~高级负面（此前只 push 一句文案 + 治疗）。
+         特级（grade 3：末日 / 遗言诅咒）按设计不解除。 */
+      var freed = (typeof cleanseNegatives === 'function') ? cleanseNegatives(t, 2) : [];
+      if (typeof syncStatusDerived === 'function') syncStatusDerived(t);
+      var names = freed.map(function (d) { return d.name || d.id; }).join('、');
+      r.events.push({ msg: '✨ ' + (c.name || '单位') + ' 净化 → ' + t.name + '：' + (freed.length ? ('解除【' + names + '】') : '无普通~高级负面可解除') });
       r.heals.push({ unitId: t.id, amount: Math.floor((c.base.soulAtk || 0) * 0.5) + 20 });
     });
   }]
@@ -283,14 +339,37 @@ registerSkill({
 registerSkill({
   id: 'fortify', name: '坚壁', type: 'support', target: 'self', cooldown: 2,
   effects: [function (c, ts, r) {
-    c._fortify = Math.min(50, (c._fortify || 0) + 10);
-    r.events.push({ msg: '🧱 ' + (c.name || '单位') + ' 坚壁：防御 +' + c._fortify + '%（上限 50%）' });
+    /* v2.1.15：改为真正的状态（此前写 _fortify，全项目没有任何结算读它 → 白写）。
+       guardup = 每层 +10% 防/魂防、最多 5 层、duration 极大（持续到战斗结束）。 */
+    applyStatus(c, { id: 'guardup', duration: 999 });
+    if (typeof syncStatusDerived === 'function') syncStatusDerived(c);
+    var inst = (c.statuses || []).filter(function (s) { return s.id === 'guardup'; })[0];
+    var stacks = inst ? (inst.stacks || 1) : 1;
+    r.events.push({ msg: '🧱 ' + (c.name || '单位') + ' 坚壁：防御·魂防 +' + (stacks * 10) + '%（' + stacks + '/5 层）' });
   }]
 });
 registerSkill({
   id: 'clearfog', name: '清除迷雾', type: 'support', target: 'all', cooldown: 8,
-  effects: [function (c, ts, r) {
-    r.events.push({ msg: '🌫️ ' + (c.name || '单位') + ' 清除迷雾：全场负面解除' });
+  effects: [function (c, ts, r, ctx) {
+    /* v2.1.15：真的清场（此前只有一句文案）。
+       ① 全场普通~高级负面状态解除
+       ② 能力变化归零 —— grow_atk / grow_def / 复仇 / 振翅 是直接改 unit.base 的，
+          按它们留下的快照还原（设计文档原文：「使全场能力变化变为 0」）
+       「全场」需要 gb.units，故走 ctx.units（castSkill 会带下来）。 */
+    var all = (ctx && ctx.units) || ts || [];
+    var cleared = 0, reverted = [];
+    all.forEach(function (t) {
+      if (!t || t.hp <= 0) return;
+      var freed = (typeof cleanseNegatives === 'function') ? cleanseNegatives(t, 2) : [];
+      cleared += freed.length;
+      if (typeof resetAbilityChanges === 'function') {
+        var back = resetAbilityChanges(t);
+        if (back.length) reverted.push(t.name + '（' + back.join('/') + '）');
+      }
+      if (typeof syncStatusDerived === 'function') syncStatusDerived(t);
+    });
+    r.events.push({ msg: '🌫️ ' + (c.name || '单位') + ' 清除迷雾：全场解除 ' + cleared + ' 个负面' +
+      (reverted.length ? ('，能力变化归零 ' + reverted.join('、') ) : '') });
   }]
 });
 
@@ -298,41 +377,34 @@ registerSkill({
    v2.1.14 技能详情文案表 —— 供 UI「点技能看完整说明」使用。
    文案以本文件 registerSkill 的**实际实现**为准，不是照抄设计文档；
    设计里有、引擎里没有的效果用 wip 单独标出，避免详情页给出虚假信息。
+   v2.1.15：上一版标了 10 个 wip，其中 9 个已实装（判定/减伤/驱散/护盾/叠层/概率），
+   现在只剩 chargeup 的「结算时点」与设计文档不一致。
    ============================================================ */
 var SKILL_DOCS = {
   charge:     { desc: '对随机 1 名敌人造成 攻击×200% 的物理伤害。' },
-  bite:       { desc: '对随机 1 名敌人造成 攻击×180% 的物理伤害。',
-                wip: '设计中的「30% 概率本次伤害 +25%」未实装（技能效果在伤害结算之后执行，无法回改本次伤害）' },
+  bite:       { desc: '对随机 1 名敌人造成 攻击×180% 的物理伤害，30% 概率本次伤害 +25%。' },
   surprise:   { desc: '对随机 1 名敌人造成 攻击×190% 的物理伤害；50% 概率使其畏缩 1 回合（每名敌人每场最多 1 次）。先制度 +1。' },
   blackmist:  { desc: '65% 概率使随机 1 名敌人中毒 4 回合；中毒每回合结束造成其最大生命 4% 的伤害，对 Boss 减半。' },
-  spikes:     { desc: '对敌方全体造成 攻击×120% 的物理伤害；每名目标 40% 概率减速 2 回合。' },
+  spikes:     { desc: '对敌方全体造成 攻击×120% 的物理伤害；每名目标 40% 概率减速 2 回合（速度 -3）。' },
   blizzard:   { desc: '对敌方全体造成 魂攻×150% 的魂伤害；每名目标 40% 概率冰冻 1~2 回合。' },
-  snowball:   { desc: '对随机 1 名敌人造成 魂攻×120% 的魂伤害，并累计雪球层数（上限 6 层）。',
-                wip: '设计中的「每层使后续伤害 +30%」未实装（只累计并记录了层数，伤害未被加成）' },
+  snowball:   { desc: '对随机 1 名敌人造成 魂攻×120% 的魂伤害，每次发动威力 +30%（满 6 层 300%）。' },
   deepfreeze: { desc: '使随机 1 名敌人冰冻 2 回合。先制度 +1。' },
-  chargeup:   { desc: '对随机 1 名敌人造成 攻击×400% 的物理伤害，并进入蓄力状态（承伤 +25%，1 回合）；蓄力标记会在下一次施放该技能时追加一次 攻击×400% 的重击。',
+  chargeup:   { desc: '对随机 1 名敌人造成 攻击×400% 的物理伤害，并进入蓄力状态（承伤 +25%，1 回合）；蓄力完成后下一次施放该技能追加一次 攻击×400% 的重击。',
                 wip: '结算时点与设计文档不同（设计为「下回合自动结算」，实现为「下次施放时追加」）' },
-  armorbreak: { desc: '对随机 1 名敌人造成 攻击×170% 的物理伤害，并叠 1 层破甲 3 回合（破甲最多 6 层）。' },
-  stardust:   { desc: '对敌方全体造成 魂攻×200% 的魂伤害；每名目标 20% 概率降低魂防 2 回合。' },
-  shrink:     { desc: '自身闪避 +10%（上限 50%），可重复施放叠加。',
-                wip: '累计的 _dodge 没有被命中判定读取（判定读的是 _eva），闪避加成实际不生效' },
+  armorbreak: { desc: '对随机 1 名敌人造成 攻击×170% 的物理伤害，并叠 1 层破甲 3 回合（每层防御 -10%，最多 6 层）。' },
+  stardust:   { desc: '对敌方全体造成 魂攻×200% 的魂伤害；每名目标 20% 概率降低魂防 15%，持续 2 回合。' },
+  shrink:     { desc: '自身闪避 +10%（上限 50%），可重复施放叠加，持续到战斗结束。' },
   yawn:       { desc: '使随机 1 名敌人获得哈欠 1 回合；其下回合开始有 55% 概率进入睡眠 1 回合。' },
-  drench:     { desc: '使随机 1 名敌人潮湿 2 回合（魂防 -10，并更易被命中）。' },
+  drench:     { desc: '使随机 1 名敌人潮湿 2 回合：魂防 -25%，且对其命中率 +30%。' },
   possess:    { desc: '使随机 1 名敌人被幽魂附身 1 回合：技能不可用；下回合开始时解除并受到其最大生命 8% 的伤害（无视防御）。先制度 +1。' },
   taunt:      { desc: '自身进入嘲讽 1 回合：敌方单体攻击优先选中自身，且自身速度 ×2 参与出手排序。' },
   doom:       { desc: '使随机 1 名敌人末日 4 回合：无法被治疗、技能不可用、普攻伤害减半，且每回合开始受到施加者魂攻×50% 的伤害（无视防御与减伤）。' },
-  drainbuff:  { desc: '设计：随机 1 名敌人的当前增益减半，并把削减的效果转移给自身 3 回合。',
-                wip: '仅记录了日志，增益窃取未实装' },
-  bulwark:    { desc: '我方全体受到的伤害降低 20%，持续 3 回合。',
-                wip: '减伤值写入了 _dmgReduce，但伤害结算从未读取该字段，减伤实际不生效' },
-  cleanse:    { desc: '解除我方 1 名队友的普通~高级负面，并回复其 魂攻×50% + 20 点生命。',
-                wip: '治疗已生效，但负面解除未实装（只记录了日志）' },
+  drainbuff:  { desc: '随机 1 名敌人的增益状态时长减半，被削掉的攻击加成折算给自身（+N% 攻击，3 回合）。' },
+  bulwark:    { desc: '我方全体受到的伤害降低 20%，持续 3 回合。' },
+  cleanse:    { desc: '解除我方 1 名队友的普通~高级负面，并回复其 魂攻×50% + 20 点生命（特级负面不解除）。' },
   heal:       { desc: '使我方随机 1 名队友回复 魂攻×80% + 其最大生命 10% 的生命。' },
-  empower:    { desc: '使我方 1 名角色攻击 +30%，持续 2 回合。',
-                wip: 'buff 是按单位下发的，而结算侧只消费「全体」类 buff，攻击加成实际不生效' },
-  lastword:   { desc: '施放后自身立即阵亡，使随机 1 名敌人中「遗言诅咒」7 回合：攻击与魂攻降低，且每回合开始受到其最大生命 5% 的伤害。开场即进入冷却。' },
-  fortify:    { desc: '自身防御 +10%（上限 50%），可重复施放叠加。',
-                wip: '写入了 _fortify，但没有任何结算读取该字段，防御加成实际不生效' },
-  clearfog:   { desc: '设计：使全场能力变化归零，并解除全场普通~高级负面状态。',
-                wip: '仅记录了日志，实际驱散与能力回退均未实装' }
+  empower:    { desc: '使我方 1 名角色攻击 +30%，持续 2 回合。' },
+  lastword:   { desc: '施放后自身立即阵亡，使随机 1 名敌人中「遗言诅咒」7 回合：攻击与魂攻 -25%，且每回合开始受到其最大生命 5% 的伤害。开场即进入冷却。' },
+  fortify:    { desc: '自身防御与魂防 +10%，可重复施放叠加（最多 5 层 → +50%），持续到战斗结束。' },
+  clearfog:   { desc: '全场普通~高级负面状态全部解除，并使全场「能力变化」归零（攻击/防御/速度的成长与增减益一并还原）。' }
 };

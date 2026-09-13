@@ -57,6 +57,36 @@ function talentDispatch(unit, hook, ctx) {
   return out;
 }
 
+/* v2.1.15：能力变化归零（供「清除迷雾」使用）。
+   grow_atk / grow_def / vengeance / flutter 这 4 个天赋是**直接改 unit.base** 的
+   （每回合 +3% 攻击、+5% 防御、按损失血量提升攻击、每回合加一点速度），
+   而设计文档的「清除迷雾：使全场能力变化变为 0」需要能把这些改动还原 ——
+   所以这 4 个天赋都留了初始值快照。返回被还原的项名（供日志）。 */
+function resetAbilityChanges(unit) {
+  var back = [];
+  if (!unit || !unit.base) return back;
+  if (unit._growAtkBase != null) {
+    unit.base.atk = unit._growAtkBase; unit._growAtkStacks = 0; unit._growAtkT = 0; back.push('攻击');
+  }
+  if (unit._growDefBase != null) {
+    unit.base.def = unit._growDefBase; unit._growDefStacks = 0; unit._growDefT = 0; back.push('防御');
+  }
+  if (unit._vengeAtkBase != null) {
+    unit.base.atk = unit._vengeAtkBase;
+    unit.base.soulAtk = unit._vengeSoulBase || 0;
+    unit._vengeStacks = 0; back.push('复仇加成');
+  }
+  if (unit._flutterBase != null) {
+    unit.base.spd = unit._flutterBase; back.push('速度');
+  }
+  // 能力变化也包含命中/闪避修正（「变小」的常驻闪避、宠物「闪耀/打湿」的限时修正）
+  if (unit._evaPerm || unit._eva || unit._accMod) {
+    unit._evaPerm = 0; unit._eva = 0; unit._accMod = 0; unit._hitModTurns = 0;
+    back.push('命中/闪避');
+  }
+  return back;
+}
+
 /* --- 16 天赋注册 --- */
 
 /* 利刃：攻击造成伤害提升 10%-50%（按 level 取） */
@@ -81,7 +111,9 @@ registerTalent({
   desc: '每回合结束，根据速度初始值增加一定比例的速度',
   hooks: {
     onTurnEnd: function (unit) {
-      var baseSpd = unit.base.spd || 0;
+      // v2.1.15：留下快照，供「清除迷雾」的能力变化归零还原
+      if (unit._flutterBase == null) unit._flutterBase = unit.base.spd || 0;
+      var baseSpd = unit._flutterBase;
       var inc = Math.max(1, Math.floor(baseSpd * 0.05));
       unit.base.spd += inc;
       return { events: [{ type: 'talent', talentId: 'flutter', unitId: unit.id, msg: '振翅: 速度 +' + inc }] };
@@ -280,9 +312,17 @@ registerTalent({
       var lost = 1 - (unit.hp / unit.base.hp);
       var stacks = Math.floor(lost / 0.25);
       if (stacks > (unit._vengeStacks || 0)) {
+        /* v2.1.15：改为「按快照重算」，而不是「在当前值上再叠一次」。
+           原实现在已经提升过的 base 上再乘一次，随层数复利放大
+           （1.1 × 1.2 × 1.3 = 1.716 倍，而设计意图是 1 + 0.1×3 = 1.3 倍）；
+           顺带留下快照，让「清除迷雾」的能力变化归零能还原它。 */
+        if (unit._vengeAtkBase == null) {
+          unit._vengeAtkBase = unit.base.atk;
+          unit._vengeSoulBase = unit.base.soulAtk || 0;
+        }
         unit._vengeStacks = stacks;
-        unit.base.atk += Math.floor(unit.base.atk * 0.1 * stacks);
-        unit.base.soulAtk = (unit.base.soulAtk || 0) + Math.floor((unit.base.soulAtk || 0) * 0.1 * stacks);
+        unit.base.atk = Math.floor(unit._vengeAtkBase * (1 + 0.1 * stacks));
+        unit.base.soulAtk = Math.floor(unit._vengeSoulBase * (1 + 0.1 * stacks));
         return { events: [{ type: 'talent', talentId: 'vengeance', unitId: unit.id, msg: '复仇: 攻击提升 x' + stacks }] };
       }
     }

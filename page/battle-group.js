@@ -33,6 +33,25 @@ function skipReasonText(evts) {
   return '';
 }
 
+/* v2.1.15：护盾吸收。
+   「金身护盾」此前只把 _shield / _shieldImmune 写在单位上，全项目没有消费方 ——
+   开战给的盾既挡不了伤害，也免疫不了负面。
+   返回 {dmg, absorbed, broke}；护盾清零时同步撤掉免疫标记。 */
+function absorbShield(target, dmg) {
+  if (!target || !(target._shield > 0) || dmg <= 0) return { dmg: dmg, absorbed: 0, broke: false };
+  var absorbed = Math.min(target._shield, dmg);
+  target._shield -= absorbed;
+  var broke = target._shield <= 0;
+  if (broke) { target._shield = 0; target._shieldImmune = false; }
+  return { dmg: Math.max(0, dmg - absorbed), absorbed: absorbed, broke: broke };
+}
+
+/* 状态增删后的统一收尾：重算 _statMods（unit.js 的 effectiveSpeed / effectiveStat 读它）。
+   漏刷的后果是「减速不影响出手顺序、破甲不影响承伤」这类静默失效。 */
+function syncStatusDerived(unit) {
+  if (unit && typeof refreshStatMods === 'function') refreshStatMods(unit);
+}
+
 /* ============ 命中 / 闪避（v2.1.5 引入） ============
    设计文档本就要求命中率机制（技能「闪耀：敌方命中率 -0%~40%」「打湿：提高对其命中率 0%~30%」），
    此前只有文案没有判定，这里补上，并让天赋「漆黑之眼 / 心眼」落地。
@@ -51,7 +70,12 @@ function groupHitChance(actor, target) {
   if (guaranteed) return 1;                       // 漆黑之眼：必定命中
   var acc = BASE_HIT_RATE + (actor._accMod || 0);
   if (noPenalty) acc = Math.max(BASE_HIT_RATE, acc);   // 心眼：命中率不会被降低
-  acc -= (target._eva || 0);
+  /* v2.1.15：潮湿「提高对其命中率 +30%」—— 设计文档写明，此前只有状态、没有命中加成 */
+  if (typeof hasStatus === 'function' && hasStatus(target, 'wet')) acc += 0.30;
+  /* v2.1.15：闪避拆成两处 ——
+     _eva（宠物「打湿」等限时修正，由 _hitModTurns 到期归零）
+     _evaPerm（技能「变小」的常驻闪避，不该被限时修正的归零逻辑清掉） */
+  acc -= ((target._eva || 0) + (target._evaPerm || 0));
   return Math.max(0.05, Math.min(1, acc));
 }
 
@@ -178,7 +202,11 @@ function normalAttack(gb, actor, target) {
     return events;
   }
   // 普攻伤害（同原公式）
-  var dmg = Math.max(1, actor.base.atk - Math.floor(target.base.def / 2) + Math.floor(gb.rng() * 4) + 1);
+  /* v2.1.15：改用 effectiveStat —— 破甲/减速/潮湿这类状态修正此前算出来了却没人用，
+     伤害公式读的一直是裸属性 base（所以 _statMods 生效了也看不出差别）。 */
+  var atkVal = effectiveStat(actor, 'atk');
+  var defVal = effectiveStat(target, 'def');
+  var dmg = Math.max(1, atkVal - Math.floor(defVal / 2) + Math.floor(gb.rng() * 4) + 1);
   /* v2.1.14 威吓落地：talent.js 的 onBattleStart 只写了 target._intimidated = true，
      全项目没有任何地方读这个标记（等于威吓从未真正生效）。这里在伤害结算前统一削减。 */
   if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown())));
@@ -190,11 +218,19 @@ function normalAttack(gb, actor, target) {
     if (m.key === 'dmgDealtHalf') dmg = Math.floor(dmg / 2);
   });
   var td2 = talentDispatch(target, 'onDamage', { attacker: actor, amount: dmg, isPhysical: true, isPlayerAttack: false, isSkill: false, isAoe: false, fromPlayer: actor.side === 'ally' });
+  /* v2.1.15：受击方还要走一遍**状态**钩子（此前只派发天赋）——
+     一是让「广域防御」的 dmgTakenReduce 真正生效，
+     二是让冰冻/睡眠的「受击解除」（status-defs / state-core 里写了却从没人调）真正生效。 */
+  var sd = dispatch(target, 'onDamage', { attacker: actor, amount: dmg, isPhysical: true, isSkill: false, isAoe: false, fromPlayer: actor.side === 'ally' });
+  td2.mutations = td2.mutations.concat(sd.mutations);
+  sd.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: target.id, type: e.type }); });
   td2.mutations.forEach(function (m) {
-    if (m.key === 'reflectFlat') { target.hp = Math.max(0, target.hp - dmg); actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 ' + target.name + ' 粗糙皮肤 → ' + (actor.name || '攻击者') + ' 反伤 ' + m.value, targetId: actor.id, type: 'damage' }); }
+    /* 反伤只打攻击者。原实现在这里顺手把 target.hp 也扣了一次，
+       而下方结算又会扣一遍 —— 等于「粗糙皮肤」让受击方吃双倍伤害（v2.1.15 修）。 */
+    if (m.key === 'reflectFlat') { actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 ' + target.name + ' 粗糙皮肤 → ' + (actor.name || '攻击者') + ' 反伤 ' + m.value, targetId: actor.id, type: 'damage' }); }
     if (m.key === 'dmgTakenBoost') dmg = Math.floor(dmg * (1 + m.value));
     if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * 0.7);
-    if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));   // 不动如山：满血受伤 -50%
+    if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));   // 不动如山 / 广域防御
   });
   // 玩家暴击技能（取高）
   if (actor.side === 'ally' && typeof playerCritHook === 'function') {
@@ -218,16 +254,27 @@ function normalAttack(gb, actor, target) {
   }
   // 圣光守护：队友分担伤害（目标少受，分担者自己掉血）
   dmg = applyAllyDamageShare(gb, target, dmg, events);
+  // v2.1.15：护盾先行吸收（金身护盾此前只写字段、无人消费）
+  var sh = absorbShield(target, dmg);
+  if (sh.absorbed > 0) {
+    dmg = sh.dmg;
+    events.push({ msg: '🛡️ ' + target.name + ' 护盾吸收 ' + sh.absorbed + (sh.broke ? '（护盾破碎）' : '（剩余 ' + target._shield + '）'), targetId: target.id, type: 'status' });
+  }
   target.hp = Math.max(0, target.hp - dmg);
   events.push({ msg: '⚔️ ' + (actor.name || '单位') + ' 攻击 ' + target.name + ' → ' + dmg + ' 伤害', targetId: target.id, type: 'damage' });
   /* v2.1.10 魂攻/魂防接入敌群战斗。
      此前 battle-group.js 对 soulAtk / soulDef 是零引用 —— 只有单敌 battle.js 用了，
      导致炼魂一半投入（满级 魂攻 +3770 / 魂防 +1798）在 120 关敌群里完全是废属性。
      规则与单敌一致：目标有魂防则 rollDamage(soulAtk, soulDef, 4)，无魂防则吃全额。 */
-  var sAtk = actor.base.soulAtk || 0;
+  var sAtk = effectiveStat(actor, 'soulAtk');
   if (sAtk > 0 && target.hp > 0) {
-    var sDef = target.base.soulDef || 0;
+    var sDef = effectiveStat(target, 'soulDef');
     var sDmg = sDef > 0 ? Math.max(1, sAtk - Math.floor(sDef / 2) + Math.floor(gb.rng() * 4) + 1) : sAtk;
+    var sh2 = absorbShield(target, sDmg);
+    if (sh2.absorbed > 0) {
+      sDmg = sh2.dmg;
+      events.push({ msg: '🛡️ ' + target.name + ' 护盾吸收 ' + sh2.absorbed + ' 魂伤' + (sh2.broke ? '（护盾破碎）' : ''), targetId: target.id, type: 'status' });
+    }
     target.hp = Math.max(0, target.hp - sDmg);
     events.push({ msg: '👻 ' + (actor.name || '单位') + ' 魂攻击 ' + target.name + ' → ' + sDmg + ' 魂伤害', targetId: target.id, type: 'damage' });
   }
@@ -248,8 +295,11 @@ function castSkill(gb, actor, skillId) {
 
   // 伤害
   if (def.type === 'attack') {
-    var dmgResult = calcSkillDamage(def, actor, targets, {});
+    /* v2.1.15：把 gb.rng 传下去 —— 技能自带的概率强化（咬击 30% 概率 +25%）需要它在
+       calcSkillDamage 里掷骰，用 gb.rng 而不是 Math.random 才能让战斗可复现。 */
+    var dmgResult = calcSkillDamage(def, actor, targets, { rng: gb.rng });
     if (dmgResult) {
+      if (dmgResult.proc) events.push({ msg: '💢 ' + (actor.name || '单位') + ' 的 ' + def.name + ' 触发强化（本次伤害 +' + Math.round((dmgResult.procMult - 1) * 100) + '%）', targetId: targets.length ? targets[0].id : null, type: 'talent' });
       dmgResult.hits.forEach(function (h) {
         var t = gb.units.find(function (u) { return u.id === h.targetId; });
         if (t && t.hp > 0) {
@@ -267,22 +317,38 @@ function castSkill(gb, actor, skillId) {
           // v2.1.13：目标侧减伤词条（伤害减免 / 抗扩散 / 抗技法）。
           // 此前技能伤害只派发攻击方，导致减伤类词条对技能完全无效。
           var tdg = talentDispatch(t, 'onDamage', { isPlayerAttack: false, amount: dmg, isPhysical: h.dmgType === 'physical', attacker: actor, target: t, isSkill: true, isAoe: targets.length > 1, fromPlayer: actor.side === 'ally' });
+          /* v2.1.15：受击方状态钩子（广域防御减伤 / 冰冻·睡眠的受击解除） */
+          var sdg = dispatch(t, 'onDamage', { attacker: actor, amount: dmg, isPhysical: h.dmgType === 'physical', isSkill: true, isAoe: targets.length > 1, fromPlayer: actor.side === 'ally' });
+          tdg.mutations = tdg.mutations.concat(sdg.mutations);
+          sdg.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: t.id, type: e.type }); });
           tdg.mutations.forEach(function (m) { if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value)); });
           // 天赋暴击（斗者本能）
           var tc2 = talentCrit(actor);
           if (tc2.chance > 0 && gb.rng() < tc2.chance) { dmg = Math.floor(dmg * tc2.mult); events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + tc2.mult }); }
           // 圣光守护：队友分担
           dmg = applyAllyDamageShare(gb, t, dmg, events);
+          // v2.1.15：护盾吸收
+          var shk = absorbShield(t, dmg);
+          if (shk.absorbed > 0) {
+            dmg = shk.dmg;
+            events.push({ msg: '🛡️ ' + t.name + ' 护盾吸收 ' + shk.absorbed + (shk.broke ? '（护盾破碎）' : '（剩余 ' + t._shield + '）'), targetId: t.id, type: 'status' });
+          }
           t.hp = Math.max(0, t.hp - dmg);
           events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
           // 蓄力重击：蓄力状态
           if (skillId === 'chargeup') {
             applyStatus(actor, { id: 'charging', duration: 1 });
+            syncStatusDerived(actor);
             events.push({ msg: '🔋 ' + actor.name + ' 蓄力中（下回合结算 400%）', targetId: actor.id, type: 'status' });
           }
-          if (actor._charging) {
-            actor._charging = false;
-            var big = Math.floor(actor.base.atk * 4 - Math.floor(t.base.def / 2));
+          /* v2.1.15：改读 _chargeReady（单一事实来源，由 charging 状态过期时置位）。
+             原实现读 _charging，而 _charging 是技能效果在伤害结算**之后**才置位的，
+             时序错乱 —— 当回合就自己把自己引爆了。 */
+          if (actor._chargeReady) {
+            actor._chargeReady = false;
+            var big = Math.max(1, Math.floor(effectiveStat(actor, 'atk') * 4 - Math.floor(effectiveStat(t, 'def') / 2)));
+            var shb = absorbShield(t, big);
+            if (shb.absorbed > 0) big = shb.dmg;
             t.hp = Math.max(0, t.hp - big);
             events.push({ msg: '💥 ' + actor.name + ' 蓄力重击 → ' + t.name + ' ' + big + ' 伤害', targetId: t.id, type: 'damage' });
           }
@@ -293,12 +359,19 @@ function castSkill(gb, actor, skillId) {
 
   // 效果（状态/治疗/增益）
   // v2.1.14：把当前回合喂给技能效果（skill.js 的「嘲讽」需要它记录失效时点）
-  var fx = applySkillEffects(def, actor, targets, { turn: gb.turn + 1 });
+  // v2.1.15：再带上 units —— 「清除迷雾」要作用全场，而 selectTargets('all') 只给对侧
+  var fx = applySkillEffects(def, actor, targets, { turn: gb.turn + 1, units: gb.units, gb: gb });
   fx.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   fx.statusApps.forEach(function (sa) {
     var t = gb.units.find(function (u) { return u.id === sa.unitId; });
     if (t && t.hp > 0) {
       var grade = sa.grade || 1;
+      /* v2.1.15：金身护盾的「护盾期免疫普通+高级负面」。
+         此前 _shieldImmune 只置位、无消费方 → 开战护盾既不挡伤害也不免负面。 */
+      if (t._shieldImmune && t._shield > 0 && grade <= 2) {
+        events.push({ msg: '🛡️ ' + t.name + ' 受护盾庇护，免疫【' + getStatusName(sa.id) + '】（剩余 ' + t._shield + '）', targetId: t.id, type: 'status' });
+        return;
+      }
       // 朴实：免疫状态；不动如山：满血免疫普通~高级
       var selfGuard = talentDispatch(t, 'onBeforeStatus', { statusId: sa.id, grade: grade });
       // 阵营光环守卫（凛冬之核：我方全体免疫冰冻）
@@ -307,6 +380,7 @@ function castSkill(gb, actor, skillId) {
       if (!selfGuard.skipAction && !auraGuard.skipAction) {
         // v2.1.14：区分「施加 / 刷新 / 叠层」，并去掉日志里外泄的英文状态 id（如 (poison)）
         var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor });
+        syncStatusDerived(t);   // v2.1.15：状态变了就重算 _statMods，否则减速/破甲不生效
         var verb = ar.refreshed ? '刷新' : '施加';
         var extra = '';
         if (ar.refreshed && sa.duration) extra = '（延续 ≥' + sa.duration + ' 回合）';
@@ -349,16 +423,29 @@ function castSkill(gb, actor, skillId) {
       } else events.push({ msg: '🌑 ' + t.name + ' 被末日阻断治疗', targetId: t.id, type: 'status' });
     }
   });
+  /* v2.1.15：buff 真正落地。
+     改前两处问题：① 只把 b.value 累加进 t._dmgReduce，而伤害结算从不读该字段（减伤不生效）；
+     ② 只处理 b.all，按单位下发的 buff（「强攻」的 atkBoost）被直接丢弃。
+     现在按 key 映射到状态：有 duration、可被驱散、能进详情页。 */
   fx.buffs.forEach(function (b) {
-    if (b.all) {
-      var side = (actor.side === 'ally' ? gb.allies : gb.enemies);
-      // v2.1.14：原日志是三处问题——缺施法者、值写成小数（+0.2 而非 +20%）、每个队友一行重复。
-      // 现在合并成一条，写明范围与百分比。
-      side.forEach(function (t) {
-        t._dmgReduce = (t._dmgReduce || 0) + b.value;
-      });
-      events.push({ msg: '🛡️ ' + actor.name + ' ' + def.name + ' → ' + joinUnitNames(side) + ' 减伤 +' + Math.round(b.value * 100) + '%', type: 'buff' });
-    }
+    var recv = b.all
+      ? (actor.side === 'ally' ? gb.allies : gb.enemies)
+      : gb.units.filter(function (u) { return u.id === b.unitId; });
+    var dur = b.duration || 3;
+    var applied = [];
+    recv.forEach(function (t) {
+      if (!t || t.hp <= 0) return;
+      if (b.key === 'dmgReduce') applyStatus(t, { id: 'wideguard', duration: dur });
+      else if (b.key === 'atkBoost') applyStatus(t, { id: 'atkup', duration: dur, modsPct: { atk: b.value } });
+      else return;
+      syncStatusDerived(t);
+      applied.push(t.name);
+    });
+    if (!applied.length) return;
+    var label = (b.key === 'dmgReduce') ? ('受到伤害 -' + Math.round(b.value * 100) + '%')
+      : (b.key === 'atkBoost') ? ('攻击 +' + Math.round(b.value * 100) + '%')
+        : ('增益 +' + Math.round(b.value * 100) + '%');
+    events.push({ msg: '🛡️ ' + actor.name + ' ' + def.name + ' → ' + applied.join('、') + ' ' + label + '（' + dur + ' 回合）', type: 'buff' });
   });
 
   // 遗言：自身阵亡
@@ -425,6 +512,12 @@ function groupUnitTurn(gb, actor) {
     // 现在把触发源的文案（冰冻/畏缩/睡眠/慢启动/懒惰…）拼进括号。
     var why = skipReasonText((tBefore.events || []).concat(before.events || []));
     events.push({ msg: '🚫 ' + (actor.name || '单位') + ' 无法行动' + (why ? '（' + why + '）' : ''), targetId: actor.id, type: 'skip' });
+    /* v2.1.15：即使这回合没行动，状态 duration 也必须递减 ——
+       否则「跳过行动」这条早退分支永远走不到回合末的 ageStatuses，
+       冰冻/睡眠会重新变成永久锁定（修好一个坑又掉进同一个坑）。 */
+    var agedSkip = ageStatuses(actor);
+    agedSkip.forEach(function (e) { events.push({ msg: e.msg, targetId: e.unitId, type: e.type }); });
+    if (agedSkip.length) syncStatusDerived(actor);
     return events;
   }
 
@@ -484,6 +577,15 @@ function groupUnitTurn(gb, actor) {
   te.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   var se = dispatch(actor, 'onTurnEnd', { turn: turn });
   se.events.forEach(function (e) { events.push({ msg: e.msg, reason: e.reason, targetId: e.unitId, type: e.type }); });
+
+  /* v2.1.15：回合末状态递减 —— 状态生命周期的关键一步，此前完全缺失
+     （ageStatuses 的角色原本由 tickStatuses 承担，而后者全项目零调用）。
+     放在 onTurnEnd 钩子之后，duration=N 的持续伤害类状态刚好结算 N 次。
+     修好之前：中毒/减速/破甲 挂上就是整场，冰冻/睡眠 更是因为「受击解除」也没接线
+     导致该单位整场无法行动。 */
+  var aged = ageStatuses(actor);
+  aged.forEach(function (e) { events.push({ msg: e.msg, targetId: e.unitId, type: e.type, reason: e.reason }); });
+  if (aged.length) syncStatusDerived(actor);
 
   // 技能冷却递减
   tickSkillCooldowns(actor);
@@ -551,6 +653,8 @@ function groupBattleTick(gb) {
     var ts3 = gb.terrain.onTurnStart(gb);
     if (ts3 && ts3.events) { gb.events = gb.events.concat(ts3.events); logTerrainEvents(gb, ts3.events); }
   }
+  // v2.1.15：建队列前先统一重算属性修正，否则「减速」影响不到出手顺序
+  refreshAllStatMods(gb.units);
   var queue = buildActionQueue(gb);
   queue.forEach(function (u) {
     if (gb.done) return;
@@ -597,6 +701,8 @@ function groupBattleStep(gb) {
       }
     }
     gb.turn++;
+    // v2.1.15：建队列前先统一重算属性修正，否则「减速」影响不到出手顺序
+    refreshAllStatMods(gb.units);
     gb._stepQueue = buildActionQueue(gb);
     gb._stepIdx = 0;
     // v2.1.13 场地：回合开始结算（此前只接线了 onTurnEnd，开场类场地不生效）

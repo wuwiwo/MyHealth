@@ -56,14 +56,17 @@ defineStatus({
   }
 });
 
-/* 潮湿：魂防御降低 0-25%，提高对其命中率（配合雨天/打湿） */
+/* 潮湿：魂防御降低 25%，并提高对其命中率（配合雨天/打湿）
+   v2.1.15：原为固定 -10 魂防（设计文档写的是「降低 0%~25%」）。
+   在动辄几百上千的魂防面前，固定 -10 等于没写 → 改为按 base 比例 -25%；
+   「提高对其命中率 +30%」在 battle-group.js 的 groupHitChance 里落地。 */
 defineStatus({
   id: 'wet',
   name: '潮湿',
   grade: 2,
   maxStacks: 1,
   stacking: 'refresh',
-  statMods: { soulDef: -10 },   // 魂防降低（基准 -10，可按等级浮动）
+  statModsPct: { soulDef: -0.25 },
   hooks: {
     onTurnEnd: function () {
       return { events: [{ type: 'passive', statusId: 'wet', msg: '💧 潮湿持续' }] };
@@ -156,14 +159,16 @@ defineStatus({
   }
 });
 
-/* 破甲：防御降低，最多 6 层 */
+/* 破甲：防御降低，最多 6 层
+   v2.1.15：原为每层固定 -5 防御，设计文档写的是「降低防御 10%，最大叠加 6 层」
+   → 改为每层 -10%（满 6 层 -60%）；并且 statMods() 现在会真的按层数乘算。 */
 defineStatus({
   id: 'armorbroken',
   name: '破甲',
   grade: 1,
   maxStacks: 6,
   stacking: 'stack',
-  statMods: { def: -5 },   // 每层 -5 防御（由 stacking 层数决定实际，此处基准）
+  statModsPct: { def: -0.10 },   // 每层 -10% 防御
   hooks: {
     onTurnStart: function () {
       return { events: [{ type: 'passive', statusId: 'armorbroken', msg: '破甲持续' }] };
@@ -171,14 +176,14 @@ defineStatus({
   }
 });
 
-/* 魂防降低（星辰坠落） */
+/* 魂防降低（星辰坠落）—— v2.1.15：固定值改按 base 比例（-15%） */
 defineStatus({
   id: 'souldown',
   name: '魂防降低',
   grade: 1,
   maxStacks: 1,
   stacking: 'refresh',
-  statMods: { soulDef: -8 },
+  statModsPct: { soulDef: -0.15 },
   hooks: {}
 });
 
@@ -193,19 +198,65 @@ defineStatus({
   hooks: {}
 });
 
-/* 遗言诅咒：攻击·魂攻大幅降低 + 每回合最大生命值伤害 */
+/* 遗言诅咒：攻击·魂攻大幅降低 + 每回合最大生命值伤害
+   v2.1.15：固定 -15 改为按 base 比例 -25%（设计文档只说「大幅降低」，未给数值） */
 defineStatus({
   id: 'lastworded',
   name: '遗言诅咒',
   grade: 3,
   maxStacks: 1,
   stacking: 'refresh',
-  statMods: { atk: -15, soulAtk: -15 },
+  statModsPct: { atk: -0.25, soulAtk: -0.25 },
   hooks: {
     onTurnStart: function (unit) {
       var dmg = Math.floor(unit.base.hp * 0.05);
       unit.hp = Math.max(0, unit.hp - dmg);
       return { events: [{ type: 'dot', statusId: 'lastworded', unitId: unit.id, amount: dmg, msg: '💀 遗言: -' + dmg }] };
+    }
+  }
+});
+
+/* ============ v2.1.15 新增：增益类状态 ============
+   这三个原先都是「写了个字段没人读」的死标记（_momBoost / _fortify / _dmgReduce），
+   现在统一走状态系统 —— 有 duration、能驱散、能进详情页、能随层数叠加。 */
+
+/* 攻击提升（强攻 / 气势如虹 共用）：幅度由实例的 modsPct 决定，故这里不写固定值 */
+defineStatus({
+  id: 'atkup',
+  name: '攻击提升',
+  grade: 1,
+  positive: true,
+  maxStacks: 1,
+  stacking: 'independent',
+  hooks: {}
+});
+
+/* 坚壁：防御·魂防 +10%/层，最多 5 层（持续到战斗结束 = duration 极大） */
+defineStatus({
+  id: 'guardup',
+  name: '坚壁',
+  grade: 1,
+  positive: true,
+  maxStacks: 5,
+  stacking: 'stack',
+  statModsPct: { def: 0.10, soulDef: 0.10 },
+  hooks: {}
+});
+
+/* 广域防御：受到的伤害降低 20% */
+defineStatus({
+  id: 'wideguard',
+  name: '广域防御',
+  grade: 1,
+  positive: true,
+  maxStacks: 1,
+  stacking: 'refresh',
+  hooks: {
+    onDamage: function (unit) {
+      return {
+        mutations: [{ key: 'dmgTakenReduce', value: 0.20 }],
+        events: [{ type: 'passive', statusId: 'wideguard', unitId: unit.id, msg: '🛡️ 广域防御：伤害 -20%' }]
+      };
     }
   }
 });

@@ -28,8 +28,11 @@ function playerSkillBattleStart(gb, player) {
     gb.allies.forEach(function (a) {
       var shield = Math.floor((a.base.atk + (a.base.soulAtk || 0)) * eff.shieldPct);
       a._shield = (a._shield || 0) + shield;
-      a._shieldImmune = true;   // 护盾期免疫普通+高级负面
-      events.push({ msg: '🛡️ ' + a.name + ' 金身护盾 +' + shield + '（护盾期免疫普攻类负面）' });
+      /* v2.1.15：盾与免疫都真正生效了 ——
+         _shield 由 absorbShield() 在伤害结算前吸收，吸收到 0 时自动撤掉 _shieldImmune。
+         此前这两个字段只置位、全项目无消费方（盾不挡伤害、也不免负面）。 */
+      a._shieldImmune = a._shield > 0;   // 护盾存在期间免疫普通+高级负面
+      events.push({ msg: '🛡️ ' + a.name + ' 金身护盾 +' + shield + '（吸收伤害；盾存在期间免疫普通~高级负面）' });
     });
   }
   return events;
@@ -72,11 +75,15 @@ function playerSkillTurnStart(gb, player, turn) {
   if (momLv >= 1 && !player._momLock) {
     var meff = getPlayerSkill('momentum').effect(momLv);
     if (Math.random() < meff.chance) {
+      /* v2.1.15：改为按单位挂 atkup 状态。
+         此前累加 a._momBoost，而全项目没有任何地方读它 → 「全队攻击 +n×3%」是空头承诺。
+         duration 用设计文档的 2 回合，幅度 = 等级 × 3%（写进实例自带的 modsPct）。 */
       gb.allies.forEach(function (a) {
-        a._momBoost = (a._momBoost || 0) + meff.atkBoost;
+        applyStatus(a, { id: 'atkup', duration: meff.dur || 2, modsPct: { atk: meff.atkBoost } });
+        if (typeof syncStatusDerived === 'function') syncStatusDerived(a);
       });
       player._momLock = meff.lock;   // 锁 N 回合
-      events.push({ msg: '🔥 气势如虹: 全队攻击+' + Math.round(meff.atkBoost*100) + '%' });
+      events.push({ msg: '🔥 ' + player.name + ' 气势如虹：全队攻击 +' + Math.round(meff.atkBoost * 100) + '%（' + (meff.dur || 2) + ' 回合，触发锁 ' + meff.lock + ' 回合）' });
     }
   }
   if (player._momLock > 0) player._momLock--;

@@ -98,7 +98,14 @@ const wet = sandbox.createUnit({ id: 'w1', base: { hp: 100, atk: 5, def: 3, soul
 sandbox.applyStatus(wet, { id: 'wet', duration: 2 });
 sandbox.applyStatus(wet, { id: 'souldown', duration: 2 });
 const mods = sandbox.statMods(wet);
-assert('statMods 聚合魂防', mods.soulDef === -18, JSON.stringify(mods));  // wet -10 + souldown -8
+/* v2.1.15：潮湿与魂防降低从「固定值」改为按 base 百分比
+   （潮湿 -25%、魂防降低 -15%）—— 在几百上千的魂防面前固定 -10/-8 等于没写。
+   本用例 soulDef=20 → -ceil(20×0.25)= -5 与 -ceil(20×0.15)= -3，合计 -8。 */
+assert('statMods 聚合魂防', mods.soulDef === -8, JSON.stringify(mods));
+
+/* v2.1.15：破甲按层数乘算（原实现每层都只算一次 -5） */
+const abMods = sandbox.statMods(ab);
+assert('破甲 3 层 = 防御 -30%', abMods.def === -9, JSON.stringify(abMods));  // 30 × -0.10 × 3 层
 
 const sl = sandbox.createUnit({ id: 'sl1', base: { hp: 100, atk: 5, def: 3, spd: 10 } });
 sandbox.applyStatus(sl, { id: 'slow', duration: 2 });

@@ -89,15 +89,25 @@ if (typeof registerSkill === 'function') {
 
 /* R：闪耀（敌方全体命中率 -40%，2 回合） */
 registerSkill({ id:'p_shine', name:'闪耀', type:'support', target:'all', cooldown:4,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ t._accMod = (t._accMod || 0) - 0.4; t._hitModTurns = 2; }); r.events.push({msg:'✨ 闪耀: 敌方命中率 -40%'}); }] });
+  effects:[function(c,ts,r){ ts.forEach(function(t){ t._accMod = (t._accMod || 0) - 0.4; t._hitModTurns = 2; }); r.events.push({msg:'✨ ' + (c.name||'宠物') + ' 闪耀：' + ts.map(function(t){return t.name;}).join('、') + ' 命中率 -40%（2 回合）'}); }] });
 
-/* R：打湿（目标受击更容易命中 +30%，并施加潮湿） */
+/* R：打湿（施加潮湿 → 目标更易被命中 +30%、魂防 -25%） */
 registerSkill({ id:'p_drench', name:'打湿', type:'support', target:'random1', cooldown:5,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ t._eva = (t._eva || 0) - 0.3; t._hitModTurns = 2; r.statusApps.push({unitId:t.id,id:'wet',duration:2,chance:1,grade:2}); }); }] });
+  /* v2.1.15：去掉这里手写的 t._eva -= 0.3。
+     命中加成现在由「潮湿」状态统一提供（groupHitChance 读 hasStatus(target,'wet') +30%），
+     两边都写会互相抵消 —— 等于打湿加了 30% 又减了 30%。 */
+  effects:[function(c,ts,r){ ts.forEach(function(t){ r.statusApps.push({unitId:t.id,id:'wet',duration:2,chance:1,grade:2}); }); }] });
 
-/* R：睡觉（自愈+睡眠） */
+/* R：睡觉（自愈 + 睡眠）。
+   v2.1.15：补上真正的治疗 —— 原文案「睡觉自愈」后面什么都没有（只 push 了一句日志，
+   连宠物名字都是写死的）。
+   睡眠时长写 1：按当前「回合末递减」的实现，它不会真的锁住自己的下一回合
+   （避免 R 级宠物自愈还倒亏一回合）；若要真的睡一回合，把 duration 改成 2 即可。 */
 registerSkill({ id:'p_sleep', name:'睡觉', type:'support', target:'self', cooldown:4,
-  effects:[function(c,ts,r){ r.events.push({msg:'💤 彭彭猪 睡觉自愈'}); }] });
+  effects:[function(c,ts,r){ ts.forEach(function(t){
+    r.heals.push({ unitId: t.id, amount: Math.floor((t.base.hp||0) * 0.25) + Math.floor((c.base.soulAtk||0) * 0.5) });
+    r.statusApps.push({ unitId: t.id, id: 'sleep', duration: 1, chance: 1, grade: 1 });
+  }); r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈并睡 1 回合'}); }] });
 
 /* SR：火焰啄击 */
 registerSkill({ id:'p_flamepeck', name:'火焰啄击', type:'attack', target:'random1', power:240, dmgType:'physical', cooldown:4 });

@@ -561,6 +561,10 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-hp-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:600;color:var(--text)}
 .gb-stats{display:flex;align-items:center;gap:10px;font-size:var(--fs-sm);flex-wrap:wrap}
 .gb-stat.soul{font-size:var(--fs-xs);color:var(--purple)}
+/* v2.1.15：属性修正标记 —— 状态修正真正生效后，卡片要能看出哪一项被改了 */
+.gb-mod{font-size:var(--fs-3xs);font-weight:700;margin-left:2px}
+.gb-mod.up{color:var(--green)}
+.gb-mod.down{color:var(--red)}
 .gb-dim{font-size:var(--fs-xs);color:var(--text3)}
 /* 技能 / 天赋标签行（原先是「⏳最小冷却」+「✨×N」） */
 .gb-row4{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}

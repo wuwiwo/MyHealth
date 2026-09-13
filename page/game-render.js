@@ -881,7 +881,25 @@ function renderGroupUnit(u,side){
   var scared=u._intimidated?'<span class="gb-badge scared" title="被威吓：攻击 -40%">😱 攻-40%</span>':''
   var skillChips=renderUnitSkillChips(u)
   var talentChips=renderUnitTalentChips(u)
-  var soulTxt=(u.base.soulAtk>0||u.base.soulDef>0)?'<span class="gb-stat soul">👻'+u.base.soulAtk+' 🔮'+u.base.soulDef+'</span>':''
+  /* v2.1.15：属性显示改为「有效值 + 修正箭头」。
+     状态修正（破甲/潮湿/减速/攻击提升）现在真的生效了，继续显示裸属性会让人
+     看不出身上到底发生了什么 —— 破甲 6 层防御砍掉 60%，卡片上却还是原值。 */
+  var effOf = function (key) {
+    return (typeof effectiveStat === 'function') ? effectiveStat(u, key) : (u.base[key] || 0);
+  };
+  var statCell = function (icon, key, forced) {
+    var base = u.base[key] || 0;
+    var v = (forced == null) ? effOf(key) : forced;
+    var mark = '';
+    if (v !== base) {
+      mark = '<span class="gb-mod ' + (v > base ? 'up' : 'down') + '" title="基础 ' + base + '">' + (v > base ? '▲' : '▼') + '</span>';
+    }
+    return '<span>' + icon + ' <b>' + v + '</b>' + mark + '</span>';
+  };
+  var effSoulAtk = effOf('soulAtk');
+  var effSoulDef = effOf('soulDef');
+  var soulTxt = (effSoulAtk > 0 || effSoulDef > 0)
+    ? '<span class="gb-stat soul">👻' + effSoulAtk + ' 🔮' + effSoulDef + '</span>' : '';
   return '<div class="'+cls+'" data-uid="'+u.id+'" role="button" tabindex="0" aria-label="'+escHtml(u.name)+' 详情"'+(acting?' aria-current="true"':'')+'>'
     // 第一行：名称 + 行动标记 + 状态
     +'<div class="gb-row1">'
@@ -894,11 +912,11 @@ function renderGroupUnit(u,side){
     +'<div class="gb-hp-fill" style="width:'+hpPct+'%;background:'+barColor+'"></div>'
     +'<span class="gb-hp-text">'+Math.max(0,u.hp)+'/'+u.base.hp+'　'+hpPct+'%</span>'
     +'</div>'
-    // 第三行：属性直显 + 提示
+    // 第三行：属性直显（有效值 + 修正箭头）+ 提示
     +'<div class="gb-stats">'
-    +'<span>⚔️ <b>'+u.base.atk+'</b></span>'
-    +'<span>🛡️ <b>'+u.base.def+'</b></span>'
-    +'<span>💨 <b>'+u.base.spd+'</b></span>'
+    +statCell('⚔️', 'atk')
+    +statCell('🛡️', 'def')
+    +statCell('💨', 'spd', (typeof effectiveSpeed === 'function') ? effectiveSpeed(u) : (u.base.spd || 0))
     +soulTxt
     +'<span style="flex:1"></span>'
     +(dead?'<span class="gb-dim">💀 已阵亡</span>':'<span class="gb-dim">👆 详情</span>')
@@ -921,8 +939,19 @@ function renderGroupDetail(u){
   // 属性
   h+='<div class="det-card">'
   h+='<div class="det-h">📊 属性</div>'
-  h+='<div class="det-line">❤️ HP <b>'+u.hp+'</b>/'+u.base.hp+'　⚔️ 攻 <b>'+u.base.atk+'</b>　🛡️ 防 <b>'+u.base.def+'</b>'
-  h+='　💨 速 <b>'+u.base.spd+'</b>'+(u.base.soulAtk?'　👻 魂攻 <b>'+u.base.soulAtk+'</b>':'')+(u.base.soulDef?'　🔮 魂防 <b>'+u.base.soulDef+'</b>':'')+'</div>'
+  // 属性（v2.1.15：显示有效值，被状态改动过时附上差额）
+  var dEff = function (k) { return (typeof effectiveStat === 'function') ? effectiveStat(u, k) : (u.base[k] || 0); };
+  var dCell = function (label, key, forced) {
+    var base = u.base[key] || 0;
+    var v = (forced == null) ? dEff(key) : forced;
+    var mark = (v !== base)
+      ? '<span class="gb-mod ' + (v > base ? 'up' : 'down') + '">(' + (v > base ? '+' : '') + (v - base) + ')</span>' : '';
+    return label + ' <b>' + v + '</b>' + mark;
+  };
+  h+='<div class="det-line">❤️ HP <b>'+u.hp+'</b>/'+u.base.hp+'　'+dCell('⚔️ 攻','atk')+'　'+dCell('🛡️ 防','def')
+  h+='　'+dCell('💨 速','spd',(typeof effectiveSpeed==='function')?effectiveSpeed(u):(u.base.spd||0))
+    +(dEff('soulAtk')?'　'+dCell('👻 魂攻','soulAtk'):'')+(dEff('soulDef')?'　'+dCell('🔮 魂防','soulDef'):'')+'</div>'
+  if (u._shield > 0)h+='<div class="det-line warn">🛡️ 护盾剩余 <b>'+u._shield+'</b>（吸收伤害；盾存在期间免疫普通~高级负面）</div>'
   if(u._intimidated)h+='<div class="det-line warn">😱 被威吓中：攻击 -40%（威吓者血量低于 50% 时解除）</div>'
   if(u._taunting)h+='<div class="det-line warn">🎯 嘲讽中：被优先选中，速度 ×2 参与出手排序（持续到本次行动结束）</div>'
   h+='</div>'
