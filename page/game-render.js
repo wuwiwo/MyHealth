@@ -371,6 +371,19 @@ var _groupMode='auto'   // 'auto' | 'manual'（manual=点一下推进一回合�
 var _groupSpeed=1        // 1/2/4
 var _groupAnimEl=null    // 动画中的单位
 var _groupDetail=null    // 详情面板中的单位 id
+var _gbTab='battle'      // v2.1.14：战斗页 / 日志页双 Tab（'battle' | 'log'）
+var _groupPaused=false   // v2.1.14：打开详情时暂停自动推进，避免详情被下一步渲染刷掉
+
+/* v2.1.14：暂停 / 恢复群战推进（详情弹层打开期间挂起，关闭后按原模式续跑） */
+function pauseGroupBattle(){
+  _groupPaused=true
+  if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
+}
+function resumeGroupBattle(){
+  if(!_groupPaused)return
+  _groupPaused=false
+  if(_groupBattle&&!_groupBattle.done&&_groupMode==='auto'&&!_groupDetail)_groupStep()
+}
 
 /* 启动敌群试炼：生成玩家 Unit + 敌人，开群战 */
 function startGroupTrial(groupId){
@@ -417,6 +430,9 @@ function startGroupTrial(groupId){
   if(['auto','manual'].indexOf(_groupMode)<0)_groupMode='auto'
   if([1,2,4,8].indexOf(_groupSpeed)<0)_groupSpeed=1
   _groupDetail=null
+  _gbTab='battle'        // v2.1.14：每次开战回到战斗页
+  _groupPaused=false
+  _groupActing=null
   renderGroupOverlay(true)
   toast('👥 '+glv.name+' 开始！'+(petUnits.length?'（带 '+petUnits.length+' 宠物）':''),'s')
   _groupStep()
@@ -431,6 +447,7 @@ function autoPickPets(n){
 
 /* 群战推进（自动模式定时循环；手动模式点按钮触发） */
 function _groupStep(){
+  if(_groupPaused)return   // 详情弹层打开中：挂起，关闭后 resumeGroupBattle() 续跑
   if(!_groupBattle||_groupBattle.done){_groupDone();return}
   // 单步执行：一次一个单位行动（速度优先级可见）
   var step = groupBattleStep(_groupBattle)
@@ -460,18 +477,26 @@ function playAttackFeedback(gb, step) {
   if (!ov) return
   var lastLog = gb.log.length ? gb.log[gb.log.length-1] : null
   if (!lastLog) return
-  // 找本次行动的伤害事件（"X 攻击 → N" / "→ N 伤害"）
+  // 找本次行动的伤害事件（v2.1.14 起日志统一为「… → [目标] N 伤害」）
   lastLog.events.forEach(function(e){
-    var m = /→ (\d+) (?:伤害|魂伤害)/.exec(e.msg)
+    // 用惰性 .*? 取伤害数字：单位名可能含空格（如「👹 熔岩巨兽」），不能按 \S+ 切
+    var m = /→\s+.*?(\d+)\s+(?:魂)?伤害/.exec(e.msg)
+    if (!m) {
+      // 场地伤害（沙暴碎石 / 雨天闪电）也飘字，格式没有箭头
+      var t2 = /(?:受碎石伤害|被闪电击中)\s+(\d+)/.exec(e.msg)
+      if (t2) m = [t2[0], t2[1]]
+    }
     if (!m) return
-    // 受击目标：优先用事件里的 targetId
+    var dmgNum = m[1]
+    // 受击目标：优先用事件里的 targetId（引擎侧保证伤害事件都带）
     var targetCard = null
     if (e.targetId) {
       targetCard = ov.querySelector('.gb-unit[data-uid="'+e.targetId+'"]')
     }
     if (!targetCard) {
-      var hitName = /([^\s]+) 攻击 →/.exec(e.msg)
-      var name = hitName ? hitName[1] : null
+      // 兜底：从文案里抠目标名（「A 攻击 B →」「→ B N 伤害」两种句式，允许名字带空格）
+      var nm = /攻击\s+(.+?)\s*→/.exec(e.msg) || /→\s+(.+?)\s+\d+\s+(?:魂)?伤害/.exec(e.msg)
+      var name = nm ? nm[1] : null
       if (name) {
         var cards = ov.querySelectorAll('.gb-unit')
         for (var i=0;i<cards.length;i++){
@@ -484,7 +509,7 @@ function playAttackFeedback(gb, step) {
       targetCard.classList.add('gb-hit')
       setTimeout(function(){ targetCard.classList.remove('gb-hit') }, 500)
       var float = document.createElement('div')
-      float.textContent = '-' + m[1]
+      float.textContent = '-' + dmgNum
       float.style = 'position:absolute;top:4px;right:10px;color:var(--red);font-size:var(--fs-xl);font-weight:800;z-index:5;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.5)'
       // 卡片需相对定位
       targetCard.style.position = 'relative'
@@ -513,6 +538,8 @@ function showSkillBubble(bubble) {
 function _groupDone(){
   if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
   var w=_groupBattle&&_groupBattle.winner
+  _groupActing=null        // v2.1.14：战斗结束不再残留「行动中」高亮
+  _groupPaused=false
   renderGroupOverlay(false)
   if(w==='ally'){
     // 记录敌群通关（解锁下一关）
@@ -576,59 +603,40 @@ function renderGroupOverlay(show){
   if(show)ov.classList.add('open')
   if(!_groupBattle){ov.classList.remove('open');return}
   var gb=_groupBattle
-  // v2.1.7：控制条改为 sticky（滚到单位区也能随时调速/关闭）
-  var h='<div class="gb-ctrl" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;min-height:44px">'
-    +'<button class="speed-btn" id="gbClose" style="padding:8px 10px;min-height:44px;min-width:44px">✕</button>'
-    +'<span style="font-size:var(--fs-base);font-weight:700">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
+  // v2.1.14：控制条常驻（sticky），其下是「战斗 / 日志」双 Tab —— 两个页签各自独立滚动
+  var h='<div class="gb-ctrl">'
+    +'<button class="speed-btn" id="gbClose" aria-label="退出战斗">✕</button>'
+    +'<span class="gb-ctrl-title">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
     +'<span style="flex:1"></span>'
     // 手动/自动切换
-    +'<button class="speed-btn" id="gbMode" style="padding:8px 10px;min-height:44px;'+( _groupMode==='manual'?'border-color:var(--orange);color:var(--orange)':'')+'">'+(_groupMode==='manual'?'✋ 手动':'🤖 自动')+'</button>'
+    +'<button class="speed-btn'+(_groupMode==='manual'?' on-warn':'')+'" id="gbMode">'+(_groupMode==='manual'?'✋ 手动':'🤖 自动')+'</button>'
     // 调速（自动模式）
-    +(_groupMode==='auto'?'<button class="speed-btn" id="gbSpeed" style="padding:8px 10px;min-height:44px">'+_groupSpeed+'×</button>':'')
+    +(_groupMode==='auto'?'<button class="speed-btn" id="gbSpeed">'+_groupSpeed+'×</button>':'')
     // 手动：推进一回合按钮
-    +(_groupMode==='manual'?'<button class="speed-btn" id="gbStep" style="padding:8px 14px;min-height:44px;border-color:var(--green);color:var(--green)">⏭️ 下一回合</button>':'')
+    +(_groupMode==='manual'?'<button class="speed-btn on-good" id="gbStep">⏭️ 下一回合</button>':'')
     +'</div>'
-  // v2.1.7：行动顺序条（此前完全看不到"接下来谁出手"）
-  h += renderGroupOrder(gb)
-  // 我方
-  h+='<div style="margin-bottom:4px;font-size:var(--fs-xs);color:var(--green);display:flex;align-items:center;gap:6px"><span>🟢 我方</span>'
-  gb.allies.forEach(function(u){
-    if(u._petSpecies)h+='<span style="font-size:var(--fs-3xs);color:var(--purple,#a855f7);background:var(--bg2);padding:1px 6px;border-radius:8px">🐾 宠物</span>'
-  })
-  h+='</div>'
-  gb.allies.forEach(function(u){h+=renderGroupUnit(u,'ally')})
-  // 敌方
-  h+='<div style="margin:8px 0 4px;font-size:var(--fs-xs);color:var(--red)">🔴 敌方</div>'
-  gb.enemies.forEach(function(u){h+=renderGroupUnit(u,'enemy')})
-  // 战斗日志（全部保留，分回合显示，可复制）
-  // v2.1.7：默认只渲染最近 8 条，减少移动端滚动距离，可一键展开
-  var curTurn = null
-  var allLogs = gb.log || []
-  var logs = _gbLogAll ? allLogs : allLogs.slice(-8)
-  h+='<div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-    +'<span style="font-size:var(--fs-base);font-weight:700">📜 战斗日志</span>'
-    +(_gbLogAll?'':'<span style="font-size:var(--fs-2xs);color:var(--text3)">仅最近 8 条</span>')
-    +'<span style="flex:1"></span>'
-    +(allLogs.length>8?'<button class="speed-btn" id="gbLogToggle" style="padding:6px 10px;min-height:36px;font-size:var(--fs-xs)">'+(_gbLogAll?'🔼 收起':'🔽 展开全部('+allLogs.length+')')+'</button>':'')
-    +'<button class="speed-btn" id="gbCopyLog" style="padding:6px 10px;min-height:36px;font-size:var(--fs-xs)">📋 复制</button>'
+  // v2.1.14 双 Tab（战斗 / 日志）
+  h+='<div class="gb-tabs" role="tablist" aria-label="战斗视图">'
+    +'<button class="gb-tab'+(_gbTab==='battle'?' active':'')+'" data-gbtab="battle" role="tab" aria-selected="'+(_gbTab==='battle')+'">⚔️ 战斗</button>'
+    +'<button class="gb-tab'+(_gbTab==='log'?' active':'')+'" data-gbtab="log" role="tab" aria-selected="'+(_gbTab==='log')+'">📜 日志<span class="gb-tab-n">'+((gb.log&&gb.log.length)||0)+'</span></button>'
     +'</div>'
-  h+='<div id="gbLogBox" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.8;color:var(--text3);max-height:300px;overflow-y:auto;border:1px solid var(--bg2);border-radius:10px;padding:10px 12px;overscroll-behavior:contain">'
-  if(_gbLogAll&&allLogs.length>8)h+='<div style="color:var(--text3);margin-bottom:4px">… 共 '+allLogs.length+' 条</div>'
-  logs.forEach(function(l){
-    if(l.turn!==curTurn){
-      curTurn=l.turn
-      h+='<div style="font-weight:700;color:var(--orange);margin:6px 0 3px">—— 回合 '+l.turn+' ——</div>'
-    }
-    l.events.forEach(function(e){
-      if(e && e.msg) h+='<div>'+e.msg+'</div>'
-    })
-  })
-  if(!gb.log.length)h+='<div style="color:var(--text3)">战斗开始…</div>'
-  h+='</div>'
+  // 页签内容（各自独立滚动，日志页不再挤在 300px 里）
+  h+='<div class="gb-pane" id="gbPane">'
+    +(_gbTab==='log' ? renderGroupLogPane(gb) : renderGroupBattlePane(gb))
+    +'</div>'
   ov.innerHTML=h
   // 事件绑定
   var closeBtn=document.getElementById('gbClose')
-  if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}})
+  if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;_groupPaused=false;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}})
+  // v2.1.14：战斗 / 日志双 Tab 切换
+  ov.querySelectorAll('[data-gbtab]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var t=btn.getAttribute('data-gbtab')
+      if(t===_gbTab)return
+      _gbTab=t
+      renderGroupOverlay(false)
+    })
+  })
   var modeBtn=document.getElementById('gbMode')
   if(modeBtn)modeBtn.addEventListener('click',function(){
     _groupMode=_groupMode==='auto'?'manual':'auto'
@@ -648,14 +656,17 @@ function renderGroupOverlay(show){
   if(stepBtn)stepBtn.addEventListener('click',function(){_groupStep()})
   // 复制日志按钮
   var copyBtn=document.getElementById('gbCopyLog')
-  // 日志自动滚动到底部
-  var logBox = document.getElementById('gbLogBox')
-  if (logBox) logBox.scrollTop = logBox.scrollHeight
+  // v2.1.14：滚动容器由 #gbLogBox 换成页签容器 #gbPane（日志页铺满整屏，不再挤在 300px 内）
+  var pane = document.getElementById('gbPane')
+  if (pane && _gbTab==='log') pane.scrollTop = pane.scrollHeight
   if(copyBtn)copyBtn.addEventListener('click',function(){
     var gb2=_groupBattle
     if(!gb2)return
     var text=gb2.log.map(function(l){
-      return '【回合 '+l.turn+'】'+l.unit+': '+l.events.map(function(e){return e.msg}).filter(Boolean).join('；')
+      // v2.1.14：带上行动者（l.unit）与开场/回合标题，气泡事件不入文本（已在战斗页弹过）
+      var head='【'+(l.turn===0?'开场':'回合 '+l.turn)+'】'+(l.unit||'')
+      var body=(l.events||[]).filter(function(e){return e&&e.msg&&e.type!=='bubble'}).map(function(e){return e.msg}).join('；')
+      return head+': '+body
     }).join('\n')
     try{
       navigator.clipboard.writeText(text).then(function(){toast('📋 日志已复制','s')})
@@ -668,17 +679,42 @@ function renderGroupOverlay(show){
   if(logToggle)logToggle.addEventListener('click',function(){
     _gbLogAll=!_gbLogAll
     renderGroupOverlay(false)
-    var lb=document.getElementById('gbLogBox')
-    if(lb)lb.scrollTop=lb.scrollHeight
+    var p2=document.getElementById('gbPane')
+    if(p2)p2.scrollTop=p2.scrollHeight
   })
-  // 单位点击：看详情
+  // 单位点击：看详情（v2.1.14：先暂停推进，否则自动模式会把详情页刷掉）
   ov.querySelectorAll('.gb-unit').forEach(function(el){
     el.addEventListener('click',function(){
       var uid=el.getAttribute('data-uid')
       var u=gb.units.find(function(x){return x.id===uid})
       if(!u)return
       _groupDetail=uid
+      pauseGroupBattle()
       renderGroupDetail(u)
+    })
+  })
+  // v2.1.14：技能 / 天赋标签点击 → 详情弹层（不触发单位卡详情，故阻止冒泡）
+  ov.querySelectorAll('.gb-chip[data-skill]').forEach(function(el){
+    el.addEventListener('click',function(ev){
+      ev.stopPropagation()
+      var u=gb.units.find(function(x){return x.id===el.getAttribute('data-uid')})
+      pauseGroupBattle()
+      showSkillDetail(el.getAttribute('data-skill'),u)
+    })
+  })
+  ov.querySelectorAll('.gb-chip[data-pskill]').forEach(function(el){
+    el.addEventListener('click',function(ev){
+      ev.stopPropagation()
+      var u=gb.units.find(function(x){return x.id===el.getAttribute('data-uid')})
+      pauseGroupBattle()
+      showPlayerSkillDetail(el.getAttribute('data-pskill'),u)
+    })
+  })
+  ov.querySelectorAll('.gb-chip[data-talent]').forEach(function(el){
+    el.addEventListener('click',function(ev){
+      ev.stopPropagation()
+      pauseGroupBattle()
+      showTalentDetail(el.getAttribute('data-talent'),gb.units.find(function(x){return x.id===el.getAttribute('data-uid')}))
     })
   })
   // 攻击动画（高亮受伤单位）
@@ -687,6 +723,117 @@ function renderGroupOverlay(show){
     if(el){el.classList.add('gb-hit');setTimeout(function(){el.classList.remove('gb-hit')},400)}
     _groupAnimEl=null
   }
+}
+
+/* ============================================================
+   v2.1.14 战斗页 / 日志页（双 Tab）
+   ============================================================ */
+
+/* 极简 HTML 转义（引擎文案含 emoji 与中文，只需挡掉 < > & 以免破坏结构） */
+function escHtml(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+/* 日志行配色：按事件类型上色，一眼区分伤害/状态/治疗/场地/天赋 */
+function logEventClass(e){
+  var t=(e&&e.type)||''
+  if(t==='terrain')return 'terrain'
+  if(t==='status'||t==='dot')return 'status'
+  if(t==='heal')return 'heal'
+  if(t==='damage')return 'dmg'
+  if(t==='talent')return 'talent'
+  if(t==='skip')return 'warn'
+  if(t==='buff')return 'buff'
+  var m=(e&&e.msg)||''
+  if(/治疗|恢复|回复/.test(m))return 'heal'
+  if(/施加|刷新|免疫|中毒|冰冻|畏缩|潮湿|睡眠|诅咒|末日|破甲|减速|解冻|苏醒/.test(m))return 'status'
+  if(/→ \d+ (魂)?伤害/.test(m))return 'dmg'
+  return ''
+}
+
+/* 战斗页：行动顺序 + 我方 + 敌方 */
+function renderGroupBattlePane(gb){
+  var h=renderGroupOrder(gb)
+  h+='<div class="gb-side-hdr ally"><span>🟢 我方</span>'
+  gb.allies.forEach(function(u){
+    if(u._petSpecies)h+='<span class="gb-tag pet">🐾 宠物</span>'
+  })
+  h+='</div>'
+  gb.allies.forEach(function(u){h+=renderGroupUnit(u,'ally')})
+  h+='<div class="gb-side-hdr enemy"><span>🔴 敌方</span></div>'
+  gb.enemies.forEach(function(u){h+=renderGroupUnit(u,'enemy')})
+  h+='<div class="gb-hint">👆 点单位卡看完整属性 · 点技能/天赋标签看详细说明</div>'
+  return h
+}
+
+/* 日志页：分回合 + 每段标出行动者
+   v2.1.14：此前日志只输出裸事件文案，看不出这段是谁的行动；
+   场地事件还完全不在 gb.log 里（引擎侧已补）。 */
+function renderGroupLogPane(gb){
+  var allLogs=(gb&&gb.log)||[]
+  var logs=_gbLogAll?allLogs:allLogs.slice(-8)
+  var h='<div class="gb-log-hdr">'
+    +'<span class="gb-log-title">📜 战斗日志</span>'
+    +(_gbLogAll?'':'<span class="gb-log-note">仅最近 8 条 · 共 '+allLogs.length+' 条</span>')
+    +'<span style="flex:1"></span>'
+    +(allLogs.length>8?'<button class="speed-btn sm" id="gbLogToggle">'+(_gbLogAll?'🔼 收起':'🔽 展开全部('+allLogs.length+')')+'</button>':'')
+    +'<button class="speed-btn sm" id="gbCopyLog">📋 复制</button>'
+    +'</div>'
+  h+='<div id="gbLogBox" class="gb-log-box">'
+  if(!allLogs.length)h+='<div class="gb-log-note">战斗开始…</div>'
+  logs.forEach(function(l){
+    h+='<div class="gb-log-turn">—— '+(l.turn===0?'开场':'回合 '+l.turn)+' ——</div>'
+    var mark=l.opening?'🎬':(l.terrain?'🌍':'▶')
+    h+='<div class="gb-log-actor'+(l.terrain?' terrain':'')+(l.opening?' opening':'')+'">'+mark+' '+escHtml(l.unit||'单位')+'</div>'
+    var lines=0
+    ;(l.events||[]).forEach(function(e){
+      if(!e||!e.msg)return
+      if(e.type==='bubble')return   // 气泡已在战斗页弹过，日志里略去以免噪声
+      lines++
+      h+='<div class="gb-log-ev '+logEventClass(e)+'">'+escHtml(e.msg)+'</div>'
+    })
+    if(!lines)h+='<div class="gb-log-ev muted">（本回合无事发生）</div>'
+  })
+  h+='</div>'
+  return h
+}
+
+/* 技能标签：敌群技能 u.skills（逐条冷却）+ 玩家技能 _playerSkills（等级 + 冷却）
+   v2.1.14：此前单位卡只显示一个「⏳最小冷却」，玩家技能根本不显示，天赋只显示「✨×N」。 */
+function renderUnitSkillChips(u){
+  var out=''
+  if(u.skills&&u.skills.length&&typeof skillCooldownLeft==='function'){
+    u.skills.forEach(function(sid){
+      var s=(typeof SKILLS!=='undefined')?SKILLS[sid]:null
+      var nm=s?s.name:sid
+      var cd=skillCooldownLeft(u,sid)
+      out+='<button type="button" class="gb-chip sk '+(cd>0?'cd':'ready')+'" data-skill="'+sid+'" data-uid="'+u.id+'" title="'+escHtml(nm)+'（点看详情）">'
+        +escHtml(nm)+(cd>0?(' ⏳'+cd):' ✓')+'</button>'
+    })
+  }
+  if(u._playerSkills&&typeof getPlayerSkill==='function'){
+    Object.keys(u._playerSkills).forEach(function(sid){
+      var s=getPlayerSkill(sid)
+      if(!s)return
+      var lv=u._playerSkills[sid]||0
+      var cd=(typeof skillCooldownLeft==='function')?skillCooldownLeft(u,sid):0
+      var active=(s.type==='attack')   // 只有主动技能吃冷却
+      var tail=active?(cd>0?(' ⏳'+cd):' ✓'):''
+      out+='<button type="button" class="gb-chip sk '+((active&&cd>0)?'cd':'ready')+'" data-pskill="'+sid+'" data-uid="'+u.id+'" title="'+escHtml(s.name)+' Lv'+lv+'（点看详情）">'
+        +escHtml(s.name)+'<span class="gb-chip-lv">Lv'+lv+'</span>'+tail+'</button>'
+    })
+  }
+  return out
+}
+
+/* 天赋标签：✨ + 天赋名（可点开详情） */
+function renderUnitTalentChips(u){
+  if(!u._talents||!u._talents.length)return ''
+  return u._talents.map(function(tid){
+    var t=(typeof TALENTS!=='undefined')?TALENTS[tid]:null
+    var nm=t?t.name:tid
+    return '<button type="button" class="gb-chip tl" data-talent="'+tid+'" data-uid="'+u.id+'" title="'+escHtml(nm)+'（点看详情）">✨'+escHtml(nm)+'</button>'
+  }).join('')
 }
 
 /* 行动顺序条：取当前行动队列，列出接下来最多 5 个出手单位（v2.1.7） */
@@ -709,39 +856,38 @@ function renderGroupOrder(gb){
 }
 
 /* 渲染单个群战单位（可点击：详情；触摸区 ≥44px）
-   信息层次：名称/血条/状态/技能冷却 */
+   信息层次：名称/行动标记/血条/属性/状态/技能冷却/天赋
+   v2.1.14 三处升级：
+     1) 行动者标识由「内联边框色」升级为 gb-acting 类（左侧强调条 + 呼吸动画 + 文字标签）
+     2) 技能从「一个 ⏳最小冷却」改为逐技能标签（敌人 u.skills + 玩家 _playerSkills，各带冷却）
+     3) 天赋从「✨×N」改为显示天赋名，且可点击看详情 */
 function renderGroupUnit(u,side){
   var hpPct=u.hp<=0?0:Math.round(u.hp/u.base.hp*100)
   var color=side==='ally'?'var(--green)':'var(--red)'
-  // v2.1.7：状态图标带剩余回合；阵亡改灰度+删除线（原 opacity:.35 文字不可读）
+  var dead=u.hp<=0
+  var low=!dead&&hpPct<=25
+  var acting=(_groupActing===u.id)
+  var cls='gb-unit'+(dead?' gb-dead':'')+(low?' gb-low':'')+(acting?' gb-acting':'')
+  var barColor=dead?'var(--text3)':hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)'
+  // 状态徽章（图标 + 剩余回合；title 用中文名而非英文 id）
   var statusHtml=(u.statuses||[]).map(function(s){
     var ic=statusIcon(s.id)
     if(!ic)return ''
     var d=(s.duration!=null&&s.duration>0)?s.duration:''
-    return '<span class="gb-badge st" title="'+s.id+'">'+ic+(d?' '+d:'')+'</span>'
+    var nm=(typeof getStatusName==='function')?getStatusName(s.id):s.id
+    return '<span class="gb-badge st" title="'+escHtml(nm)+'">'+ic+(d?' '+d:'')+'</span>'
   }).join('')
-  var talentTag=u._talents&&u._talents.length?'<span style="font-size:var(--fs-xs);color:var(--purple,#a855f7)">✨×'+u._talents.length+'</span>':''
-  // v2.1.7：技能冷却直接上卡片（原先只有 ×N，要进详情才知道能不能放）
-  var skillBadge=''
-  if(u.skills&&u.skills.length&&typeof skillCooldownLeft==='function'){
-    var cds=u.skills.map(function(sid){return skillCooldownLeft(u,sid)})
-    var minCd=Math.min.apply(null,cds)
-    skillBadge = minCd>0 ? '<span class="gb-badge cd">⏳ '+minCd+'</span>' : '<span class="gb-badge ready">⚡ 就绪</span>'
-  }
-  var dead=u.hp<=0
-  var low=!dead&&hpPct<=25
-  var cls='gb-unit'+(dead?' gb-dead':'')+(low?' gb-low':'')
-  var barColor=dead?'var(--text3)':hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)'
-  // 行动高亮
-  var acting = (_groupActing===u.id)?'border-color:var(--orange);box-shadow:0 0 12px rgba(249,115,22,.3);background:rgba(249,115,22,.08)':''
-  // 属性直显
-  var soulTxt = (u.base.soulAtk>0||u.base.soulDef>0)?'<span style="font-size:var(--fs-xs);color:var(--purple,#a855f7)">👻'+u.base.soulAtk+' 🔮'+u.base.soulDef+'</span>':''
-  return '<div class="'+cls+'" data-uid="'+u.id+'" style="border:1px solid var(--bg2);border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--bg2);'+acting+'">'
-    // 第一行：名称 + 状态 + 天赋/技能标记
-    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">'
-    +'<span class="gb-name" style="flex:1;min-width:0;font-size:var(--fs-lg);color:'+color+';font-weight:700">'+u.name+'</span>'
-    +statusHtml
-    +talentTag+skillBadge
+  // 威吓标记（此前被威吓的单位在界面上完全看不出来）
+  var scared=u._intimidated?'<span class="gb-badge scared" title="被威吓：攻击 -40%">😱 攻-40%</span>':''
+  var skillChips=renderUnitSkillChips(u)
+  var talentChips=renderUnitTalentChips(u)
+  var soulTxt=(u.base.soulAtk>0||u.base.soulDef>0)?'<span class="gb-stat soul">👻'+u.base.soulAtk+' 🔮'+u.base.soulDef+'</span>':''
+  return '<div class="'+cls+'" data-uid="'+u.id+'" role="button" tabindex="0" aria-label="'+escHtml(u.name)+' 详情"'+(acting?' aria-current="true"':'')+'>'
+    // 第一行：名称 + 行动标记 + 状态
+    +'<div class="gb-row1">'
+    +'<span class="gb-name" style="color:'+color+'">'+escHtml(u.name)+'</span>'
+    +(acting?'<span class="gb-acting-tag">▶ 行动中</span>':'')
+    +statusHtml+scared
     +'</div>'
     // 第二行：血条（大）+ 数值与百分比
     +'<div class="gb-hp-wrap">'
@@ -749,87 +895,284 @@ function renderGroupUnit(u,side){
     +'<span class="gb-hp-text">'+Math.max(0,u.hp)+'/'+u.base.hp+'　'+hpPct+'%</span>'
     +'</div>'
     // 第三行：属性直显 + 提示
-    +'<div style="display:flex;align-items:center;gap:10px;font-size:var(--fs-sm)">'
+    +'<div class="gb-stats">'
     +'<span>⚔️ <b>'+u.base.atk+'</b></span>'
     +'<span>🛡️ <b>'+u.base.def+'</b></span>'
     +'<span>💨 <b>'+u.base.spd+'</b></span>'
     +soulTxt
     +'<span style="flex:1"></span>'
-    +(dead?'<span style="font-size:var(--fs-xs);color:var(--text3)">💀 已阵亡</span>':'<span style="font-size:var(--fs-xs);color:var(--text3)">👆 详情</span>')
+    +(dead?'<span class="gb-dim">💀 已阵亡</span>':'<span class="gb-dim">👆 详情</span>')
     +'</div>'
+    // 第四行：技能冷却 + 天赋
+    +((skillChips||talentChips)?'<div class="gb-row4">'+skillChips+talentChips+'</div>':'')
     +'</div>'
 }
 
-/* 详情面板：属性/技能/天赋/状态/冷却 */
+/* 详情面板：属性/技能/天赋/状态/冷却
+   v2.1.14：技能行与天赋行改为可点按钮 —— 点开走 #panelOverlay 的完整说明弹层 */
 function renderGroupDetail(u){
   var ov=document.getElementById('battleOverlay')
   if(!ov)return
-  var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-    +'<button class="speed-btn" id="gbDetailBack" style="padding:2px 8px">← 返回</button>'
-    +'<span style="font-size:var(--fs-base);font-weight:700">'+(u.name||'单位')+'</span>'
-    +'<span style="font-size:var(--fs-3xs);color:var(--text3)">'+u.side+' · Lv'+u.level+'</span>'
+  var h='<div class="det-hdr">'
+    +'<button class="speed-btn" id="gbDetailBack">← 返回</button>'
+    +'<span class="det-title">'+escHtml(u.name||'单位')+'</span>'
+    +'<span class="det-sub">'+(u.side==='ally'?'我方':'敌方')+' · Lv'+u.level+'</span>'
     +'</div>'
   // 属性
-  h+='<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
-  h+='<div style="font-weight:700;margin-bottom:4px">📊 属性</div>'
-  h+='❤️ HP <b>'+u.hp+'</b>/'+u.base.hp+'　⚔️ 攻 <b>'+u.base.atk+'</b>　🛡️ 防 <b>'+u.base.def+'</b>'
-  h+='　💨 速 <b>'+u.base.spd+'</b>'+(u.base.soulAtk?'　👻 魂攻 <b>'+u.base.soulAtk+'</b>':'')+(u.base.soulDef?'　🔮 魂防 <b>'+u.base.soulDef+'</b>':'')
+  h+='<div class="det-card">'
+  h+='<div class="det-h">📊 属性</div>'
+  h+='<div class="det-line">❤️ HP <b>'+u.hp+'</b>/'+u.base.hp+'　⚔️ 攻 <b>'+u.base.atk+'</b>　🛡️ 防 <b>'+u.base.def+'</b>'
+  h+='　💨 速 <b>'+u.base.spd+'</b>'+(u.base.soulAtk?'　👻 魂攻 <b>'+u.base.soulAtk+'</b>':'')+(u.base.soulDef?'　🔮 魂防 <b>'+u.base.soulDef+'</b>':'')+'</div>'
+  if(u._intimidated)h+='<div class="det-line warn">😱 被威吓中：攻击 -40%（威吓者血量低于 50% 时解除）</div>'
+  if(u._taunting)h+='<div class="det-line warn">🎯 嘲讽中：被优先选中，速度 ×2 参与出手排序（持续到本次行动结束）</div>'
   h+='</div>'
   // 技能（兼容：敌群技能 u.skills + 玩家技能 _playerSkills）
-  h+='<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
-  h+='<div style="font-weight:700;margin-bottom:4px">⚡ 技能</div>'
+  h+='<div class="det-card">'
+  h+='<div class="det-h">⚡ 技能</div>'
   var skillShown = false
-  if(u.skills&&u.skills.length){
+  if(u.skills&&u.skills.length&&typeof SKILLS!=='undefined'){
     u.skills.forEach(function(sid){
       var s=SKILLS[sid]
       if(!s)return
-      var cd=skillCooldownLeft(u,sid)
-      h+='<div>'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' · '+s.power+'%':'')+' · CD'+s.cooldown+(cd>0?' <b style="color:var(--orange)">⏳ 冷却 '+cd+'</b>':' <b style="color:var(--green)">✓ 就绪</b>')+'</span></div>'
       skillShown = true
+      var cd=(typeof skillCooldownLeft==='function')?skillCooldownLeft(u,sid):0
+      h+='<button type="button" class="det-item" data-dskill="'+sid+'">'
+        +'<span class="det-item-name">'+escHtml(s.name)+'</span>'
+        +'<span class="det-item-sub">'+(s.type==='attack'?'攻击类':'辅助类')+(s.power?(' · '+s.power+'%'):'')+' · CD'+s.cooldown+'</span>'
+        +'<span class="det-item-tail">'+(cd>0?('⏳ '+cd):'✓ 就绪')+'</span>'
+        +'</button>'
     })
   }
   // 玩家技能（_playerSkills：暴击/陨石等）
-  if(u._playerSkills){
+  if(u._playerSkills&&typeof getPlayerSkill==='function'){
     Object.keys(u._playerSkills).forEach(function(sid){
       var s=getPlayerSkill(sid)
       if(!s)return
-      var lv=u._playerSkills[sid]
-      h+='<div>'+s.name+' <span style="color:var(--text3)">· '+s.type+' · Lv'+lv+' · '+(s.effect? (s.effect(lv).chance?('几率'+(s.effect(lv).chance*100).toFixed(0)+'%'):'') :'')+'</span></div>'
       skillShown = true
+      var lv=u._playerSkills[sid]||0
+      var cd=(typeof skillCooldownLeft==='function')?skillCooldownLeft(u,sid):0
+      h+='<button type="button" class="det-item" data-dpskill="'+sid+'">'
+        +'<span class="det-item-name">'+escHtml(s.name)+'</span>'
+        +'<span class="det-item-sub">'+(s.type==='passive'?'被动':(s.type==='attack'?'攻击':'辅助'))+' · Lv'+lv+'/'+s.maxLevel+'</span>'
+        +'<span class="det-item-tail">'+(s.type==='attack'?(cd>0?('⏳ '+cd):'✓ 就绪'):'被动')+'</span>'
+        +'</button>'
     })
   }
-  if(!skillShown)h+='<div style="color:var(--text3)">（无技能，普通攻击）</div>'
+  if(!skillShown)h+='<div class="det-dim">（无技能，普通攻击）</div>'
   h+='</div>'
   // 天赋
-  h+='<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
-  h+='<div style="font-weight:700;margin-bottom:4px">✨ 天赋</div>'
-  if(!u._talents||!u._talents.length){h+='<div style="color:var(--text3)">（无天赋）</div>'}
+  h+='<div class="det-card">'
+  h+='<div class="det-h">✨ 天赋</div>'
+  if(!u._talents||!u._talents.length){h+='<div class="det-dim">（无天赋）</div>'}
   else{
     u._talents.forEach(function(tid){
-      var t=TALENTS[tid]
+      var t=(typeof TALENTS!=='undefined')?TALENTS[tid]:null
       if(!t)return
-      h+='<div>'+t.name+' <span style="color:var(--text3)">· '+t.desc+'</span></div>'
+      h+='<button type="button" class="det-item" data-dtalent="'+tid+'">'
+        +'<span class="det-item-name">✨ '+escHtml(t.name)+'</span>'
+        +'<span class="det-item-sub">'+escHtml(t.desc||'（无说明）')+'</span>'
+        +'</button>'
     })
   }
   h+='</div>'
   // 状态
-  h+='<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:8px 10px">'
-  h+='<div style="font-weight:700;margin-bottom:4px">🌀 状态</div>'
-  if(!u.statuses||!u.statuses.length){h+='<div style="color:var(--text3)">（无状态）</div>'}
+  h+='<div class="det-card">'
+  h+='<div class="det-h">🌀 状态</div>'
+  if(!u.statuses||!u.statuses.length){h+='<div class="det-dim">（无状态）</div>'}
   else{
     u.statuses.forEach(function(st){
-      var def=getStatusDef(st.id)
-      h+='<div>'+statusIcon(st.id)+' '+getStatusName(st.id)+(def&&def.grade?' <span style="color:var(--text3)">[等级'+def.grade+']</span>':'')+' <span style="color:var(--text3)">剩余'+st.duration+'回合'+(st.stacks>1?' · '+st.stacks+'层':'')+'</span></div>'
+      var def=(typeof getStatusDef==='function')?getStatusDef(st.id):null
+      h+='<div class="det-line">'+statusIcon(st.id)+' '+getStatusName(st.id)+(def&&def.grade?' <span class="det-dim">[等级'+def.grade+']</span>':'')+' <span class="det-dim">剩余'+st.duration+'回合'+(st.stacks>1?' · '+st.stacks+'层':'')+'</span></div>'
     })
   }
   h+='</div>'
-  ov.innerHTML=h
+  h+='<div class="gb-hint">点技能行 / 天赋行可查看完整说明</div>'
+  ov.innerHTML='<div class="gb-pane">'+h+'</div>'
   var back=document.getElementById('gbDetailBack')
-  if(back)back.addEventListener('click',function(){_groupDetail=null;renderGroupOverlay(false)})
+  if(back)back.addEventListener('click',function(){_groupDetail=null;resumeGroupBattle();renderGroupOverlay(false)})
+  // 技能 / 天赋行 → 完整说明弹层（复用 #panelOverlay）
+  ov.querySelectorAll('[data-dskill]').forEach(function(el){
+    el.addEventListener('click',function(){showSkillDetail(el.getAttribute('data-dskill'),u)})
+  })
+  ov.querySelectorAll('[data-dpskill]').forEach(function(el){
+    el.addEventListener('click',function(){showPlayerSkillDetail(el.getAttribute('data-dpskill'),u)})
+  })
+  ov.querySelectorAll('[data-dtalent]').forEach(function(el){
+    el.addEventListener('click',function(){showTalentDetail(el.getAttribute('data-dtalent'),u)})
+  })
 }
 
-/* 状态图标映射 */
+/* 状态图标映射（title 用中文名，避免英文 id 外露） */
 function statusIcon(id){
   var map={sleep:'💤',poison:'☠️',freeze:'❄️',flinch:'😵',wet:'💧',charging:'🔋',possessed:'👻',doomed:'🌑',armorbroken:'💔',slow:'🐌',souldown:'🔮',lastworded:'💀',sleepy:'😪'}
-  return '<span title="'+id+'">'+(map[id]||'')+'</span>'
+  var nm=(typeof getStatusName==='function')?getStatusName(id):id
+  return '<span title="'+escHtml(nm)+'">'+(map[id]||'')+'</span>'
+}
+
+/* ============================================================
+   v2.1.14 详情弹层：技能 / 玩家技能 / 天赋
+   复用 #panelOverlay（z-index = 52 > 战斗 overlay 的 50，且自身可滚动）。
+   打开时暂停群战推进，关闭时恢复 —— 否则自动模式会在阅读期间把界面刷掉。
+   ============================================================ */
+var _detailRestore=null   // 关闭弹层后要恢复的界面（从技能培养面板打开时用）
+function _openDetailPanel(html, restore){
+  var ov=document.getElementById('panelOverlay')
+  if(!ov)return
+  _detailRestore=(typeof restore==='function')?restore:null
+  ov.innerHTML='<div class="panel-inner">'+html+'</div>'
+  ov.classList.add('open')
+  var back=document.getElementById('detailClose')
+  if(back)back.addEventListener('click',_closeDetailPanel)
+}
+function _closeDetailPanel(){
+  var ov=document.getElementById('panelOverlay')
+  if(ov){ov.classList.remove('open');ov.innerHTML=''}   // 清干净，避免留下失效的 #detailClose
+  var r=_detailRestore
+  _detailRestore=null
+  if(r){r();return}   // 从技能培养面板进来的：回到面板
+  resumeGroupBattle()
+}
+function detRow(k,v){
+  return '<div class="det-kv"><span class="det-k">'+escHtml(k)+'</span><span class="det-v">'+escHtml(v)+'</span></div>'
+}
+
+/* 技能目标术语 */
+var _SKILL_TARGET_NAMES={random1:'随机 1 名敌人',all:'敌方全体',self:'自身',ally1:'随机 1 名队友',enemy1:'指定 1 名敌人'}
+/* 技能类别术语 */
+var _SKILL_TYPE_NAMES={attack:'攻击类',support:'辅助类',passive:'被动'}
+/* 玩家技能 effect() 返回值的展示标签 */
+var _EFFECT_LABELS={chance:'触发几率',critMult:'暴击伤害倍率',healPct:'回复比例（基于防御）',power:'威力倍率（基于魂攻）',
+  targets:'目标数',cd:'冷却回合',reduce:'减伤比例',atkBoost:'全队攻击加成',dur:'持续回合',lock:'触发后锁',
+  shieldPct:'护盾比例（攻+魂攻）',tauntDur:'嘲讽回合',soulDefDown:'降低魂防比例',freeze:'冰冻回合',ignoreSoulDef:'无视魂防'}
+/* 天赋 hook → 人话触发时机 */
+var _HOOK_LABELS={onBattleStart:'战斗开始时（仅一次）',onTurnStart:'自己回合开始',onTurnEnd:'自己回合结束',
+  onBeforeAction:'自己行动前（可跳过行动）',onAfterAction:'自己行动后',onDamage:'伤害结算时（攻防双方都会问）',
+  onAfterDamage:'自己造成伤害后',onBeforeStatus:'自己将被施加状态时',onAllyStatus:'友方将被施加状态时',
+  onAllyDamage:'友方受到伤害时（可分担）',onBeforeHeal:'自己将被治疗时',onFoeHeal:'敌方被治疗时',
+  onBeforeHit:'命中判定时',onBeforeCrit:'暴击判定时'}
+
+/* 比例类数值 → 百分数；倍率类 → 保留两位 */
+function fmtEffectVal(k,v){
+  if(v==null||v==='')return '—'
+  if(typeof v!=='number')return String(v)
+  if(k==='chance'||k==='healPct'||k==='reduce'||k==='atkBoost'||k==='shieldPct'||k==='soulDefDown')return Math.round(v*100)+'%'
+  if(k==='power')return (Math.round(v*100)/100)+'×'
+  if(k==='critMult')return v.toFixed(2)+'×'
+  return String(v)
+}
+/* 玩家技能 desc 的 n 占位符填充（v2.1.14：此前 skill-ui.js 用 replace('n',lv)，只替换了第一个 n） */
+function fillPlayerSkillDesc(s,lv){
+  if(!s)return ''
+  return String(s.desc||'').replace(/n/g,String(lv))
+}
+
+/* 敌群技能详情（SKILLS + SKILL_DOCS） */
+function showSkillDetail(skillId, unit){
+  var s=(typeof SKILLS!=='undefined')?SKILLS[skillId]:null
+  if(!s){toast('技能不存在','e');return}
+  pauseGroupBattle()
+  var cd=(unit&&typeof skillCooldownLeft==='function')?skillCooldownLeft(unit,skillId):0
+  var doc=(typeof SKILL_DOCS!=='undefined'&&SKILL_DOCS[skillId])?SKILL_DOCS[skillId]:null
+  var h='<div class="det-hdr">'
+    +'<button class="speed-btn" id="detailClose">← 返回</button>'
+    +'<span class="det-title">⚡ '+escHtml(s.name)+'</span>'
+    +(unit?('<span class="det-sub">'+escHtml(unit.name)+'</span>'):'')
+    +'</div>'
+  h+='<div class="det-card"><div class="det-h">📋 基本信息</div>'
+  h+=detRow('类别', _SKILL_TYPE_NAMES[s.type]||s.type)
+  h+=detRow('目标', _SKILL_TARGET_NAMES[s.target]||s.target||'随机 1 名敌人')
+  if(s.type==='attack'){
+    h+=detRow('威力', (s.power||0)+'% '+(s.dmgType==='soul'?'魂攻':'攻击'))
+    h+=detRow('伤害类型', s.dmgType==='soul'?'魂攻（吃目标魂防）':'物理（吃目标防御）')
+  }
+  h+=detRow('冷却', (s.cooldown||0)+' 回合'+(s.startCooldown?('（开场即进入 '+s.startCooldown+' 回合冷却）'):''))
+  if(s.priority)h+=detRow('先制度', '+'+s.priority+'（出手队列中优先行动）')
+  if(unit)h+=detRow('当前状态', cd>0?('冷却中，还需 '+cd+' 回合'):'就绪')
+  h+='</div>'
+  h+='<div class="det-card"><div class="det-h">📖 效果说明</div>'
+  h+='<div class="det-line">'+escHtml(doc?doc.desc:'（该技能暂无说明文案）')+'</div>'
+  if(doc&&doc.wip)h+='<div class="det-wip">⚠ 与设计文档不一致：'+escHtml(doc.wip)+'</div>'
+  h+='</div>'
+  _openDetailPanel(h)
+}
+
+/* 玩家技能详情（PLAYER_SKILLS）：当前等级真实数值 + 满级预览 + 升级花费
+   restore：可选。从「技能培养」面板打开时传 renderSkillPanel，关闭后回到面板。 */
+function showPlayerSkillDetail(skillId, unit, restore){
+  var s=(typeof getPlayerSkill==='function')?getPlayerSkill(skillId):null
+  if(!s){toast('技能不存在','e');return}
+  pauseGroupBattle()
+  var lv=(unit&&unit._playerSkills&&unit._playerSkills[skillId])
+    ||((typeof getSkillState==='function'&&getSkillState().levels[skillId])||0)
+  var h='<div class="det-hdr">'
+    +'<button class="speed-btn" id="detailClose">← 返回</button>'
+    +'<span class="det-title">⚡ '+escHtml(s.name)+'</span>'
+    +(unit?('<span class="det-sub">'+escHtml(unit.name)+'</span>'):'')
+    +'</div>'
+  h+='<div class="det-card"><div class="det-h">📋 基本信息</div>'
+  h+=detRow('类别', _SKILL_TYPE_NAMES[s.type]||s.type)
+  h+=detRow('当前等级', 'Lv'+lv+' / '+s.maxLevel)
+  h+='</div>'
+  h+='<div class="det-card"><div class="det-h">📖 效果说明</div>'
+  h+='<div class="det-line">'+escHtml(fillPlayerSkillDesc(s,lv))+'</div>'
+  h+='<div class="det-line dim">（说明中的 n = 当前等级 '+lv+'）</div>'
+  h+='</div>'
+  var cur=(s.effect&&lv>0)?s.effect(lv):null
+  var max=s.effect?s.effect(s.maxLevel):null
+  if(cur||max){
+    h+='<div class="det-card"><div class="det-h">📊 数值对比</div>'
+    h+='<div class="det-kv head"><span class="det-k">项目</span><span class="det-v">Lv'+lv+'</span><span class="det-v2">Lv'+s.maxLevel+' 满级</span></div>'
+    Object.keys(max||cur||{}).forEach(function(k){
+      var a=(cur&&cur[k]!=null)?cur[k]:'—'
+      var b=(max&&max[k]!=null)?max[k]:'—'
+      h+='<div class="det-kv"><span class="det-k">'+escHtml(_EFFECT_LABELS[k]||k)+'</span><span class="det-v">'+escHtml(fmtEffectVal(k,a))+'</span><span class="det-v2">'+escHtml(fmtEffectVal(k,b))+'</span></div>'
+    })
+    h+='</div>'
+  }
+  var cost=(lv>=s.maxLevel)?0:((typeof skillUpgradeCost==='function')?skillUpgradeCost(s,lv):0)
+  h+='<div class="det-card"><div class="det-h">⬆️ 升级</div>'
+  h+='<div class="det-line">'+(lv>=s.maxLevel?('已满级（Lv'+s.maxLevel+'）'):('升到 Lv'+(lv+1)+' 需 '+cost+' 技能点 · 满级共需 '+((typeof skillTotalCost==='function')?skillTotalCost(s):'—')+' 点'))+'</div>'
+  h+='<div class="det-line dim">技能点来自「挑战 → 敌群讨伐」胜利（与挑战数值独立）；月底技能等级减半</div>'
+  h+='</div>'
+  _openDetailPanel(h, restore)
+}
+
+/* 天赋详情（TALENTS）：说明 + 触发时机 + 配置 + 静态属性修正 */
+function showTalentDetail(talentId, unit){
+  var t=(typeof TALENTS!=='undefined')?TALENTS[talentId]:null
+  if(!t){toast('天赋不存在','e');return}
+  pauseGroupBattle()
+  var h='<div class="det-hdr">'
+    +'<button class="speed-btn" id="detailClose">← 返回</button>'
+    +'<span class="det-title">✨ '+escHtml(t.name)+'</span>'
+    +(unit?('<span class="det-sub">'+escHtml(unit.name)+'</span>'):'')
+    +'</div>'
+  h+='<div class="det-card"><div class="det-h">📖 说明</div>'
+  h+='<div class="det-line">'+escHtml(t.desc||'（无说明）')+'</div></div>'
+  var hooks=(t.hooks&&Object.keys(t.hooks))||[]
+  h+='<div class="det-card"><div class="det-h">⏱ 触发时机</div>'
+  if(!hooks.length)h+='<div class="det-dim">（纯属性被动，无时机钩子）</div>'
+  else hooks.forEach(function(k){
+    h+='<div class="det-line">· '+escHtml(_HOOK_LABELS[k]||k)+' <span class="det-dim">'+escHtml(k)+'</span></div>'
+  })
+  h+='</div>'
+  if(t.config){
+    h+='<div class="det-card"><div class="det-h">⚙️ 配置</div>'
+    Object.keys(t.config).forEach(function(k){
+      var v=t.config[k]
+      h+='<div class="det-kv"><span class="det-k">'+escHtml(k)+'</span><span class="det-v">'+escHtml(Array.isArray(v)?v.join(' ~ '):String(v))+'</span></div>'
+    })
+    h+='</div>'
+  }
+  if(t.statMods){
+    h+='<div class="det-card"><div class="det-h">📊 静态属性修正</div>'
+    var sm=(typeof t.statMods==='function')?(unit?t.statMods(unit.base):null):t.statMods
+    if(!sm)h+='<div class="det-line">按单位基础属性百分比计算，战斗开始时结算一次</div>'
+    else Object.keys(sm).forEach(function(k){
+      h+='<div class="det-kv"><span class="det-k">'+escHtml(k)+'</span><span class="det-v">'+(sm[k]>=0?'+':'')+sm[k]+'</span></div>'
+    })
+    h+='</div>'
+  }
+  h+='<div class="det-card"><div class="det-h">🔎 标识</div><div class="det-line dim">'+escHtml(talentId)+'</div></div>'
+  _openDetailPanel(h)
 }

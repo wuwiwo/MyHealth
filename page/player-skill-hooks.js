@@ -29,7 +29,7 @@ function playerSkillBattleStart(gb, player) {
       var shield = Math.floor((a.base.atk + (a.base.soulAtk || 0)) * eff.shieldPct);
       a._shield = (a._shield || 0) + shield;
       a._shieldImmune = true;   // 护盾期免疫普通+高级负面
-      events.push({ msg: '🛡️ ' + a.name + ' 金身护盾 +' + shield });
+      events.push({ msg: '🛡️ ' + a.name + ' 金身护盾 +' + shield + '（护盾期免疫普攻类负面）' });
     });
   }
   return events;
@@ -87,7 +87,7 @@ function playerSkillTurnStart(gb, player, turn) {
     var veff = getPlayerSkill('vitality').effect(vitLv);
     var heal = Math.floor(player.base.def * veff.healPct);
     player.hp = Math.min(player.base.hp, player.hp + heal);
-    events.push({ msg: '💚 气力恢复 +' + heal });
+    events.push({ msg: '💚 ' + player.name + ' 气力恢复 +' + heal });
   }
 
   // 瞩目：n×3% 几率进入嘲讽 1 回合（pity 乘算 + 触发锁2回合）
@@ -97,11 +97,12 @@ function playerSkillTurnStart(gb, player, turn) {
     var spotChance = seff.chance * (player._spotPity || 1);
     if (Math.random() < spotChance) {
       player._taunting = true;
+      player._tauntMark = turn;   // v2.1.14：battle-group 用它在下一次行动开始时清除嘲讽
       player._spotPity = 1;
       player._spotLock = 2;
       player._spotTauntTurn = turn;
       player._spotHits = 0;   // 本回合受击计数
-      events.push({ msg: '🎯 ' + player.name + ' 瞩目：嘲讽敌方！' });
+      events.push({ msg: '🎯 ' + player.name + ' 瞩目：吸引敌方全体攻击 1 回合' });
     } else {
       player._spotPity = (player._spotPity || 1) * 1.2;
     }
@@ -118,10 +119,12 @@ function playerSkillTurnEnd(gb, player, turn) {
   if (spotLv >= 1 && player._spotTauntTurn === turn && player._spotHits > 0) {
     var healPer = player.base.def + (player.base.soulDef || 0);
     var total = healPer * player._spotHits;
+    // v2.1.14：原先在 forEach 里逐人 push，3 个队友就是 3 行完全相同的日志。
+    // 回复照旧对全队生效，但只落一条汇总日志。
     gb.allies.forEach(function (a) {
       a.hp = Math.min(a.base.hp, a.hp + total);
-      events.push({ msg: '💖 瞩目：全体回复 ' + total + '（受击' + player._spotHits + '次）' });
     });
+    events.push({ msg: '💖 瞩目结算：全体回复 ' + total + '（（防+魂防）' + healPer + ' × 受击 ' + player._spotHits + ' 次）' });
     player._spotHits = 0;
     player._spotTauntTurn = null;
   }
@@ -144,7 +147,7 @@ function playerAttackSkill(gb, player, skillId) {
       var t = enemies[Math.floor(Math.random() * enemies.length)];
       var dmg = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
       t.hp = Math.max(0, t.hp - dmg);
-      events.push({ msg: '☄️ 陨石轰炸 → ' + t.name + ' ' + dmg });
+      events.push({ msg: '☄️ ' + player.name + ' 陨石轰炸 → ' + t.name + ' ' + dmg + ' 魂伤害' });
     }
     return { name: '陨石轰炸', events: events, cd: eff.cd };
   }
@@ -154,7 +157,7 @@ function playerAttackSkill(gb, player, skillId) {
     var dmg = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
     target.hp = Math.max(0, target.hp - dmg);
     applyStatus(target, { id: 'freeze', duration: 1 });
-    events.push({ msg: '❄️ 冰魄光束 → ' + target.name + ' ' + dmg + '（冰冻）' });
+    events.push({ msg: '❄️ ' + player.name + ' 冰魄光束 → ' + target.name + ' ' + dmg + ' 魂伤害（冰冻 1 回合）' });
     return { name: '冰魄光束', events: events, cd: eff.cd };
   }
   if (skillId === 'boulder') {
@@ -163,7 +166,7 @@ function playerAttackSkill(gb, player, skillId) {
     var dmg2 = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
     t2.hp = Math.max(0, t2.hp - dmg2);
     applyStatus(t2, { id: 'souldown', duration: 3 });
-    events.push({ msg: '🪨 巨石重压 → ' + t2.name + ' ' + dmg2 });
+    events.push({ msg: '🪨 ' + player.name + ' 巨石重压 → ' + t2.name + ' ' + dmg2 + ' 魂伤害（魂防 -' + Math.round((eff.soulDefDown || 0) * 100) + '%）' });
     return { name: '巨石重压', events: events, cd: eff.cd };
   }
   return null;

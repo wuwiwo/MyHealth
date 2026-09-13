@@ -39,11 +39,13 @@ function renderSkillPanel() {
     h += '<div style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--bg2);border-radius:14px;margin-bottom:10px">'
       +'<div style="flex:1">'
       +'<div style="font-size:var(--fs-md);font-weight:600">'+s.name+' <span style="color:var(--text3);font-size:var(--fs-xs)">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
-      +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:3px;line-height:1.5">'+s.desc.replace('n', lv)+'</div>'
+      +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:3px;line-height:1.5">'+(typeof fillPlayerSkillDesc==='function'?fillPlayerSkillDesc(s,lv):String(s.desc||'').replace(/n/g,String(lv)))+'</div>'
       +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:3px">Lv '+lv+'/'+s.maxLevel+(lv>=s.maxLevel?' · 已满级':' · 升级需 '+cost+' 点')+'</div>'
       +'</div>'
       // 操作（大按钮 44px）
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+      // v2.1.14：技能详情（当前等级数值 / 满级预览 / 升级花费）
+      +'<button class="speed-btn" data-skill-info="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">ℹ️ 详情</button>'
       +(equippedSlot>-1
         ? '<button class="speed-btn" data-skill-equip="'+id+'" data-slot="'+equippedSlot+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--green);color:var(--green)">装备中</button>'
         : '<button class="speed-btn" data-skill-equip="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">装备</button>')
@@ -56,6 +58,14 @@ function renderSkillPanel() {
 
   var closeBtn = document.getElementById('skillClose')
   if (closeBtn) closeBtn.addEventListener('click', function(){ ov.classList.remove('open') })
+  // v2.1.14：技能详情（当前等级数值 / 满级预览 / 升级花费），关闭后回到本面板
+  ov.querySelectorAll('[data-skill-info]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      if (typeof showPlayerSkillDetail === 'function') {
+        showPlayerSkillDetail(btn.getAttribute('data-skill-info'), null, renderSkillPanel)
+      }
+    })
+  })
   // 升级
   ov.querySelectorAll('[data-skill-up]').forEach(function(btn){
     btn.addEventListener('click', function(){

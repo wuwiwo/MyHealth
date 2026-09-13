@@ -152,23 +152,35 @@ registerTalent({
   }
 });
 
-/* 威吓：战斗开始时恐吓敌方随机 1 名，攻击力大幅降低，持续到自身血量<50% */
+/* 威吓：战斗开始时恐吓敌方随机 1 名，攻击力大幅降低，持续到自身血量<50%
+   v2.1.14：本天赋唯一可读的削减幅度常量，battle-group.js 直接读取，避免两处各写一个魔法数。 */
+var INTIMIDATE_ATK_DOWN = 0.4;
 registerTalent({
   id: 'intimidate',
   name: '威吓',
   desc: '战斗开始时，恐吓敌方随机1名，攻击力大幅降低（持续到自身血量<50%）',
   hooks: {
     onBattleStart: function (unit, ctx) {
-      var enemies = ctx.enemyUnits || [];
+      var enemies = (ctx && ctx.enemyUnits) || [];
       if (!enemies.length) return;
       var target = enemies[Math.floor(Math.random() * enemies.length)];
       target._intimidated = true;
-      return { events: [{ type: 'talent', talentId: 'intimidate', unitId: unit.id, msg: '威吓: ' + target.name + ' 攻击降低' }] };
+      target._intimidateBy = unit.name || '威吓者';
+      return { events: [{ type: 'talent', talentId: 'intimidate', unitId: unit.id,
+        targetId: target.id,
+        msg: '😱 威吓：' + (unit.name || '单位') + ' → ' + target.name + ' 攻击 -' + Math.round(INTIMIDATE_ATK_DOWN * 100) + '%（持续到威吓者血量 <50%）' }] };
     },
     onTurnStart: function (unit, ctx) {
-      // 血量<50% 解除威吓
+      // 血量<50% 解除威吓（v2.1.14：解除时补一条日志，此前静默失效，玩家无从察觉）
       if (unit.hp < unit.base.hp * 0.5) {
-        (ctx.enemyUnits || []).forEach(function (e) { if (e._intimidated) e._intimidated = false; });
+        var freed = [];
+        ((ctx && ctx.enemyUnits) || []).forEach(function (e) {
+          if (e._intimidated) { e._intimidated = false; e._intimidateBy = ''; freed.push(e.name); }
+        });
+        if (freed.length) {
+          return { events: [{ type: 'talent', talentId: 'intimidate', unitId: unit.id,
+            msg: '😤 威吓解除：' + (unit.name || '单位') + ' 血量低于 50%，' + freed.join('、') + ' 攻击恢复' }] };
+        }
       }
     }
   }

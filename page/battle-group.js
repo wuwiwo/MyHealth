@@ -10,6 +10,29 @@
 var STATUS_NAMES = { sleep:'睡眠', poison:'中毒', freeze:'冰冻', flinch:'畏缩', wet:'潮湿', charging:'蓄力', possessed:'幽魂附身', doomed:'末日', armorbroken:'破甲', slow:'减速', souldown:'魂防降低', lastworded:'遗言诅咒', sleepy:'哈欠' };
 function getStatusName(id){ return STATUS_NAMES[id] || id; }
 
+/* v2.1.14 威吓削减幅度：唯一来源是 talent.js 的 INTIMIDATE_ATK_DOWN
+   （talent.js 在本文件之前加载）。这里做一次兜底读取，避免加载顺序意外变化时静默失效。 */
+function intimidateAtkDown() {
+  return (typeof INTIMIDATE_ATK_DOWN === 'number') ? INTIMIDATE_ATK_DOWN : 0.4;
+}
+
+/* 日志里给技能/技能事件补「谁 → 谁」用的目标名 */
+function joinUnitNames(list) {
+  return (list || []).map(function (u) { return u && u.name ? u.name : '单位'; }).join('、');
+}
+
+/* 从 skipAction 事件里抽一句人话原因（供「无法行动」日志） */
+function skipReasonText(evts) {
+  var pool = evts || [];
+  for (var i = 0; i < pool.length; i++) {
+    var e = pool[i] || {};
+    var txt = e.msg || e.reason || '';
+    if (!txt) continue;
+    return String(txt).split(/[:：]/)[0].trim();
+  }
+  return '';
+}
+
 /* ============ 命中 / 闪避（v2.1.5 引入） ============
    设计文档本就要求命中率机制（技能「闪耀：敌方命中率 -0%~40%」「打湿：提高对其命中率 0%~30%」），
    此前只有文案没有判定，这里补上，并让天赋「漆黑之眼 / 心眼」落地。
@@ -156,6 +179,9 @@ function normalAttack(gb, actor, target) {
   }
   // 普攻伤害（同原公式）
   var dmg = Math.max(1, actor.base.atk - Math.floor(target.base.def / 2) + Math.floor(gb.rng() * 4) + 1);
+  /* v2.1.14 威吓落地：talent.js 的 onBattleStart 只写了 target._intimidated = true，
+     全项目没有任何地方读这个标记（等于威吓从未真正生效）。这里在伤害结算前统一削减。 */
+  if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown())));
   // 天赋 hook: 利刃加成 / 多目标惩罚 / 末日减半
   var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: dmg, isPhysical: true, attacker: actor, target: target });
   td.mutations.forEach(function (m) {
@@ -165,7 +191,7 @@ function normalAttack(gb, actor, target) {
   });
   var td2 = talentDispatch(target, 'onDamage', { attacker: actor, amount: dmg, isPhysical: true, isPlayerAttack: false, isSkill: false, isAoe: false, fromPlayer: actor.side === 'ally' });
   td2.mutations.forEach(function (m) {
-    if (m.key === 'reflectFlat') { target.hp = Math.max(0, target.hp - dmg); actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 粗糙皮肤反伤 ' + m.value }); }
+    if (m.key === 'reflectFlat') { target.hp = Math.max(0, target.hp - dmg); actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 ' + target.name + ' 粗糙皮肤 → ' + (actor.name || '攻击者') + ' 反伤 ' + m.value, targetId: actor.id, type: 'damage' }); }
     if (m.key === 'dmgTakenBoost') dmg = Math.floor(dmg * (1 + m.value));
     if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * 0.7);
     if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));   // 不动如山：满血受伤 -50%
@@ -193,7 +219,7 @@ function normalAttack(gb, actor, target) {
   // 圣光守护：队友分担伤害（目标少受，分担者自己掉血）
   dmg = applyAllyDamageShare(gb, target, dmg, events);
   target.hp = Math.max(0, target.hp - dmg);
-  events.push({ msg: (actor.name || '单位') + ' 攻击 → ' + dmg + ' 伤害', targetId: target.id });
+  events.push({ msg: '⚔️ ' + (actor.name || '单位') + ' 攻击 ' + target.name + ' → ' + dmg + ' 伤害', targetId: target.id, type: 'damage' });
   /* v2.1.10 魂攻/魂防接入敌群战斗。
      此前 battle-group.js 对 soulAtk / soulDef 是零引用 —— 只有单敌 battle.js 用了，
      导致炼魂一半投入（满级 魂攻 +3770 / 魂防 +1798）在 120 关敌群里完全是废属性。
@@ -203,7 +229,7 @@ function normalAttack(gb, actor, target) {
     var sDef = target.base.soulDef || 0;
     var sDmg = sDef > 0 ? Math.max(1, sAtk - Math.floor(sDef / 2) + Math.floor(gb.rng() * 4) + 1) : sAtk;
     target.hp = Math.max(0, target.hp - sDmg);
-    events.push({ msg: '👻 魂攻击 → ' + sDmg + ' 魂伤害', targetId: target.id });
+    events.push({ msg: '👻 ' + (actor.name || '单位') + ' 魂攻击 ' + target.name + ' → ' + sDmg + ' 魂伤害', targetId: target.id, type: 'damage' });
   }
   // 嗜血：造成伤害恢复
   var bt = talentDispatch(actor, 'onAfterDamage', { dealt: dmg, target: target });
@@ -235,6 +261,8 @@ function castSkill(gb, actor, skillId) {
           // 天赋修正（利刃等）
           var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: h.amount, isPhysical: h.dmgType === 'physical', attacker: actor, target: t });
           var dmg = h.amount;
+          // v2.1.14 威吓：被威吓者的技能伤害同样削减（此前只标记不生效）
+          if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown())));
           td.mutations.forEach(function (m) { if (m.key === 'dmgBoost') dmg = Math.floor(dmg * (1 + m.value)); });
           // v2.1.13：目标侧减伤词条（伤害减免 / 抗扩散 / 抗技法）。
           // 此前技能伤害只派发攻击方，导致减伤类词条对技能完全无效。
@@ -246,17 +274,17 @@ function castSkill(gb, actor, skillId) {
           // 圣光守护：队友分担
           dmg = applyAllyDamageShare(gb, t, dmg, events);
           t.hp = Math.max(0, t.hp - dmg);
-          events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + dmg + ' 伤害', targetId: t.id });
+          events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
           // 蓄力重击：蓄力状态
           if (skillId === 'chargeup') {
             applyStatus(actor, { id: 'charging', duration: 1 });
-            events.push({ msg: '🔋 ' + actor.name + ' 蓄力中' });
+            events.push({ msg: '🔋 ' + actor.name + ' 蓄力中（下回合结算 400%）', targetId: actor.id, type: 'status' });
           }
           if (actor._charging) {
             actor._charging = false;
             var big = Math.floor(actor.base.atk * 4 - Math.floor(t.base.def / 2));
             t.hp = Math.max(0, t.hp - big);
-            events.push({ msg: '💥 蓄力重击结算! ' + big + ' 伤害' });
+            events.push({ msg: '💥 ' + actor.name + ' 蓄力重击 → ' + t.name + ' ' + big + ' 伤害', targetId: t.id, type: 'damage' });
           }
         }
       });
@@ -264,8 +292,9 @@ function castSkill(gb, actor, skillId) {
   }
 
   // 效果（状态/治疗/增益）
-  var fx = applySkillEffects(def, actor, targets, {});
-  fx.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  // v2.1.14：把当前回合喂给技能效果（skill.js 的「嘲讽」需要它记录失效时点）
+  var fx = applySkillEffects(def, actor, targets, { turn: gb.turn + 1 });
+  fx.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   fx.statusApps.forEach(function (sa) {
     var t = gb.units.find(function (u) { return u.id === sa.unitId; });
     if (t && t.hp > 0) {
@@ -276,11 +305,23 @@ function castSkill(gb, actor, skillId) {
       var mates = (t.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return u.hp > 0; });
       var auraGuard = talentAura(mates, 'onAllyStatus', { statusId: sa.id, grade: grade, target: t });
       if (!selfGuard.skipAction && !auraGuard.skipAction) {
-        applyStatus(t, { id: sa.id, duration: sa.duration, source: actor });
-        events.push({ msg: '🌀 ' + actor.name + ' → ' + t.name + ' 施加 ' + getStatusName(sa.id) + '(' + sa.id + ')' });
+        // v2.1.14：区分「施加 / 刷新 / 叠层」，并去掉日志里外泄的英文状态 id（如 (poison)）
+        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor });
+        var verb = ar.refreshed ? '刷新' : '施加';
+        var extra = '';
+        if (ar.refreshed && sa.duration) extra = '（延续 ≥' + sa.duration + ' 回合）';
+        else if (sa.duration) extra = '（' + sa.duration + ' 回合）';
+        if (Array.isArray(ar.events)) {
+          for (var qi = 0; qi < ar.events.length; qi++) {
+            if (ar.events[qi] && ar.events[qi].type === 'stack' && ar.events[qi].stacks) extra = '（叠至 ' + ar.events[qi].stacks + ' 层）';
+          }
+        }
+        events.push({ msg: '🌀 ' + actor.name + ' → ' + t.name + ' ' + verb + '【' + getStatusName(sa.id) + '】' + extra, targetId: t.id, type: 'status' });
       } else {
         var blocked = selfGuard.events.concat(auraGuard.events);
-        events.push({ msg: blocked.length ? blocked[0].msg : ('🛡️ ' + t.name + ' 免疫 ' + getStatusName(sa.id)) });
+        var bmsg = '';
+        for (var bi = 0; bi < blocked.length; bi++) { if (blocked[bi] && blocked[bi].msg) { bmsg = blocked[bi].msg; break; } }
+        events.push({ msg: bmsg || ('🛡️ ' + t.name + ' 免疫【' + getStatusName(sa.id) + '】'), targetId: t.id, type: 'status' });
       }
     }
   });
@@ -304,23 +345,26 @@ function castSkill(gb, actor, skillId) {
         pf.events.forEach(function (e) { events.push({ msg: e.msg }); });
         if (amount < 0) amount = 0;
         t.hp = Math.min(t.base.hp, t.hp + amount);
-        events.push({ msg: '💚 ' + t.name + ' 治疗 +' + amount });
-      } else events.push({ msg: '🌑 ' + t.name + ' 末日阻断治疗' });
+        events.push({ msg: '💚 ' + actor.name + ' → ' + t.name + ' 治疗 +' + amount, targetId: t.id, type: 'heal' });
+      } else events.push({ msg: '🌑 ' + t.name + ' 被末日阻断治疗', targetId: t.id, type: 'status' });
     }
   });
   fx.buffs.forEach(function (b) {
     if (b.all) {
-      (actor.side === 'ally' ? gb.allies : gb.enemies).forEach(function (t) {
+      var side = (actor.side === 'ally' ? gb.allies : gb.enemies);
+      // v2.1.14：原日志是三处问题——缺施法者、值写成小数（+0.2 而非 +20%）、每个队友一行重复。
+      // 现在合并成一条，写明范围与百分比。
+      side.forEach(function (t) {
         t._dmgReduce = (t._dmgReduce || 0) + b.value;
-        events.push({ msg: '🛡️ ' + t.name + ' 减伤 +' + b.value });
       });
+      events.push({ msg: '🛡️ ' + actor.name + ' ' + def.name + ' → ' + joinUnitNames(side) + ' 减伤 +' + Math.round(b.value * 100) + '%', type: 'buff' });
     }
   });
 
   // 遗言：自身阵亡
   if (skillId === 'lastword') {
     actor.hp = 0;
-    events.push({ msg: '💀 ' + actor.name + ' 遗言牺牲' });
+    events.push({ msg: '💀 ' + actor.name + ' 遗言：自我牺牲阵亡', targetId: actor.id, type: 'status' });
   }
 
   // 设置冷却
@@ -349,6 +393,17 @@ function groupUnitTurn(gb, actor) {
   var events = [];
   var turn = gb.turn + 1;
 
+  /* v2.1.14 嘲讽复位。此前 player-skill-hooks.js / skill.js 只把 _taunting 置 true，
+     全项目没有一处置回 false —— 后果有两个：
+       1) selectTargets 永远把敌方攻击吸到嘲讽者身上（永久嘲讽）；
+       2) unitInitiative 里 `if (u._taunting) spd *= 2` 永久生效（永久 2 倍速）。
+     语义修正：嘲讽从施加起持续到「本单位下一次行动开始」，
+     刚好覆盖本轮剩余出手 + 到本单位下轮出手之前。 */
+  if (actor._taunting && actor._tauntMark !== turn) {
+    actor._taunting = false;
+    actor._tauntMark = null;
+  }
+
   // 玩家技能回合开始（气势如虹/气力恢复）
   if (actor.side === 'ally' && typeof playerSkillTurnStart === 'function') {
     var ps = playerSkillTurnStart(gb, actor, turn);
@@ -356,17 +411,20 @@ function groupUnitTurn(gb, actor) {
   }
   // 天赋 onTurnStart
   var ts = talentDispatch(actor, 'onTurnStart', { turn: turn, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies });
-  ts.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  ts.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
 
   // 状态 onTurnStart（哈欠→睡眠等）
   var ss = dispatch(actor, 'onTurnStart', { turn: turn });
-  ss.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  ss.events.forEach(function (e) { events.push({ msg: e.msg, reason: e.reason, targetId: e.unitId, type: e.type }); });
 
   // 慢启动/懒惰/冰冻/畏缩 → skipAction
   var before = dispatch(actor, 'onBeforeAction', { turn: turn });
   var tBefore = talentDispatch(actor, 'onBeforeAction', { turn: turn });
   if (before.skipAction || tBefore.skipAction) {
-    events.push({ msg: (actor.name || '') + ' 无法行动' });
+    // v2.1.14：原日志只有「XX 无法行动」，玩家看不出到底是冰冻、畏缩还是慢启动。
+    // 现在把触发源的文案（冰冻/畏缩/睡眠/慢启动/懒惰…）拼进括号。
+    var why = skipReasonText((tBefore.events || []).concat(before.events || []));
+    events.push({ msg: '🚫 ' + (actor.name || '单位') + ' 无法行动' + (why ? '（' + why + '）' : ''), targetId: actor.id, type: 'skip' });
     return events;
   }
 
@@ -417,15 +475,15 @@ function groupUnitTurn(gb, actor) {
   // 玩家技能回合结束（瞩目回复）
   if (actor.side === 'ally' && typeof playerSkillTurnEnd === 'function') {
     var pe = playerSkillTurnEnd(gb, actor, turn);
-    pe.forEach(function (e) { events.push({ msg: e.msg }); });
+    pe.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   }
   // 天赋 onAfterAction / onTurnEnd
   var ae = talentDispatch(actor, 'onAfterAction', {});
-  ae.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  ae.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   var te = talentDispatch(actor, 'onTurnEnd', { turn: turn, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies });
-  te.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  te.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   var se = dispatch(actor, 'onTurnEnd', { turn: turn });
-  se.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  se.events.forEach(function (e) { events.push({ msg: e.msg, reason: e.reason, targetId: e.unitId, type: e.type }); });
 
   // 技能冷却递减
   tickSkillCooldowns(actor);
@@ -439,9 +497,47 @@ function groupUnitTurn(gb, actor) {
   return events;
 }
 
+/* v2.1.14：场地事件此前只 push 进 gb.events，而 UI 只读 gb.log
+   —— 导致 g3 起每个大关的主题场地（沙暴/雪天/酷暑/雨天/反转/毒气）
+   造成的伤害与状态在战斗日志中完全不可见。统一由此函数落日志。 */
+function logTerrainEvents(gb, evts) {
+  if (!evts || !evts.length) return;
+  var label = (gb.terrain && gb.terrain.name) ? ('场地·' + gb.terrain.name) : '场地';
+  gb.log.push({
+    turn: gb.turn,
+    unit: label,
+    terrain: true,
+    events: evts.map(function (e) {
+      return { msg: e.msg, targetId: e.targetId, type: e.type || 'terrain' };
+    })
+  });
+}
+
+/* v2.1.14：开战（回合 0）天赋钩子派发。
+   此前 talent.js 的「威吓」注册在 onBattleStart 上，但全项目没有任何地方派发过这个 hook
+   —— 结果不是「日志没写清威吓了谁」，而是威吓事件根本没发生过。
+   这里对双方各派发一次，并把事件写进 gb.log（UI 只读 gb.log）。 */
+function dispatchBattleStartTalents(gb) {
+  var rA = talentAura(gb.allies, 'onBattleStart', { allyUnits: gb.allies, enemyUnits: gb.enemies });
+  var rE = talentAura(gb.enemies, 'onBattleStart', { allyUnits: gb.enemies, enemyUnits: gb.allies });
+  var evts = rA.events.concat(rE.events).filter(function (e) { return e && e.msg; });
+  if (!evts.length) return evts;
+  gb.events = gb.events.concat(evts);
+  gb.log.push({
+    turn: 0,
+    unit: '开场',
+    opening: true,
+    events: evts.map(function (e) {
+      return { msg: e.msg, targetId: e.targetId, type: e.type || 'talent', talentId: e.talentId };
+    })
+  });
+  return evts;
+}
+
 /* 一个完整回合（所有存活单位按行动队列行动一次） */
 function groupBattleTick(gb) {
   if (gb.done) return;
+  if (gb.turn === 0) dispatchBattleStartTalents(gb);
   if (gb.turn === 0 && typeof playerSkillBattleStart === 'function') {
     var player = gb.allies.find(function(u){ return u._playerSkills; });
     if (player) {
@@ -453,7 +549,7 @@ function groupBattleTick(gb) {
   // v2.1.13 场地：回合开始结算
   if (gb.terrain && gb.terrain.onTurnStart) {
     var ts3 = gb.terrain.onTurnStart(gb);
-    if (ts3 && ts3.events) gb.events = gb.events.concat(ts3.events);
+    if (ts3 && ts3.events) { gb.events = gb.events.concat(ts3.events); logTerrainEvents(gb, ts3.events); }
   }
   var queue = buildActionQueue(gb);
   queue.forEach(function (u) {
@@ -464,7 +560,7 @@ function groupBattleTick(gb) {
     var exRes2 = talentDispatch(u, 'onAfterAction', { turn: gb.turn });
     var wantExtra2 = false;
     exRes2.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra2 = true; });
-    exRes2.events.forEach(function (e) { evts.push({ msg: e.msg }); });
+    exRes2.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
     if (wantExtra2 && !gb.done && u.hp > 0
         && (u.side === 'ally' ? gb.enemies : gb.allies).some(function (a) { return a.hp > 0; })) {
       evts = evts.concat(groupUnitTurn(gb, u));
@@ -480,7 +576,7 @@ function groupBattleTick(gb) {
   // 场地（M2b-5 接入）
   if (gb.terrain && gb.terrain.onTurnEnd) {
     var te = gb.terrain.onTurnEnd(gb);
-    if (te && te.events) gb.events = gb.events.concat(te.events);
+    if (te && te.events) { gb.events = gb.events.concat(te.events); logTerrainEvents(gb, te.events); }
   }
 }
 
@@ -490,6 +586,8 @@ function groupBattleStep(gb) {
   if (gb.done) return { done: true };
   // 初始化队列（跨步保存）
   if (!gb._stepQueue || gb._stepQueue.length === 0) {
+    // 开战钩子（威吓等天赋）
+    if (gb.turn === 0) dispatchBattleStartTalents(gb);
     // 开战钩子（金身）
     if (gb.turn === 0 && typeof playerSkillBattleStart === 'function') {
       var p0 = gb.allies.find(function(u){ return u._playerSkills; });
@@ -504,7 +602,7 @@ function groupBattleStep(gb) {
     // v2.1.13 场地：回合开始结算（此前只接线了 onTurnEnd，开场类场地不生效）
     if (gb.terrain && gb.terrain.onTurnStart) {
       var ts2 = gb.terrain.onTurnStart(gb);
-      if (ts2 && ts2.events) gb.events = gb.events.concat(ts2.events);
+      if (ts2 && ts2.events) { gb.events = gb.events.concat(ts2.events); logTerrainEvents(gb, ts2.events); }
     }
   }
   // 跳过死亡单位
@@ -513,7 +611,7 @@ function groupBattleStep(gb) {
     // 本回合结束：场地结算 + 重置队列
     if (gb.terrain && gb.terrain.onTurnEnd) {
       var te = gb.terrain.onTurnEnd(gb);
-      if (te && te.events) gb.events = gb.events.concat(te.events);
+      if (te && te.events) { gb.events = gb.events.concat(te.events); logTerrainEvents(gb, te.events); }
     }
     gb._stepQueue = null; gb._stepIdx = 0;
     // 回合末检查
@@ -530,7 +628,7 @@ function groupBattleStep(gb) {
   var exRes = talentDispatch(actor, 'onAfterAction', { turn: gb.turn });
   var wantExtra = false;
   exRes.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra = true; });
-  exRes.events.forEach(function (e) { evts.push({ msg: e.msg }); });
+  exRes.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   if (wantExtra && !gb.done && actor.hp > 0
       && (actor.side === 'ally' ? gb.enemies : gb.allies).some(function (u) { return u.hp > 0; })) {
     evts = evts.concat(groupUnitTurn(gb, actor));
