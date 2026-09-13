@@ -36,7 +36,7 @@ const pg12 = sb.groupClearedCount('g12');
 assert('g12 未解锁 → locked', pg12.cleared === 0 && pg12.total === 10 && pg12.state === 'locked', JSON.stringify(pg12));
 
 // 5. 进度统计（敌群已扩至 12 大关 × 10 小关 = 120 关）
-const TOTAL = 120;
+const TOTAL = sb.allStageIds().length;   // 由数据派生，扩关自动跟随
 const stats = sb.groupProgressStats();
 assert('进度 10/' + TOTAL, stats.cleared === 10 && stats.total === TOTAL, JSON.stringify(stats));
 // 6. 通关后不可重打（startGroupTrial 里拦截，这里测 isGroupStageCleared）

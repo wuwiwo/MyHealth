@@ -13,8 +13,23 @@ var GROUP_STAGE_NAMES = {
   1: '试炼·森林', 2: '试炼·山丘', 3: '试炼·洞穴',
   4: '试炼·遗迹', 5: '试炼·深渊', 6: '试炼·王座',
   7: '试炼·天穹', 8: '试炼·冥府', 9: '试炼·神域',
-  10: '试炼·混沌', 11: '试炼·虚无', 12: '试炼·终焉'
+  10: '试炼·混沌', 11: '试炼·虚无', 12: '试炼·终焉',
+  13: '试炼·星陨', 14: '试炼·洪荒', 15: '试炼·永夜'
 };
+
+/* ============ g13+ 超限试炼：必须继续锻炼才能挑战 ============
+   基础曲线是线性的（每大关 lvScale +0.9）。照此推算，实测号
+   （攻 2036 / 防 678 / 血 14714，继承 60% 后 1221/406/8828）能推到 g13 左右 ——
+   达不到「后续关卡当前属性打不过」的目标。
+   所以对 g13+ 叠加超线性加压：tailMul = TAIL_POW^(lg − 12)。
+   ⚠️ 这是 [PLACEHOLDER]：按「每档需再练约 +40% 属性」的假设标定，
+      验证路径：balance-sim.js 扫玩家属性倍数，看 g13/14/15 的解锁门槛是否落在预期月份。
+      改 TAIL_POW 即可整体缩放门槛，不需要动曲线主体。 */
+var GROUP_TAIL_FROM = 13;
+var GROUP_TAIL_POW = 1.45;
+function groupTailMul(lg) {
+  return lg < GROUP_TAIL_FROM ? 1 : Math.pow(GROUP_TAIL_POW, lg - GROUP_TAIL_FROM + 1);
+}
 
 /* 敌人名字池 */
 var ENEMY_NAMES = {
@@ -91,7 +106,7 @@ var SKILLS_LOW = ['bite', 'snowball', 'shrink', 'yawn', 'drench'];
 function genEnemyCfg(lg, st, slot, isElite, isBoss) {
   // v2.1.10：玩家在敌群里只继承 25%，固定曲线相应上调斜率（0.8→1.0 / 0.16→0.20），
   //          让后续关卡持续加压 —— 练得更多才能推更高关
-  var lvScale = 1 + (lg - 1) * 0.9 + (st - 1) * 0.18;
+  var lvScale = (1 + (lg - 1) * 0.9 + (st - 1) * 0.18) * groupTailMul(lg);
   var hasSoul = lg >= 3;
   var tier = isBoss ? 'boss' : isElite ? 'elite2' : (st % 3 === 0 ? 'elite1' : 'minion');
   // 确定性随机：同一关永远生成同一套配置（不再每次刷新重摇）
@@ -169,10 +184,10 @@ function genStageEnemies(lg, st) {
   return enemies;
 }
 
-/* 生成全部 12 大关 × 10 小关（v2.1.7：由 9 大关扩展到 12） */
+/* 生成全部 15 大关 × 10 小关（v2.1.10：由 12 大关扩展到 15，g13+ 为超限试炼） */
 var GROUP_LEVELS = {};
 (function () {
-  for (var lg = 1; lg <= 12; lg++) {
+  for (var lg = 1; lg <= 15; lg++) {
     var stages = [];
     for (var st = 1; st <= 10; st++) {
       var isElite = st === 5, isBoss = st === 10;
@@ -187,6 +202,7 @@ var GROUP_LEVELS = {};
       id: 'g' + lg,
       name: GROUP_STAGE_NAMES[lg],
       desc: lg <= 2 ? '基础试炼（最多 2 敌）'
+        : lg >= 13 ? '超限试炼（最多 3 敌+魂攻防）'
         : lg >= 10 ? '终极试炼（最多 3 敌+魂攻防）'
         : lg >= 5 ? '高阶试炼（最多 3 敌+魂攻防）'
         : '进阶试炼（最多 3 敌+魂攻防）',

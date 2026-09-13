@@ -77,20 +77,20 @@ function snapshot(s, gk, st) {
   }));
 }
 let same = true, checked = 0;
-for (let lg = 1; lg <= 12; lg++) {
+for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
   for (let st = 1; st <= 10; st++) {
     if (snapshot(sb, 'g' + lg, st) !== snapshot(sb2, 'g' + lg, st)) { same = false; break; }
     checked++;
   }
 }
-assert('120 关配置与 Math 种子无关（' + checked + ' 关比对）', same && checked === 120, '比对 ' + checked + ' 关');
+assert(checked + ' 关配置与 Math 种子无关', same && checked === Object.keys(sb.GROUP_LEVELS).length * 10, '比对 ' + checked + ' 关');
 
 // ---- 4. Boss / 精英只用高级池 ----
 const HIGH_T = sb.TALENTS_HIGH || [];
 const HIGH_S = sb.SKILLS_HIGH || [];
 const LOW_T = ['lazy', 'slowstart'];
 let bossBad = [], lowUsed = [];
-for (let lg = 1; lg <= 12; lg++) {
+for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
   const st = sb.GROUP_LEVELS['g' + lg].stages[9];   // 第 10 关 = Boss
   (st.enemies || []).forEach(function (e) {
     (e.talents || []).forEach(function (t) {
@@ -109,7 +109,7 @@ assert('Boss 至少 2 天赋 + 2 技能',
   (anyBoss.talents || []).length >= 2 && (anyBoss.skills || []).length >= 2,
   JSON.stringify({ t: anyBoss.talents, s: anyBoss.skills }));
 assert('天赋/技能 id 都真实存在', (function () {
-  for (let lg = 1; lg <= 12; lg++) {
+  for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
     for (let st = 1; st <= 10; st++) {
       (sb.GROUP_LEVELS['g' + lg].stages[st - 1].enemies || []).forEach(function (e) {
         (e.talents || []).forEach(function (t) { if (!sb.TALENTS[t]) throw new Error('天赋 ' + t); });
@@ -127,7 +127,7 @@ assert('g12 Boss 攻击高于 g1（' + g1.atk + ' → ' + g12.atk + '）', g12.a
 assert('曲线斜率已抬高（g12 Boss 攻 ≥ 500）', g12.atk >= 500, String(g12.atk));
 assert('敌人属性仍随大关单调递增', (function () {
   let prev = 0;
-  for (let lg = 1; lg <= 12; lg++) {
+  for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
     const a = sb.GROUP_LEVELS['g' + lg].stages[9].enemies[0].base.atk;
     if (a <= prev) return false;
     prev = a;

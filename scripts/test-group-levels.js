@@ -31,7 +31,7 @@ function assert(name, cond, detail) {
 // ---- 1. 12 大关 × 10 小关 ----
 const gl = sandbox.GROUP_LEVELS;
 const groupKeys = Object.keys(gl);
-assert('12 大关', groupKeys.length === 12, '实际 ' + groupKeys.length);
+assert(groupKeys.length + ' 大关', groupKeys.length === 15, '实际 ' + groupKeys.length);
 groupKeys.forEach(k => assert('大关 ' + k + ' 有 10 小关', (gl[k].stages || []).length === 10, '实际 ' + (gl[k].stages||[]).length));
 
 // ---- 2. 第 5 小关精英、第 10 小关 Boss ----
@@ -118,8 +118,29 @@ groupKeys.forEach(function (gk) {
     catch (e) { crash++; console.log('  崩溃 ' + s.id + ': ' + e.message); }
   });
 });
-assert('120 关总数正确', stageCount === 120, '实际 ' + stageCount);
-assert('120 关遍历无崩溃', crash === 0, crash + ' 崩溃');
+assert(stageCount + ' 关总数正确', stageCount === groupKeys.length * 10, '实际 ' + stageCount);
+assert(stageCount + ' 关遍历无崩溃', crash === 0, crash + ' 崩溃');
+
+// ---- 7. g13+ 超限试炼门槛（v2.1.11）----
+// 目的：后续关卡必须是「当前属性打不过、需要继续锻炼」的门槛，而不是线性外推的送分关
+function bossAtkOf(k) { return gl[k].stages[9].enemies[0].base.atk; }
+const tailKeys = groupKeys.filter(function (k) { return parseInt(k.slice(1), 10) >= 13; });
+assert('g13~g15 三个超限大关存在', tailKeys.length === 3, tailKeys.join(',') || '无');
+assert('超限大关 desc 标注为超限试炼', tailKeys.every(function (k) { return gl[k].desc.indexOf('超限') >= 0; }));
+assert('g13 门槛显著高于 g12（' + bossAtkOf('g12') + ' → ' + bossAtkOf('g13') + '）',
+  bossAtkOf('g13') > bossAtkOf('g12') * 1.4);
+// 注：档间倍率是恒定的（≈1.55 = TAIL_POW × 线性底），不是递增的 ——
+// 这里要断言的是「跨进超限档的跳跃远大于普通档位步进」，而不是倍率递增。
+assert('跨进超限档的跳跃 ≫ 普通档位步进（' + (bossAtkOf('g13') / bossAtkOf('g12')).toFixed(2) + '× vs '
+  + (bossAtkOf('g12') / bossAtkOf('g11')).toFixed(2) + '×）',
+  (bossAtkOf('g13') / bossAtkOf('g12')) > (bossAtkOf('g12') / bossAtkOf('g11')) * 1.3);
+assert('基础曲线 g1~g12 仍为线性加压（每档倍率递减）', (function () {
+  return (bossAtkOf('g12') / bossAtkOf('g11')) < (bossAtkOf('g3') / bossAtkOf('g2'));
+})());
+assert('超限大关敌人仍有魂攻魂防', tailKeys.every(function (k) {
+  const b = gl[k].stages[9].enemies[0].base;
+  return b.soulAtk > 0 && b.soulDef > 0;
+}));
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

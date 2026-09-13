@@ -61,10 +61,11 @@ function totals(cfg) {
 
 // ---- 1. 关卡进度 t ----
 assert('t(g1-1) = 0', sb.groupAnchorT('g1', 'g1-1') === 0, String(sb.groupAnchorT('g1', 'g1-1')));
-assert('t(末关) = 1', Math.abs(sb.groupAnchorT('g12', 'g12-10') - 1) < 1e-9, String(sb.groupAnchorT('g12', 'g12-10')));
+var lastG = Object.keys(sb.GROUP_LEVELS).pop();
+assert('t(末关 ' + lastG + ') = 1', Math.abs(sb.groupAnchorT(lastG, lastG + '-10') - 1) < 1e-9, String(sb.groupAnchorT(lastG, lastG + '-10')));
 assert('t 随关卡单调递增', (function () {
   let prev = -1;
-  for (let lg = 1; lg <= 12; lg++) {
+  for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
     for (let st = 1; st <= 10; st++) {
       const t = sb.groupAnchorT('g' + lg, 'g' + lg + '-' + st);
       if (t <= prev) return false;
@@ -101,7 +102,7 @@ assert('我方全 0 属性时原样返回', sb.anchorStageEnemies('g6', st6,
 // 越往后打越久、累计挨的伤害越多。所以难度指标用「总攻 × 总血」。
 assert('敌人总血随大关递增', (function () {
   let prev = 0;
-  for (let lg = 1; lg <= 12; lg++) {
+  for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
     const t = totals(sb.anchorStageEnemies('g' + lg, sb.GROUP_LEVELS['g' + lg].stages[9], alliesA)).hp;
     if (t <= prev) return false;
     prev = t;
@@ -110,7 +111,7 @@ assert('敌人总血随大关递增', (function () {
 })());
 assert('难度指标（总攻 × 总血）随大关递增', (function () {
   let prev = 0;
-  for (let lg = 1; lg <= 12; lg++) {
+  for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
     const t = totals(sb.anchorStageEnemies('g' + lg, sb.GROUP_LEVELS['g' + lg].stages[9], alliesA));
     const d = t.atk * t.hp;
     if (d <= prev) return false;
