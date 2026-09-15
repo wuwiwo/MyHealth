@@ -66,8 +66,12 @@ function boostPetForGroup(unit) {
   if (!unit || !unit.base) return unit;
   var tag = ((unit.tags || [])[1] || 'R');
   var k = PET_GROUP_SCALE[tag] || PET_GROUP_SCALE.R;
+  // 只放大「非宝珠」部分：宝珠加成（_orbBonus）原样保留，否则会被 ×12~26 放大成天文数字
+  var ob = unit._orbBonus || {};
   ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].forEach(function (s) {
-    if (unit.base[s] != null) unit.base[s] = Math.max(1, Math.floor(unit.base[s] * k));
+    if (unit.base[s] == null) return;
+    var orbPart = ob[s] || 0;
+    unit.base[s] = Math.max(1, Math.floor((unit.base[s] - orbPart) * k) + orbPart);
   });
   // 宠物同样给魂防下限，否则被敌人魂攻打全额
   unit.base.soulDef = Math.max(unit.base.soulDef || 0, Math.floor((unit.base.def || 0) * 0.5));

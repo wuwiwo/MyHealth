@@ -16,6 +16,7 @@ if (typeof store !== 'undefined' && store.registerSchema) {
           nutrition: 0, feed: 0, spirit: 0,
           refineNormal: 0, refineHigh: 0, orbShard: 0
         },
+        orbs: [],            // v2.1.17 未装配的宝珠库存 [{id,type,rarity,level,exp}]
         lastSettleDate: null,  // 宠物系统上次结算日
         monthlyKey: null       // 月度重置键
       };
@@ -28,10 +29,11 @@ if (typeof store !== 'undefined' && store.registerSchema) {
 /* 读取宠物数据（默认值兜底） */
 function getPetStore() {
   if (typeof store === 'undefined') {
-    return { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, lastSettleDate: null, monthlyKey: null };
+    return { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], lastSettleDate: null, monthlyKey: null };
   }
   var d = store.get('pets');
-  if (!d) { d = { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, lastSettleDate: null, monthlyKey: null }; store.set('pets', d); }
+  if (!d) { d = { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], lastSettleDate: null, monthlyKey: null }; store.set('pets', d); }
+  if (!Array.isArray(d.orbs)) d.orbs = [];   // v2.1.17 老存档补齐宝珠库存
   return d;
 }
 
@@ -107,7 +109,12 @@ function monthlyResetPets(now) {
   var d = getPetStore();
   var cur = monthKey(now || new Date());
   if (d.monthlyKey === cur) return { ok: false, reason: '本月已重置' };
-  d.pets.forEach(function (pet) { monthlyResetPet(pet); });
+  d.pets.forEach(function (pet) {
+    monthlyResetPet(pet);
+    /* v2.1.17 宝珠月重置：已装宝珠回 1 级（本体保留）+ 碎片清空。
+       此前 monthlyResetOrbs 无人调用，与宝珠系统整体一样是死代码。 */
+    if (typeof monthlyResetOrbs === 'function') monthlyResetOrbs(pet, d.materials);
+  });
   monthlyResetMaterials(d.materials);
   d.monthlyKey = cur;
   savePetStore(d);

@@ -77,6 +77,18 @@ function createPetUnit(petState) {
     unit.base[k] = (unit.base[k] || 0) + unit._talentMods[k];
     if (k === 'hp') unit.hp = unit.base[k];
   }
+  /* v2.1.17 宝珠加成。
+     记录增量到 _orbBonus —— 敌群参战时 boostPetForGroup 会把宠物基础属性 ×12~26，
+     若宝珠加成被一起放大，满级 SSR 攻击宝珠(+248) 会变成 ~4000，直接顶穿队伍。
+     所以放大时只放大「基础部分」，宝珠部分原样保留。 */
+  if (typeof applyOrbStats === 'function' && petState.orbs) {
+    var OB = ['hp', 'atk', 'def', 'soulAtk', 'soulDef'];
+    var _pre = {};
+    OB.forEach(function (s) { _pre[s] = unit.base[s] || 0; });
+    applyOrbStats(unit, petState);
+    unit._orbBonus = {};
+    OB.forEach(function (s) { unit._orbBonus[s] = (unit.base[s] || 0) - _pre[s]; });
+  }
   return unit;
 }
 
