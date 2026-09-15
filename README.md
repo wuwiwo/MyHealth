@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.17
+> Personal Health Manager — 个人健身健康管理应用 v2.1.18
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -258,4 +258,6 @@ Vercel 项目设置：
 
 | **v2.1.17** | **2026-09-15** | **💎 实装宠物宝珠系统（此前碎片能拿能看但完全用不了）：存档加宝珠库存字段（老存档自动补齐）、宠物面板新增合成（20碎片/65%）与库存分解、宠物详情新增 5 个宝珠槽位（装配/升级/卸下）、applyOrbStats 属性生效接线；敌群放大系数排除宝珠加成避免 +248 被放大成 ~4000；新增 test-orb-wiring.js（27 断言）；缓存版本对齐（v77）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.17**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.18** | **2026-09-15** | **🐾 宠物放大倍数下调：12/16/20/26 → 8/11/14/18，两宠合计攻占玩家比例 62% → 43%（原档位喧宾夺主）；修 balance-sim.js 宠物数值硬编码导致改配置后测量结果不变，改走 createPetUnit+boostPetForGroup 真实管道；实测 g1~g12 维持 100% 胜率、g12 剩血 34%、g13 起打不过；缓存版本对齐（v78）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.18**（设计规范：`doc/design-tokens-v2.1.md`）

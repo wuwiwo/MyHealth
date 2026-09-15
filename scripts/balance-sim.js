@@ -16,7 +16,7 @@ const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const files = ['levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'skill.js', 'enemy.js',
-  'ai.js', 'terrain.js', 'battle.js', 'group-levels.js', 'battle-group.js'];
+  'ai.js', 'terrain.js', 'battle.js', 'orbs.js', 'pet-codex.js', 'group-levels.js', 'battle-group.js'];
 // v2.1.16：必须加载 ai.js（否则敌人不会放技能）与 terrain.js（否则场地不生效），
 // 缺这两个会让测量结果显著偏乐观
 
@@ -43,12 +43,21 @@ function makeSandbox(seed) {
    groupId 传入 + 未加 --no-anchor 时，走 v2.1.9 的「按我方阵容反推敌人属性」 */
 /* 参战宠物稀有度，默认 SR + SSR（对应清脆鸟 + 小冰晶） */
 const petArg = (function () { const i = process.argv.indexOf('--pets-rarity'); return i >= 0 ? process.argv[i + 1] : 'SR,SSR'; })();
-/* 宠物代表值（图鉴基础 × 稀有度放大系数，见 group-levels.js PET_GROUP_SCALE） */
-const PET_BASE = { R: { atk: 12, def: 8, hp: 120 }, SR: { atk: 15, def: 10, hp: 150 }, SSR: { atk: 20, def: 15, hp: 200 }, UR: { atk: 28, def: 22, hp: 280 } };
-const PET_SCALE = { R: 12, SR: 16, SSR: 20, UR: 26 };
-function petStats(rarity) {
-  const b = PET_BASE[rarity] || PET_BASE.SR, k = PET_SCALE[rarity] || PET_SCALE.SR;
-  return { atk: b.atk * k, def: b.def * k, hp: b.hp * k, spd: 8 };
+/* 宠物数值必须走真实管道：createPetUnit（图鉴+炼化+天赋）→ boostPetForGroup（稀有度放大）。
+   ⚠️ 此前这里硬编码了一份 PET_BASE / PET_SCALE，改游戏配置时模拟器不会跟着变，
+   测出来的数字是假的（与 v2.1.16 缺 ai.js/terrain.js 是同一类「测量口径分叉」）。 */
+const RARITY_PET = { R: 'sparkle', SR: 'chirpbird', SSR: 'icecrystal', UR: 'dream' };   // 各稀有度代表宠（图鉴实有 id）
+function petStats(rarity, sb) {
+  const id = RARITY_PET[rarity] || RARITY_PET.SR;
+  if (sb && typeof sb.createPetUnit === 'function') {
+    const u = sb.createPetUnit({ speciesId: id, stage: 'mature', refineStats: {} });
+    if (u) {
+      if (typeof sb.boostPetForGroup === 'function') sb.boostPetForGroup(u);
+      return { atk: u.base.atk, def: u.base.def, hp: u.base.hp, soulAtk: u.base.soulAtk || 0,
+               soulDef: u.base.soulDef || 0, spd: u.base.spd || 8 };
+    }
+  }
+  return { atk: 240, def: 160, hp: 2400, soulAtk: 0, soulDef: 80, spd: 8 };   // 兜底（SR 清脆鸟）
 }
 
 function simulate(sb, playerBase, stage, petCount, maxTurns, groupId) {
@@ -58,10 +67,10 @@ function simulate(sb, playerBase, stage, petCount, maxTurns, groupId) {
   const rarities = String(petArg).split(',').filter(Boolean);
   const allies = [player];
   for (let i = 0; i < (petCount || 0); i++) {
-    const p = petStats(rarities[i] || 'SR');
+    const p = petStats(rarities[i] || 'SR', sb);
     allies.push(sb.createUnit({
       id: 'pet-' + i, side: 'ally', name: '宠' + i,
-      base: { hp: p.hp, atk: p.atk, def: p.def, spd: p.spd }
+      base: { hp: p.hp, atk: p.atk, def: p.def, soulAtk: p.soulAtk || 0, soulDef: p.soulDef || 0, spd: p.spd }
     }));
   }
   // v2.1.10：锚定默认关闭（GROUP_ANCHOR.enabled=false），只有显式 --anchor 才启用
