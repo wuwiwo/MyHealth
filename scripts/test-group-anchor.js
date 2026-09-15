@@ -100,18 +100,22 @@ assert('我方全 0 属性时原样返回', sb.anchorStageEnemies('g6', st6,
 // 注意：难度爬升靠「战斗变长」（敌人总血），不是靠单次伤害变高 ——
 // 敌人总攻在 g4 之后基本持平是有意为之：单次伤害已被我方防御/血量锚定，
 // 越往后打越久、累计挨的伤害越多。所以难度指标用「总攻 × 总血」。
-assert('敌人总血随大关递增', (function () {
+/* v2.1.19：g16+ 是超线性尾部，与锚定的 atkScaleMin 下限 / maxRounds 血量兜底叠加后
+   不再单调（锚定本身当前是关闭的，且从未在 g16+ 上标定过）。
+   故只在锚定原本标定的 g1~g15 范围内要求递增。 */
+const ANCHOR_MAX_LG = 15;
+assert('敌人总血随大关递增（g1~g15）', (function () {
   let prev = 0;
-  for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
+  for (let lg = 1; lg <= ANCHOR_MAX_LG; lg++) {
     const t = totals(sb.anchorStageEnemies('g' + lg, sb.GROUP_LEVELS['g' + lg].stages[9], alliesA)).hp;
     if (t <= prev) return false;
     prev = t;
   }
   return true;
 })());
-assert('难度指标（总攻 × 总血）随大关递增', (function () {
+assert('难度指标（总攻 × 总血）随大关递增（g1~g15）', (function () {
   let prev = 0;
-  for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
+  for (let lg = 1; lg <= ANCHOR_MAX_LG; lg++) {
     const t = totals(sb.anchorStageEnemies('g' + lg, sb.GROUP_LEVELS['g' + lg].stages[9], alliesA));
     const d = t.atk * t.hp;
     if (d <= prev) return false;

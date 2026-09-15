@@ -26,9 +26,12 @@ function saveSkillState(d) {
 }
 
 /* 隐藏挑战胜利结算：获得技能点（周递增） */
+/* v2.1.19：每关敌群通关获得的技能点基数（原 10，偏高，下调到 4） */
+var SKILL_POINTS_PER_STAGE = 4;
+
 function awardSkillPoints(winCount) {
   var d = getSkillState();
-  var gained = earnSkillPoints(10, winCount || 0);   // 敌群通关 10 点（原 100 的 1/10），周递增照旧
+  var gained = earnSkillPoints(SKILL_POINTS_PER_STAGE, winCount || 0);   // v2.1.19：10 → 4，周递增照旧
   d.points += gained;
   d.totalEarned += gained;
   saveSkillState(d);

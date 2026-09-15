@@ -19,10 +19,11 @@ assert('初始 1 槽', st.slotsUnlocked === 1);
 // 2. 技能点获取（周递增）
 sb.recordSkillWin('2026-W1');
 const r1 = sb.awardSkillPoints(1);
-assert('第1次 10 点', r1.gained === 10 && st.points === 10);
+const BASE = sb.SKILL_POINTS_PER_STAGE;   // v2.1.19：由 10 降到 4，测试由配置派生
+assert('第1次 ' + BASE + ' 点', r1.gained === BASE && st.points === BASE);
 sb.recordSkillWin('2026-W1');
 const r2 = sb.awardSkillPoints(2);
-assert('第2次 15 点', r2.gained === 15 && st.points === 25);
+assert('第2次 ' + Math.round(BASE * 1.5) + ' 点（周递增）', r2.gained === Math.round(BASE * 1.5) && st.points === Math.round(BASE * 2.5));
 // 3. 槽位解锁
 assert('12关 2槽', sb.unlockSkillSlots(12) === 2);
 assert('20关 3槽', sb.unlockSkillSlots(20) === 3);
@@ -33,7 +34,7 @@ const eq = sb.skillEquip(0, 'crit');
 assert('装备暴击', eq.ok === true && st.loadout[0] === 'crit');
 // 5. store 保存
 const saved = sb.store.get('skills');
-assert('store 已保存', saved && saved.points === 15 && saved.loadout[0] === 'crit');
+assert('store 已保存', saved && saved.points === st.points && saved.loadout[0] === 'crit');   // 升级会扣点，别写死
 // 6. 月重置
 sb.monthlyResetSkillState();
 assert('月重置技能减半', st.levels.crit === 0);

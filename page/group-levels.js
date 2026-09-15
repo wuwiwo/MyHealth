@@ -14,7 +14,8 @@ var GROUP_STAGE_NAMES = {
   4: '试炼·遗迹', 5: '试炼·深渊', 6: '试炼·王座',
   7: '试炼·天穹', 8: '试炼·冥府', 9: '试炼·神域',
   10: '试炼·混沌', 11: '试炼·虚无', 12: '试炼·终焉',
-  13: '试炼·星陨', 14: '试炼·洪荒', 15: '试炼·永夜'
+  13: '试炼·星陨', 14: '试炼·洪荒', 15: '试炼·永夜',
+  16: '试炼·寂灭', 17: '试炼·归墟', 18: '试炼·无相'
 };
 
 /* ============ g13+ 超限试炼：必须继续锻炼才能挑战 ============
@@ -27,8 +28,14 @@ var GROUP_STAGE_NAMES = {
       改 TAIL_POW 即可整体缩放门槛，不需要动曲线主体。 */
 var GROUP_TAIL_FROM = 13;
 var GROUP_TAIL_POW = 1.45;
+/* v2.1.19：g16+ 若继续用 1.45 叠加，g18 需要约 6~7 倍属性才可能通关 ——
+   那是永远碰不到的内容。故 g13~g15 维持 1.45，g16 起换用更缓的斜率。 */
+var GROUP_TAIL_POW_EXT = 1.24;
 function groupTailMul(lg) {
-  return lg < GROUP_TAIL_FROM ? 1 : Math.pow(GROUP_TAIL_POW, lg - GROUP_TAIL_FROM + 1);
+  if (lg < GROUP_TAIL_FROM) return 1;
+  var n = lg - GROUP_TAIL_FROM + 1;                 // g13 → 1
+  if (n <= 3) return Math.pow(GROUP_TAIL_POW, n);   // g13~g15 保持原样
+  return Math.pow(GROUP_TAIL_POW, 3) * Math.pow(GROUP_TAIL_POW_EXT, n - 3);
 }
 
 /* 敌人名字池 */
@@ -43,10 +50,10 @@ var ENEMY_NAMES = {
    直接进敌群会把敌人压成 1 点伤害。改为：敌群战斗里玩家只继承一定比例。
    宠物同步放大（否则基础 atk 15~20 在玩家面前等于摆设）。 */
 var GROUP_INHERIT = 0.50;                                  // 玩家在敌群中继承的属性比例
-/* v2.1.18：由 12/16/20/26 下调到 8/11/14/18（约 2/3）。
-   原档位下两只宠物合计攻 = 玩家的 62%，喧宾夺主。
-   下调后约 43%，仍是重要战力但不抢戏。 */
-var PET_GROUP_SCALE = { R: 8, SR: 11, SSR: 14, UR: 18 };    // 宠物按稀有度放大到同量级
+/* v2.1.19：改为 12/14/15/16（dundun 指定）。
+   相比 v2.1.18 的 8/11/14/18，低稀有度抬得更多、UR 略降 —— 稀有度差距收窄，
+   不再「只有 UR 能用」。 */
+var PET_GROUP_SCALE = { R: 12, SR: 14, SSR: 15, UR: 16 };   // 宠物按稀有度放大到同量级
 var PET_GROUP_REFINE = 1.5;                                // 宠物炼化加成在敌群中的额外权重
 
 /* 按真实属性算出敌群战斗属性（玩家） */
@@ -216,10 +223,10 @@ function genStageEnemies(lg, st) {
   return enemies;
 }
 
-/* 生成全部 15 大关 × 10 小关（v2.1.10：由 12 大关扩展到 15，g13+ 为超限试炼） */
+/* 生成全部 18 大关 × 10 小关（v2.1.19：由 15 大关扩展到 18，g13+ 为超限试炼） */
 var GROUP_LEVELS = {};
 (function () {
-  for (var lg = 1; lg <= 15; lg++) {
+  for (var lg = 1; lg <= 18; lg++) {
     var stages = [];
     for (var st = 1; st <= 10; st++) {
       var isElite = st === 5, isBoss = st === 10;

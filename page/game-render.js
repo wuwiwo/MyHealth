@@ -373,6 +373,7 @@ var _groupAnimEl=null    // 动画中的单位
 var _groupDetail=null    // 详情面板中的单位 id
 var _gbTab='battle'      // v2.1.14：战斗页 / 日志页双 Tab（'battle' | 'log'）
 var _groupPaused=false   // v2.1.14：打开详情时暂停自动推进，避免详情被下一步渲染刷掉
+var _groupRewarded=false // v2.1.19：本次战斗是否已结算过奖励（防手动模式重复领取）
 
 /* v2.1.14：暂停 / 恢复群战推进（详情弹层打开期间挂起，关闭后按原模式续跑） */
 function pauseGroupBattle(){
@@ -395,6 +396,7 @@ function startGroupTrial(groupId){
   if(!glv){toast('敌群关卡不存在','e');return}
   // 记录当前小关 id（通关解锁用）
   _groupStageId = stage ? groupId : null
+  _groupRewarded = false   // v2.1.19：新战斗重置结算标志
   // 通关的关卡不可重打
   if (_groupStageId && typeof isGroupStageCleared === 'function' && isGroupStageCleared(_groupStageId)) {
     toast('该关卡已通关 ✅','e'); return
@@ -538,6 +540,14 @@ function showSkillBubble(bubble) {
 function _groupDone(){
   if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
   var w=_groupBattle&&_groupBattle.winner
+  /* v2.1.19：手动模式下战斗结束后仍可继续点「下一步」→ _groupStep 会再次走到这里，
+     导致 markGroupStageCleared / groupVictoryReward 被重复执行、奖励重复发放。
+     这里保证每场战斗只结算一次。 */
+  if(_groupRewarded){
+    renderGroupOverlay(false)
+    return
+  }
+  _groupRewarded=true
   _groupActing=null        // v2.1.14：战斗结束不再残留「行动中」高亮
   _groupPaused=false
   renderGroupOverlay(false)
@@ -561,7 +571,18 @@ function _groupDone(){
       showGroupStages(lg)
     }
   }
-  else toast('💀 敌群讨伐失败…','e')
+  else {
+    // v2.1.19：参战的成熟宠物 50% 几率受伤
+    var msg0 = '💀 敌群讨伐失败…'
+    try {
+      var dInj = getPetStore()
+      var sps = (_groupBattle && _groupBattle.allies ? _groupBattle.allies : [])
+        .map(function (u) { return u._petSpecies; }).filter(Boolean)
+      var hurt = (typeof applyDefeatInjuries === 'function') ? applyDefeatInjuries(dInj, sps) : []
+      if (hurt.length) { savePetStore(dInj); msg0 += ' ' + hurt.join('、') + ' 受伤（喂养恢复）' }
+    } catch (e) { console.warn('[group] 受伤判定失败', e); }
+    toast(msg0, 'e')
+  }
 }
 
 /* 敌群胜利奖励：技能点（10 点/胜，与挑战数值独立）+ 材料掉落 */

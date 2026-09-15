@@ -105,6 +105,23 @@ function settleAllPets(now) {
 }
 
 /* 月度重置入口（月底调用）：炼化/技能/材料 */
+/* v2.1.19：战斗失败后，参战的成熟宠物各有 50% 几率进入受伤状态。
+   受伤期间不可出战，需喂营养液（+10~15%）/ 饲料（+4~5%）把恢复进度喂到 100 解除。
+   @param {string[]} speciesIds 本场参战的宠物 speciesId
+   @returns {string[]} 本次受伤的宠物名 */
+function applyDefeatInjuries(d, speciesIds) {
+  var hurt = [];
+  var chance = (typeof PET_CONFIG !== 'undefined' && PET_CONFIG.matureInjuryChance) || 0.5;
+  (speciesIds || []).forEach(function (sid) {
+    var pet = (d.pets || []).find(function (p) { return p.speciesId === sid; });
+    if (!pet || !canPetBattle(pet)) return;
+    if (Math.random() >= chance) return;
+    var r = injurePet(pet);
+    if (r.ok) hurt.push((getPetCodex(pet.speciesId) || {}).name || pet.name || sid);
+  });
+  return hurt;
+}
+
 function monthlyResetPets(now) {
   var d = getPetStore();
   var cur = monthKey(now || new Date());
@@ -136,7 +153,8 @@ function hatchAllEggs() {
 /* 获取可参战宠物（成熟期） */
 function getBattleReadyPets() {
   var d = getPetStore();
-  return d.pets.filter(function (p) { return p.stage === 'mature' && !p.isDead; });
+  // v2.1.19：受伤期间无法参战
+  return d.pets.filter(function (p) { return canPetBattle(p); });
 }
 
 /* 生成参战 Unit（最多 maxRoster 只） */
@@ -146,7 +164,7 @@ function createPetUnitsForBattle(petIds, maxRoster) {
   var units = [];
   (petIds || []).slice(0, max).forEach(function (pid) {
     var pet = d.pets.find(function (p) { return p.speciesId === pid || p.name === pid; });
-    if (pet && pet.stage === 'mature' && !pet.isDead) {
+    if (pet && canPetBattle(pet)) {   // v2.1.19：受伤不可出战
       var u = createPetUnit(pet);
       if (u) units.push(u);
     }

@@ -102,20 +102,22 @@ function renderPetPanel() {
       var stageIcon = p.stage==='egg'?'🥚':p.stage==='grow'?'🌱':'🐾'
       var stageText = p.stage==='egg'?'孵化 '+Math.round(p.hatchProgress)+'%':p.stage==='grow'?'成长 '+Math.round(p.growth)+'%':'成熟'
       var dead = p.isDead ? '<span style="color:var(--red)">💀 阵亡</span>' : ''
+      // v2.1.19 受伤状态：无法参战，需喂养把恢复进度喂到 100
+      var inj = (!p.isDead && p.injured) ? '<span style="color:var(--red)">🤕 受伤 ' + Math.round(p.injuryHeal || 0) + '%</span>' : ''
       // 进度条（孵化/成长）
       var prog = p.stage==='egg' ? p.hatchProgress : p.stage==='grow' ? p.growth : 100
       h += '<div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg2);border-radius:14px;margin-bottom:10px">'
         +'<span style="font-size:var(--fs-2xl)">'+stageIcon+'</span>'
         +'<div style="flex:1">'
         +'<div style="font-size:var(--fs-lg);font-weight:600">'+(codex.name||p.name)+' <span style="color:var(--purple,#a855f7);font-size:var(--fs-xs)">'+p.rarity+'</span></div>'
-        +'<div style="font-size:var(--fs-xs);color:var(--text3);margin:3px 0">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+'</div>'
+        +'<div style="font-size:var(--fs-xs);color:var(--text3);margin:3px 0">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+(inj?' · '+inj:'')+'</div>'
         // 进度条
         +'<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;border:1px solid var(--bg2)"><div style="width:'+Math.min(100,prog)+'%;height:100%;background:var(--orange);border-radius:3px;transition:width .3s"></div></div>'
         +'</div>'
         // 操作按钮（大按钮 44px）
         +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
         +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">🍖喂</button>'
-        +(p.stage==='egg'?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">🧪营养</button>':'')
+        +((p.stage==='egg'||(p.stage==='mature'&&!p.isDead))?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(p.injured?';border-color:var(--red);color:var(--red)':'')+'">🧪营养</button>':'')
         +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">✨炼化</button>':'')
         +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="detail" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">📋</button>':'')
         +'</div>'
@@ -195,8 +197,20 @@ function renderPetPanel() {
       var d2 = getPetStore()
       var pet = d2.pets[idx]
       if (!pet) return
-      if (op === 'feed') { var r = useFeed(pet, d2.materials); toast(r.reason || ('🍖 饥饿+' + r.inc.toFixed(0)), r.ok?'s':'e') }
-      if (op === 'nutrition') { var r2 = useNutrition(pet, d2.materials); toast(r2.reason || ('🧪 孵化+' + r2.inc.toFixed(1)+'%'), r2.ok?'s':'e') }
+      if (op === 'feed') {
+        var r = useFeed(pet, d2.materials)
+        var m = r.reason || (pet.stage === 'mature'
+          ? ('🍖 饥饿+' + r.inc.toFixed(0) + (r.injuryHeal != null ? ' · 治疗 ' + r.injuryHeal + '%' + (r.healed ? ' ✅已痊愈' : '') : ''))
+          : ('🍖 饥饿+' + r.inc.toFixed(0)))
+        toast(m, r.ok?'s':'e')
+      }
+      if (op === 'nutrition') {
+        var r2 = useNutrition(pet, d2.materials)
+        var m2 = r2.reason || (pet.stage === 'mature'
+          ? ('🧪 治疗 ' + (r2.injuryHeal != null ? r2.injuryHeal + '%' : '') + (r2.healed ? ' ✅已痊愈' : ''))
+          : ('🧪 孵化+' + r2.inc.toFixed(1)+'%'))
+        toast(m2, r2.ok?'s':'e')
+      }
       if (op === 'refine') { var r3 = attemptRefine(pet, d2.materials, 'refineHigh'); toast(r3.reason || ('✨ 炼化 +' + r3.gained + ' ' + r3.stat + '（Lv'+r3.level+'）'), r3.ok?'s':'e') }
       if (op === 'detail') { renderPetDetail(pet, idx); return }
       savePetStore(d2)

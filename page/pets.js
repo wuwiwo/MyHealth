@@ -17,8 +17,38 @@ var PET_CONFIG = {
   },
   growthPerDay: [1, 7],   // 健康达标每天成长 +1%~7%
   matureHungerUse: [20, 35],  // 成熟后每天消耗饥饿 20%~35%
-  maxRoster: 2            // 每场最多上 2 只
+  maxRoster: 2,           // 每场最多上 2 只
+  /* v2.1.19 受伤系统：成熟期参战失败 → 50% 几率受伤；受伤期间无法出战。
+     恢复进度 injuryHeal 0→100，到 100 解除受伤。
+     营养液 每次 +10%~15%（约 7~10 次）；饲料 每次 +4%~5%（约 20~25 次）。 */
+  matureInjuryChance: 0.5,
+  injuryHeal: { nutrition: [10, 15], feed: [4, 5] }
 };
+
+/* 受伤：成熟期战斗失败时调用（概率由调用方判定） */
+function injurePet(pet) {
+  if (!pet || pet.stage !== 'mature') return { ok: false, reason: '非成熟期' };
+  pet.injured = true;
+  pet.injuryHeal = 0;
+  return { ok: true };
+}
+
+/* 治疗受伤：kind = 'nutrition'（营养液）| 'feed'（饲料）
+   恢复进度累积到 100 → 解除受伤状态 */
+function healPetInjury(pet, kind) {
+  if (!pet || !pet.injured) return { ok: false, reason: '未受伤' };
+  var cfg = (PET_CONFIG.injuryHeal && PET_CONFIG.injuryHeal[kind]) || PET_CONFIG.injuryHeal.feed;
+  var inc = cfg[0] + Math.random() * (cfg[1] - cfg[0]);
+  pet.injuryHeal = Math.min(100, (pet.injuryHeal || 0) + inc);
+  var healed = false;
+  if (pet.injuryHeal >= 100) { pet.injured = false; pet.injuryHeal = 0; healed = true; }
+  return { ok: true, inc: inc, progress: pet.injuryHeal, healed: healed };
+}
+
+/* 是否可参战：成熟 + 未阵亡 + 未受伤 */
+function canPetBattle(pet) {
+  return !!pet && pet.stage === 'mature' && !pet.isDead && !pet.injured;
+}
 
 /* createPet({speciesId, rarity, name}) → 宠物状态对象（蛋期开始）
    存 store 的结构：dh-pets-v1 下的单个宠物 */
@@ -54,6 +84,12 @@ function createPet(spec) {
 
 /* 喂营养液（孵化期）：+0.5%~2%，返回进度 */
 function feedNutrition(pet) {
+  /* v2.1.19：成熟期喂营养液 —— 治疗受伤（10%~15%），不涨孵化进度 */
+  if (pet.stage === 'mature') {
+    var nh = healPetInjury(pet, 'nutrition');
+    if (!nh.ok) return { ok: false, reason: nh.reason };
+    return { ok: true, mature: true, injuryHeal: Math.round(nh.progress), healed: nh.healed, inc: nh.inc };
+  }
   if (pet.stage !== 'egg') return { ok: false, reason: '非孵化期' };
   var inc = PET_CONFIG.nutritionPerFeed[0] + Math.random() * (PET_CONFIG.nutritionPerFeed[1] - PET_CONFIG.nutritionPerFeed[0]);
   pet.hatchProgress = Math.min(100, pet.hatchProgress + inc);
@@ -63,6 +99,14 @@ function feedNutrition(pet) {
 
 /* 喂饲料（成长期）：恢复饥饿 10%~15% */
 function feedPet(pet) {
+  /* v2.1.19：成熟期也需要喂饲料 —— 恢复饥饿 + 治疗受伤（4%~5%） */
+  if (pet.stage === 'mature') {
+    var mi = PET_CONFIG.feedHunger[0] + Math.random() * (PET_CONFIG.feedHunger[1] - PET_CONFIG.feedHunger[0]);
+    pet.hunger = Math.min(100, pet.hunger + mi);
+    var mh = healPetInjury(pet, 'feed');
+    return { ok: true, hunger: pet.hunger, inc: mi, mature: true,
+             injuryHeal: mh.ok ? Math.round(mh.progress) : null, healed: mh.ok ? mh.healed : false };
+  }
   if (pet.stage !== 'grow') return { ok: false, reason: '非成长期' };
   var inc = PET_CONFIG.feedHunger[0] + Math.random() * (PET_CONFIG.feedHunger[1] - PET_CONFIG.feedHunger[0]);
   pet.hunger = Math.min(100, pet.hunger + inc);
