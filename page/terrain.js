@@ -59,7 +59,7 @@ registerTerrain({
     var alive = gb.units.filter(function (u) { return u.hp > 0; });
     var targets = [];
     while (targets.length < 2 && alive.length) {
-      var pick = alive[Math.floor(Math.random() * alive.length)];
+      var pick = alive[Math.floor(battleRnd() * alive.length)];
       if (!targets.includes(pick)) targets.push(pick);
       if (alive.length === 1) break;
     }
@@ -82,12 +82,12 @@ registerTerrain({
     var events = [];
     var turn = gb.turn || 0;
     // interval 固定（场地创建时确定），避免每回合重算
-    if (!gb._snowInterval) gb._snowInterval = 5 + Math.floor(Math.random() * 3);
+    if (!gb._snowInterval) gb._snowInterval = 5 + Math.floor(battleRnd() * 3);
     var interval = gb._snowInterval;
     if (turn >= interval && turn % interval === 0) {
       var alive = gb.units.filter(function (u) { return u.hp > 0; });
       if (alive.length) {
-        var t = alive[Math.floor(Math.random() * alive.length)];
+        var t = alive[Math.floor(battleRnd() * alive.length)];
         var plain = talentDispatch(t, 'onBeforeStatus', {});
         if (!plain.skipAction) {
           applyStatus(t, { id: 'freeze', duration: 1 });
@@ -122,7 +122,7 @@ registerTerrain({
   onTurnStart: function (gb) {
     var events = [];
     gb.units.forEach(function (u) {
-      if (u.hp > 0 && Math.random() < 0.15) {
+      if (u.hp > 0 && battleRnd() < 0.15) {
         applyStatus(u, { id: 'wet', duration: 1 });
         events.push({ msg: '🌧️ ' + u.name + ' 变潮湿' });
       }
@@ -165,7 +165,7 @@ registerTerrain({
     if ((gb.turn || 0) < 5) return { events: events };
     gb.units.forEach(function (u) {
       if (u.hp <= 0 || u._gasImmune) return;
-      if (Math.random() < 0.35) {
+      if (battleRnd() < 0.35) {
         if (hasStatus(u, 'poison')) {
           u._gasPoisonCount = (u._gasPoisonCount || 0) + 1;
           if (u._gasPoisonCount >= 3) {

@@ -153,7 +153,7 @@ registerSkill({ id:'p_flamepeck', name:'火焰啄击', type:'attack', target:'ra
 
 /* SR：歌唱（全体魂攻+几率睡眠）—— 设计 魂攻×160%~250% */
 registerSkill({ id:'p_sing', name:'歌唱', type:'attack', target:'all', power:200, range:{power:[160,250]}, dmgType:'soul', cooldown:5,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ if(Math.random()<0.2) r.statusApps.push({unitId:t.id,id:'sleep',duration:1,chance:1,grade:1}); }); }] });
+  effects:[function(c,ts,r){ ts.forEach(function(t){ if(battleRnd()<0.2) r.statusApps.push({unitId:t.id,id:'sleep',duration:1,chance:1,grade:1}); }); }] });
 
 /* SR：雷霆冲撞（蓄力+反冲）—— 设计 魂攻×220%~400% */
 registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target:'random1', power:300, range:{power:[220,400]}, dmgType:'soul', cooldown:4 });
@@ -177,7 +177,7 @@ registerSkill({ id:'p_phantom', name:'幻影之瞳', type:'support', target:'ran
 
 /* SSR：冰晶爆（冰冻+伤害）—— 设计 魂攻×150%~240% */
 registerSkill({ id:'p_iceburst', name:'冰晶爆', type:'attack', target:'random1', power:200, range:{power:[150,240]}, dmgType:'soul', cooldown:4,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ if(Math.random()<0.3) r.statusApps.push({unitId:t.id,id:'freeze',duration:1,chance:1,grade:2}); }); }] });
+  effects:[function(c,ts,r){ ts.forEach(function(t){ if(battleRnd()<0.3) r.statusApps.push({unitId:t.id,id:'freeze',duration:1,chance:1,grade:2}); }); }] });
 
 /* SSR：圣光治愈 —— 设计 恢复 魂攻×110%~200%（v2.1.22 接区间） */
 registerSkill({ id:'p_holylight', name:'圣光治愈', type:'support', target:'ally1', cooldown:3,
@@ -246,7 +246,7 @@ registerTalent({ id:'inspiration', name:'灵感涌动', desc:'每回合开始随
     onTurnStart: function (unit, ctx) {
       var mates = (ctx.allyUnits || []).filter(function (u) { return u.hp > 0; });
       if (!mates.length) return;
-      var t = mates[Math.floor(Math.random() * mates.length)];
+      var t = mates[Math.floor(battleRnd() * mates.length)];
       if (!t._inspireBoost) t._inspireOrig = t.base.soulAtk || 0;
       t.base.soulAtk = Math.floor((t._inspireOrig || 0) * 1.2);
       t._inspireBoost = true;

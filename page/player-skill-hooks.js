@@ -44,7 +44,7 @@ function playerCritHook(player, dmg) {
   var lv = player._playerSkills['crit'] || 0;
   if (lv < 1) return dmg;
   var eff = getPlayerSkill('crit').effect(lv);
-  if (Math.random() < eff.chance) {
+  if (battleRnd() < eff.chance) {
     return Math.floor(dmg * eff.critMult);
   }
   return dmg;
@@ -57,7 +57,7 @@ function playerBlockHook(player, dmg) {
   if (lv < 1) return dmg;
   var eff = getPlayerSkill('block').effect(lv);
   var chance = eff.chance * (player._blockPity || 1);
-  if (Math.random() < chance) {
+  if (battleRnd() < chance) {
     player._blockPity = 1;
     return Math.floor(dmg * (1 - eff.reduce));
   }
@@ -74,7 +74,7 @@ function playerSkillTurnStart(gb, player, turn) {
   var momLv = player._playerSkills['momentum'] || 0;
   if (momLv >= 1 && !player._momLock) {
     var meff = getPlayerSkill('momentum').effect(momLv);
-    if (Math.random() < meff.chance) {
+    if (battleRnd() < meff.chance) {
       /* v2.1.15：改为按单位挂 atkup 状态。
          此前累加 a._momBoost，而全项目没有任何地方读它 → 「全队攻击 +n×3%」是空头承诺。
          duration 用设计文档的 2 回合，幅度 = 等级 × 3%（写进实例自带的 modsPct）。 */
@@ -102,7 +102,7 @@ function playerSkillTurnStart(gb, player, turn) {
   if (spotLv >= 1 && !player._spotLock) {
     var seff = getPlayerSkill('spotlight').effect(spotLv);
     var spotChance = seff.chance * (player._spotPity || 1);
-    if (Math.random() < spotChance) {
+    if (battleRnd() < spotChance) {
       player._taunting = true;
       player._tauntMark = turn;   // v2.1.14：battle-group 用它在下一次行动开始时清除嘲讽
       player._spotPity = 1;
@@ -151,7 +151,7 @@ function playerAttackSkill(gb, player, skillId) {
     // 陨石：随机3敌各1次（敌人少则只命中1次）
     var hits = Math.min(eff.targets || 3, enemies.length);
     for (var i = 0; i < hits; i++) {
-      var t = enemies[Math.floor(Math.random() * enemies.length)];
+      var t = enemies[Math.floor(battleRnd() * enemies.length)];
       var dmg = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
       t.hp = Math.max(0, t.hp - dmg);
       events.push({ msg: '☄️ ' + player.name + ' 陨石轰炸 → ' + t.name + ' ' + dmg + ' 魂伤害' });

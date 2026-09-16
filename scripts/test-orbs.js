@@ -14,7 +14,7 @@ const path = require('path');
 const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
-const files = ['date-roll.js','unit.js','pets.js','orbs.js'];
+const files = ['utils.js', 'date-roll.js','unit.js','pets.js','orbs.js'];
 const sb = { Math, JSON, console, Date };
 sb.window = sb;
 vm.createContext(sb);

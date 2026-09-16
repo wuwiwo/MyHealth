@@ -212,7 +212,66 @@ function applyAllyDamageShare(gb, target, dmg, events) {
   return share > 0 ? Math.max(1, dmg - share) : dmg;
 }
 
-/* createGroupBattle({allies:[Unit], enemies:[Unit], rng?}) → group battle 状态
+/* ================= v2.1.27 [7c/7d] 种子随机 & 快照 =================
+   游戏侧此前把 gb.rng 直接设为 Math.random，不可播种 → 无法复现、无法回退。 */
+
+/* v2.1.27：战斗随机作用域。
+   battleRnd / makeSeededRng / beginBattleRng 全部定义在 **utils.js**（最早加载），
+   这里只保留把本场 rng 挂上去的辅助函数。
+   ⚠️ 切勿在本文件再声明 battleRnd —— 批量替换曾把定义体里的 Math.random() 也换掉，
+      造成 self-recursion（栈溢出）。 */
+function _setBattleRng(gb) { _BATTLE_RNG = (gb && gb.rng) ? gb.rng : null; }
+
+/* 只拷可 JSON 序列化的自有属性（跳过函数，如 hook / rng） */
+function _cloneUnit(u) {
+  var o = {};
+  for (var k in u) {
+    if (typeof u[k] === 'function') continue;
+    try { o[k] = JSON.parse(JSON.stringify(u[k])); } catch (e) { console.warn('[group] 快照跳过不可序列化的键 ' + k, e); }
+  }
+  return o;
+}
+
+/* 快照：回合 / 胜负 / **rng 计数器** / 每个单位的可序列化状态 */
+function groupSnapshot(gb) {
+  if (!gb) return null;
+  try {
+    return {
+      turn: gb.turn, done: !!gb.done, winner: gb.winner || null,
+      rngState: (gb.rng && gb.rng.getState) ? gb.rng.getState() : null,
+      units: (gb.units || []).map(_cloneUnit)
+    };
+  } catch (e) { console.warn('[group] 生成快照失败', e); return null; }
+}
+
+/* 回滚到快照。⚠️ _stepQueue / _stepIdx 必须重置，否则行动队列错乱 */
+function groupRestore(gb, snap) {
+  if (!gb || !snap || !Array.isArray(snap.units)) return { ok: false, reason: '快照无效' };
+  try {
+    gb.turn = snap.turn; gb.done = !!snap.done; gb.winner = snap.winner || null;
+    if (gb.rng && gb.rng.setState && snap.rngState != null) gb.rng.setState(snap.rngState);
+    snap.units.forEach(function (su) {
+      var u = null;
+      (gb.units || []).forEach(function (x) { if (x.id === su.id) u = x; });
+      if (!u) return;
+      Object.keys(su).forEach(function (k) { u[k] = su[k]; });
+    });
+    gb._stepQueue = null; gb._stepIdx = 0;
+    if (typeof syncStatusDerived === 'function') (gb.units || []).forEach(syncStatusDerived);
+    return { ok: true, turn: gb.turn };
+  } catch (e) { console.warn('[group] 回滚失败', e); return { ok: false, reason: String(e && e.message) }; }
+}
+
+/* 从初始快照无头重跑到结束，用于验证「同种子结果一致」 */
+function groupReplay(gb, initSnap, maxSteps) {
+  var r0 = groupRestore(gb, initSnap);
+  if (!r0.ok) return { ok: false, reason: r0.reason };
+  var n = 0, cap = maxSteps || 600;
+  while (!gb.done && n < cap) { groupBattleStep(gb); n++; }
+  return { ok: true, winner: gb.winner || null, turn: gb.turn, steps: n, hitCap: n >= cap };
+}
+
+/* createGroupBattle({allies:[Unit], enemies:[Unit], rng?, seed?}) → group battle 状态
    allies/enemies 是 unit.js 的 Unit 数组 */
 function createGroupBattle(opts) {
   opts = opts || {};
@@ -226,7 +285,8 @@ function createGroupBattle(opts) {
     winner: null,        // 'ally' | 'enemy'
     events: [],
     log: [],
-    rng: opts.rng || Math.random,
+    /* v2.1.27：给了 seed 就用可播种 RNG（可复现 / 可回退）；都没给才退回 Math.random */
+    rng: opts.rng || (opts.seed != null ? makeSeededRng(opts.seed) : Math.random),
     terrain: opts.terrain || null
   };
 }
@@ -555,7 +615,7 @@ function playerAttackSkillPick(gb, actor) {
   var ready = atkSkills.filter(function (sid) { return !skillOnCooldown(actor, sid); });
   if (!ready.length) return null;
   // 30% 几率施放（不每回合放），让普攻也有存在感
-  if (Math.random() < 0.3) return ready[Math.floor(Math.random() * ready.length)];
+  if (battleRnd() < 0.3) return ready[Math.floor(battleRnd() * ready.length)];
   return null;
 }
 
@@ -740,6 +800,7 @@ function dispatchBattleStartTalents(gb) {
 /* 一个完整回合（所有存活单位按行动队列行动一次） */
 function groupBattleTick(gb) {
   if (gb.done) return;
+  _setBattleRng(gb);   // v2.1.27
   if (gb.turn === 0) dispatchBattleStartTalents(gb);
   if (gb.turn === 0 && typeof playerSkillBattleStart === 'function') {
     var player = gb.allies.find(function(u){ return u._playerSkills; });
@@ -789,6 +850,7 @@ function groupBattleTick(gb) {
    返回 { unit: 行动单位, events, done, winner, queueIndex, queue } */
 function groupBattleStep(gb) {
   if (gb.done) return { done: true };
+  _setBattleRng(gb);   // v2.1.27：让技能/AI/场地里的随机也走本场种子
   // 初始化队列（跨步保存）
   if (!gb._stepQueue || gb._stepQueue.length === 0) {
     // 开战钩子（威吓等天赋）
@@ -831,6 +893,7 @@ function groupBattleStep(gb) {
   var actor = gb._stepQueue[gb._stepIdx];
   gb._stepIdx++;
   var evts = groupUnitTurn(gb, actor);
+  if (gb.done) _BATTLE_RNG = null;   // v2.1.27：本场结束，别污染下一场的建场阶段
   // v2.1.13 天赋「疾影」：本回合额外行动 1 次
   var exRes = talentDispatch(actor, 'onAfterAction', { turn: gb.turn });
   var wantExtra = false;

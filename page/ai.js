@@ -27,7 +27,7 @@ function scoreTarget(t) {
   if (t.skills && t.skills.some(function(s){ var d = SKILLS[s]; return d && d.type === 'support'; })) score += 8;
   // 攻击高（威胁大）优先
   if (t.base.atk >= 50) score += 5;
-  return score + Math.random() * 5;  // 少量随机避免完全确定
+  return score + battleRnd() * 5;  // 少量随机避免完全确定
 }
 
 /* 选目标：评分最高（嘲讽者强制） */
@@ -105,8 +105,8 @@ function aiPickSkill(gb, actor) {
     return (pb + prb * 20) - (pa + pra * 20);
   });
   // 70% 用最强，30% 随机（避免太机械）
-  if (Math.random() < 0.7) return sorted[0];
-  return sorted[Math.floor(Math.random() * sorted.length)];
+  if (battleRnd() < 0.7) return sorted[0];
+  return sorted[Math.floor(battleRnd() * sorted.length)];
 }
 
 /* 集成：替换 battle-group 里的 pickSkill/selectTargets 调用 */

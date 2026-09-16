@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.1.26';
+const APP_VERSION = '2.1.27';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -203,3 +203,28 @@ COMMON_W.forEach(w=>{const b=document.createElement('button')
 b.className='wt-btn'+(w===sel?' selected':'');b.textContent=w;b.dataset.w=w
 b.addEventListener('click',()=>{c.querySelectorAll('.wt-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');if(onChg)onChg(w)})
 c.appendChild(b)})}
+
+
+/* ================= v2.1.27 战斗随机作用域 =================
+   ⚠️ 必须定义在 utils.js（index.html 里最早加载）：skill.js / talent.js / ai.js /
+   terrain.js / affix.js / enemy.js / pet-codex.js 等都会调用 battleRnd()。
+   若定义在后面才加载的模块里，只加载部分文件的测试沙箱会 ReferenceError。
+
+   战斗进行中 → 用本场种子 RNG（可复现 / 可回退）；未开战 → 回退 Math.random（行为不变）。 */
+var _BATTLE_RNG = null;
+function battleRnd() { return _BATTLE_RNG ? _BATTLE_RNG() : Math.random(); }
+function setBattleRng(fn) { _BATTLE_RNG = fn || null; }
+function makeSeededRng(seed) {
+  var a = (seed >>> 0) || 1;
+  function rnd() {
+    a = (a + 0x6D2B79F5) >>> 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  rnd.getState = function () { return a; };
+  rnd.setState = function (st) { a = (st >>> 0) || 1; };
+  rnd.seed = (seed >>> 0) || 1;
+  return rnd;
+}
+function beginBattleRng(seed) { var r = makeSeededRng(seed); _BATTLE_RNG = r; return r; }

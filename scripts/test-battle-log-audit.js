@@ -15,7 +15,7 @@ const path = require('path');
 const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
-const files = ['date-roll.js', 'levels.js', 'group-levels.js', 'unit.js', 'state-core.js',
+const files = ['utils.js', 'date-roll.js', 'levels.js', 'group-levels.js', 'unit.js', 'state-core.js',
   'status-defs.js', 'talent.js', 'skill.js', 'enemy.js', 'battle.js', 'battle-group.js',
   'terrain.js', 'ai.js'];
 // 确定性随机（Math 属性不可枚举，须 Object.create 继承而非拷贝）

@@ -13,7 +13,7 @@ const path = require('path');
 const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
-const files = ['unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js','terrain.js'];
+const files = ['utils.js', 'unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js','terrain.js'];
 // v2.1.5：群战引入 5% 基础命中率，测试改用可复现伪随机（mulberry32）
 // 注意：不可用恒定 0.5 —— 场地战斗会长时间不收敛（实测 45s 超时）
 function mulberry32(a) {

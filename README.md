@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.26
+> Personal Health Manager — 个人健身健康管理应用 v2.1.27
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -276,4 +276,6 @@ Vercel 项目设置：
 
 | **v2.1.26** | **2026-09-16** | **🎚️ 技能区间接进非攻击通道：治愈治疗量、睡觉睡眠时长（由随机改为随炼化成长）、强攻增益幅度与持续、广域防御减伤与持续、打湿持续回合全部接区间；新增 test-skill-range-channels.js 以「数值必须真随成长变化」为判据；动作媒体实测 Vercel 可访问（根目录=page/）；清理 5 个已合并的远端分支；修 group-progress 残留旧物理键注释；HANDOFF 待办同步；缓存版本对齐（v86）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.26**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.27** | **2026-09-16** | **🎬 实装 7c RNG 回放 + 7d 时间旅行：战斗随机统一走 battleRnd（43 处 Math.random 改为可播种，此前同种子也复现不了），createGroupBattle 支持 seed 并记录到 _groupSeed；新增 groupSnapshot / groupRestore / groupReplay；Debug 面板新增「🎬 回放」分区（种子、重放验证、快照回退）；新增 test-group-determinism.js（14 断言）；平衡复核未变；缓存版本对齐（v87）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.27**（设计规范：`doc/design-tokens-v2.1.md`）

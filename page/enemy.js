@@ -26,7 +26,7 @@ function createEnemyUnit(opts) {
   var talentIds;
   if (opts.talents) talentIds = opts.talents.slice();
   else {
-    var tCount = cfg.talent[0] + Math.floor(Math.random() * (cfg.talent[1] - cfg.talent[0] + 1));
+    var tCount = cfg.talent[0] + Math.floor(battleRnd() * (cfg.talent[1] - cfg.talent[0] + 1));
     talentIds = pickRandomTalents(tCount);
   }
 
@@ -34,13 +34,13 @@ function createEnemyUnit(opts) {
   var skillIds;
   if (opts.skills) skillIds = opts.skills.slice();
   else {
-    var sCount = cfg.skill[0] + Math.floor(Math.random() * (cfg.skill[1] - cfg.skill[0] + 1));
+    var sCount = cfg.skill[0] + Math.floor(battleRnd() * (cfg.skill[1] - cfg.skill[0] + 1));
     skillIds = pickRandomSkills(sCount);
   }
 
   // 构建 Unit
   var unit = createUnit({
-    id: opts.id || ('enemy-' + Math.floor(Math.random() * 1e6)),
+    id: opts.id || ('enemy-' + Math.floor(battleRnd() * 1e6)),
     side: 'enemy',
     name: opts.name || '敌人',
     level: opts.level || 1,
@@ -82,7 +82,7 @@ function pickRandomTalents(n) {
   var picked = [];
   var pool = ids.slice();
   for (var i = 0; i < n && pool.length; i++) {
-    var k = Math.floor(Math.random() * pool.length);
+    var k = Math.floor(battleRnd() * pool.length);
     picked.push(pool[k]);
     pool.splice(k, 1);
   }
@@ -96,7 +96,7 @@ function pickRandomSkills(n) {
   var picked = [];
   var pool = ids.slice();
   for (var i = 0; i < n && pool.length; i++) {
-    var k = Math.floor(Math.random() * pool.length);
+    var k = Math.floor(battleRnd() * pool.length);
     picked.push(pool[k]);
     pool.splice(k, 1);
   }

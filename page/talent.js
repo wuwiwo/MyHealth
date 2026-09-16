@@ -171,7 +171,7 @@ registerTalent({
     onBeforeSupport: function (unit, ctx) {
       if (ctx.targeted && ctx.support) {
         var chance = 0.3;
-        if (Math.random() < chance) {
+        if (battleRnd() < chance) {
           return {
             skipAction: true,
             mutations: [{ key: 'reflectSupport', value: ctx.sourceId || null }],
@@ -206,7 +206,7 @@ registerTalent({
     onBattleStart: function (unit, ctx) {
       var enemies = (ctx && ctx.enemyUnits) || [];
       if (!enemies.length) return;
-      var target = enemies[Math.floor(Math.random() * enemies.length)];
+      var target = enemies[Math.floor(battleRnd() * enemies.length)];
       target._intimidated = true;
       target._intimidateBy = unit.name || '威吓者';
       return { events: [{ type: 'talent', talentId: 'intimidate', unitId: unit.id,
@@ -265,7 +265,7 @@ registerTalent({
   desc: '每回合开始有25%几率放弃行动，放弃行动回合自身受到伤害降低',
   hooks: {
     onBeforeAction: function (unit) {
-      if (Math.random() < 0.25) {
+      if (battleRnd() < 0.25) {
         unit._lazySkip = true;
         return { skipAction: true, events: [{ type: 'talent', talentId: 'lazy', unitId: unit.id, msg: '懒惰: 放弃行动' }] };
       }

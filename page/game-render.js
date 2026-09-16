@@ -374,6 +374,7 @@ var _groupDetail=null    // 详情面板中的单位 id
 var _gbTab='battle'      // v2.1.14：战斗页 / 日志页双 Tab（'battle' | 'log'）
 var _groupPaused=false   // v2.1.14：打开详情时暂停自动推进，避免详情被下一步渲染刷掉
 var _groupRewarded=false // v2.1.19：本次战斗是否已结算过奖励（防手动模式重复领取）
+var _groupSeed=null      // v2.1.27 [7c]：本场战斗的随机种子（用于复现）
 
 /* v2.1.14：暂停 / 恢复群战推进（详情弹层打开期间挂起，关闭后按原模式续跑） */
 function pauseGroupBattle(){
@@ -425,7 +426,14 @@ function startGroupTrial(groupId){
   var lgNum = parseInt(String(anchorG).replace(/[^0-9]/g, ''), 10) || 1
   var terrain = (typeof groupTerrainFor === 'function') ? groupTerrainFor(lgNum) : null
   if (terrain) toast('🌍 场地：' + terrain.name + '（对敌我双方均有效，点界面上的 🌍 可随时查看）', 's')
-  _groupBattle=createGroupBattle({allies:allies,enemies:enemies,terrain:terrain})
+  /* v2.1.27 [7c]：给本场一个种子，使战斗可复现 / 可回退 */
+  _groupSeed = ((Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0
+  _groupBattle=createGroupBattle({allies:allies,enemies:enemies,terrain:terrain,seed:_groupSeed})
+  /* v2.1.27 [7d]：初始快照（重放 / 时间旅行的起点） */
+  try {
+    window.__groupSnaps = []
+    window.__groupInitSnap = (typeof groupSnapshot === 'function') ? groupSnapshot(_groupBattle) : null
+  } catch (e) { console.warn('[group] 初始快照失败，时间旅行将不可用', e); }
   // 模式/速度持久化（记住上次选择）
   _groupMode=localStorage.getItem('dh-group-mode')||'auto'
   _groupSpeed=parseInt(localStorage.getItem('dh-group-speed')||'1',10)||1
@@ -452,6 +460,13 @@ function _groupStep(){
   if(_groupPaused)return   // 详情弹层打开中：挂起，关闭后 resumeGroupBattle() 续跑
   if(!_groupBattle||_groupBattle.done){_groupDone();return}
   // 单步执行：一次一个单位行动（速度优先级可见）
+  /* v2.1.27 [7d]：每步前存一份快照（环形，最多 30 份） */
+  try {
+    if (typeof groupSnapshot === 'function' && window.__groupSnaps) {
+      window.__groupSnaps.push({ t: _groupBattle.turn, snap: groupSnapshot(_groupBattle) })
+      if (window.__groupSnaps.length > 30) window.__groupSnaps.shift()
+    }
+  } catch (e) { console.warn('[group] 存快照失败', e); }
   var _perfT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
   var step = groupBattleStep(_groupBattle)
   /* v2.1.26 [7b]：群战单步耗时埋点，供 Debug 面板「⏱ 性能」分区读取 */

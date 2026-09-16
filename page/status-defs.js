@@ -83,7 +83,7 @@ defineStatus({
   stacking: 'refresh',
   hooks: {
     onTurnStart: function (unit, st) {
-      if (Math.random() < 0.55) {
+      if (battleRnd() < 0.55) {
         applyStatus(unit, { id: 'sleep', duration: 1 });
         return { events: [{ type: 'status', statusId: 'sleepy', unitId: unit.id, msg: '💤 哈欠: 入睡' }] };
       }

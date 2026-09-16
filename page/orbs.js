@@ -31,7 +31,7 @@ function createOrb(typeId, rarity) {
   var t = ORB_TYPES[typeId];
   if (!t) return null;
   return {
-    id: 'orb-' + typeId + '-' + rarity + '-' + Math.floor(Math.random() * 1e6),
+    id: 'orb-' + typeId + '-' + rarity + '-' + Math.floor(battleRnd() * 1e6),
     type: typeId,
     rarity: rarity || 'N',
     level: 1,
@@ -51,10 +51,10 @@ function orbStat(orb) {
 function synthOrb(bag) {
   if (!bag || (bag.orbShard || 0) < ORB_SYNTH_COST) return { ok: false, reason: '碎片不足（需 ' + ORB_SYNTH_COST + '）' };
   bag.orbShard -= ORB_SYNTH_COST;
-  if (Math.random() > ORB_SYNTH_SUCCESS) return { ok: false, success: false, reason: '合成失败' };
+  if (battleRnd() > ORB_SYNTH_SUCCESS) return { ok: false, success: false, reason: '合成失败' };
   var types = Object.keys(ORB_TYPES);
-  var type = types[Math.floor(Math.random() * types.length)];
-  var roll = Math.random();
+  var type = types[Math.floor(battleRnd() * types.length)];
+  var roll = battleRnd();
   var rarity = 'N';
   var acc = 0;
   for (var i = 0; i < ORB_RARITIES.length; i++) {

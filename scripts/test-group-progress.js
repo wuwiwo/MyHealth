@@ -6,7 +6,7 @@ const path = require('path');
 const vm = require('vm');
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 function makeStore(){ const data={}; return { get:k=>data[k]||null, set:(k,v)=>{data[k]=v}, registerSchema:()=>{}, _data:data }; }
-const files = ['date-roll.js','levels.js','group-levels.js','unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js','terrain.js'];
+const files = ['utils.js', 'date-roll.js','levels.js','group-levels.js','unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js','terrain.js'];
 const sb = { Math, JSON, console, Date, store: makeStore() };
 sb.window = sb; vm.createContext(sb);
 files.forEach(f => vm.runInContext(load(f), sb));

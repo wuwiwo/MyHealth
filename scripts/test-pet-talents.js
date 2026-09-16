@@ -11,7 +11,7 @@ const path = require('path');
 const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
-const files = ['date-roll.js', 'levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js',
+const files = ['utils.js', 'date-roll.js', 'levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js',
   'skill.js', 'enemy.js', 'battle.js', 'battle-group.js', 'pets.js', 'pet-materials.js', 'pet-codex.js'];
 const sandbox = { Math, JSON, console, Date };
 sandbox.window = sandbox;

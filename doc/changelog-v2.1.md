@@ -8,6 +8,60 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 
 ---
 
+## v2.1.27
+
+**Date:** 2026-09-16
+
+### 7c RNG 回放 + 7d 时间旅行
+
+> 施工记录见 `doc/plans/v2.1.26-施工记录.md`（7c/7d 章节）。
+
+#### 根因：战斗根本不可复现
+
+`createGroupBattle` 里 `gb.rng` 在游戏侧就是 `Math.random`。更麻烦的是，**战斗代码里还有
+43 处直接写 `Math.random()`**，分布在 `skill.js` / `talent.js` / `ai.js` / `terrain.js` /
+`affix.js` / `enemy.js` / `player-skill-hooks.js` / `status-defs.js` / `pet-codex.js` /
+`unit.js` / `orbs.js` / `pet-store.js` —— 它们压根不经过 `gb.rng`，所以**就算给了种子也复现不了**。
+
+（第一批只扫了 6 个文件、改了 25 处；测试仍报不一致，全量扫才发现 `affix.js`、`talent.js`、
+`player-skill-hooks.js`、`enemy.js` 等又是漏网之鱼。）
+
+#### 做法：战斗随机作用域
+
+逐处传 `ctx` 改动太大，改用**模块级作用域**：
+
+- `utils.js`（**必须放在这里**——它是 `index.html` 里最早加载的）新增
+  `battleRnd()` / `setBattleRng()` / `makeSeededRng()` / `beginBattleRng(seed)`
+- 战斗进行中 → 用本场种子 RNG；未开战 → 自动回退 `Math.random`（行为不变）
+- 43 处 `Math.random()` 统一改为 `battleRnd()`
+
+#### 功能
+
+- **7c**：`createGroupBattle` 支持 `seed`；`startGroupTrial` 生成种子并记到 `_groupSeed`
+- **7d**：`groupSnapshot(gb)` / `groupRestore(gb, snap)` / `groupReplay(gb, initSnap)`
+  - 快照含 **rng 计数器**（否则回退后随机序列对不上，时间旅行是假货）
+  - 回滚会重置 `_stepQueue` / `_stepIdx`，否则行动队列错乱
+- Debug 面板新增「🎬 回放」分区：显示本场种子、**▶ 重放验证**（无头重跑并比对结果）、
+  快照列表（每步一份、最多 30 份）与「回到此处」
+
+#### 两个必须记住的坑
+
+1. **`battleRnd` 必须定义在 `utils.js`**。起初放在 `battle-group.js`，结果 16+ 个只加载部分模块的
+   测试沙箱直接 `ReferenceError` —— 全量断言数从 924 掉到 690 才发现。已给这些测试补上 `utils.js`。
+2. **批量替换时定义体自身也会被换掉**。曾出现 `function battleRnd(){ return _BATTLE_RNG ? _BATTLE_RNG() : battleRnd(); }`
+   —— 无限递归。已在 `battle-group.js` 注明「切勿在本文件再声明 `battleRnd`」。
+
+#### 验收
+
+- 新增 `scripts/test-group-determinism.js`（**14 断言**）：
+  同种子跑两遍 **winner / 回合 / 每单位血量逐项一致**；不同种子必须有差异（证明种子真的生效）；
+  `setState` 后可复现序列；快照回滚后血量/回合还原、`_stepQueue` 已重置；回滚后重跑到终点与首次一致；
+  `groupReplay` 结果一致
+- **平衡复核未变**：g12/g13 100%、g14 44%、g15+ 0%（与改前一致）
+- 全量 **38 套件 / 892 断言**通过
+
+---
+
 ## v2.1.26
 
 **Date:** 2026-09-16
@@ -1737,3 +1791,4 @@ v2.1.9 的「锚定」把难度与玩家强弱解耦，副作用是**练得再�
 | v2.1.24 | 45 | 1269 行 game-render.js | 😴 睡觉时长改 1~3 回合（设计文档原 3~4）+ 睡眠期间每回合回复；无影拳 5 连击真正实装。踩坑：状态在宠物自己回合内施加，同一回合末 ageStatuses 会先扣 1 → duration = 想锁的回合数 + 1，写 1 等于没睡 |
 | v2.1.25 | 46 | 1268 行 game-render.js | 🧩 结构性拆分：敌群「词条」从 TALENTS 独立为新注册表 AFFIXES（page/affix.js），天赋与词条各归其位（纯结构改动、数值不变）；修拆分后减伤断言因按 id 取对象静默失效 |
 | v2.1.26 | 46 | 1268 行 game-render.js | 🎚️ 技能区间接进非攻击通道：治愈治疗量、睡觉时长（改随成长不再随机）、强攻增益幅度+持续、广域防御减伤+持续、打湿持续回合；新增 test-skill-range-channels.js（判据＝数值必须真的随 t 变化）；媒体实测 Vercel 可访问；清理 5 个已合并远端分支；修 group-progress 残留旧键注释；HANDOFF 同步（无影拳已实装、三项标暂缓） |
+| v2.1.27 | 46 | 1288 行 game-render.js | 🎬 7c RNG 回放 + 7d 时间旅行：战斗随机统一走 battleRnd（43 处 Math.random → 可播种），createGroupBattle 支持 seed，新增 groupSnapshot/groupRestore/groupReplay，Debug 新增「🎬 回放」分区（种子 + 重放验证 + 快照回退）；新增 test-group-determinism.js（14 断言，同种子必须逐字节一致） |

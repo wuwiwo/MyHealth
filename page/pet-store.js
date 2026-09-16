@@ -47,7 +47,7 @@ function grantStarterPet() {
   var d = getPetStore();
   if (d.pets.length > 0) return { ok: false, reason: '已有宠物' };
   var codex = listPetCodex();
-  var sid = codex[Math.floor(Math.random() * codex.length)];
+  var sid = codex[Math.floor(battleRnd() * codex.length)];
   var pet = createPet({ speciesId: sid, rarity: getPetCodex(sid).rarity, name: getPetCodex(sid).name });
   d.pets.push(pet);
   savePetStore(d);
@@ -115,7 +115,7 @@ function applyDefeatInjuries(d, speciesIds) {
   (speciesIds || []).forEach(function (sid) {
     var pet = (d.pets || []).find(function (p) { return p.speciesId === sid; });
     if (!pet || !canPetBattle(pet)) return;
-    if (Math.random() >= chance) return;
+    if (battleRnd() >= chance) return;
     var r = injurePet(pet);
     if (r.ok) hurt.push((getPetCodex(pet.speciesId) || {}).name || pet.name || sid);
   });

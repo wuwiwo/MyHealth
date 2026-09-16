@@ -20,7 +20,7 @@
     if (errs.length > 30) errs.pop();
   });
 
-  var SECS = [['ov', '概览'], ['st', '存储'], ['at', '属性·经济'], ['ba', '⚖️ 平衡'], ['ch', '挑战'], ['sy', '☁️ 同步'], ['pf', '⏱ 性能'], ['er', '错误']];
+  var SECS = [['ov', '概览'], ['st', '存储'], ['at', '属性·经济'], ['ba', '⚖️ 平衡'], ['ch', '挑战'], ['sy', '☁️ 同步'], ['pf', '⏱ 性能'], ['rp', '🎬 回放'], ['er', '错误']];
   var state = { open: false, sec: 'ov', openKey: null, bal: null };
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -383,6 +383,85 @@
     return L.join('<br>');
   }
 
+
+  /* ================= v2.1.27 [7c/7d] 🎬 回放 / 时间旅行 ================= */
+  function _gbNow() { try { return (typeof _groupBattle !== 'undefined') ? _groupBattle : null; } catch (e) { return null; /* 忽略：未开局时按 null 处理，面板照样出 */ } }
+
+  /* 重放验证：从初始快照无头重跑，比对结果是否一致（同种子必须完全一致） */
+  function dbgReplayVerify() {
+    var gb = _gbNow();
+    if (!gb) { toast('当前没有进行中的战斗', 'e'); return; }
+    var init = (typeof window !== 'undefined') ? window.__groupInitSnap : null;
+    if (!init) { toast('没有初始快照，无法重放', 'e'); return; }
+    var before = { winner: gb.winner || null, turn: gb.turn, done: !!gb.done };
+    var cur = null;
+    try { cur = (typeof groupSnapshot === 'function') ? groupSnapshot(gb) : null; } catch (e) { cur = null; console.warn('[debug] 存当前状态失败', e); }
+    var res = null;
+    try { res = (typeof groupReplay === 'function') ? groupReplay(gb, init, 600) : { ok: false, reason: 'groupReplay 不可用' }; }
+    catch (e) { console.warn('[debug] 重放异常', e); toast('重放异常：' + (e && e.message), 'e'); return; }
+    if (!res.ok) { toast('重放失败：' + res.reason, 'e'); return; }
+    var same = (res.winner === before.winner) && (res.turn === before.turn);
+    /* 还原到重放前的状态，别把玩家的战斗搅了 */
+    if (cur) { try { groupRestore(gb, cur); } catch (e) { console.warn('[debug] 还原战斗状态失败', e); } }
+    toast(same
+      ? ('✅ 重放一致：' + (res.winner || '未结束') + ' · ' + res.turn + ' 回合 · ' + res.steps + ' 步')
+      : ('⚠ 重放不一致：原 ' + before.winner + '/' + before.turn + ' vs 重放 ' + res.winner + '/' + res.turn),
+      same ? 's' : 'e');
+    render();
+  }
+
+  /* 回到某个快照 */
+  function dbgGotoSnap(i) {
+    var gb = _gbNow();
+    if (!gb) { toast('当前没有进行中的战斗', 'e'); return; }
+    var list = (typeof window !== 'undefined' && window.__groupSnaps) ? window.__groupSnaps : [];
+    var item = list[i];
+    if (!item || !item.snap) { toast('快照不存在', 'e'); return; }
+    var r = null;
+    try { r = groupRestore(gb, item.snap); } catch (e) { console.warn('[debug] 回滚异常', e); toast('回滚异常：' + (e && e.message), 'e'); return; }
+    if (!r.ok) { toast('回滚失败：' + (r.reason || '未知'), 'e'); return; }
+    try { if (typeof renderGroupOverlay === 'function') renderGroupOverlay(false); } catch (e) { console.warn('[debug] 重绘战斗界面失败', e); }
+    toast('⏪ 已回到第 ' + r.turn + ' 回合', 's');
+    render();
+  }
+  if (typeof window !== 'undefined') { window.__dbgReplayVerify = dbgReplayVerify; window.__dbgGotoSnap = dbgGotoSnap; }
+
+  function secRp() {
+    var L = [];
+    var gb = _gbNow();
+    L.push('🎬 回放 / 时间旅行');
+    var seed = null;
+    try { seed = (typeof _groupSeed !== 'undefined') ? _groupSeed : null; } catch (e) { seed = null; /* 忽略：旧版本没有 _groupSeed 时显示「—」 */ }
+    L.push('本场种子：<b>' + (seed === null || seed === undefined ? '—（未开局或旧版本）' : seed) + '</b>');
+    if (typeof window !== 'undefined' && window.__groupInitSnap) {
+      L.push('<button type="button" onclick="window.__dbgReplayVerify()">▶ 重放验证（同种子应完全一致）</button>');
+    } else {
+      L.push('<span style="color:var(--text3)">开局后才有初始快照，可重放 / 回退。</span>');
+    }
+    L.push('');
+    var list = (typeof window !== 'undefined' && window.__groupSnaps) ? window.__groupSnaps : [];
+    if (!list.length) {
+      L.push('快照：无（战斗每走一步会存一份，最多保留 30 份）');
+    } else {
+      L.push('快照（近 ' + list.length + ' 份，点「回到此处」可回退）：');
+      list.slice().reverse().forEach(function (it, k) {
+        var idx = list.length - 1 - k;
+        var hpA = 0, hpE = 0, mxA = 0, mxE = 0;
+        (it.snap.units || []).forEach(function (u) {
+          var side = (u.side === 'ally') ? 1 : 0;
+          if (side) { hpA += u.hp || 0; mxA += (u.base && u.base.hp) || 0; }
+          else { hpE += u.hp || 0; mxE += (u.base && u.base.hp) || 0; }
+        });
+        L.push('回合 ' + it.t + '　我 ' + Math.round(hpA) + '/' + Math.round(mxA)
+          + '　敌 ' + Math.round(hpE) + '/' + Math.round(mxE)
+          + ' <button type="button" onclick="window.__dbgGotoSnap(' + idx + ')">回到此处</button>');
+      });
+    }
+    L.push('');
+    L.push('<span style="color:var(--text3)">确定性依赖 gb.rng 为可播种 RNG；若某处仍直接用 Math.random，重放会不一致。</span>');
+    return L.join('<br>');
+  }
+
   function render() {
     if (!drawer) return;
     if (!state.open) { drawer.className = 'modal-overlay'; return; }
@@ -400,6 +479,7 @@
       : state.sec === 'ch' ? secCh()
       : state.sec === 'sy' ? secSy()
       : state.sec === 'pf' ? secPf()
+      : state.sec === 'rp' ? secRp()
       : secEr();
     drawer.innerHTML =
       '<div class="modal-sheet">'

@@ -51,7 +51,7 @@ function usableSkills(unit) {
 function pickSkill(unit) {
   var usable = usableSkills(unit);
   if (!usable.length) return null;
-  return usable[Math.floor(Math.random() * usable.length)];
+  return usable[Math.floor(battleRnd() * usable.length)];
 }
 
 /* ============ v2.1.22：技能等级（此前完全没接进战斗） ============
@@ -141,7 +141,7 @@ function calcSkillDamage(skill, caster, targets, ctx) {
   var mult = 1;
   var proc = false;
   if (skill.procBoost) {
-    var roll = (typeof ctx.rng === 'function') ? ctx.rng() : Math.random();
+    var roll = (typeof ctx.rng === 'function') ? ctx.rng() : battleRnd();
     if (roll < skill.procBoost.chance) { mult *= (1 + skill.procBoost.value); proc = true; }
   }
   var base = Math.floor(atk * power / 100 * mult);
@@ -167,7 +167,7 @@ function calcSkillDamage(skill, caster, targets, ctx) {
   if (skill.multiHit) {
     var pool = (ctx.pool && ctx.pool.length) ? ctx.pool : targets;
     for (var hi = 0; hi < skill.multiHit && pool.length; hi++) {
-      var pk = (typeof ctx.rng === 'function') ? ctx.rng() : Math.random();
+      var pk = (typeof ctx.rng === 'function') ? ctx.rng() : battleRnd();
       hitOne(pool[Math.floor(pk * pool.length)]);
     }
   } else {
@@ -213,7 +213,7 @@ registerSkill({
   effects: [function (c, ts, r) {
     ts.forEach(function (t) {
       if (!t._flinched) {  // 每场最多1次
-        if (Math.random() < 0.5) {
+        if (battleRnd() < 0.5) {
           r.statusApps.push({ unitId: t.id, id: 'flinch', duration: 1, chance: 1, grade: 2 });
           t._flinched = true;
         }
@@ -225,7 +225,7 @@ registerSkill({
   id: 'blackmist', name: '黑气', type: 'support', target: 'random1', cooldown: 4,
   effects: [function (c, ts, r) {
     ts.forEach(function (t) {
-      if (Math.random() < 0.65) {  // 命中 50-80%
+      if (battleRnd() < 0.65) {  // 命中 50-80%
         r.statusApps.push({ unitId: t.id, id: 'poison', duration: 4, chance: 1, grade: 2, bossHalf: true });
       }
     });
@@ -235,7 +235,7 @@ registerSkill({
   id: 'spikes', name: '地刺', type: 'attack', target: 'all', power: 120, dmgType: 'physical', cooldown: 3,
   effects: [function (c, ts, r) {
     ts.forEach(function (t) {
-      if (Math.random() < 0.4) r.statusApps.push({ unitId: t.id, id: 'slow', duration: 2, chance: 1, grade: 1 });
+      if (battleRnd() < 0.4) r.statusApps.push({ unitId: t.id, id: 'slow', duration: 2, chance: 1, grade: 1 });
     });
   }]
 });
@@ -243,7 +243,7 @@ registerSkill({
   id: 'blizzard', name: '暴风雪', type: 'attack', target: 'all', power: 150, dmgType: 'soul', cooldown: 4,
   effects: [function (c, ts, r) {
     ts.forEach(function (t) {
-      if (Math.random() < 0.4) r.statusApps.push({ unitId: t.id, id: 'freeze', duration: 1 + Math.floor(Math.random() * 2), chance: 1, grade: 2 });
+      if (battleRnd() < 0.4) r.statusApps.push({ unitId: t.id, id: 'freeze', duration: 1 + Math.floor(battleRnd() * 2), chance: 1, grade: 2 });
     });
   }]
 });
@@ -291,7 +291,7 @@ registerSkill({
   id: 'stardust', name: '星辰坠落', type: 'attack', target: 'all', power: 200, dmgType: 'soul', cooldown: 5,
   effects: [function (c, ts, r) {
     ts.forEach(function (t) {
-      if (Math.random() < 0.2) r.statusApps.push({ unitId: t.id, id: 'souldown', duration: 2, chance: 1, grade: 1 });
+      if (battleRnd() < 0.2) r.statusApps.push({ unitId: t.id, id: 'souldown', duration: 2, chance: 1, grade: 1 });
     });
   }]
 });

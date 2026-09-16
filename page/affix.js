@@ -212,7 +212,7 @@ registerAffix({
   hooks: {
     onAfterAction: function (unit) {
       if ((unit._extraCd || 0) > 0) return;
-      if (Math.random() >= 0.55) return;
+      if (battleRnd() >= 0.55) return;
       unit._extraCd = 3;
       return {
         mutations: [{ key: 'extraAction', value: 1 }],

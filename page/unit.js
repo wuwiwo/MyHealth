@@ -12,7 +12,7 @@ function createUnit(spec) {
   spec = spec || {};
   var base = spec.base || {};
   return {
-    id: spec.id || ('unit-' + Math.floor(Math.random() * 1e6)),
+    id: spec.id || ('unit-' + Math.floor(battleRnd() * 1e6)),
     side: spec.side || 'ally',           // 'ally' | 'enemy'
     name: spec.name || 'Unit',
     level: spec.level || 1,
