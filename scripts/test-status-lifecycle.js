@@ -352,40 +352,86 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   assert('迷惑 1 回合后自动解除', !sb.hasStatus(e5, 'confused'), JSON.stringify(e5.statuses));
 }
 
-/* ============ 12. 技能等级接进战斗数值（v2.1.22） ============ */
+/* ============ 12. 技能「区间」随基础属性（炼化）成长（v2.1.22） ============
+   设计依据 design-v2.0.md:187：「数值区间 = 随**基础属性**成长的下限~上限；
+   属性来源见 §2.9 初始属性倾向与 §2.8 宠物炼化」。宠物基础属性的成长线 = 炼化，
+   上限按稀有度 R50/SR60/SSR80/UR100（§2.4）。OQ-8 标注曲线公式**待定**，现用线性占位。 */
 {
-  const caster = sb.createUnit({ id: 'pc', side: 'ally', name: '鸟', base: { hp: 200, atk: 100, def: 5, spd: 5 } });
-  const tgt = sb.createUnit({ id: 'pt', side: 'enemy', name: '靶', base: { hp: 9999, atk: 1, def: 0, spd: 1 } });
+  const tgt = sb.createUnit({ id: 'pt', side: 'enemy', name: '靶', base: { hp: 99999, atk: 1, def: 0, spd: 1 } });
   const skill = sb.getSkill('p_flamepeck');   // range.power = [150, 330]
   assert('宠物攻击技能带区间数据', !!(skill && skill.range && skill.range.power), JSON.stringify(skill && skill.range));
 
-  caster._skillLevels = {};
-  const d1 = sb.calcSkillDamage(skill, caster, [tgt], {}).hits[0].amount;
-  caster._skillLevels = { p_flamepeck: 10 };
-  const d10 = sb.calcSkillDamage(skill, caster, [tgt], {}).hits[0].amount;
-  assert('宠物技能威力随等级（火焰啄击 Lv1=150% → Lv10=330%）', d1 === 150 && d10 === 330, d1 + '/' + d10);
+  function petAt(refine, rarity) {
+    const u = sb.createUnit({ id: 'pc' + refine + (rarity || 'SR'), side: 'ally', name: '鸟', base: { hp: 200, atk: 100, def: 5, spd: 5 }, tags: ['pet', rarity || 'SR'] });
+    u._refineLevel = refine;
+    return u;
+  }
+  const dmgOf = u => sb.calcSkillDamage(skill, u, [tgt], {}).hits[0].amount;
 
-  caster._skillLevels = { p_flamepeck: 5 };
-  const d5 = sb.calcSkillDamage(skill, caster, [tgt], {}).hits[0].amount;
-  // 插值点 t = (5-1)/(10-1) = 4/9 → 150 + 180×4/9 = 230（不是中点 240）
-  assert('中间等级线性插值（Lv5 → 230%）', d5 === 230, d5);
+  assert('SR（上限60）炼化 0 → 区间下限 150%', dmgOf(petAt(0)) === 150, dmgOf(petAt(0)));
+  assert('SR 炼化 30 → 线性中点 240%', dmgOf(petAt(30)) === 240, dmgOf(petAt(30)));
+  assert('SR 炼化 60（满）→ 区间上限 330%', dmgOf(petAt(60)) === 330, dmgOf(petAt(60)));
+  assert('上限按稀有度 R50/UR100：UR 炼化 50 → 中点 240%', dmgOf(petAt(50, 'UR')) === 240, dmgOf(petAt(50, 'UR')));
+  assert('超过上限不越界（SR 炼化 999 → 仍 330%）', dmgOf(petAt(999)) === 330, dmgOf(petAt(999)));
 
-  // 敌人没有 _skillLevels → 取 unit.level（由 group-levels 按大关给定）
+  // 敌人没有炼化 → 退回 unit.level（1~10，由 group-levels 按大关给定）
   const foe5 = sb.createUnit({ id: 'f5', side: 'enemy', name: '敌', level: 5, base: { hp: 200, atk: 100, def: 5, spd: 5 } });
-  assert('敌人技能等级取 unit.level（Lv5 → 230%）',
-    sb.calcSkillDamage(skill, foe5, [tgt], {}).hits[0].amount === 230,
-    sb.calcSkillDamage(skill, foe5, [tgt], {}).hits[0].amount);
-  const foe0 = sb.createUnit({ id: 'f0', side: 'enemy', name: '敌', base: { hp: 200, atk: 100, def: 5, spd: 5 } });
-  assert('level 缺省时按 Lv1（区间下限 150%）',
-    sb.calcSkillDamage(skill, foe0, [tgt], {}).hits[0].amount === 150,
-    sb.calcSkillDamage(skill, foe0, [tgt], {}).hits[0].amount);
+  assert('敌人退回 unit.level（Lv5 → t=4/9 → 230%）', dmgOf(foe5) === 230, dmgOf(foe5));
 
-  // 没有区间的技能不受等级影响（设计只给单一「默认：X%」的那些）
-  const flat = sb.getSkill('charge');   // power 200，无 range
-  foe5._skillLevels = undefined;
+  // 没有区间的技能不受影响（文档只给单一「默认：X%」的那些）
   assert('无区间技能保持固定威力（冲撞 200%）',
-    sb.calcSkillDamage(flat, foe5, [tgt], {}).hits[0].amount === 200,
-    sb.calcSkillDamage(flat, foe5, [tgt], {}).hits[0].amount);
+    sb.calcSkillDamage(sb.getSkill('charge'), foe5, [tgt], {}).hits[0].amount === 200,
+    sb.calcSkillDamage(sb.getSkill('charge'), foe5, [tgt], {}).hits[0].amount);
+}
+
+/* ============ 13. 治疗 / 状态 / 增益 三类通道也要吃到区间（v2.1.22） ============ */
+{
+  function petAt(refine, soulAtk) {
+    const u = sb.createUnit({ id: 'h' + refine, side: 'ally', name: '宠', base: { hp: 500, atk: 50, def: 40, soulAtk: soulAtk || 100, soulDef: 30, spd: 5 }, tags: ['pet', 'SR'] });
+    u._refineLevel = refine;
+    return u;
+  }
+  const mate = sb.createUnit({ id: 'mate', side: 'ally', name: '友', base: { hp: 500, atk: 10, def: 10, spd: 5 } });
+
+  // 圣光治愈：治疗量 110%~200% × 魂攻
+  const lo = sb.applySkillEffects(sb.getSkill('p_holylight'), petAt(0), [mate], {}).heals[0].amount;
+  const hi = sb.applySkillEffects(sb.getSkill('p_holylight'), petAt(60), [mate], {}).heals[0].amount;
+  assert('治疗量随基础属性（圣光治愈 炼化0=110% × 100魂攻 = 110 → 满炼化 200）', lo === 110 && hi === 200, lo + '/' + hi);
+
+  // 战意灌注：增益幅度 3%~30%
+  const bLo = sb.applySkillEffects(sb.getSkill('p_warmight'), petAt(0), [mate], {}).buffs[0].value;
+  const bHi = sb.applySkillEffects(sb.getSkill('p_warmight'), petAt(60), [mate], {}).buffs[0].value;
+  assert('增益幅度随基础属性（战意灌注 3% → 30%）', Math.abs(bLo - 0.03) < 1e-9 && Math.abs(bHi - 0.30) < 1e-9, bLo + '/' + bHi);
+
+  // 闪耀：降命 0%~40%
+  const t1 = sb.createUnit({ id: 's1', side: 'enemy', name: '敌1', base: { hp: 100, atk: 10, def: 5, spd: 5 } });
+  const t2 = sb.createUnit({ id: 's2', side: 'enemy', name: '敌2', base: { hp: 100, atk: 10, def: 5, spd: 5 } });
+  sb.applySkillEffects(sb.getSkill('p_shine'), petAt(0), [t1], {});
+  sb.applySkillEffects(sb.getSkill('p_shine'), petAt(60), [t2], {});
+  assert('降命幅度随基础属性（闪耀 0% → 40%）', t1._accMod === 0 && Math.abs(t2._accMod + 0.4) < 1e-9, t1._accMod + '/' + t2._accMod);
+
+  // 打湿：魂防 0%~25%（实例 modsPct 覆盖定义值，不叠加）+ 被命中 0%~30%（塞进状态 data）
+  // 注意：applySkillEffects 只**产出** statusApps，真正施加在 castSkill 里（要把 modsPct/data 透传下去）
+  function castDrench(who, refine) {
+    const res = sb.applySkillEffects(sb.getSkill('p_drench'), petAt(refine), [who], {});
+    res.statusApps.forEach(function (sa) {
+      sb.applyStatus(who, { id: sa.id, duration: sa.duration, modsPct: sa.modsPct, data: sa.data });
+    });
+    sb.syncStatusDerived(who);
+  }
+  const wLo = sb.createUnit({ id: 'w1', side: 'enemy', name: '湿1', base: { hp: 100, atk: 10, def: 100, soulDef: 100, spd: 5 } });
+  const wHi = sb.createUnit({ id: 'w2', side: 'enemy', name: '湿2', base: { hp: 100, atk: 10, def: 100, soulDef: 100, spd: 5 } });
+  castDrench(wLo, 0);
+  castDrench(wHi, 60);
+  assert('打湿的魂防降幅随基础属性且不叠加（炼化0 → -0%，满 → -25%）',
+    sb.effectiveStat(wLo, 'soulDef') === 100 && sb.effectiveStat(wHi, 'soulDef') === 75,
+    sb.effectiveStat(wLo, 'soulDef') + '/' + sb.effectiveStat(wHi, 'soulDef'));
+  const wetHi = (wHi.statuses || []).filter(s => s.id === 'wet')[0];
+  assert('打湿的被命中加成随基础属性（满炼化 → +30%）',
+    !!wetHi && Math.abs(wetHi.data.hitBonus - 0.30) < 1e-9, wetHi && JSON.stringify(wetHi.data));
+  const atk0 = sb.createUnit({ id: 'atk0', side: 'ally', name: '攻', base: { hp: 100, atk: 50, def: 5, spd: 5 } });
+  assert('castSkill 必须把 modsPct/data 透传给 applyStatus（否则上面的接线会被静默丢弃）',
+    sb.groupHitChance(atk0, wHi) === 1, sb.groupHitChance(atk0, wHi));
 }
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');

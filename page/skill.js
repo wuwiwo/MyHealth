@@ -72,8 +72,30 @@ function pickSkill(unit) {
    本版采用**按技能等级线性插值**（Lv1→下限，Lv10→上限）作为占位实现；
    OQ-8 定案后只需替换 skillValue 里的插值公式，数据结构不用动。 */
 var SKILL_LEVEL_MAX = 10;
+/* 宠物炼化等级上限（design-v2.0.md:163 §2.4）：稀有度 R50 / SR60 / SSR80 / UR100 */
+var PET_REFINE_CAP = { R: 50, SR: 60, SSR: 80, UR: 100 };
 
-/* 取「某单位施放某技能」时的技能等级（夹到 1..10；未登记按 1 = 区间下限） */
+/* 区间进度 t ∈ [0,1]：0 = 区间**下端**，1 = 区间**上端**。
+   ⚠️ 驱动源是「基础属性成长」，**不是技能等级** —— design-v2.0.md:187 原文：
+     「数值区间 = 随**基础属性**成长的下限~上限；属性来源见 §2.9 初始属性倾向与 §2.8 宠物炼化」
+   宠物的基础属性成长线是**炼化**（§2.8，消耗普通/高级炼化石；上限按稀有度 R50/SR60/SSR80/UR100），
+   所以 t = 当前炼化等级 / 该稀有度上限。
+   敌人没有炼化 → 退回 unit.level（1~10，由 group-levels 按大关给定）。
+   ⚠️ OQ-8（design-v2.0.md:383）标注「技能倍率随炼化等级的成长曲线公式**仍待定**」——
+      本函数先用**线性**占位。曲线定案后**只需改这一个函数**，数据结构与所有调用点都不用动。 */
+function skillRangeT(unit) {
+  if (!unit) return 0;
+  var cap = PET_REFINE_CAP[(unit.tags || [])[1]];
+  if (cap) {
+    var rl = unit._refineLevel || 0;
+    return Math.max(0, Math.min(1, rl / cap));
+  }
+  var lv = Math.max(1, Math.min(SKILL_LEVEL_MAX, Math.floor(unit.level || 1)));
+  return (lv - 1) / (SKILL_LEVEL_MAX - 1);
+}
+
+/* 技能等级（0~10）：**仅用于展示与说明，不再驱动区间**（区间看 skillRangeT）。
+   保留它是为了以后 OQ-8 若决定「灵能与炼化共同影响」时有个现成的读数口。 */
 function skillLevelOf(unit, skillId) {
   if (!unit) return 1;
   if (unit._skillLevels && skillId && unit._skillLevels[skillId]) {
@@ -83,14 +105,15 @@ function skillLevelOf(unit, skillId) {
   return Math.max(1, Math.min(SKILL_LEVEL_MAX, Math.floor(lv)));
 }
 
-/* 按等级取技能数值：
-   skill.range[key] = [低, 高] → 线性插值；没有区间的键（文档只给单一「默认：X%」）原样返回 */
-function skillValue(skill, key, lv) {
+/* 按区间进度取技能数值：
+   skill.range[key] = [低, 高] → 按 t 线性插值；没有区间的键（文档只给单一「默认：X%」）原样返回。
+   @param t 区间进度 0~1（由 skillRangeT(unit) 算出） */
+function skillValue(skill, key, t) {
   if (!skill) return undefined;
   var r = skill.range ? skill.range[key] : null;
   if (r && r.length === 2) {
-    var t = (Math.max(1, Math.min(SKILL_LEVEL_MAX, lv || 1)) - 1) / (SKILL_LEVEL_MAX - 1);
-    return r[0] + (r[1] - r[0]) * t;
+    var k = Math.max(0, Math.min(1, t || 0));
+    return r[0] + (r[1] - r[0]) * k;
   }
   return skill[key];
 }
@@ -106,9 +129,8 @@ function calcSkillDamage(skill, caster, targets, ctx) {
   if (!skill || skill.type !== 'attack') return null;
   ctx = ctx || {};
   var atk = skill.dmgType === 'soul' ? effectiveStat(caster, 'soulAtk') : effectiveStat(caster, 'atk');
-  /* v2.1.22：威力按施法者的技能等级取值（区间写成 [低, 高] 的技能才会随等级变化） */
-  var lv = skillLevelOf(caster, skill.id);
-  var power = skillValue(skill, 'power', lv) || 1;
+  /* v2.1.22：威力按「基础属性成长进度」取区间值（驱动源见 skillRangeT 的注释） */
+  var power = skillValue(skill, 'power', skillRangeT(caster)) || 1;
   /* 叠层加成按「百分点」累加，不是乘法：雪球设计写的是
      120% → 每层 +30% → 满层 300%（120 + 6×30），乘法会得到 120×1.3^6 ≈ 579%。
      caster[key] 是**本次施放前**已累计的层数，所以首次施放 n=0 → 保持 120%。 */
@@ -146,6 +168,13 @@ function calcSkillDamage(skill, caster, targets, ctx) {
 function applySkillEffects(skill, caster, targets, ctx) {
   var r = { events: [], statusApps: [], heals: [], buffs: [] };
   if (!skill || !skill.effects) return r;
+  /* v2.1.22：把「区间取值」透传给效果层。
+     治疗量 / 状态幅度 / 增益幅度这些走 heals / statusApps / buffs 通道的效果，
+     以前在回调里拿不到任何成长信息，只能写死固定值（于是「区间」对它们形同不存在）。
+     现在效果里可以直接 ctx.sv('power') 拿到按基础属性成长换算后的数值。 */
+  ctx = ctx || {};
+  ctx.t = skillRangeT(caster);
+  ctx.sv = function (key) { return skillValue(skill, key, ctx.t); };
   skill.effects.forEach(function (fx) {
     fx(caster, targets, r, ctx);
   });

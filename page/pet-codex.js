@@ -76,6 +76,10 @@ function createPetUnit(petState) {
      战斗结算完全读不到 —— 结果是「花灵能把技能升到 Lv10，打出来的伤害一点没变」。
      skill.js 的 skillLevelOf() 会优先读这个字段。 */
   unit._skillLevels = petState.skillLevels || {};
+  /* v2.1.22：炼化等级 —— 技能「区间」的驱动源（design-v2.0.md:187「区间随基础属性成长」，
+     而宠物基础属性的成长线就是炼化 §2.8，上限按稀有度 R50/SR60/SSR80/UR100）。
+     skill.js 的 skillRangeT() 用它算区间进度 t = 炼化等级 / 上限。 */
+  unit._refineLevel = petState.refineLevel || 0;
   attachTalents(unit, getPetTalents(petState));   // 天赋恒为图鉴固有值（见上方说明）
   // 应用天赋静态修正
   for (var k in (unit._talentMods || {})) {
@@ -104,27 +108,37 @@ function listPetCodex() { return Object.keys(PET_CODEX); }
 /* ============ 宠物专属技能注册（复用 SKILLS 机制） ============ */
 if (typeof registerSkill === 'function') {
 
-/* R：闪耀（敌方全体命中率 -40%，2 回合） */
+/* R：闪耀（敌方全体命中率 -0~40%）—— v2.1.22 接区间 */
 registerSkill({ id:'p_shine', name:'闪耀', type:'support', target:'all', cooldown:4,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ t._accMod = (t._accMod || 0) - 0.4; t._hitModTurns = 2; }); r.events.push({msg:'✨ ' + (c.name||'宠物') + ' 闪耀：' + ts.map(function(t){return t.name;}).join('、') + ' 命中率 -40%（2 回合）'}); }] });
+  range:{ acc:[0, 40] },
+  effects:[function(c,ts,r,ctx){ var acc=ctx.sv('acc')/100; ts.forEach(function(t){ t._accMod = (t._accMod || 0) - acc; t._hitModTurns = 2; }); r.events.push({msg:'✨ ' + (c.name||'宠物') + ' 闪耀：' + ts.map(function(t){return t.name;}).join('、') + ' 命中率 -' + Math.round(acc*100) + '%（2 回合）'}); }] });
 
-/* R：打湿（施加潮湿 → 目标更易被命中 +30%、魂防 -25%） */
+/* R：打湿（目标更易被命中 + 魂防降低）—— v2.1.22 接区间：魂防 0~25%、命中 +0~30% */
 registerSkill({ id:'p_drench', name:'打湿', type:'support', target:'random1', cooldown:5,
-  /* v2.1.15：去掉这里手写的 t._eva -= 0.3。
-     命中加成现在由「潮湿」状态统一提供（groupHitChance 读 hasStatus(target,'wet') +30%），
-     两边都写会互相抵消 —— 等于打湿加了 30% 又减了 30%。 */
-  effects:[function(c,ts,r){ ts.forEach(function(t){ r.statusApps.push({unitId:t.id,id:'wet',duration:2,chance:1,grade:2}); }); }] });
+  range:{ soulDefDown:[0, 25], hit:[0, 30] },
+  /* v2.1.15：去掉这里手写的 t._eva -= 0.3（命中加成由「潮湿」统一提供，两边都写会互相抵消）。
+     v2.1.22：幅度改为按基础属性成长换算后**传给状态实例** ——
+     statMods() 对同键的实例 modsPct 优先于定义里的 statModsPct，所以不会叠加成两份。 */
+  effects:[function(c,ts,r,ctx){
+    var down=ctx.sv('soulDefDown')/100, hit=ctx.sv('hit')/100;
+    ts.forEach(function(t){ r.statusApps.push({unitId:t.id,id:'wet',duration:2,chance:1,grade:2,
+      modsPct:{ soulDef:-down }, data:{ hitBonus:hit }}); });
+    r.events.push({msg:'💧 ' + (c.name||'宠物') + ' 打湿 → ' + ts.map(function(t){return t.name;}).join('、') + '：魂防 -' + Math.round(down*100) + '%、被命中 +' + Math.round(hit*100) + '%'});
+  }] });
 
-/* R：睡觉（自愈 + 睡眠）。
-   v2.1.15：补上真正的治疗 —— 原文案「睡觉自愈」后面什么都没有（只 push 了一句日志，
-   连宠物名字都是写死的）。
-   睡眠时长写 1：按当前「回合末递减」的实现，它不会真的锁住自己的下一回合
-   （避免 R 级宠物自愈还倒亏一回合）；若要真的睡一回合，把 duration 改成 2 即可。 */
+/* R：睡觉（自愈 + 睡眠）—— v2.1.22 治疗量接区间 (防御+魂防)×0~300%
+   睡眠时长仍写 1：按当前「回合末递减」的实现，它不会真的锁住自己的下一回合
+   （避免 R 级宠物自愈还倒亏一回合）；设计写的是 3~4 回合，改前先确认这个取舍。 */
 registerSkill({ id:'p_sleep', name:'睡觉', type:'support', target:'self', cooldown:4,
-  effects:[function(c,ts,r){ ts.forEach(function(t){
-    r.heals.push({ unitId: t.id, amount: Math.floor((t.base.hp||0) * 0.25) + Math.floor((c.base.soulAtk||0) * 0.5) });
-    r.statusApps.push({ unitId: t.id, id: 'sleep', duration: 1, chance: 1, grade: 1 });
-  }); r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈并睡 1 回合'}); }] });
+  range:{ power:[0, 300] },
+  effects:[function(c,ts,r,ctx){
+    var pct=ctx.sv('power')/100;
+    ts.forEach(function(t){
+      r.heals.push({ unitId: t.id, amount: Math.floor(((t.base.def||0)+(t.base.soulDef||0)) * pct) });
+      r.statusApps.push({ unitId: t.id, id: 'sleep', duration: 1, chance: 1, grade: 1 });
+    });
+    r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈 ' + Math.round(pct*100) + '%（防+魂防）并睡 1 回合'});
+  }] });
 
 /* SR：火焰啄击 —— 设计 攻击×150%~330%（区间随技能等级，v2.1.22 接线） */
 registerSkill({ id:'p_flamepeck', name:'火焰啄击', type:'attack', target:'random1', power:240, range:{power:[150,330]}, dmgType:'physical', cooldown:4 });
@@ -157,9 +171,10 @@ registerSkill({ id:'p_phantom', name:'幻影之瞳', type:'support', target:'ran
 registerSkill({ id:'p_iceburst', name:'冰晶爆', type:'attack', target:'random1', power:200, range:{power:[150,240]}, dmgType:'soul', cooldown:4,
   effects:[function(c,ts,r){ ts.forEach(function(t){ if(Math.random()<0.3) r.statusApps.push({unitId:t.id,id:'freeze',duration:1,chance:1,grade:2}); }); }] });
 
-/* SSR：圣光治愈 —— 设计 魂攻×110%~200%（治疗量，属 heal 通道，尚未接等级） */
+/* SSR：圣光治愈 —— 设计 恢复 魂攻×110%~200%（v2.1.22 接区间） */
 registerSkill({ id:'p_holylight', name:'圣光治愈', type:'support', target:'ally1', cooldown:3,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ r.heals.push({unitId:t.id,amount:Math.floor((c.base.soulAtk||0)*1.5)}); }); }] });
+  range:{ power:[110, 200] },
+  effects:[function(c,ts,r,ctx){ var v=ctx.sv('power')/100; ts.forEach(function(t){ r.heals.push({unitId:t.id,amount:Math.floor((c.base.soulAtk||0)*v)}); }); }] });
 
 /* UR：梦幻光球（全场弹射）—— 设计 魂攻×200%~290% */
 registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'random1', power:250, range:{power:[200,290]}, dmgType:'soul', cooldown:5 });
@@ -170,9 +185,10 @@ registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'ra
 registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'random1', power:70, range:{power:[50,95]}, dmgType:'physical', cooldown:4,
   effects:[function(c,ts,r){ r.events.push({msg:'👊 ' + (c.name||'宠物') + ' 无影拳'}); }] });
 
-/* UR：战意灌注（2友方增益）—— 设计 +3%~30% 攻击/魂攻较高项（增益幅度接等级另开一条） */
+/* UR：战意灌注（2友方增益）—— 设计 +3%~30%（攻击/魂攻较高项，v2.1.22 接区间） */
 registerSkill({ id:'p_warmight', name:'战意灌注', type:'support', target:'ally1', cooldown:4,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ r.buffs.push({unitId:t.id,key:'atkBoost',value:0.2,duration:2}); }); }] });
+  range:{ atkBoost:[3, 30] },
+  effects:[function(c,ts,r,ctx){ var v=ctx.sv('atkBoost')/100; ts.forEach(function(t){ r.buffs.push({unitId:t.id,key:'atkBoost',value:v,duration:2}); }); }] });
 
 }
 

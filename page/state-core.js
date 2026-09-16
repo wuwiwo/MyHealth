@@ -229,7 +229,13 @@ function statMods(unit) {
     var k;
     if (def.statMods) for (k in def.statMods) flat[k] = (flat[k] || 0) + def.statMods[k] * n;
     if (def.statModsPct) for (k in def.statModsPct) pct[k] = (pct[k] || 0) + def.statModsPct[k] * n;
-    if (st.modsPct) for (k in st.modsPct) pct[k] = (pct[k] || 0) + st.modsPct[k] * n;
+    if (st.modsPct) for (k in st.modsPct) {
+      /* v2.1.22：同一键上**实例 modsPct 覆盖定义的 statModsPct**（而不是叠加）——
+         否则「打湿」按基础属性成长传进来的幅度会与定义里的固定值叠成两份。
+         不同键之间照旧各自累加。 */
+      if (def.statModsPct && def.statModsPct[k] != null) pct[k] = (pct[k] || 0) - def.statModsPct[k] * n;
+      pct[k] = (pct[k] || 0) + st.modsPct[k] * n;
+    }
   }
   var out = {}, key;
   for (key in flat) out[key] = flat[key];

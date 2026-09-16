@@ -2,11 +2,11 @@
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
 > **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
-> **生成**：2026-09-02 · **最后更新**：2026-09-16（对应 **v2.1.22**）
+> **生成**：2026-09-02 · **最后更新**：2026-09-16（对应 **v2.1.23**）
 > **分支**：`main` —— 提交号变动频繁，**以 `git log --oneline -5` 实时输出为准**，本文档不写死
 > ⚠️ **`git status` 的 ahead/behind 在本环境会失真**（本地远端引用不更新）—— **判断"推没推"必须用 `git ls-remote`**，详见 **§0.2.1**
-> **当前版本**：`APP_VERSION` = `2.1.22` · cache-busting `?v82` · 45 个 `page/*.js` 模块
-> **测试**：36 套件 / 913 断言，全部通过（含 a11y 护栏 40/40）
+> **当前版本**：`APP_VERSION` = `2.1.23` · cache-busting `?v83` · 45 个 `page/*.js` 模块
+> **测试**：36 套件 / 921 断言，全部通过（含 a11y 护栏 40/40）
 > **⚠️ 本仓库 2026-09-16 起有多个会话并行推进**（v2.1.16~19 一个、v2.1.20~22 另一个）——
 > **动手前先 `git log --oneline -5` 核对**，不要相信任何文档/记忆里的「当前版本」
 
@@ -171,12 +171,12 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 
 | 项 | 值 |
 |---|---|
-| 当前版本 | **v2.1.22**（2026-09-16） |
+| 当前版本 | **v2.1.23**（2026-09-16） |
 | HEAD / 远端 | **不写死** —— 用 `git log --oneline -1` 与 `git ls-remote origin refs/heads/main` 实时取（⚠️ **别信 `git status` 的 ahead 数**，见 §0.2.1） |
-| cache-busting | `?v82`（`page/index.html` 内全部 47 处；改 JS/CSS 必升） |
+| cache-busting | `?v83`（`page/index.html` 内全部 47 处；改 JS/CSS 必升） |
 | 模块数 | 45 个 `page/*.js`（+ 1 个 `page/data/exercises-dataset.js`） |
 | 最大文件 | `page/game-render.js` 1269 行，其次 `page/battle-group.js` 824 行、`page/challenge.js` 716 行 |
-| 测试 | 36 套件 / 913 断言全绿（见 §8） |
+| 测试 | 36 套件 / 921 断言全绿（见 §8） |
 
 **其他分支**（远端存在，均落后于 main）：`feat/action-dataset`、`feat/uiux-batch1`、`feat/v2-m2a`、`feat/v2-m2a-rest`、`fix/version-sync`。
 
@@ -455,7 +455,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ---
 
-## 8. 测试（36 套件 / 913 断言，全绿）
+## 8. 测试（36 套件 / 921 断言，全绿）
 
 ```bash
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
@@ -468,7 +468,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `test-page-load` | 27 | 页面加载链冒烟（校验 index.html 挂载了全部模块 + 骨架容器）——**接线事故防线** |
 | `test-sync-coverage` | 20 | ☁️ **云同步键覆盖**：从源码派生 store 键做 push→pull 往返，防「新增键忘同步」（见 §7.1） |
 | `test-pools-reachable` | 19 | 🔌 **技能/天赋可达性**：按真实技能池判定 + 未入池清单显式登记（见 §6.3） |
-| `test-status-lifecycle` | 71 | 🔁 状态生命周期（递减/到期/受击解除）+ `_statMods` + 护盾 + 迷惑（三选一 + 按技能等级取值）+ 蓄力时点 + **技能等级必须影响威力** |
+| `test-status-lifecycle` | 79 | 🔁 状态生命周期（递减/到期/受击解除）+ `_statMods` + 护盾 + 迷惑（三选一 + 按技能等级取值）+ 蓄力时点 + **技能等级必须影响威力** |
 | `test-group-levels` | 65 | 180 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / **`desc` 敌数与实际一致** |
 | `test-pet-codex` | 53 | 图鉴 + 参战 Unit 生成 + **天赋固有专属（防跨宠物回归）** |
 | `test-pet-talents` | 45 | 10 个专属天赋 hook + 命中/闪避 + petOnly 隔离 + 端到端伤害分担 |

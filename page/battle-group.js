@@ -154,8 +154,15 @@ function groupHitChance(actor, target) {
   if (guaranteed) return 1;                       // 漆黑之眼：必定命中
   var acc = BASE_HIT_RATE + (actor._accMod || 0);
   if (noPenalty) acc = Math.max(BASE_HIT_RATE, acc);   // 心眼：命中率不会被降低
-  /* v2.1.15：潮湿「提高对其命中率 +30%」—— 设计文档写明，此前只有状态、没有命中加成 */
-  if (typeof hasStatus === 'function' && hasStatus(target, 'wet')) acc += 0.30;
+  /* v2.1.15：潮湿「提高对其命中率」—— 设计文档写明，此前只有状态、没有命中加成。
+     v2.1.22：加成幅度改从**状态实例**读（打湿技能按基础属性成长换算后塞进 data.hitBonus，
+     设计区间 0%~30%）；没带 data 的潮湿（如雨天场地给的）沿用 30% 的既有行为。 */
+  if (typeof hasStatus === 'function' && hasStatus(target, 'wet')) {
+    var wetInst = null;
+    (target.statuses || []).forEach(function (s) { if (s.id === 'wet') wetInst = s; });
+    var hitBonus = (wetInst && wetInst.data && typeof wetInst.data.hitBonus === 'number') ? wetInst.data.hitBonus : 0.30;
+    acc += hitBonus;
+  }
   /* v2.1.15：闪避拆成两处 ——
      _eva（宠物「打湿」等限时修正，由 _hitModTurns 到期归零）
      _evaPerm（技能「变小」的常驻闪避，不该被限时修正的归零逻辑清掉） */
@@ -451,7 +458,7 @@ function castSkill(gb, actor, skillId) {
       var auraGuard = talentAura(mates, 'onAllyStatus', { statusId: sa.id, grade: grade, target: t });
       if (!selfGuard.skipAction && !auraGuard.skipAction) {
         // v2.1.14：区分「施加 / 刷新 / 叠层」，并去掉日志里外泄的英文状态 id（如 (poison)）
-        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor });
+        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor, modsPct: sa.modsPct, data: sa.data });
         syncStatusDerived(t);   // v2.1.15：状态变了就重算 _statMods，否则减速/破甲不生效
         var verb = ar.refreshed ? '刷新' : '施加';
         var extra = '';
