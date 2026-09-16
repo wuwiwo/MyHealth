@@ -146,7 +146,7 @@ function calcSkillDamage(skill, caster, targets, ctx) {
   }
   var base = Math.floor(atk * power / 100 * mult);
   var out = [];
-  targets.forEach(function (t) {
+  function hitOne(t) {
     var def = effectiveStat(t, 'def');
     var sdef = effectiveStat(t, 'soulDef');
     var dmg;
@@ -157,7 +157,22 @@ function calcSkillDamage(skill, caster, targets, ctx) {
     }
     if (skill.ignoreDef) dmg = base;
     out.push({ targetId: t.id, amount: dmg, dmgType: skill.dmgType || 'physical' });
-  });
+  }
+  /* v2.1.24：多段攻击。
+     skill.multiHit = N（无影拳：总计 5 次）→ 打 N 次、**目标随机且可重复**
+     （设计 design-v2.0.md:249「总计 5 次攻击，每次视为普通攻击，目标随机可重复」）。
+     随机池由 castSkill 经 ctx.pool 传进来 —— selectTargets('random1') 只返回 1 个目标，
+     拿不到「随机可重复」需要的整套候选。
+     此前无影拳只有 1 次命中（power 单发），日志却写「×5」。 */
+  if (skill.multiHit) {
+    var pool = (ctx.pool && ctx.pool.length) ? ctx.pool : targets;
+    for (var hi = 0; hi < skill.multiHit && pool.length; hi++) {
+      var pk = (typeof ctx.rng === 'function') ? ctx.rng() : Math.random();
+      hitOne(pool[Math.floor(pk * pool.length)]);
+    }
+  } else {
+    targets.forEach(hitOne);
+  }
   var res = { type: 'damage', hits: out };
   if (proc) { res.proc = true; res.procMult = 1 + skill.procBoost.value; }
   return res;

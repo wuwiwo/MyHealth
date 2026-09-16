@@ -434,5 +434,58 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
     sb.groupHitChance(atk0, wHi) === 1, sb.groupHitChance(atk0, wHi));
 }
 
+/* ============ 14. 多段攻击与睡眠时长（v2.1.24） ============ */
+{
+  // 无影拳：设计「总计 5 次攻击，目标随机可重复」（design-v2.0.md:249）
+  const fist = sb.getSkill('p_shadowfist');
+  assert('无影拳声明为 5 段攻击', !!(fist && fist.multiHit === 5), fist && fist.multiHit);
+  const caster = sb.createUnit({ id: 'sf', side: 'ally', name: '熊', base: { hp: 300, atk: 100, def: 5, spd: 5 }, tags: ['pet', 'UR'] });
+  caster._refineLevel = 0;
+  const pool = [1, 2, 3].map(i => sb.createUnit({ id: 'fe' + i, side: 'enemy', name: '敌' + i, base: { hp: 99999, atk: 1, def: 0, spd: 1 } }));
+  let seed = 7;
+  const vrand = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const res = sb.calcSkillDamage(fist, caster, [pool[0]], { rng: vrand, pool: pool });
+  assert('无影拳真的打 5 次（此前只有 1 次）', res.hits.length === 5, res.hits.length);
+  assert('5 次命中都落在随机池内（目标随机可重复）',
+    res.hits.every(h => pool.some(f => f.id === h.targetId)),
+    JSON.stringify(res.hits.map(h => h.targetId)));
+  assert('没有 pool 时退回目标列表（不报错，仍 5 段）',
+    sb.calcSkillDamage(fist, caster, [pool[0]], {}).hits.length === 5);
+  assert('单段技能不受影响（冲撞单目标仍 1 段）',
+    sb.calcSkillDamage(sb.getSkill('charge'), caster, [pool[0]], {}).hits.length === 1);
+
+  // 睡觉：1~3 回合（作者指定；设计文档原写 3~4）。duration = 实际回合数 + 1
+  const sleeper = sb.createUnit({ id: 'sl', side: 'ally', name: '猪', base: { hp: 500, atk: 10, def: 100, soulDef: 100, spd: 5 }, tags: ['pet', 'R'] });
+  sleeper._refineLevel = 0;
+  const durations = [];
+  [0.01, 0.5, 0.99].forEach(function (v) {
+    RND = v;
+    const r2 = sb.applySkillEffects(sb.getSkill('p_sleep'), sleeper, [sleeper], {});
+    r2.statusApps.forEach(sa => durations.push(sa.duration));
+  });
+  RND = 0.5;
+  assert('睡觉时长为 1~3 回合（duration 已 +1 → 2/3/4）',
+    durations.length === 3 && durations.join(',') === '2,3,4', durations.join(','));
+  assert('睡觉把 healPct 带给状态实例', (() => {
+    const r3 = sb.applySkillEffects(sb.getSkill('p_sleep'), sleeper, [sleeper], {});
+    const sa = r3.statusApps[0];
+    return sa && sa.data && typeof sa.data.healPct === 'number';
+  })());
+
+  // 睡眠期间每回合结束回复 (防御+魂防)×healPct
+  const t1 = sb.createUnit({ id: 'sl2', side: 'ally', name: '猪', base: { hp: 400, atk: 10, def: 100, soulDef: 100, spd: 5 } });
+  sb.applyStatus(t1, { id: 'sleep', duration: 5, data: { healPct: 1.0 } });
+  t1.hp = 100;
+  sb.dispatch(t1, 'onTurnEnd', {});
+  assert('睡眠每回合结束回复 (防100+魂防100)×100% = 200', t1.hp === 300, t1.hp);
+
+  // 哈欠 / 歌唱造成的睡眠没有 healPct → 不回血（行为不变）
+  const t2 = sb.createUnit({ id: 'sl3', side: 'ally', name: '猪', base: { hp: 400, atk: 10, def: 100, soulDef: 100, spd: 5 } });
+  sb.applyStatus(t2, { id: 'sleep', duration: 2 });
+  t2.hp = 100;
+  sb.dispatch(t2, 'onTurnEnd', {});
+  assert('哈欠/歌唱造成的睡眠不回血（无 healPct）', t2.hp === 100, t2.hp);
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

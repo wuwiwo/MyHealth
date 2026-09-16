@@ -388,7 +388,12 @@ function castSkill(gb, actor, skillId) {
   if (def.type === 'attack') {
     /* v2.1.15：把 gb.rng 传下去 —— 技能自带的概率强化（咬击 30% 概率 +25%）需要它在
        calcSkillDamage 里掷骰，用 gb.rng 而不是 Math.random 才能让战斗可复现。 */
-    var dmgResult = calcSkillDamage(def, actor, targets, { rng: gb.rng });
+    /* v2.1.24：把「敌方全体存活单位」当随机池一并传下去 ——
+       无影拳的 5 连击要求「目标随机可重复」，而 selectTargets('random1') 只给 1 个目标。 */
+    var dmgResult = calcSkillDamage(def, actor, targets, {
+      rng: gb.rng,
+      pool: (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; })
+    });
     if (dmgResult) {
       if (dmgResult.proc) events.push({ msg: '💢 ' + (actor.name || '单位') + ' 的 ' + def.name + ' 触发强化（本次伤害 +' + Math.round((dmgResult.procMult - 1) * 100) + '%）', targetId: targets.length ? targets[0].id : null, type: 'talent' });
       dmgResult.hits.forEach(function (h) {

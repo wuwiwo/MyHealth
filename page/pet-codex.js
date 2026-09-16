@@ -126,18 +126,23 @@ registerSkill({ id:'p_drench', name:'打湿', type:'support', target:'random1', 
     r.events.push({msg:'💧 ' + (c.name||'宠物') + ' 打湿 → ' + ts.map(function(t){return t.name;}).join('、') + '：魂防 -' + Math.round(down*100) + '%、被命中 +' + Math.round(hit*100) + '%'});
   }] });
 
-/* R：睡觉（自愈 + 睡眠）—— v2.1.22 治疗量接区间 (防御+魂防)×0~300%
-   睡眠时长仍写 1：按当前「回合末递减」的实现，它不会真的锁住自己的下一回合
-   （避免 R 级宠物自愈还倒亏一回合）；设计写的是 3~4 回合，改前先确认这个取舍。 */
+/* R：睡觉（自愈 + 睡眠）—— 治疗量接区间 (防御+魂防)×0~300%（v2.1.22）
+   v2.1.24（作者指定）：睡眠时长 1~3 回合（设计文档原写 3~4）。
+   ⚠️ duration 必须 = 实际回合数 **+1**：本状态是在**自己的回合内**被施加的，
+      同一回合末的 ageStatuses 会先扣 1，所以 duration=N 只锁 N-1 个回合
+      （写 1 等于完全没睡，这正是改前的状况）。
+   睡眠期间**每回合结束**按 healPct 回复（由 sleep 状态的 onTurnEnd 实现）。 */
 registerSkill({ id:'p_sleep', name:'睡觉', type:'support', target:'self', cooldown:4,
   range:{ power:[0, 300] },
   effects:[function(c,ts,r,ctx){
     var pct=ctx.sv('power')/100;
     ts.forEach(function(t){
       r.heals.push({ unitId: t.id, amount: Math.floor(((t.base.def||0)+(t.base.soulDef||0)) * pct) });
-      r.statusApps.push({ unitId: t.id, id: 'sleep', duration: 1, chance: 1, grade: 1 });
+      var turns = 1 + Math.floor(Math.random() * 3);   // 1~3 回合
+      r.statusApps.push({ unitId: t.id, id: 'sleep', duration: turns + 1, chance: 1, grade: 1,
+        data: { healPct: pct } });
+      r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈 ' + Math.round(pct*100) + '%（防+魂防），睡 ' + turns + ' 回合'});
     });
-    r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈 ' + Math.round(pct*100) + '%（防+魂防）并睡 1 回合'});
   }] });
 
 /* SR：火焰啄击 —— 设计 攻击×150%~330%（区间随技能等级，v2.1.22 接线） */
@@ -179,11 +184,12 @@ registerSkill({ id:'p_holylight', name:'圣光治愈', type:'support', target:'a
 /* UR：梦幻光球（全场弹射）—— 设计 魂攻×200%~290% */
 registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'random1', power:250, range:{power:[200,290]}, dmgType:'soul', cooldown:5 });
 
-/* UR：无影拳（5连击）—— 设计 单次 攻击×50%~95%、总计 5 次
-   ⚠️ 已知偏差：实现里只打 1 次（power=70 一次），日志却写「×5」。
-   本次只把 power 接上等级区间；真正的 5 连击与「每次视为普攻」待另开一条改。 */
-registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'random1', power:70, range:{power:[50,95]}, dmgType:'physical', cooldown:4,
-  effects:[function(c,ts,r){ r.events.push({msg:'👊 ' + (c.name||'宠物') + ' 无影拳'}); }] });
+/* UR：无影拳（5连击）—— 设计 design-v2.0.md:249：
+   「总计 5 次攻击，每次视为普通攻击，目标随机可重复，单次 攻击×50%~95%」
+   v2.1.24 修复：此前只有 1 次命中（power 单发、日志却写「×5」）。
+   现在 multiHit:5 —— 真正打 5 次、目标随机可重复（随机池由 castSkill 传 ctx.pool）。 */
+registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'random1', power:70, range:{power:[50,95]}, multiHit:5, dmgType:'physical', cooldown:4,
+  effects:[function(c,ts,r){ r.events.push({msg:'👊 ' + (c.name||'宠物') + ' 无影拳：5 连击（目标随机可重复）'}); }] });
 
 /* UR：战意灌注（2友方增益）—— 设计 +3%~30%（攻击/魂攻较高项，v2.1.22 接区间） */
 registerSkill({ id:'p_warmight', name:'战意灌注', type:'support', target:'ally1', cooldown:4,

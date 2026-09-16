@@ -272,6 +272,17 @@ defineStatus({
     onBeforeAction: function (unit, st) {
       return { skipAction: true, events: [{ type: 'skip', statusId: 'sleep', unitId: unit.id, reason: '睡眠中跳过行动' }] };
     },
+    onTurnEnd: function (unit, st) {
+      /* v2.1.24：睡觉技能期间「每回合结束回复 (防御+魂防)×0~300%」——
+         幅度由施加方塞进实例 data.healPct（见 pet-codex.js 的 p_sleep）。
+         哈欠 / 歌唱造成的睡眠没有这个字段 → 不回血，行为不变。 */
+      var pct = (st && st.data && st.data.healPct) || 0;
+      if (pct <= 0) return {};
+      var heal = Math.floor(((unit.base.def || 0) + (unit.base.soulDef || 0)) * pct);
+      if (heal <= 0) return {};
+      unit.hp = Math.min(unit.base.hp, unit.hp + heal);
+      return { events: [{ type: 'heal', statusId: 'sleep', unitId: unit.id, amount: heal, msg: '💤 睡眠回复 +' + heal }] };
+    },
     onDamage: function (unit, st) {
       // 受伤即醒
       clearStatus(unit, 'sleep');
