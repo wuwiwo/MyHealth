@@ -56,9 +56,9 @@ const PET_SKILL_SRC = load('pet-codex.js');
 const isPetSkill = id => PET_SKILL_SRC.indexOf("'" + id + "'") > -1;
 
 /* 设计已实现、但当前**不在任何技能池**里的技能（实战永远见不到）。
-   这是一份「待设计决定」清单：要不要入池属于平衡决策，不要默默往池子里塞。
-   清单变了就同步这里，测试会替你盯着。 */
-const NOT_YET_PLACED = ['chargeup', 'doom', 'lastword', 'heal'];
+   v2.1.22：最后 4 个（chargeup/doom/lastword/heal）已按 dundun 指定入池 → 清单清空。
+   这份清单的价值在于：一旦有新技能「写了却没入池」，测试会在这里报出来，而不是被字符串巧合藏住。 */
+const NOT_YET_PLACED = [];
 
 const deadSkills = skillIds.filter(id =>
   !isEnemyPoolSkill(id) && !isPetSkill(id) && NOT_YET_PLACED.indexOf(id) === -1);

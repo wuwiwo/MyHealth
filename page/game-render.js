@@ -419,12 +419,12 @@ function startGroupTrial(groupId){
   // 锚定默认关闭（见 GROUP_ANCHOR.enabled），开启时按我方阵容反推敌人属性
   var cfgList = (typeof groupStageEnemies === 'function') ? groupStageEnemies(anchorG, glv, allies) : glv.enemies
   var enemies=cfgList.map(function(ec,i){
-    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
+    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base,level:ec.level})
   })
   // v2.1.13 场地：每个大关一个主题场地（g3 起）
   var lgNum = parseInt(String(anchorG).replace(/[^0-9]/g, ''), 10) || 1
   var terrain = (typeof groupTerrainFor === 'function') ? groupTerrainFor(lgNum) : null
-  if (terrain) toast('场地：' + terrain.name + ' — ' + (terrain.desc || ''), 's')
+  if (terrain) toast('🌍 场地：' + terrain.name + '（对敌我双方均有效，点界面上的 🌍 可随时查看）', 's')
   _groupBattle=createGroupBattle({allies:allies,enemies:enemies,terrain:terrain})
   // 模式/速度持久化（记住上次选择）
   _groupMode=localStorage.getItem('dh-group-mode')||'auto'
@@ -630,6 +630,10 @@ function renderGroupOverlay(show){
   var h='<div class="gb-ctrl">'
     +'<button class="speed-btn" id="gbClose" aria-label="退出战斗">✕</button>'
     +'<span class="gb-ctrl-title">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
+    /* v2.1.22：场地常驻胶囊（可点击看介绍）。
+       此前场地只在开战时 toast 一次，几秒后就消失 —— 玩家打到一半根本记不住自己在什么场地里，
+       更看不到「对敌我双方均有效」这类关键前提。现在控制条上常驻一个 🌍 胶囊，点开是完整说明。 */
+    +(gb.terrain?'<button class="gb-terrain" id="gbTerrain" title="点击查看场地介绍">🌍 '+escHtml(gb.terrain.name)+'</button>':'')
     +'<span style="flex:1"></span>'
     // 手动/自动切换
     +'<button class="speed-btn'+(_groupMode==='manual'?' on-warn':'')+'" id="gbMode">'+(_groupMode==='manual'?'✋ 手动':'🤖 自动')+'</button>'
@@ -651,6 +655,9 @@ function renderGroupOverlay(show){
   // 事件绑定
   var closeBtn=document.getElementById('gbClose')
   if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;_groupPaused=false;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}})
+  // v2.1.22：场地胶囊 → 场地介绍弹层
+  var terrBtn=document.getElementById('gbTerrain')
+  if(terrBtn)terrBtn.addEventListener('click',function(){showTerrainDetail(gb.terrain)})
   // v2.1.14：战斗 / 日志双 Tab 切换
   ov.querySelectorAll('[data-gbtab]').forEach(function(btn){
     btn.addEventListener('click',function(){
@@ -1134,7 +1141,13 @@ function showSkillDetail(skillId, unit){
   h+=detRow('类别', _SKILL_TYPE_NAMES[s.type]||s.type)
   h+=detRow('目标', _SKILL_TARGET_NAMES[s.target]||s.target||'随机 1 名敌人')
   if(s.type==='attack'){
-    h+=detRow('威力', (s.power||0)+'% '+(s.dmgType==='soul'?'魂攻':'攻击'))
+    /* v2.1.22：带区间 [低,高] 的技能按施法者等级取值 —— 详情页要能看出「区间」与「我这级实际多少」 */
+    var rp=(s.range&&s.range.power)?s.range.power:null
+    h+=detRow('威力', rp?(rp[0]+'%~'+rp[1]+'%（随技能等级）'):((s.power||0)+'%'))
+    if(rp&&unit&&typeof skillLevelOf==='function'&&typeof skillValue==='function'){
+      var slv=skillLevelOf(unit,skillId)
+      h+=detRow('当前等级', 'Lv'+slv+' → 实际威力 '+Math.round(skillValue(s,'power',slv))+'%')
+    }
     h+=detRow('伤害类型', s.dmgType==='soul'?'魂攻（吃目标魂防）':'物理（吃目标防御）')
   }
   h+=detRow('冷却', (s.cooldown||0)+' 回合'+(s.startCooldown?('（开场即进入 '+s.startCooldown+' 回合冷却）'):''))
@@ -1144,6 +1157,31 @@ function showSkillDetail(skillId, unit){
   h+='<div class="det-card"><div class="det-h">📖 效果说明</div>'
   h+='<div class="det-line">'+escHtml(doc?doc.desc:'（该技能暂无说明文案）')+'</div>'
   if(doc&&doc.wip)h+='<div class="det-wip">⚠ 与设计文档不一致：'+escHtml(doc.wip)+'</div>'
+  h+='</div>'
+  _openDetailPanel(h)
+}
+
+/* 场地详情弹层（v2.1.22）
+   数据源是 terrain.js 的 desc（唯一来源），这里只做展示。
+   设计依据 doc/2.0 敌群设计.md:207「## 场地 —— 对敌我双方均有效」。 */
+function showTerrainDetail(terrain){
+  if(!terrain){toast('本关没有场地效果','s');return}
+  pauseGroupBattle()
+  var h='<div class="det-hdr">'
+    +'<button class="speed-btn" id="detailClose">← 返回</button>'
+    +'<span class="det-title">🌍 '+escHtml(terrain.name)+'</span>'
+    +'</div>'
+  h+='<div class="det-card"><div class="det-h">🔎 作用范围</div>'
+  h+='<div class="det-line">对<strong>敌我双方</strong>均有效 —— 场地不偏向任何一方：'
+    +'加成与损伤同时作用于你和敌人（设计文档：<code>doc/2.0 敌群设计.md</code> §场地）。</div>'
+  h+='</div>'
+  h+='<div class="det-card"><div class="det-h">📖 效果</div>'
+  var segs=String(terrain.desc||'').split('；')
+  segs.forEach(function(seg){
+    seg=seg.trim()
+    if(seg)h+='<div class="det-line">· '+escHtml(seg)+'</div>'
+  })
+  if(!terrain.desc)h+='<div class="det-line">（该场地暂无说明文案）</div>'
   h+='</div>'
   _openDetailPanel(h)
 }

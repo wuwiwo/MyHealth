@@ -140,7 +140,14 @@ function groupTerrainFor(lg) {
 var TALENTS_LOW = ['lazy', 'slowstart'];
 var SKILLS_HIGH = ['charge', 'spikes', 'blizzard', 'armorbreak', 'blackmist', 'possess', 'deepfreeze',
   // v2.1.16：这 7 个技能代码完整但此前不在任何池里 → 实战永远见不到
-  'taunt', 'empower', 'bulwark', 'cleanse', 'drainbuff', 'stardust', 'clearfog'
+  'taunt', 'empower', 'bulwark', 'cleanse', 'drainbuff', 'stardust', 'clearfog',
+  /* v2.1.22（dundun 指定）：最后 4 个也入池。
+     · chargeup 蓄力重击：上轮刚把结算时点对齐设计文档（本回合蓄力 → 下回合自动 400%）
+     · doom 末日 / lastword 遗言：特级负面；ai.js:87-97 已写好「Boss 血量 <35% 才放大招/特级负面」，
+       lastword 的「自身阵亡」正好当作残血 Boss 的同归于尽手段
+     · heal 治愈：ai.js:78-85 的「队友 <40% 血就治疗」分支此前因为没有治疗技能可用而永远走不到，
+       入池后敌方治疗行为才真正成立 */
+  'chargeup', 'doom', 'lastword', 'heal'
 ];
 var SKILLS_LOW = ['bite', 'snowball', 'shrink', 'yawn', 'drench', 'surprise'];   // v2.1.16 击掌奇袭入池
 
@@ -163,6 +170,11 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
   var cfg = {
     name: isBoss ? ENEMY_NAMES.boss[lg % ENEMY_NAMES.boss.length] : (isElite || tier==='elite1' ? ENEMY_NAMES.elite[(lg+st) % ENEMY_NAMES.elite.length] : ENEMY_NAMES.minion[(lg+st+slot) % ENEMY_NAMES.minion.length]),
     tier: tier,
+    /* v2.1.22：敌人的**技能等级** = 大关号（夹到 1..10）。
+       设计文档把部分技能数值写成区间（如「蓄力承伤 +20%~35%」），区间两端即「等级低→满级」；
+       此前 createEnemyUnit 的 level 恒为 1（没有任何调用方传值）→ 敌人技能永远停在区间下限。
+       现在随大关推进，g1= Lv1 … g10 及以上 = Lv10。 */
+    level: Math.max(1, Math.min(10, lg)),
     base: { atk: atk, def: def, hp: hp, spd: Math.min(12, spd) }
   };
   if (hasSoul) {

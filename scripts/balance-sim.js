@@ -78,7 +78,7 @@ function simulate(sb, playerBase, stage, petCount, maxTurns, groupId) {
     && (!sb.GROUP_ANCHOR || sb.GROUP_ANCHOR.enabled !== false || argv.includes('--force-anchor'));
   const cfg = useAnchor ? sb.anchorStageEnemies(groupId, stage, allies) : (stage.enemies || []);
   const enemies = cfg.map(function (ec, i) {
-    return sb.createEnemyUnit({ id: 'enemy-' + i, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base });
+    return sb.createEnemyUnit({ id: 'enemy-' + i, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base, level: ec.level });
   });
   const gb = sb.createGroupBattle({ allies: allies, enemies: enemies });
   let turns = 0;

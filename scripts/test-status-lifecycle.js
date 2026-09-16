@@ -301,38 +301,91 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
     return { gb: gb, actor: actor, ev: sb.groupUnitTurn(gb, actor) };
   }
 
-  // ① 丧失防备（r=0.1 → floor(0.3)=0）
+  // ① 丧失防备（r=0.1 → floor(0.3)=0）。未带等级信息 → 按技能 Lv1 = 区间下限 15%
   const a1 = mkUnit('a1', 'ally'), e1 = mkUnit('e1', 'enemy');
   const r1 = runConfused(0.1, [a1], [e1]);
   assert('迷惑分支①：丧失防备', /丧失防备/.test(msgs(r1.ev)), msgs(r1.ev));
-  assert('丧失防备真的降低防御（-45%）', sb.effectiveStat(e1, 'def') === 55, sb.effectiveStat(e1, 'def'));
+  assert('丧失防备按 Lv1 取下限（防御 -15%）', sb.effectiveStat(e1, 'def') === 85, sb.effectiveStat(e1, 'def'));
   assert('分支①不造成伤害', a1.hp === 500 && e1.hp === 500, a1.hp + '/' + e1.hp);
 
-  // ② 不分敌我误击（r=0.4 → floor(1.2)=1）
+  // ② 不分敌我误击（r=0.4 → floor(1.2)=1）。Lv1 → ×50%
   const a2 = mkUnit('a2', 'ally'), e2 = mkUnit('e2', 'enemy');
   const r2 = runConfused(0.4, [a2], [e2]);
   assert('迷惑分支②：敌我不分误击', /敌我不分/.test(msgs(r2.ev)), msgs(r2.ev));
   assert('误击伤害落在「其他敌人」身上', a2.hp < 500 && e2.hp === 500, a2.hp + '/' + e2.hp);
-  assert('误击伤害 = 攻击×75%（100×0.75 − 防100/2 = 25）', a2.hp === 475, 'a2.hp=' + a2.hp);
+  assert('误击按 Lv1 取下限（100×50% − 防100/2 → 保底 1）', a2.hp === 499, 'a2.hp=' + a2.hp);
 
-  // ③ 牺牲自我（r=0.9 → floor(2.7)=2）
+  // ③ 牺牲自我（r=0.9 → floor(2.7)=2）。Lv1 → 1%
   const a3 = mkUnit('a3', 'ally'), e3 = mkUnit('e3', 'enemy', 1000);
   const r3 = runConfused(0.9, [a3], [e3]);
   assert('迷惑分支③：牺牲自我', /牺牲自我/.test(msgs(r3.ev)), msgs(r3.ev));
-  assert('牺牲自我耗自身最大生命 6%（1000×6%=60）', e3.hp === 940, 'e3.hp=' + e3.hp);
+  assert('牺牲自我按 Lv1 取下限（1000×1%=10）', e3.hp === 990, 'e3.hp=' + e3.hp);
   assert('分支③不打别人', a3.hp === 500, 'a3.hp=' + a3.hp);
 
   // ② 无其他敌人时不触发 → 退到 ③（文档明写）。直接调 resolveConfusion 避免构造空阵营的整场战斗
   const solo = mkUnit('solo', 'enemy', 1000);
   const evSolo = sb.resolveConfusion({ allies: [], enemies: [solo], units: [solo], rng: function () { return 0.4; } }, solo);
   assert('无其他敌人时 ② 不触发，回退到 ③', /牺牲自我/.test(msgs(evSolo)), msgs(evSolo));
-  assert('回退分支的自身伤害正确（1000×6%=60）', solo.hp === 940, 'solo.hp=' + solo.hp);
+  assert('回退分支同样按等级取值（1000×1%=10）', solo.hp === 990, 'solo.hp=' + solo.hp);
+
+  /* ★ v2.1.22 核心：技能等级必须真的影响数值。
+     dundun 指出「宠物技能有等级」—— 而此前 skillLevels 只在 UI/升级逻辑里读，
+     战斗结算一律用固定值（升级了技能却不增强）。下面的对照锁住这条链路。 */
+  function runWithLevel(lv, r) {
+    const a = mkUnit('lv-a', 'ally'), e = mkUnit('lv-e', 'enemy', 1000);
+    sb.applyStatus(e, { id: 'confused', duration: 1, data: { skillId: 'p_phantom', level: lv } });
+    const ev = sb.resolveConfusion({ allies: [a], enemies: [e], units: [a, e], rng: function () { return r; } }, e);
+    return { ev: ev, e: e, a: a };
+  }
+  const selfLo = runWithLevel(1, 0.9), selfHi = runWithLevel(10, 0.9);
+  assert('牺牲自我随等级（Lv1 1% → Lv10 10%，hp 990/900）',
+    selfLo.e.hp === 990 && selfHi.e.hp === 900, selfLo.e.hp + '/' + selfHi.e.hp);
+  const downLo = runWithLevel(1, 0.1), downHi = runWithLevel(10, 0.1);
+  assert('丧失防备随等级（Lv1 -15% → Lv10 -75%，def 85/25）',
+    sb.effectiveStat(downLo.e, 'def') === 85 && sb.effectiveStat(downHi.e, 'def') === 25,
+    sb.effectiveStat(downLo.e, 'def') + '/' + sb.effectiveStat(downHi.e, 'def'));
 
   // 迷惑会正常过期（不会永久锁死）
   const e5 = mkUnit('e5', 'enemy');
   sb.applyStatus(e5, { id: 'confused', duration: 1 });
   sb.ageStatuses(e5);
   assert('迷惑 1 回合后自动解除', !sb.hasStatus(e5, 'confused'), JSON.stringify(e5.statuses));
+}
+
+/* ============ 12. 技能等级接进战斗数值（v2.1.22） ============ */
+{
+  const caster = sb.createUnit({ id: 'pc', side: 'ally', name: '鸟', base: { hp: 200, atk: 100, def: 5, spd: 5 } });
+  const tgt = sb.createUnit({ id: 'pt', side: 'enemy', name: '靶', base: { hp: 9999, atk: 1, def: 0, spd: 1 } });
+  const skill = sb.getSkill('p_flamepeck');   // range.power = [150, 330]
+  assert('宠物攻击技能带区间数据', !!(skill && skill.range && skill.range.power), JSON.stringify(skill && skill.range));
+
+  caster._skillLevels = {};
+  const d1 = sb.calcSkillDamage(skill, caster, [tgt], {}).hits[0].amount;
+  caster._skillLevels = { p_flamepeck: 10 };
+  const d10 = sb.calcSkillDamage(skill, caster, [tgt], {}).hits[0].amount;
+  assert('宠物技能威力随等级（火焰啄击 Lv1=150% → Lv10=330%）', d1 === 150 && d10 === 330, d1 + '/' + d10);
+
+  caster._skillLevels = { p_flamepeck: 5 };
+  const d5 = sb.calcSkillDamage(skill, caster, [tgt], {}).hits[0].amount;
+  // 插值点 t = (5-1)/(10-1) = 4/9 → 150 + 180×4/9 = 230（不是中点 240）
+  assert('中间等级线性插值（Lv5 → 230%）', d5 === 230, d5);
+
+  // 敌人没有 _skillLevels → 取 unit.level（由 group-levels 按大关给定）
+  const foe5 = sb.createUnit({ id: 'f5', side: 'enemy', name: '敌', level: 5, base: { hp: 200, atk: 100, def: 5, spd: 5 } });
+  assert('敌人技能等级取 unit.level（Lv5 → 230%）',
+    sb.calcSkillDamage(skill, foe5, [tgt], {}).hits[0].amount === 230,
+    sb.calcSkillDamage(skill, foe5, [tgt], {}).hits[0].amount);
+  const foe0 = sb.createUnit({ id: 'f0', side: 'enemy', name: '敌', base: { hp: 200, atk: 100, def: 5, spd: 5 } });
+  assert('level 缺省时按 Lv1（区间下限 150%）',
+    sb.calcSkillDamage(skill, foe0, [tgt], {}).hits[0].amount === 150,
+    sb.calcSkillDamage(skill, foe0, [tgt], {}).hits[0].amount);
+
+  // 没有区间的技能不受等级影响（设计只给单一「默认：X%」的那些）
+  const flat = sb.getSkill('charge');   // power 200，无 range
+  foe5._skillLevels = undefined;
+  assert('无区间技能保持固定威力（冲撞 200%）',
+    sb.calcSkillDamage(flat, foe5, [tgt], {}).hits[0].amount === 200,
+    sb.calcSkillDamage(flat, foe5, [tgt], {}).hits[0].amount);
 }
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');

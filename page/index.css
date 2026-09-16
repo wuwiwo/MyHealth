@@ -526,6 +526,12 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 /* 控制条：常驻，两个页签下都能调速与退出 */
 .gb-ctrl{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;row-gap:6px;min-height:52px;padding:6px 0 8px;position:sticky;top:0;z-index:6;background:var(--bg)}
 .gb-ctrl-title{font-size:var(--fs-base);font-weight:700}
+/* v2.1.22：场地常驻胶囊（可点击看介绍）。场地只在开战时 toast 一次，之后玩家就看不到自己在什么场地里了 */
+.gb-terrain{min-height:var(--touch-min);padding:0 12px;border:1px solid var(--bd-l);border-radius:var(--rad-full);
+  background:var(--surface-2);color:var(--text2);font-family:inherit;font-size:var(--fs-xs);font-weight:700;cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.gb-terrain:active{background:var(--surface-3)}
+.gb-terrain::after{content:'›';opacity:.6;font-size:var(--fs-sm)}
 .speed-btn.sm{min-height:36px;min-width:36px;padding:0 10px;font-size:var(--fs-xs)}
 .speed-btn.on-warn{border-color:var(--orange);color:var(--orange)}
 .speed-btn.on-good{border-color:var(--green);color:var(--green)}

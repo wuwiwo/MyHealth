@@ -278,13 +278,15 @@ defineStatus({
 
 /* 丧失防备（迷惑分支①）：防御与魂防降低。
    ⚠ duration 必须写 2：本状态是在目标**自己的回合内**被施加的，
-   若 duration=1 会在同一回合末的 ageStatuses 立刻过期，一点效果都留不下。 */
+   若 duration=1 会在同一回合末的 ageStatuses 立刻过期，一点效果都留不下。
+   ⚠ v2.1.22：这里**不再写死 statModsPct** —— 幅度随技能等级变化（设计 15%~75%），
+   由 battle-group.js 的 resolveConfusion() 用**实例 modsPct** 传进来；
+   两处都写会叠加成「固定 + 等级」两份。 */
 defineStatus({
   id: 'confused_down',
   name: '丧失防备',
   grade: 2,
   maxStacks: 1,
   stacking: 'refresh',
-  statModsPct: { def: -0.45, soulDef: -0.45 },
   hooks: {}
 });

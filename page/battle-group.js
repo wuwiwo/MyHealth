@@ -78,35 +78,58 @@ function resolveChargeStrike(gb, actor) {
 }
 
 /* 迷惑（幻影之瞳）三选一 —— 设计依据 doc/design-v2.0.md:229：
-   ①丧失防备（防御·魂防 -45%，文档区间 15%~75%）
-   ②不分敌我误击其他敌人（伤害 ×75%，文档区间 50%~95%；无其他敌人则不触发）
-   ③牺牲自我（消耗自身最大生命 6%，文档区间 1%~10%）
-   宠物技能没有等级（宠物不走技能升级线），故取区间中位；三项数值都写在这里便于日后细分。 */
-var CONFUSE_HIT_MUL = 0.75;
-var CONFUSE_SELF_PCT = 0.06;
+   ①丧失防备（防御·魂防 降低 15%~75%）
+   ②不分敌我误击其他敌人（伤害 50%~95%；无其他敌人则不触发）
+   ③牺牲自我（消耗自身最大生命 1%~10%）
+   **三个区间都随技能等级取值**（v2.1.22 接线）：等级与区间写在技能定义上
+   （pet-codex.js 的 p_phantom.range），由施法时塞进「迷惑」状态实例的 data 带过来 ——
+   所以这里要读 actor 身上的 confused 实例，而不是用固定常量。 */
+
+/* 读出本次迷惑的等级与三个分支数值（读不到就按 Lv1 = 区间下限兜底） */
+function _confuseParams(actor) {
+  var st = null;
+  (actor.statuses || []).forEach(function (s) { if (s.id === 'confused') st = s; });
+  var data = (st && st.data) || {};
+  var lv = Math.max(1, Math.min(SKILL_LEVEL_MAX, Math.floor(data.level || 1)));
+  var sk = (typeof SKILLS !== 'undefined' && data.skillId) ? SKILLS[data.skillId] : null;
+  var R = (sk && sk.range) || {};
+  var t = (lv - 1) / (SKILL_LEVEL_MAX - 1);
+  function pick(key, lo, hi) {
+    var r = R[key];
+    if (r && r.length === 2) { lo = r[0]; hi = r[1]; }
+    return lo + (hi - lo) * t;
+  }
+  return {
+    level: lv,
+    down: pick('confuseDown', 0.15, 0.75),
+    hit: pick('confuseHit', 0.50, 0.95),
+    self: pick('confuseSelf', 0.01, 0.10)
+  };
+}
 
 function resolveConfusion(gb, actor) {
   var events = [];
+  var cf = _confuseParams(actor);
   var others = (actor.side === 'ally' ? gb.enemies : gb.allies)
     .filter(function (u) { return u.hp > 0 && u.id !== actor.id; });
   var branch = Math.floor(gb.rng() * 3);
   if (branch === 1 && !others.length) branch = 2;   // 文档：无其他敌人则不触发 ② → 退到 ③
 
   if (branch === 0) {
-    applyStatus(actor, { id: 'confused_down', duration: 2 });   // duration 2：本回合内施加，写 1 会在同一回合末立刻过期
+    /* 幅度按等级走**实例** modsPct（confused_down 定义里不再写死 statModsPct），
+       否则会与定义里的固定值叠加、变成「固定 + 等级」两份。 */
+    applyStatus(actor, { id: 'confused_down', duration: 2, modsPct: { def: -cf.down, soulDef: -cf.down } });
     syncStatusDerived(actor);
-    var d = (typeof getStatusDef === 'function' ? getStatusDef('confused_down') : null) || {};
-    var pct = Math.abs((d.statModsPct && d.statModsPct.def) || 0.45);
-    events.push({ msg: '🌀 ' + actor.name + ' 迷惑 → 丧失防备（防御·魂防 -' + Math.round(pct * 100) + '%）', targetId: actor.id, type: 'status' });
+    events.push({ msg: '🌀 ' + actor.name + ' 迷惑 → 丧失防备（防御·魂防 -' + Math.round(cf.down * 100) + '%）', targetId: actor.id, type: 'status' });
   } else if (branch === 1) {
     var t = others[Math.floor(gb.rng() * others.length)];
-    var dmg = Math.max(1, Math.floor(effectiveStat(actor, 'atk') * CONFUSE_HIT_MUL - Math.floor(effectiveStat(t, 'def') / 2)));
+    var dmg = Math.max(1, Math.floor(effectiveStat(actor, 'atk') * cf.hit - Math.floor(effectiveStat(t, 'def') / 2)));
     var sh = absorbShield(t, dmg);
     if (sh.absorbed > 0) dmg = sh.dmg;
     t.hp = Math.max(0, t.hp - dmg);
     events.push({ msg: '🌀 ' + actor.name + ' 迷惑 → 敌我不分，误击 ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
   } else {
-    var self = Math.max(1, Math.floor((actor.base.hp || 0) * CONFUSE_SELF_PCT));
+    var self = Math.max(1, Math.floor((actor.base.hp || 0) * cf.self));
     actor.hp = Math.max(0, actor.hp - self);
     events.push({ msg: '🌀 ' + actor.name + ' 迷惑 → 牺牲自我 -' + self, targetId: actor.id, type: 'damage' });
   }

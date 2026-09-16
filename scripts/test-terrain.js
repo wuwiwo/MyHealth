@@ -96,5 +96,23 @@ const sev = sandbox.terrainTurnStart(gb5);
 const anyFrozen = sandbox.hasStatus(a5, 'freeze') || sandbox.hasStatus(e5, 'freeze');
 assert('雪天触发冰冻', anyFrozen, 'events=' + sev.map(e => e.msg).join(';'));
 
+// ---- 7. 场地数据完整性 + 全局作用域（v2.1.22：场地介绍弹层的数据前提）----
+const allIds = ['sandstorm','snow','heat','rain','reverse','gas'];
+const allT = allIds.map(id => sandbox.getTerrain(id));
+assert('6 场地全有 name', allT.every(t => t && t.name && t.name.length > 0));
+assert('6 场地全有 desc（介绍弹层的唯一数据来源）',
+  allT.every(t => t && t.desc && String(t.desc).length > 0),
+  allT.map(t => t.id + ':' + (t.desc ? 'ok' : '空')).join(','));
+assert('desc 可拆成条目（弹层按「；」分条展示）',
+  allT.every(t => String(t.desc).split('；').filter(Boolean).length >= 1));
+/* 设计文档 doc/2.0 敌群设计.md:207「## 场地 —— 对敌我双方均有效」：
+   伤害/状态类场地必须同时作用于我方与敌方（gb.units 而非单侧） */
+const a6 = sandbox.createUnit({ id: 'a6', side: 'ally', base: { hp: 100, atk: 10, def: 5, spd: 3 } });
+const e6 = sandbox.createUnit({ id: 'e6', side: 'enemy', base: { hp: 100, atk: 10, def: 5, spd: 3 } });
+const gb6 = sandbox.createGroupBattle({ allies: [a6], enemies: [e6] });
+gb6.terrain = sandbox.getTerrain('heat');   // 酷暑：每回合结束全体失最大生命值 4%
+sandbox.terrainTurnEnd(gb6);
+assert('场地对敌我双方均生效（酷暑双方都掉血）', a6.hp < 100 && e6.hp < 100, a6.hp + '/' + e6.hp);
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

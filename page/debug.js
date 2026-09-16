@@ -207,7 +207,7 @@
           var cfg = (typeof groupStageEnemies === 'function') ? groupStageEnemies(gk, st, allies) : (st.enemies || []);
           lastCfg = cfg;
           var foes = cfg.map(function (ec, j) {
-            return createEnemyUnit({ id: 'e' + j, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base });
+            return createEnemyUnit({ id: 'e' + j, tier: ec.tier, name: ec.name, talents: ec.talents, skills: ec.skills, base: ec.base, level: ec.level });
           });
           var gb = createGroupBattle({ allies: allies, enemies: foes });
           var t = 0;

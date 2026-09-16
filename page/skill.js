@@ -54,6 +54,47 @@ function pickSkill(unit) {
   return usable[Math.floor(Math.random() * usable.length)];
 }
 
+/* ============ v2.1.22：技能等级（此前完全没接进战斗） ============
+   设计文档把「随等级成长」的数值写成 `A%~B%` 区间 —— 例如宠物技能
+   「火焰啄击 攻击×150%~330%」「歌唱 魂攻×160%~250%」、敌群技能「蓄力承伤 +20%~35%」。
+   **区间两端就是「等级低 → 满级」的取值。**
+
+   等级来源：
+     · 宠物：`pet.skillLevels[skillId]`（0~Lv10，灵能升级，见 pet-materials.js 的 PET_SKILL_MAX_LEVEL）
+     · 敌人：`unit.level`（enemy.js 的 level 字段，由 group-levels 按大关给定）
+
+   ⚠️ 修之前的状态：**技能等级对战斗数值零影响** ——
+   宠物 `skillLevels` 只有 UI 与升级逻辑在读，`calcSkillDamage` 与各技能效果一律用固定值；
+   敌人 `unit.level` 恒为 1（没有任何调用方传值）。
+
+   ⚠️ 成长曲线：design-v2.0.md §2.6 说「数值区间 = 随基础属性成长的下限~上限」，
+   且标注 `OQ-8（技能倍率随炼化等级的成长曲线公式仍待定）`。
+   本版采用**按技能等级线性插值**（Lv1→下限，Lv10→上限）作为占位实现；
+   OQ-8 定案后只需替换 skillValue 里的插值公式，数据结构不用动。 */
+var SKILL_LEVEL_MAX = 10;
+
+/* 取「某单位施放某技能」时的技能等级（夹到 1..10；未登记按 1 = 区间下限） */
+function skillLevelOf(unit, skillId) {
+  if (!unit) return 1;
+  if (unit._skillLevels && skillId && unit._skillLevels[skillId]) {
+    return Math.max(1, Math.min(SKILL_LEVEL_MAX, Math.floor(unit._skillLevels[skillId])));
+  }
+  var lv = unit.level || 1;
+  return Math.max(1, Math.min(SKILL_LEVEL_MAX, Math.floor(lv)));
+}
+
+/* 按等级取技能数值：
+   skill.range[key] = [低, 高] → 线性插值；没有区间的键（文档只给单一「默认：X%」）原样返回 */
+function skillValue(skill, key, lv) {
+  if (!skill) return undefined;
+  var r = skill.range ? skill.range[key] : null;
+  if (r && r.length === 2) {
+    var t = (Math.max(1, Math.min(SKILL_LEVEL_MAX, lv || 1)) - 1) / (SKILL_LEVEL_MAX - 1);
+    return r[0] + (r[1] - r[0]) * t;
+  }
+  return skill[key];
+}
+
 /* 计算技能伤害（返回给 battle 应用）：
    攻击类：power% × 攻击/魂攻
    v2.1.15 三处接线：
@@ -65,7 +106,9 @@ function calcSkillDamage(skill, caster, targets, ctx) {
   if (!skill || skill.type !== 'attack') return null;
   ctx = ctx || {};
   var atk = skill.dmgType === 'soul' ? effectiveStat(caster, 'soulAtk') : effectiveStat(caster, 'atk');
-  var power = skill.power || 1;
+  /* v2.1.22：威力按施法者的技能等级取值（区间写成 [低, 高] 的技能才会随等级变化） */
+  var lv = skillLevelOf(caster, skill.id);
+  var power = skillValue(skill, 'power', lv) || 1;
   /* 叠层加成按「百分点」累加，不是乘法：雪球设计写的是
      120% → 每层 +30% → 满层 300%（120 + 6×30），乘法会得到 120×1.3^6 ≈ 579%。
      caster[key] 是**本次施放前**已累计的层数，所以首次施放 n=0 → 保持 120%。 */

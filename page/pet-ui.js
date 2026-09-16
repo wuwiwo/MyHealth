@@ -382,7 +382,7 @@ function startGroupTrialWithPets(groupId, petIds) {
   var gStage = (glv.stages || [])[0]
   var cfgList = (typeof groupStageEnemies === 'function' && gStage) ? groupStageEnemies(groupId, gStage, allies) : glv.enemies
   var enemies = cfgList.map(function(ec,i){
-    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base})
+    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base,level:ec.level})
   })
   var lgNum2 = parseInt(String(groupId).replace(/[^0-9]/g, ''), 10) || 1
   var terrain2 = (typeof groupTerrainFor === 'function') ? groupTerrainFor(lgNum2) : null

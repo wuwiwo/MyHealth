@@ -71,6 +71,11 @@ function createPetUnit(petState) {
     tags: ['pet', codex.rarity]
   });
   unit._petSpecies = petState.speciesId;
+  /* v2.1.22：把宠物技能等级带到战斗单位上。
+     此前 skillLevels 只在 UI（pet-ui.js）与升级逻辑（pet-materials.js）里读，
+     战斗结算完全读不到 —— 结果是「花灵能把技能升到 Lv10，打出来的伤害一点没变」。
+     skill.js 的 skillLevelOf() 会优先读这个字段。 */
+  unit._skillLevels = petState.skillLevels || {};
   attachTalents(unit, getPetTalents(petState));   // 天赋恒为图鉴固有值（见上方说明）
   // 应用天赋静态修正
   for (var k in (unit._talentMods || {})) {
@@ -121,47 +126,51 @@ registerSkill({ id:'p_sleep', name:'睡觉', type:'support', target:'self', cool
     r.statusApps.push({ unitId: t.id, id: 'sleep', duration: 1, chance: 1, grade: 1 });
   }); r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈并睡 1 回合'}); }] });
 
-/* SR：火焰啄击 */
-registerSkill({ id:'p_flamepeck', name:'火焰啄击', type:'attack', target:'random1', power:240, dmgType:'physical', cooldown:4 });
+/* SR：火焰啄击 —— 设计 攻击×150%~330%（区间随技能等级，v2.1.22 接线） */
+registerSkill({ id:'p_flamepeck', name:'火焰啄击', type:'attack', target:'random1', power:240, range:{power:[150,330]}, dmgType:'physical', cooldown:4 });
 
-/* SR：歌唱（全体魂攻+几率睡眠） */
-registerSkill({ id:'p_sing', name:'歌唱', type:'attack', target:'all', power:200, dmgType:'soul', cooldown:5,
+/* SR：歌唱（全体魂攻+几率睡眠）—— 设计 魂攻×160%~250% */
+registerSkill({ id:'p_sing', name:'歌唱', type:'attack', target:'all', power:200, range:{power:[160,250]}, dmgType:'soul', cooldown:5,
   effects:[function(c,ts,r){ ts.forEach(function(t){ if(Math.random()<0.2) r.statusApps.push({unitId:t.id,id:'sleep',duration:1,chance:1,grade:1}); }); }] });
 
-/* SR：雷霆冲撞（蓄力+反冲） */
-registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target:'random1', power:300, dmgType:'soul', cooldown:4 });
+/* SR：雷霆冲撞（蓄力+反冲）—— 设计 魂攻×220%~400% */
+registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target:'random1', power:300, range:{power:[220,400]}, dmgType:'soul', cooldown:4 });
 
-/* SSR：双撞（2目标+降攻防） */
-registerSkill({ id:'p_doublehit', name:'双撞', type:'attack', target:'random1', power:200, dmgType:'physical', cooldown:5,
+/* SSR：双撞（2目标+降攻防）—— 设计 攻击×150%~240% */
+registerSkill({ id:'p_doublehit', name:'双撞', type:'attack', target:'random1', power:200, range:{power:[150,240]}, dmgType:'physical', cooldown:5,
   effects:[function(c,ts,r){ ts.forEach(function(t){ r.statusApps.push({unitId:t.id,id:'armorbroken',duration:2,chance:1,grade:1}); }); }] });
 
 /* SSR：幻影之瞳（迷惑）—— v2.1.21 实装。
    设计依据 doc/design-v2.0.md:229：迷惑 1 敌 1 回合，使其随机执行三选一
    （①丧失防备 ②不分敌我误击其他敌人 ③牺牲自我）。
-   真正执行在 battle-group.js 的 resolveConfusion()；这里只负责挂上「迷惑」状态。
-   此前本技能只 push 了一句日志，机制完全没实现。 */
+   真正执行在 battle-group.js 的 resolveConfusion()；这里只负责挂上「迷惑」状态，
+   并把**施法者与该技能等级**塞进状态实例（三个分支的数值按等级取，区间见 design-v2.0.md:229）。 */
 registerSkill({ id:'p_phantom', name:'幻影之瞳', type:'support', target:'random1', cooldown:4,
+  range:{ confuseDown:[0.15, 0.75], confuseHit:[0.50, 0.95], confuseSelf:[0.01, 0.10] },
   effects:[function(c,ts,r){
-    ts.forEach(function(t){ r.statusApps.push({ unitId:t.id, id:'confused', duration:1, chance:1, grade:2 }); });
-    r.events.push({ msg:'👁️ ' + (c.name||'宠物') + ' 幻影之瞳 → ' + ts.map(function(t){return t.name;}).join('、') + '：迷惑 1 回合' });
+    var lv = (typeof skillLevelOf === 'function') ? skillLevelOf(c, 'p_phantom') : 1;
+    ts.forEach(function(t){ r.statusApps.push({ unitId:t.id, id:'confused', duration:1, chance:1, grade:2, data:{ casterId:c.id, skillId:'p_phantom', level:lv } }); });
+    r.events.push({ msg:'👁️ ' + (c.name||'宠物') + ' 幻影之瞳 → ' + ts.map(function(t){return t.name;}).join('、') + '：迷惑 1 回合（技能 Lv' + lv + '）' });
   }] });
 
-/* SSR：冰晶爆（冰冻+伤害） */
-registerSkill({ id:'p_iceburst', name:'冰晶爆', type:'attack', target:'random1', power:200, dmgType:'soul', cooldown:4,
+/* SSR：冰晶爆（冰冻+伤害）—— 设计 魂攻×150%~240% */
+registerSkill({ id:'p_iceburst', name:'冰晶爆', type:'attack', target:'random1', power:200, range:{power:[150,240]}, dmgType:'soul', cooldown:4,
   effects:[function(c,ts,r){ ts.forEach(function(t){ if(Math.random()<0.3) r.statusApps.push({unitId:t.id,id:'freeze',duration:1,chance:1,grade:2}); }); }] });
 
-/* SSR：圣光治愈 */
+/* SSR：圣光治愈 —— 设计 魂攻×110%~200%（治疗量，属 heal 通道，尚未接等级） */
 registerSkill({ id:'p_holylight', name:'圣光治愈', type:'support', target:'ally1', cooldown:3,
   effects:[function(c,ts,r){ ts.forEach(function(t){ r.heals.push({unitId:t.id,amount:Math.floor((c.base.soulAtk||0)*1.5)}); }); }] });
 
-/* UR：梦幻光球（全场弹射） */
-registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'random1', power:250, dmgType:'soul', cooldown:5 });
+/* UR：梦幻光球（全场弹射）—— 设计 魂攻×200%~290% */
+registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'random1', power:250, range:{power:[200,290]}, dmgType:'soul', cooldown:5 });
 
-/* UR：无影拳（5连击） */
-registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'random1', power:70, dmgType:'physical', cooldown:4,
-  effects:[function(c,ts,r){ r.events.push({msg:'👊 无念熊 无影拳 ×5'}); }] });
+/* UR：无影拳（5连击）—— 设计 单次 攻击×50%~95%、总计 5 次
+   ⚠️ 已知偏差：实现里只打 1 次（power=70 一次），日志却写「×5」。
+   本次只把 power 接上等级区间；真正的 5 连击与「每次视为普攻」待另开一条改。 */
+registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'random1', power:70, range:{power:[50,95]}, dmgType:'physical', cooldown:4,
+  effects:[function(c,ts,r){ r.events.push({msg:'👊 ' + (c.name||'宠物') + ' 无影拳'}); }] });
 
-/* UR：战意灌注（2友方增益） */
+/* UR：战意灌注（2友方增益）—— 设计 +3%~30% 攻击/魂攻较高项（增益幅度接等级另开一条） */
 registerSkill({ id:'p_warmight', name:'战意灌注', type:'support', target:'ally1', cooldown:4,
   effects:[function(c,ts,r){ ts.forEach(function(t){ r.buffs.push({unitId:t.id,key:'atkBoost',value:0.2,duration:2}); }); }] });
 
