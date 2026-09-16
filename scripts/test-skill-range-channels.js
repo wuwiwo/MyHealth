@@ -113,6 +113,46 @@ function both(skillId) {
     String(s0.statusApps[0].duration));
 })();
 
+/* ---- 成长曲线：线性（OQ-8 定案 2026-09-16） ---- */
+(function () {
+  assert('skillRangeT 线性：炼化 0 → t=0', sb.skillRangeT(casterAt(0)) === 0);
+  assert('skillRangeT 线性：炼化半 → t=0.5', Math.abs(sb.skillRangeT(casterAt(Math.round(SSR_CAP / 2))) - 0.5) < 0.02,
+    String(sb.skillRangeT(casterAt(Math.round(SSR_CAP / 2)))));
+  assert('skillRangeT 线性：炼化满 → t=1', Math.abs(sb.skillRangeT(casterAt(SSR_CAP)) - 1) < 1e-9);
+})();
+
+/* ---- 打湿：幅度也随成长（技能成长） ---- */
+(function () {
+  const d = both('drench');
+  assert('打湿已注册', !!d);
+  if (!d) return;
+  const sa0 = d[0].statusApps[0], sa1 = d[1].statusApps[0];
+  assert('打湿：魂防降幅随成长（' + (sa0.modsPct && sa0.modsPct.soulDef) + ' → ' + (sa1.modsPct && sa1.modsPct.soulDef) + '）',
+    sa0.modsPct && sa1.modsPct && Math.abs(sa1.modsPct.soulDef) > Math.abs(sa0.modsPct.soulDef));
+  assert('打湿：命中加成随成长（' + (sa0.data && sa0.data.hitBonus) + ' → ' + (sa1.data && sa1.data.hitBonus) + '）',
+    sa0.data && sa1.data && sa1.data.hitBonus > sa0.data.hitBonus);
+  assert('打湿：持续回合随成长（' + sa0.duration + ' → ' + sa1.duration + '）', sa1.duration > sa0.duration);
+
+  /* 场地固定：不带实例幅度的潮湿（雨天场地就是这么施加的）沿用定义值 -25%
+     注意 statMods() 返回的是**扁平**的绝对修正（已按 unit.base 折算），不是 {flat,pct}。 */
+  const u = sb.createUnit({ id: 'w', side: 'ally', name: '湿', level: 1,
+    base: { hp: 500, atk: 10, def: 100, soulAtk: 10, soulDef: 100, spd: 5 } });
+  sb.applyStatus(u, { id: 'wet', duration: 1 });
+  const sm = sb.statMods(u) || {};
+  const defPct = (sb.STATUS_DEFS && sb.STATUS_DEFS.wet && sb.STATUS_DEFS.wet.statModsPct) || {};
+  const expect = (defPct.soulDef || 0) * u.base.soulDef;   // -0.25 × 100 = -25
+  assert('场地施加的潮湿不带实例幅度 → 沿用定义值（' + sm.soulDef + '，期望 ' + expect + '）',
+    typeof sm.soulDef === 'number' && Math.abs(sm.soulDef - expect) < 1e-6, JSON.stringify(sm));
+  assert('场地施加的潮湿不随成长变化（固定值）',
+    (function () {
+      const u2 = sb.createUnit({ id: 'w2', side: 'ally', name: '湿2', level: 1,
+        base: { hp: 500, atk: 10, def: 100, soulAtk: 10, soulDef: 100, spd: 5 }, tags: ['pet', 'SSR'] });
+      u2._refineLevel = SSR_CAP;                       // 满炼化
+      sb.applyStatus(u2, { id: 'wet', duration: 1 });  // 仍是「不带实例幅度」的施加方式
+      return Math.abs((sb.statMods(u2) || {}).soulDef - expect) < 1e-6;
+    })());
+})();
+
 /* 源码级守卫：这几个技能必须声明 range，否则区间形同不存在 */
 (function () {
   const src = load('skill.js') + load('pet-codex.js');   // load() 已带 page/ 前缀

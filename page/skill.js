@@ -317,15 +317,22 @@ registerSkill({
 });
 registerSkill({
   id: 'drench', name: '打湿', type: 'support', target: 'random1', cooldown: 4,
-  /* v2.1.26：持续回合接区间（低值 = 改前固定值 2 回合）。
-     ⚠️ 状态**幅度**（魂防 / 命中）定义在 status-defs.js 的 wet 上，改它会影响所有来源，
-        风险较大，本次未动 —— 记为后续项。 */
-  range: { dur: [2, 4] },
+  /* v2.1.28：持续回合 + **状态幅度**都接区间。
+     幅度通过**状态实例**传（modsPct + data.hitBonus），不是改 status-defs.js 的 wet 定义：
+       · state-core 的 statMods 让同键的实例 modsPct **覆盖**定义的 statModsPct → 不会叠成两份
+       · battle-group 读命中加成时优先取实例的 data.hitBonus；没有 data 的潮湿
+         （如**雨天场地**给的）沿用既有固定值 → 场地保持固定，符合 dundun 2026-09-16 裁决
+     区间取值与宠物技能「打湿」（pet-codex.js）一致，保证同源同感。 */
+  range: { dur: [2, 4], soulDefDown: [0, 25], hit: [0, 30] },
   effects: [function (c, ts, r, ctx) {
     var d = Math.round(ctx.sv('dur'));
+    var down = ctx.sv('soulDefDown') / 100, hit = ctx.sv('hit') / 100;
     ts.forEach(function (t) {
-      r.statusApps.push({ unitId: t.id, id: 'wet', duration: d, chance: 1, grade: 2 });
+      r.statusApps.push({ unitId: t.id, id: 'wet', duration: d, chance: 1, grade: 2,
+        modsPct: { soulDef: -down }, data: { hitBonus: hit } });
     });
+    r.events.push({ msg: '💧 ' + (c.name || '单位') + ' 打湿 → ' + ts.map(function (t) { return t.name; }).join('、')
+      + '：魂防 -' + Math.round(down * 100) + '%、被命中 +' + Math.round(hit * 100) + '%' });
   }]
 });
 registerSkill({

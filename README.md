@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.27
+> Personal Health Manager — 个人健身健康管理应用 v2.1.28
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -278,4 +278,6 @@ Vercel 项目设置：
 
 | **v2.1.27** | **2026-09-16** | **🎬 实装 7c RNG 回放 + 7d 时间旅行：战斗随机统一走 battleRnd（43 处 Math.random 改为可播种，此前同种子也复现不了），createGroupBattle 支持 seed 并记录到 _groupSeed；新增 groupSnapshot / groupRestore / groupReplay；Debug 面板新增「🎬 回放」分区（种子、重放验证、快照回退）；新增 test-group-determinism.js（14 断言）；平衡复核未变；缓存版本对齐（v87）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.27**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.28** | **2026-09-16** | **📈 落实三条裁决：① 技能强度随宠物成长 ② 场地效果保持固定 ③ 成长曲线线性（OQ-8 定案，t = 炼化等级 ÷ 稀有度上限，并加回归断言）；打湿技能补齐幅度区间（魂防 0→25%、命中 0→30%、持续 2→4），通过状态实例传递而非改 wet 定义，因此雨天场地仍固定；测试扩到 27 断言；平衡未变；缓存版本对齐（v88）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.28**（设计规范：`doc/design-tokens-v2.1.md`）
