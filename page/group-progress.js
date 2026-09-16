@@ -1,8 +1,9 @@
 /* ============================================
    MyHealth — Enemy Group Progress (敌群解锁)
-   敌群试炼线性解锁：g1-1 → g1-2 → ... → g12-10（大关数由 group-levels.js 决定）
+   敌群试炼线性解锁：g1-1 → g1-2 → ... → g18-10（大关数由 group-levels.js 决定）
    通关的关卡锁定（不可重打），胜利解锁下一关。
-   进度存 dh-group-progress（store 注册表）。
+   进度存 dh-groupProgress-v1（逻辑名 groupProgress + store.js 的 physKey 规则；
+   此前注释写的是 dh-group-progress，与实际物理键不符，v2.1.21 修）。
    纯逻辑 + store。
    ============================================ */
 

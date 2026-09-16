@@ -262,7 +262,9 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   assert('冰冻被攻击即解除（受击解除已接线）', !sb.hasStatus(frozen, 'freeze'), JSON.stringify(frozen.statuses));
 }
 
-/* ============ 10. 蓄力重击：_chargeReady 单一时序 ============ */
+/* ============ 10. 蓄力重击：结算时点对齐设计文档（v2.1.21） ============
+   设计 doc/design-v2.0.md:101-105：本回合进入蓄力（承伤 +25%）→ **下回合**结算 400%。
+   改前实现是「当回合就打 400%（技能自带 power:400）+ 下回合再追加一次」，时点不符。 */
 {
   const ch = sb.createUnit({ id: 'cg', side: 'enemy', name: '蓄', skills: ['chargeup'], base: { hp: 400, atk: 100, def: 5, spd: 9 } });
   const target = sb.createUnit({ id: 'ct', side: 'ally', name: '靶', base: { hp: 9999, atk: 1, def: 0, spd: 1 } });
@@ -270,14 +272,67 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   gb.turn = 1;
   const ev1 = sb.castSkill(gb, ch, 'chargeup');
   assert('蓄力重击进入蓄力状态', sb.hasStatus(ch, 'charging'), JSON.stringify(ch.statuses));
-  assert('首次施放不追加💥重击（只有技能本身的 400%）', !/💥 .* 蓄力重击 →/.test(msgs(ev1)), msgs(ev1));
+  assert('施放当回合不造成任何伤害（只蓄力）', target.hp === 9999, 'hp=' + target.hp);
+  const dmgMuts = sb.dispatch(ch, 'onDamage', {}).mutations;
+  assert('蓄力期间承伤 +25%', dmgMuts.some(m => m.key === 'dmgTakenBoost'), JSON.stringify(dmgMuts));
   sb.ageStatuses(ch);   // 模拟回合末到期 → _chargeReady
   assert('蓄力完成置 _chargeReady', ch._chargeReady === true);
   const hpBefore = target.hp;
-  const ev2 = sb.castSkill(gb, ch, 'chargeup');
-  assert('蓄力完成后追加 💥 重击', /💥 .* 蓄力重击 →/.test(msgs(ev2)), msgs(ev2));
-  assert('重击确实扣血（400 + 400）', target.hp <= hpBefore - 800, hpBefore + '→' + target.hp);
+  const ev2 = sb.groupUnitTurn(gb, ch);
+  assert('下回合开始自动结算 💥 重击', /💥 .* 蓄力重击 →/.test(msgs(ev2)), msgs(ev2));
+  assert('重击伤害 = 攻击×400%（100×4）', target.hp === hpBefore - 400, hpBefore + '→' + target.hp);
+  assert('结算占用该次行动（本回合只有这一击）', ev2.filter(e => e.type === 'damage').length === 1,
+    ev2.filter(e => e.type === 'damage').map(e => e.msg).join(' | '));
   assert('_chargeReady 用后归零', ch._chargeReady === false);
+}
+
+/* ============ 11. 迷惑（幻影之瞳）三选一（v2.1.21） ============
+   设计 doc/design-v2.0.md:229：迷惑 1 敌 1 回合，随机执行 ①丧失防备 ②不分敌我误击 ③牺牲自我。 */
+{
+  function mkUnit(id, side, hp) {
+    return sb.createUnit({ id: id, side: side, name: id, base: { hp: hp || 500, atk: 100, def: 100, spd: 5 } });
+  }
+  // 用固定 rng 精确命中三个分支：floor(r*3) = 0 / 1 / 2
+  function runConfused(r, allies, enemies) {
+    const gb = sb.createGroupBattle({ allies: allies, enemies: enemies });
+    gb.rng = function () { return r; };
+    const actor = enemies[0];
+    sb.applyStatus(actor, { id: 'confused', duration: 1 });
+    return { gb: gb, actor: actor, ev: sb.groupUnitTurn(gb, actor) };
+  }
+
+  // ① 丧失防备（r=0.1 → floor(0.3)=0）
+  const a1 = mkUnit('a1', 'ally'), e1 = mkUnit('e1', 'enemy');
+  const r1 = runConfused(0.1, [a1], [e1]);
+  assert('迷惑分支①：丧失防备', /丧失防备/.test(msgs(r1.ev)), msgs(r1.ev));
+  assert('丧失防备真的降低防御（-45%）', sb.effectiveStat(e1, 'def') === 55, sb.effectiveStat(e1, 'def'));
+  assert('分支①不造成伤害', a1.hp === 500 && e1.hp === 500, a1.hp + '/' + e1.hp);
+
+  // ② 不分敌我误击（r=0.4 → floor(1.2)=1）
+  const a2 = mkUnit('a2', 'ally'), e2 = mkUnit('e2', 'enemy');
+  const r2 = runConfused(0.4, [a2], [e2]);
+  assert('迷惑分支②：敌我不分误击', /敌我不分/.test(msgs(r2.ev)), msgs(r2.ev));
+  assert('误击伤害落在「其他敌人」身上', a2.hp < 500 && e2.hp === 500, a2.hp + '/' + e2.hp);
+  assert('误击伤害 = 攻击×75%（100×0.75 − 防100/2 = 25）', a2.hp === 475, 'a2.hp=' + a2.hp);
+
+  // ③ 牺牲自我（r=0.9 → floor(2.7)=2）
+  const a3 = mkUnit('a3', 'ally'), e3 = mkUnit('e3', 'enemy', 1000);
+  const r3 = runConfused(0.9, [a3], [e3]);
+  assert('迷惑分支③：牺牲自我', /牺牲自我/.test(msgs(r3.ev)), msgs(r3.ev));
+  assert('牺牲自我耗自身最大生命 6%（1000×6%=60）', e3.hp === 940, 'e3.hp=' + e3.hp);
+  assert('分支③不打别人', a3.hp === 500, 'a3.hp=' + a3.hp);
+
+  // ② 无其他敌人时不触发 → 退到 ③（文档明写）。直接调 resolveConfusion 避免构造空阵营的整场战斗
+  const solo = mkUnit('solo', 'enemy', 1000);
+  const evSolo = sb.resolveConfusion({ allies: [], enemies: [solo], units: [solo], rng: function () { return 0.4; } }, solo);
+  assert('无其他敌人时 ② 不触发，回退到 ③', /牺牲自我/.test(msgs(evSolo)), msgs(evSolo));
+  assert('回退分支的自身伤害正确（1000×6%=60）', solo.hp === 940, 'solo.hp=' + solo.hp);
+
+  // 迷惑会正常过期（不会永久锁死）
+  const e5 = mkUnit('e5', 'enemy');
+  sb.applyStatus(e5, { id: 'confused', duration: 1 });
+  sb.ageStatuses(e5);
+  assert('迷惑 1 回合后自动解除', !sb.hasStatus(e5, 'confused'), JSON.stringify(e5.statuses));
 }
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');

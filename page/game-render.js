@@ -558,7 +558,8 @@ function _groupDone(){
     if (stageId && typeof markGroupStageCleared === 'function') {
       prog = markGroupStageCleared(stageId)
     }
-    // 敌群胜利奖励：技能点（10 点/胜，原 100 的 1/10）+ 材料（随关卡难度递增）
+    // 敌群胜利奖励：技能点（基数 4 点/胜，见 skill-store.js 的 SKILL_POINTS_PER_STAGE）+ 材料（随关卡难度递增）
+    // 注：v2.1.19 把基数从 10 降到 4，此处注释同步（此前一直写着 10，与实际不符）
     var reward = groupVictoryReward(_groupBattle)
     var msg = '🎉 敌群讨伐成功！' + reward.msg
     if (prog && prog.firstClear) {
@@ -585,10 +586,11 @@ function _groupDone(){
   }
 }
 
-/* 敌群胜利奖励：技能点（10 点/胜，与挑战数值独立）+ 材料掉落 */
+/* 敌群胜利奖励：技能点（基数 4 点/胜，与挑战数值独立）+ 材料掉落
+   数值口径唯一来源是 skill-store.js 的 SKILL_POINTS_PER_STAGE，改那里即可，别在这里写死数字 */
 function groupVictoryReward(gb) {
   var msgs = []
-  // 技能点：10 点 + 周递增
+  // 技能点：基数 4 点 + 周内递增（weeklyBonusRate = min(2.5, 胜局数×0.5) → 4/6/8/10/12/14 封顶）
   var wk = monthKey(new Date()) + '-W' + Math.ceil((new Date().getDate()) / 7)
   var winCount = recordSkillWin(wk)
   var award = awardSkillPoints(winCount)

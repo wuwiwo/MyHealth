@@ -135,9 +135,16 @@ registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target
 registerSkill({ id:'p_doublehit', name:'双撞', type:'attack', target:'random1', power:200, dmgType:'physical', cooldown:5,
   effects:[function(c,ts,r){ ts.forEach(function(t){ r.statusApps.push({unitId:t.id,id:'armorbroken',duration:2,chance:1,grade:1}); }); }] });
 
-/* SSR：幻影之瞳（迷惑） */
+/* SSR：幻影之瞳（迷惑）—— v2.1.21 实装。
+   设计依据 doc/design-v2.0.md:229：迷惑 1 敌 1 回合，使其随机执行三选一
+   （①丧失防备 ②不分敌我误击其他敌人 ③牺牲自我）。
+   真正执行在 battle-group.js 的 resolveConfusion()；这里只负责挂上「迷惑」状态。
+   此前本技能只 push 了一句日志，机制完全没实现。 */
 registerSkill({ id:'p_phantom', name:'幻影之瞳', type:'support', target:'random1', cooldown:4,
-  effects:[function(c,ts,r){ r.events.push({msg:'👁️ 黑暗鸦 幻影之瞳'}); }] });
+  effects:[function(c,ts,r){
+    ts.forEach(function(t){ r.statusApps.push({ unitId:t.id, id:'confused', duration:1, chance:1, grade:2 }); });
+    r.events.push({ msg:'👁️ ' + (c.name||'宠物') + ' 幻影之瞳 → ' + ts.map(function(t){return t.name;}).join('、') + '：迷惑 1 回合' });
+  }] });
 
 /* SSR：冰晶爆（冰冻+伤害） */
 registerSkill({ id:'p_iceburst', name:'冰晶爆', type:'attack', target:'random1', power:200, dmgType:'soul', cooldown:4,

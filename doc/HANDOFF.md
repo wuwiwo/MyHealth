@@ -2,11 +2,13 @@
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
 > **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
-> **生成**：2026-09-02 · **最后更新**：2026-09-11（对应 **v2.1.7**）
+> **生成**：2026-09-02 · **最后更新**：2026-09-16（对应 **v2.1.21**）
 > **分支**：`main` —— 提交号变动频繁，**以 `git log --oneline -5` 实时输出为准**，本文档不写死
 > ⚠️ **`git status` 的 ahead/behind 在本环境会失真**（本地远端引用不更新）—— **判断"推没推"必须用 `git ls-remote`**，详见 **§0.2.1**
-> **当前版本**：`APP_VERSION` = `2.1.7` · cache-busting `?v67` · 45 个 `page/*.js` 模块
-> **测试**：28 套件 / 648 断言，全部通过（含 a11y 护栏 40/40）
+> **当前版本**：`APP_VERSION` = `2.1.21` · cache-busting `?v81` · 45 个 `page/*.js` 模块
+> **测试**：36 套件 / 883 断言，全部通过（含 a11y 护栏 40/40）
+> **⚠️ 本仓库 2026-09-16 起有多个会话并行推进**（v2.1.16~19 一个、v2.1.20~21 另一个）——
+> **动手前先 `git log --oneline -5` 核对**，不要相信任何文档/记忆里的「当前版本」
 
 ---
 
@@ -169,12 +171,12 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 
 | 项 | 值 |
 |---|---|
-| 当前版本 | **v2.1.7**（2026-09-11） |
+| 当前版本 | **v2.1.21**（2026-09-16） |
 | HEAD / 远端 | **不写死** —— 用 `git log --oneline -1` 与 `git ls-remote origin refs/heads/main` 实时取（⚠️ **别信 `git status` 的 ahead 数**，见 §0.2.1） |
-| cache-busting | `?v66`（`page/index.html` 内全部 47 处；改 JS/CSS 必升） |
+| cache-busting | `?v81`（`page/index.html` 内全部 47 处；改 JS/CSS 必升） |
 | 模块数 | 45 个 `page/*.js`（+ 1 个 `page/data/exercises-dataset.js`） |
-| 最大文件 | `page/game-render.js` 763 行，其次 `page/challenge.js` 709 行 |
-| 测试 | 28 套件 / 638 断言全绿（见 §8） |
+| 最大文件 | `page/game-render.js` 1231 行，其次 `page/battle-group.js` 824 行、`page/challenge.js` 716 行 |
+| 测试 | 36 套件 / 883 断言全绿（见 §8） |
 
 **其他分支**（远端存在，均落后于 main）：`feat/action-dataset`、`feat/uiux-batch1`、`feat/v2-m2a`、`feat/v2-m2a-rest`、`fix/version-sync`。
 
@@ -188,8 +190,22 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 - **v2.1.3** — 🐾 宠物养成：属性面板补炼化进度 / 炼化石 10:1 兑换 / 技能指定升级 / 天赋槽解锁
 - **v2.1.4** — 🐾 天赋回退为固有专属（修跨宠物共享）/ 宠物·技能面板补可滚动容器 / 修顶部横向溢出 38px / 浅色按钮改深橙底白字
 - **v2.1.5** — ⚔️ 命中·闪避系统（基础 95%）+ 10 个宠物专属天赋接入实战 + 修敌人可抽到宠物天赋
-- **v2.1.7** — 🗺️ 敌群扩至 12 大关 120 关 + 大关外侧进度 + 战斗 UI 四项优化
 - **v2.1.6** — 🔒 修「页面有时无法滚动」：模态滚动锁泄漏（兜底 observer 改各自持有 + 全局点击改真关闭）+ 隐藏挑战小游戏点背景不再卡死
+- **v2.1.7** — 🗺️ 敌群扩至 12 大关 120 关 + 大关外侧进度 + 战斗 UI 四项优化
+- **v2.1.8** — ⚖️ Debug 面板新增「平衡」分区（属性来源拆解 / 碾压诊断 / 实战模拟）+ 命令行扫描器 `scripts/balance-sim.js`
+- **v2.1.9** — 🎯 敌群难度锚定：敌人属性改由参战阵容反推（实测攻 2500 与 6000 跑出相同难度曲线）
+- **v2.1.10** — ⚔️ 敌群独立属性空间：玩家按比例继承 + 宠物按稀有度放大 + 魂攻魂防接入敌群（此前零引用）
+- **v2.1.11** — ⛩️ 新增 g13~g15 超限试炼（120→150 关），关卡数改为由数据派生
+- **v2.1.12** — 🐞 修 Debug 体检与实战不一致：新增单一入口 `groupStageEnemies()` 从结构上杜绝再分叉
+- **v2.1.13** — 🛡️ 敌群继承降为 50% + Boss/精英固定伤害减免词条第 + 6 个新词条 + 实装场地效果（g3 起）
+- **v2.1.14** — 🖥️ 敌群战斗界面可读性：战斗/日志双 Tab + 日志补出行者与目标 + 单位卡直显技能冷却 + 技能/天赋详情弹层
+- **v2.1.15** — 🔌 实装 9 处「写了没接线」的效果（状态真正过期 / `_statMods` 生效 / 护盾 / 驱散 / 叠层 / 概率）
+- **v2.1.16** — 🔌 补推送 v2.1.14/15 + 实装剩余 11 处不可达效果（8 技能 + 3 天赋）+ 新增可达性守卫测试
+- **v2.1.17** — 💎 实装宠物宝珠系统：碎片终于能花（库存 / 合成分解 / 5 槽装配升级 / 属性生效全链路）
+- **v2.1.18** — 🐾 宠物放大倍数下调 12/16/20/26 → 8/11/14/18 + 修模拟器宠物数值硬编码
+- **v2.1.19** — 🐛 修手动模式重复发放通关奖励 + 每关技能点 10→4 + 宠物放大改 12/14/15/16 + 成熟期受伤系统 + 新增 g16~g18（180 关）
+- **v2.1.20** — ☁️ 修云同步丢数据：载荷改为从 `store.getAll()` 自动派生（此前硬编码 14 键，宠物/材料/宝珠/敌群进度/技能全不同步）
+- **v2.1.21** — 🔧 修 3 处「技能点 10 点/胜」陈旧注释 + 实装「迷惑」（幻影之瞳，设计文档三选一）+ 蓄力重击结算时点对齐设计文档 + 可达性测试改为按真实技能池判定
 
 > ⚠️ **v2.0.10/2.0.11 与 v2.1.0 曾分叉**（两条线都改 `index.html`/`utils.js`/`README`/`changelog`），已于 `dd46332` 合并解决。若再见到两条线并行，合并前先看 §8 的冲突回避经验。
 
@@ -317,7 +333,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 - **属性折算**：`stats.js` → 攻击/防御/生命/魂攻/魂防；周期目标按旬（`getCurrentPeriod`，每月上/中/下旬，各有容量阈值）
 - **date-roll**：`dateKey`/`monthKey`/`daysBetween`/`monthKeyDiff`/`isClockRolledBack`（本地日历日，DST 安全）
 
-### 6.2 隐藏挑战（`challenge.js`，709 行）
+### 6.2 隐藏挑战（`challenge.js`，716 行）
 
 - **召唤门槛**：每 100kg 今日容量 = 1 次召唤机会（`todayPool = floor(今日容量/100)`）
 - **召唤成功率阶梯**（`summonRate(used)`，`used` = 今日已失败次数）：
@@ -338,31 +354,42 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ### 6.3 敌群多对多战斗
 
-**`group-levels.js`** —— **12 大关 × 10 小关 = 120 关**，程序化生成（`GROUP_LEVELS` 是 `{g1..g9}` 对象，每大关含 `stages[10]`）。实测数据：
+**`group-levels.js`** —— **18 大关 × 10 小关 = 180 关**，程序化生成（`GROUP_LEVELS` 是 `{g1..g18}` 对象，每大关含 `stages[10]`，关卡数一律由数据派生、别写死）。实测数据（各段末关的**主 Boss**）：
 
-| 大关 | 名称 | 最多敌数 | 魂攻防 | 最高 atk |
-|---|---|---|---|---|
-| g1 / g2 | 森林 / 山丘 | 2 | 无 | — |
-| g3–g9 | 洞穴 / 遗迹 / 深渊 / 王座 / 天穹 / 冥府 / 神域 | 3 | 有 | g9-10 = **353** |
-| g10–g12 | 混沌 / 虚无 / 终焉 | 3 | 有 | g12-10 = **449** |
+| 大关 | 最多敌数 | 魂攻防 | 末关(gX-10) 攻 / 防 / 血 |
+|---|---|---|---|
+| g1 | 2 | 无 | 104 / 53 / 707 |
+| g3–g9 | 3 | 有 | g9-10 = 392 / 200 / 2651 |
+| g10–g12 | 3 | 有 | g12-10 = 500 / 255 / 3380 |
+| g13–g15 | 3 | 有 | g15-10 = 1856 / 946 / 12528 |
+| **g16–g18** | 3 | 有 | **g18-10 = 4166 / 2124 / 28123**（+2 护卫 2708/1328/18749） |
 
-- 首关 g1-1 的 atk = **14**，末关 g9-10 的 atk = **353**
+- 首关 g1-1 的 atk = **14**；曲线由 `genEnemyCfg` 的 `lvScale` × `groupTailMul` 决定（g13+ 超线性加压、g16+ 斜率放缓）
 - **每大关第 5 小关为精英（`type: "elite"`）**、**第 10 小关为 Boss（`type: "boss"`）**（如 g1-5 elite、g1-10 boss）
+- **实测难度阶梯**（2026-09-16 · 账号 攻2883/防1145/血24800/魂攻532/魂防99 → 敌群继承 50%）：g1~g13 全 100%、g14 43%、g15~g18 0%；
+  达到 50% 胜率所需**属性倍率** = g14 1.17× / g15 1.86× / g16 2.38× / g17 3.23× / **g18 4.09×**
+  ⚠️ `scripts/balance-sim.js` 是项目自带扫描器，但**没加载 `ai.js` / `terrain.js`，不是实战口径**；
+  实战口径要自己写脚本走 `groupStageEnemies` + `groupTerrainFor` + `boostPetForGroup`（口径见 §12）
 - ✅ **v2.1.2 已修**：`desc` 由三元表达式生成，g3–g4 曾写「进阶试炼（最多 4 敌）」、g5–g9 曾写「高阶试炼（4 敌+魂攻防）」，而实际生成上限是 3 敌（Boss 关 = 1 Boss + 2 护卫、精英关 = 1 精英 + 2 杂兵、普通关至多 3）。现文案与数据一致，并由 `test-group-levels.js` 的「`desc` 敌数一致」断言（逐大关比对）锁死防回归
 
 **其他战斗模块**：
 
 - **`group-progress.js`**：线性解锁，通关解锁下一关，**通关后锁定不可重打**
-- **`battle-group.js`**：群战引擎，行动队列按速度排序 + 单步执行（`groupBattleStep`，一次一单位；`groupBattleTick` 兼容整回合）
-- **`talent.js`** 16 天赋 · **`skill.js`** 25 敌群技能（含冷却/先制度）· **`status-defs.js`** 12 状态（中毒/冰冻/畏缩/潮湿/哈欠/蓄力/附身/末日/破甲/魂防降/减速/遗言诅咒；哈欠会衍生「睡眠」子状态）
+- **`battle-group.js`**：群战引擎（824 行），行动队列按速度排序 + 单步执行（`groupBattleStep`，一次一单位；`groupBattleTick` 兼容整回合）
+- **`talent.js`** 32 天赋 · **`skill.js`** 38 技能（敌群 25 + v2.1.16 入池的 8 + 其他）· **`status-defs.js`** **17 状态**
+  （基础 12 个 + v2.1.15 的 3 个增益 `atkup`/`guardup`/`wideguard` + v2.1.21 的 `confused`/`confused_down`；哈欠会衍生「睡眠」子状态）
 - **`ai.js`** AI 策略：斩杀残血 / 治疗队友 / Boss 大招 / 嘲讽强制 / 集火评分
-- **`terrain.js`** 6 场地
-- **UI**：`game-render.js` 手动/自动模式 + 1×2×4×8× 调速 + 单位详情 + 分回合战斗日志 + 复制 + 伤害飘字 + 技能气泡
+- **`terrain.js`** 6 场地（g3 起每大关一个主题场地）
+- ⚠️ **当前未入池的技能（实战见不到）**：`chargeup` 蓄力重击 · `doom` 末日 · `lastword` 遗言 · `heal` 治愈。
+  它们**实现完整**（v2.1.21 连蓄力时点都对好了），只是不在 `SKILLS_HIGH`/`SKILLS_LOW` 里。
+  要不要入池属于平衡决策；清单由 `scripts/test-pools-reachable.js` 的 `NOT_YET_PLACED` 显式盯着（改了会红）
+- **UI**：`game-render.js` 手动/自动模式 + 1×2×4×8× 调速 + **战斗/日志双 Tab** + 单位卡（技能冷却/行动者高亮）+ 技能与天赋详情弹层 + 伤害飘字 + 技能气泡
 
 ### 6.4 玩家技能（`skills.js` 等）
 
 - 9 技能（被动/辅助/攻击各 3）：暴击 / 气力恢复 / 陨石轰炸 / 格挡 / 气势如虹 / 冰魄光束 / 金身护盾 / 瞩目 / 巨石重压
-- 技能点经济：敌群通关 **+10/胜**（周内递增 +50%：10→15→20→25→30→**35 封顶**）
+- 技能点经济：敌群通关 **+4/胜**（基数在 `skill-store.js` 的 `SKILL_POINTS_PER_STAGE`；周内递增 `weeklyBonusRate = min(2.5, 本周胜局×0.5)` → **4→6→8→10→12→14 封顶**）。
+  v2.1.10 从 100 降到 10、v2.1.19 又降到 4。⚠️ **数值唯一来源是 `SKILL_POINTS_PER_STAGE`**，别在别处写死数字（`game-render.js` 的注释曾长期写「10 点/胜」与实际不符，v2.1.21 已同步）
 - 槽位：初始 1，12/20 关解锁；同类型限 1
 - **关键**：`startGroupTrial` 里必须 `attachPlayerSkills(player, getSkillState())`，玩家技能才生效
 
@@ -406,9 +433,28 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 >
 > ⚠️ **已知的过期注释**：`page/group-progress.js:5` 的注释写的是「进度存 `dh-group-progress`」，但实际物理键是 `dh-groupProgress-v1`（`store.get('groupProgress')` + `physKey` 规则）。以本表为准，下次改该文件时顺手修掉注释。
 
+### 7.1 云同步载荷格式（v2.1.20 重修，动数据前必读）
+
+载荷由 `page/sync.js` 的 `getAllData()` 生成，走 `PUT /api/data`。
+⚠️ **`api/` 目录不在本仓库** —— `/api/data` 是 Vercel 侧函数，本地看不到实现。
+
+| 段 | 内容 |
+|---|---|
+| `version` | 当前 **5**（v4 及更早为旧格式，仍可读，自然跳过 `keys`） |
+| `lastUpdated` | `store.getLastModTime()`（即 `dh-mod-time`），用于判断本地/云端谁更新 |
+| 14 个扁平字段 | `entries`(strength) · `plans` · `missed` · `cardio` · `weight` · `profile` · `game` · `prs` · `records` · `attrLog` · `cardioTypes` · `exercises` · `refine` · `challenge` |
+| **`keys`** | **其余全部 store 键**（`pets` / `skills` / `groupProgress` / `cardioPlans` / `theme` …），由 `collectOtherKeys()` 从 `store.getAll()` **自动派生** |
+
+- 拉取侧对称：`mergeServerData()` 会合并 `keys`；文件导入/导出走 `buildImportMap()`（同样处理 `keys`）
+- ⚠️ **历史坑（v2.1.20 修）**：`getAllData()` 曾**硬编码那 14 个键** —— v2.x 新增的宠物 / 材料袋 / 宝珠库存 /
+  敌群进度 / 玩家技能全都不参与同步（往返实测 **19 键丢 5 个**，换设备即全丢）。
+  **现在新增 store 键不需要再改 `sync.js`**，由 `scripts/test-sync-coverage.js` 守着
+  （它从 `page/*.js` 源码**自动派生**键清单做 push→pull 往返断言）
+- ⚠️ 另一个历史坑：`store.mergeAll()` 曾写 `if (typeof v === 'object' && ...)`，**静默丢弃标量键**（`theme` 就是这么丢的）
+
 ---
 
-## 8. 测试（28 套件 / 648 断言，全绿）
+## 8. 测试（36 套件 / 901 断言，全绿）
 
 ```bash
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
@@ -419,27 +465,35 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `test-a11y-tokens` | 40 | 🛡️ **设计体系护栏**（见 §4.3） |
 | `test-scroll-lock` | 13 | 🔒 **模态滚动锁必须归零**（防「页面无法滚动」，见 §12 第 10 条） |
 | `test-page-load` | 27 | 页面加载链冒烟（校验 index.html 挂载了全部模块 + 骨架容器）——**接线事故防线** |
-| `test-challenge-borrow` | 27 | 隐藏挑战顺延/补召/误锁恢复 |
-| `test-skill` | 40 | 25 敌群技能 |
+| `test-sync-coverage` | 20 | ☁️ **云同步键覆盖**：从源码派生 store 键做 push→pull 往返，防「新增键忘同步」（见 §7.1） |
+| `test-pools-reachable` | 19 | 🔌 **技能/天赋可达性**：按真实技能池判定 + 未入池清单显式登记（见 §6.3） |
+| `test-status-lifecycle` | 65 | 🔁 状态生命周期（递减/到期/受击解除）+ `_statMods` + 护盾 + 迷惑 + 蓄力时点 |
+| `test-group-levels` | 65 | 180 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / **`desc` 敌数与实际一致** |
 | `test-pet-codex` | 53 | 图鉴 + 参战 Unit 生成 + **天赋固有专属（防跨宠物回归）** |
 | `test-pet-talents` | 45 | 10 个专属天赋 hook + 命中/闪避 + petOnly 隔离 + 端到端伤害分担 |
-| `test-group-levels` | 40 | 120 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / **`desc` 敌数与实际一致** |
-| `test-skills` | 29 | 玩家技能 |
-| `test-enemy` | 26 | 16 天赋 + 编成阶梯 |
-| `test-state-core` | 25 | 状态框架 |
-| `test-status` | 25 | 状态定义 |
+| `test-group-inherit` | 44 | 敌群属性继承 50% / 宠物放大 / 魂攻魂防接入 |
+| `test-skill` | 40 | 25 敌群技能 |
 | `test-pet-materials` | 37 | 材料 + 炼化 + **10:1 兑换 + 技能指定升级** |
+| `test-skills` | 29 | 玩家技能 |
+| `test-challenge-borrow` | 27 | 隐藏挑战顺延/补召/误锁恢复 |
+| `test-orb-wiring` | 27 | 宝珠全链路（合成/装配/升级/属性生效） |
+| `test-enemy` | 26 | 16 天赋 + 编成阶梯 |
+| `test-status` | 26 | 状态定义 |
+| `test-state-core` | 25 | 状态框架 |
 | `test-date-roll` | 23 | 时间工具 |
+| `test-pet-injury` | 22 | 🩹 成熟期受伤系统（50% 几率 / 治疗进度 / 不可参战） |
 | `test-exercise-rename` | 21 | 动作改名/合并四库联动 |
+| `test-battle-log-audit` | 20 | 📜 战斗日志可读性（行动者/目标/文案口径） |
 | `test-store` | 20 | store 注册表/读写/坏值回落 |
 | `test-pets` | 19 | 宠物生命周期 |
-| `test-orbs` | 17 | 宝珠 |
+| `test-group-anchor` | 17 | 难锚定（默认关闭，保留实现与测试） |
+| `test-orbs` | 17 | 宝珠数值表 |
 | `test-battle` | 16 | 单敌战斗 + rng |
 | `test-pet-store` | 15 | 宠物持久化 |
 | `test-player-skills` | 15 | 玩家技能挂钩 |
 | `test-terrain` | 13 | 6 场地 |
+| `test-group-progress` | 13 | 敌群解锁链 |
 | `test-group-battle` | 11 | 群战引擎 |
-| `test-group-progress` | 10 | 敌群解锁链 |
 | `test-pet-stage` | 10 | 宠物阶段归一化 |
 | `test-skill-store` | 10 | 技能点经济数值 |
 | `test-ai` | 7 | AI 策略 |
@@ -453,7 +507,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 
 每次改 `APP_VERSION`（`page/utils.js`）必须**三项同步**，否则 `scripts/check-release.js`（pre-commit hook）会拦：
 
-1. **`page/index.html`**：全部 `?vNN` cache-busting 递增（当前 v61）
+1. **`page/index.html`**：全部 `?vNN` cache-busting 递增（当前 v81）
 2. **`doc/changelog-v<主版本>.md`**：新增版本章节 + **底部架构演化表加行**（版本 | JS 文件数 | 最大文件行数 | 摘要）
 3. **`README.md`**：顶部副标题版本号 + 版本历史表格加行 + 「当前版本」指向
 
@@ -468,12 +522,19 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 
 - [x] ~~**原有 10 个宠物天赋是空壳**~~ → **v2.1.5 已全部接入实战**。幸运口袋走结算层（`game-render.js` 的 `groupVictoryReward`），其余走战斗 hook；为此同时引入了命中/闪避系统（`BASE_HIT_RATE`）
 - [ ] **真机验收**：本地测试全绿，但手机端手感/性能（群战 8 倍速、飘字动画、长时间挂机）未全面验证
-- [ ] **敌群数值平衡**：90 关全通需要非常强的角色，曲线可能仍偏陡
+- [ ] **敌群数值平衡（现 180 关）**：2026-09-16 实测（账号 攻2883/防1145/血24800/魂攻532/魂防99）
+  g1~g13 全 100%、g14 43%、g15~g18 0%；达到 50% 胜率所需**属性倍率** = g14 1.17× / g15 1.86× / g16 2.38× / g17 3.23× / g18 4.09×。
+  阶梯本身是渐进的（每关约 +50~90%，不是死墙），但**瓶颈偏在防御** —— 继续堆攻的边际收益低于补防。是否调曲线待定
 - [x] **🐛 用户可见文案过期**：`page/group-levels.js` 的 `desc` 写「4 敌」，实际每关最多 3 敌 —— **v2.1.2 已修**（连同三处同源过期注释），并加防回归断言
 - [ ] **动作百科媒体**：媒体接线已完成（本地 `page/media/` + `MEDIA_BASE` 可配，见 `config.js`），**待确认 Vercel 部署后可访问**
-- [ ] **云同步健壮性**：Blob 存储的冲突合并策略较简单，多设备并发写入未压测
+- [ ] **云同步**：**v2.1.20 已修「载荷漏键」**（宠物/材料袋/宝珠/敌群进度/玩家技能此前完全不参与同步，往返实测 19 键丢 5），
+  并加了 `test-sync-coverage` 守卫；但**多设备并发写入仍未压测**，Blob 的冲突合并策略较简单（见 §7.1）
+- [ ] **4 个技能未入池**（`chargeup` 蓄力重击 / `doom` 末日 / `lastword` 遗言 / `heal` 治愈）：
+  实现完整，但不在 `SKILLS_HIGH` / `SKILLS_LOW` 里，实战永远见不到。**要不要入池属于平衡决策**；
+  清单由 `scripts/test-pools-reachable.js` 的 `NOT_YET_PLACED` 显式登记（改动会红）
 - [ ] **Debug 面板扩展**：RNG 回放 / 时间旅行 / 同步日志 / 性能面板（见 §5 末尾）
 - [ ] 远端遗留分支（`feat/action-dataset` 等 5 个）可评估后清理
+- [ ] **陈旧注释**：`page/group-progress.js:5` 写「进度存 `dh-group-progress`」，实际物理键是 `dh-groupProgress-v1`（以 §7 表格为准）
 
 ---
 
@@ -488,7 +549,8 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `page/stats.js` | 训练量 → 属性折算 |
 | `page/date-roll.js` / `monthly-reset.js` | 时间/周期工具 |
 | `page/challenge.js` | 隐藏挑战（含内嵌诊断块） |
-| `page/group-levels.js` / `group-progress.js` | 敌群 9×10 生成 / 解锁链 |
+| `page/group-levels.js` / `group-progress.js` | 敌群 18×10=180 关生成 / 解锁链 |
+| `page/sync.js` | ☁️ 云同步（载荷组装 / 拉取合并 / 导入导出；**新增 store 键无需改它**，见 §7.1） |
 | `page/battle-group.js` | 群战引擎（核心） |
 | `page/ai.js` / `talent.js` / `skill.js` / `status-defs.js` / `terrain.js` | 战斗内容层 |
 | `page/game-render.js` | 群战 UI（最大文件） |
@@ -497,7 +559,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `page/pets.js` / `pet-*.js` | 宠物系统 |
 | `page/orbs.js` | 宝珠 |
 | `page/debug.js` | 🐞 Debug 面板 |
-| `scripts/test-*.js` | 26 套测试 |
+| `scripts/test-*.js` | 36 套测试 / 901 断言（见 §8） |
 | `scripts/test-a11y-tokens.js` | 🛡️ 设计体系护栏 |
 | `scripts/check-release.js` | 版本三项校验（pre-commit hook） |
 | `doc/design-tokens-v2.1.md` | 🎨 设计规范（唯一权威） |
@@ -515,7 +577,11 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 5. **JS 内联硬编码字号**：护栏规则 5 会拦，一律 `var(--fs-*)`。硬编码 hex 颜色虽不报错，但浅色主题下会不协调 —— **用令牌**。
 6. **git 工具选错**（`myhealth-git` vs `git`）：看到文档/指令写「用 `myhealth-git`」就在任何机器上照抄 → 在 Windows/Linux 上根本找不到它，白花时间。**先按 §0.2 跑两步判定**（SAF 挂载目录存在？wrapper 已安装？），两个都是才用 wrapper，否则直接用 `git`。2026-09-11 已在 Windows 端踩过一次（详见 §0.2 的实测案例）。
 7. **群战与隐藏挑战的技能点是两条独立代码路径**，调数值时别只改一处。
-8. **两条线并行开发易分叉**（v2.0.10/11 vs v2.1.0）：都改 `index.html`/`utils.js`/`README`/`changelog` 必冲突。解决经验：`index.html` 用 `git checkout --theirs` 取远端结构，再用 sed/脚本**重放自己的增量改动**（比手抠冲突块快且不会丢远端的改造）；changelog 用脚本按「远端行 + 本地行 + 本地章节 + 远端章节」重组。
+8. **两条线并行开发易分叉**（v2.0.10/11 vs v2.1.0）：都改 `index.html`/`utils.js`/`README`/`changelog` 必冲突。解决经验：`index.html` 用 `git checkout --theirs` 取远端结构，再用 sed/脚本**重放自己的增量改动**（比手抠冲突块快且不会丢远端的改造）；changelog 用脚本按「远端行 + 本地行 + 本地章节 + 远端章节」重组。**2026-09-16 再次出现并行会话**（v2.1.16~19 一条线、v2.1.20~21 另一条）—— 结论同上：动手前先 `git log --oneline -5`。
+9. **云同步丢数据：硬编码的键清单**（2026-09-16 用户实测上报，v2.1.20 修）：`getAllData()` 把载荷写死成 14 个扁平字段，v2.x 新增的**宠物 / 材料袋 / 宝珠库存 / 敌群进度 / 玩家技能 / 有氧计划 / 主题**一个都没进去；`mergeServerData()` 同样硬编码，于是「推送带不走、拉取写不回」—— 往返实测 **19 键丢 5**。**教训：所有「数据集合的枚举」都不要手写清单**，从源头（`store.getAll()`）派生，并配一个**从源码自动派生清单**的往返测试（`test-sync-coverage.js`）。
+10. **通用数据入口上的静默过滤**（同一事故的另一半）：`store.mergeAll()` 曾写 `if (typeof v === 'object' && validValue(...))`，把**标量键静默丢弃**（`theme` 就是这么丢的，表现是「同步后主题回默认」）。这类条件从任何调用点都看不出来 —— **排查「数据没上来」时优先怀疑通用入口的过滤/continue**。
+11. **测试用「字符串出现」当可达性判据太松**（v2.1.21 修）：`test-pools-reachable.js` 原本判「技能 id 的引号字符串是否出现在别的源码里」，结果 `'heal'` 命中事件类型字符串 `type:'heal'`、`'doom'`/`'lastword'` 命中 ai.js 的目标逻辑，**都被误判成可达**；只有 `'chargeup'` 因为一句特判被删掉才暴露出来。现改为**按真实技能池判定** + 把「尚未入池」的显式登记在 `NOT_YET_PLACED`。**教训：守卫测试的判据要盯着「真实数据结构」，不要盯着「字符串有没有出现过」。**
+12. **改行为前先想清楚「谁在读这个标记」**：本项目反复出现同一类缺陷（v2.1.14 威吓/嘲讽、v2.1.15 九处、v2.1.20 云同步）——**写了不读的标记** 与 **算了不用的中间结果**。改完一处效果，顺手 grep 一遍「这个字段谁在读」最划算。
 9. **`git status` 的 ahead/behind 不可信**（2026-09-11 实测）：沙箱会**静默丢弃 git 对 `.git/refs/remotes/**` 的写入** —— `git fetch` 打印 `xxx..yyy main -> origin/main`、`git update-ref` 返回 exit=0、reflog 都写了，**但 ref 文件就是不落盘**；于是 git 回退去读 `packed-refs` 的旧值，`git status` 长期误报「ahead 24」（本地引用其实停在 v2.0.9）。**判断"推没推"一律用 `git ls-remote origin refs/heads/main`**（直连远端，不读本地引用）。完整对照实验与修复手法见 **§0.2.1**。
 10. **模态关掉后页面滚不动**（2026-09-11 修复，v2.1.6）：`openModal` 锁滚动的方式是给 `body` 加 `position:fixed`，**只要有一条路径没解锁，`body` 就永久 fixed，整页再也无法滚动，用户只能刷新**。两条高危写法别再写：
     - ❌ 只 `classList.remove('open')` 就算关闭 —— 遮罩只是 `display:none`，锁还在（`app.js` 的全局点击处理器就是这个 bug，且 `closest('[id]')` 会让**所有带 id 的模态**都命中）

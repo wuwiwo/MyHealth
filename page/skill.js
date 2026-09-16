@@ -181,12 +181,15 @@ registerSkill({
   }]
 });
 registerSkill({
-  id: 'chargeup', name: '蓄力重击', type: 'attack', target: 'random1', power: 400, dmgType: 'physical', cooldown: 3,
+  /* v2.1.21：改为「辅助类 · 自身」—— 本技能只负责进入蓄力，
+     400% 重击由 battle-group 在**本单位下回合开始时**结算（resolveChargeStrike）。
+     改前是 attack/random1/power:400：当回合就先打 400%、下回合再追加一次，
+     与设计文档 doc/design-v2.0.md:101-105 的「本回合蓄力 → 下回合结算 400%」不符。 */
+  id: 'chargeup', name: '蓄力重击', type: 'support', target: 'self', cooldown: 3,
   effects: [function (c, ts, r) {
-    /* 本回合进入蓄力（承伤 +25%），下回合结算 400%
-       v2.1.15：不再写 c._charging —— 承伤与「蓄力完成」都改由 charging 状态承担
-       （onExpire 置 _chargeReady，battle-group 读它），避免两个标记各说各话。 */
-    r.events.push({ msg: '🔋 ' + (c.name || '单位') + ' 蓄力重击：进入蓄力（承伤 +25%，下回合结算 400%）' });
+    applyStatus(c, { id: 'charging', duration: 1 });
+    if (typeof syncStatusDerived === 'function') syncStatusDerived(c);
+    r.events.push({ msg: '🔋 ' + (c.name || '单位') + ' 蓄力重击：进入蓄力（承伤 +25%，下回合结算 攻击×400%）' });
   }]
 });
 registerSkill({
@@ -377,8 +380,9 @@ registerSkill({
    v2.1.14 技能详情文案表 —— 供 UI「点技能看完整说明」使用。
    文案以本文件 registerSkill 的**实际实现**为准，不是照抄设计文档；
    设计里有、引擎里没有的效果用 wip 单独标出，避免详情页给出虚假信息。
-   v2.1.15：上一版标了 10 个 wip，其中 9 个已实装（判定/减伤/驱散/护盾/叠层/概率），
-   现在只剩 chargeup 的「结算时点」与设计文档不一致。
+   v2.1.15 实装了上一版披露的 9 处，v2.1.16 又实装剩余 11 处不可达效果，
+   v2.1.21 修掉最后一条（chargeup 的结算时点）。
+   → 现在**没有任何 wip 条目**，详情页不会再出现「⚠ 与设计文档不一致」。
    ============================================================ */
 var SKILL_DOCS = {
   charge:     { desc: '对随机 1 名敌人造成 攻击×200% 的物理伤害。' },
@@ -389,8 +393,7 @@ var SKILL_DOCS = {
   blizzard:   { desc: '对敌方全体造成 魂攻×150% 的魂伤害；每名目标 40% 概率冰冻 1~2 回合。' },
   snowball:   { desc: '对随机 1 名敌人造成 魂攻×120% 的魂伤害，每次发动威力 +30%（满 6 层 300%）。' },
   deepfreeze: { desc: '使随机 1 名敌人冰冻 2 回合。先制度 +1。' },
-  chargeup:   { desc: '对随机 1 名敌人造成 攻击×400% 的物理伤害，并进入蓄力状态（承伤 +25%，1 回合）；蓄力完成后下一次施放该技能追加一次 攻击×400% 的重击。',
-                wip: '结算时点与设计文档不同（设计为「下回合自动结算」，实现为「下次施放时追加」）' },
+  chargeup:   { desc: '本回合进入蓄力（承伤 +25%，持续 1 回合）；下回合开始时自动对随机 1 名敌人结算一次 攻击×400% 的重击，并占用该次行动。' },
   armorbreak: { desc: '对随机 1 名敌人造成 攻击×170% 的物理伤害，并叠 1 层破甲 3 回合（每层防御 -10%，最多 6 层）。' },
   stardust:   { desc: '对敌方全体造成 魂攻×200% 的魂伤害；每名目标 20% 概率降低魂防 15%，持续 2 回合。' },
   shrink:     { desc: '自身闪避 +10%（上限 50%），可重复施放叠加，持续到战斗结束。' },

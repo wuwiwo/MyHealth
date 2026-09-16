@@ -8,6 +8,104 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 
 ---
 
+## v2.1.21
+
+**Date:** 2026-09-16
+
+处理 v2.1.19 核对报告里挂着的 4 项待办。
+
+### 1. 修 3 处陈旧注释（技能点数值）
+
+`page/game-render.js` 里 `groupVictoryReward` 相关注释长期写着「技能点 10 点/胜」，
+而 v2.1.19 已把基数降到 **4**（`skill-store.js` 的 `SKILL_POINTS_PER_STAGE`）。
+已同步，并写明「数值唯一来源是 `SKILL_POINTS_PER_STAGE`，别在别处写死」。
+顺带修掉 `page/group-progress.js:5` 的物理键名笔误（`dh-group-progress` → `dh-groupProgress-v1`）。
+
+### 2. 实装「迷惑」（幻影之瞳）
+
+**改前**：`p_phantom` 只 push 了一句日志「👁️ 黑暗鸦 幻影之瞳」，机制完全没实现。
+
+**设计依据** `doc/design-v2.0.md:229`：迷惑 1 敌 1 回合，使其随机执行其一 ——
+① 丧失防备（防御+魂防 -15%~75%）② 不分敌我攻击其他敌人（伤害 50%~95%，无其他敌人则不触发）
+③ 牺牲自我（消耗自身最大生命 1%~10%）。
+
+**实现**：新增状态 `confused`（迷惑）+ `confused_down`（丧失防备）；
+结算在 `battle-group.js` 的 `resolveConfusion()` —— 它是**替代行动**而不是 `skipAction`，
+被迷惑的单位仍要动手，只是打错人 / 打自己 / 放弃防备。
+
+宠物技能没有等级（宠物不走技能升级线），三个数值取文档区间中位：
+丧失防备 **-45%** / 误击 **×75%** / 牺牲自我 **自身最大生命 6%**，都写在 `battle-group.js` 顶部便于日后细分。
+
+⚠️ 一个容易踩的坑：`confused_down` 的 duration 必须写 **2** 而不是 1 ——
+它是在目标**自己的回合内**被施加的，写 1 会在同一回合末的 `ageStatuses` 立刻过期，一点效果都留不下。
+
+### 3. 蓄力重击：结算时点对齐设计文档
+
+**设计** `doc/design-v2.0.md:101-105`：「本回合进入蓄力状态，期间受到伤害增加；
+**下回合**对随机 1 名敌人造成高额攻击伤害；蓄力承伤 +20%~35%；下回合伤害 400%」。
+
+**改前实现**：技能是 `attack / random1 / power:400` —— 当回合就先打出 400%，
+`_chargeReady` 则让**下一次施放**再追加一次 400%。时点与文档不符，且「追加」的触发条件很别扭。
+
+**现在**：技能改为 `support / self`，只负责施加 `charging` 状态；`charging` 到期置 `_chargeReady`；
+`groupUnitTurn` 在**本单位下一次行动开始时**自动结算一次 `攻击×400%` 的重击（`resolveChargeStrike`）
+并**占用该次行动**。`castSkill` 里的 chargeup 特判已删除。
+
+### 4. `doc/HANDOFF.md` 对齐（此前停在 v2.1.7，落后 14 个版本）
+
+- 头部与 §2：`APP_VERSION` 2.1.7 → **2.1.21**、`?v67` → **`?v81`**、测试 28 套 648 断言 → **36 套 901 断言**、
+  最大文件 `game-render.js` 763 → **1231 行**（并补上 `battle-group.js` 824 行）
+- 版本沿革补齐 **v2.1.8 ~ v2.1.21**（此前只到 v2.1.7）
+- §6.3：**12 大关 120 关 → 18 大关 180 关**，换成实测数值表 + 实测难度阶梯
+  （g14 1.17× / g15 1.86× / g16 2.38× / g17 3.23× / g18 4.09×），并标注 `balance-sim.js` 不是实战口径
+- §6.4：技能点 **+4/胜**（周内递增 4→6→8→10→12→14 封顶）
+- §7：新增 **§7.1 云同步载荷格式**（v2.1.20 的 `keys` 段 + 两个历史坑 + `api/` 不在本仓库）
+- §8：套件表补齐到 36 套（含新增的 `sync-coverage` / `pools-reachable` / `status-lifecycle` /
+  `pet-injury` / `orb-wiring` / `battle-log-audit`）
+- §10 待办：更新敌群平衡、云同步，新增「4 个技能未入池」与陈旧注释项
+- §11 文件速查：补 `page/sync.js`，修「26 套测试」等陈旧行
+- §12 踩坑经验：新增 4 条（硬编码键清单 / 通用入口静默过滤 / 测试判据太松 / 先想清楚谁在读标记）
+
+### 顺带修好：可达性守卫测试的判据太松
+
+`scripts/test-pools-reachable.js` 原本判定「技能 id 的引号字符串**是否出现在 `skill.js` 之外的源码里**」——
+太松，把三个技能**误判成可达**：
+
+| 技能 | 被什么碰巧命中 |
+|---|---|
+| `heal` 治愈 | `battle-group.js` / `game-render.js` 里的事件类型字符串 `type:'heal'` |
+| `doom` 末日 | `ai.js:96` 的优先目标逻辑（`sid === 'doom'`）——那是消费点，不是技能池 |
+| `lastword` 遗言 | 同上 |
+
+`chargeup` 则一直靠 `battle-group.js` 里那句 `if (skillId === 'chargeup')` 特判才算「可达」——
+而那句特判正是本轮删掉的旧实现，于是它暴露了出来。
+
+**现在改为按真实技能池判定**（`SKILLS_HIGH` ∪ `SKILLS_LOW` ∪ 宠物技能），
+余下的必须在 `NOT_YET_PLACED` 里显式登记 → 测试绿，同时**真相可见**：
+
+> 当前**未入池**（实战永远见不到）：`chargeup` 蓄力重击 · `doom` 末日 · `lastword` 遗言 · `heal` 治愈。
+> 四者实现都是完整的，只是不在池子里。**要不要入池属于平衡决策**，本轮没动。
+
+### 测试
+
+- `scripts/test-status-lifecycle.js` 51 → **65 断言**：新增迷惑三选一（含「无其他敌人时 ② 不触发 → 退到 ③」）、
+  蓄力「施放当回合零伤害」「下回合自动结算 400%」「占用该次行动」
+- `scripts/test-pools-reachable.js` 18 → **19 断言**（判据改真实池 + 未入池清单比对）
+- 全量 **36 套件 / 901 断言**全绿
+
+### 文件
+
+- `page/status-defs.js`（新增 `confused` / `confused_down`）
+- `page/battle-group.js`（`resolveConfusion` / `resolveChargeStrike` / `groupUnitTurn` 三分支 / 删 chargeup 特判）
+- `page/skill.js`（chargeup 改 `support/self` + `SKILL_DOCS` 去掉最后一条 wip）
+- `page/pet-codex.js`（`p_phantom` 实装）
+- `page/game-render.js` · `page/group-progress.js`（陈旧注释）
+- `scripts/test-status-lifecycle.js` · `scripts/test-pools-reachable.js`
+- `doc/HANDOFF.md`（对齐到 v2.1.21）
+- 版本三项：`APP_VERSION` 2.1.20 → 2.1.21 · `page/index.html` `?v80` → `?v81`（47 处）
+
+---
+
 ## v2.1.20
 
 **Date:** 2026-09-16
@@ -1295,3 +1393,4 @@ v2.1.9 的「锚定」把难度与玩家强弱解耦，副作用是**练得再�
 | v2.1.18 | 45 | 1207 行 game-render.js | 🐾 宠物放大倍数下调 12/16/20/26 → 8/11/14/18（两宠合计攻占玩家 62% → 43%）；修 balance-sim.js 宠物数值硬编码导致改配置后测量结果不变（改走 createPetUnit+boostPetForGroup 真实管道） |
 | v2.1.19 | 45 | 1228 行 game-render.js | 🐛 修手动模式重复发放通关奖励（_groupRewarded 幂等）；每关技能点 10 → 4；宠物放大改 12/14/15/16（稀有度差距收窄）；新增成熟期受伤系统（败北50%几率受伤、受伤不可参战、营养液+10~15%/饲料+4~5%、成熟期也能喂养）；新增 g16~g18（18 大关 180 关），g16+ 难度斜率改 1.24 避免 g18 需 6~7 倍属性 |
 | v2.1.20 | 45 | 1228 行 game-render.js | ☁️ 修云同步丢数据：推送/拉取载荷硬编码 14 个键，宠物/材料袋/宝珠/敌群进度/玩家技能/有氧计划/主题（实测 19 键丢 5 个）全部不同步 → 改为从 `store.getAll()` 自动派生 `keys` 段（载荷 v4→v5），拉取侧对称合并；`store.mergeAll` 不再丢弃标量键（theme）；同步弹窗补新系统摘要；新增 test-sync-coverage.js（20 断言，从源码派生键做往返守卫） |
+| v2.1.21 | 45 | 1231 行 game-render.js | 🔧 处理 v2.1.19 核对报告 4 项待办：① 修 3 处「技能点 10 点/胜」陈旧注释（实际 4）+ group-progress 物理键名笔误 ② 实装「迷惑」（幻影之瞳，设计文档三选一：丧失防备/误击友军/牺牲自我）③ 蓄力重击结算时点对齐设计文档（改为「本回合蓄力 → 下回合自动结算 400% 并占用该次行动」）④ HANDOFF.md 对齐（v2.1.7 → v2.1.21，补 v2.1.8~21 沿革、180 关数据、§7.1 同步格式、36 套测试表、§12 新增 4 条踩坑）。顺带修可达性测试判据（原按「字符串出现」判定，误判 heal/doom/lastword 可达）→ 改按真实技能池 + 显式登记未入池清单（chargeup/doom/lastword/heal） |

@@ -260,3 +260,31 @@ defineStatus({
     }
   }
 });
+
+/* ============ v2.1.21 新增：迷惑（幻影之瞳） ============
+   设计依据 doc/design-v2.0.md:229 —— 「迷惑 1 敌 1 回合，使其随机执行其一：
+   ①丧失防备 / ②不分敌我攻击其他敌人 / ③牺牲自我」。
+   结算放在 battle-group.js 的 resolveConfusion()：它是「替代行动」而不是 skipAction ——
+   被迷惑的单位仍要动手，只是打错人 / 打自己 / 放弃防备。 */
+
+defineStatus({
+  id: 'confused',
+  name: '迷惑',
+  grade: 2,
+  maxStacks: 1,
+  stacking: 'refresh',
+  hooks: {}
+});
+
+/* 丧失防备（迷惑分支①）：防御与魂防降低。
+   ⚠ duration 必须写 2：本状态是在目标**自己的回合内**被施加的，
+   若 duration=1 会在同一回合末的 ageStatuses 立刻过期，一点效果都留不下。 */
+defineStatus({
+  id: 'confused_down',
+  name: '丧失防备',
+  grade: 2,
+  maxStacks: 1,
+  stacking: 'refresh',
+  statModsPct: { def: -0.45, soulDef: -0.45 },
+  hooks: {}
+});

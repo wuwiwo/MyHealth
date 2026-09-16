@@ -52,6 +52,67 @@ function syncStatusDerived(unit) {
   if (unit && typeof refreshStatMods === 'function') refreshStatMods(unit);
 }
 
+/* ============ v2.1.21：两种「替代本回合正常行动」的结算 ============ */
+
+/* 蓄力重击（设计文档 doc/design-v2.0.md:101-105）：
+   本回合进入蓄力（承伤 +25%），**下回合**对随机 1 名敌人造成 400% 攻击伤害。
+   改造前实现是「本回合就打出 400%（技能自带 power:400）+ 下次施放再追加一次」，
+   时点与文档不符。现在 charging 到期时置 _chargeReady，本单位下一次行动开始时
+   自动结算 400% 重击并**占用该次行动**。 */
+var CHARGE_STRIKE_POWER = 4;   // 400%
+
+function resolveChargeStrike(gb, actor) {
+  var events = [];
+  var foes = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; });
+  if (!foes.length) return events;
+  var t = foes[Math.floor(gb.rng() * foes.length)];
+  var dmg = Math.max(1, Math.floor(effectiveStat(actor, 'atk') * CHARGE_STRIKE_POWER - Math.floor(effectiveStat(t, 'def') / 2)));
+  var sh = absorbShield(t, dmg);
+  if (sh.absorbed > 0) {
+    dmg = sh.dmg;
+    events.push({ msg: '🛡️ ' + t.name + ' 护盾吸收 ' + sh.absorbed + (sh.broke ? '（护盾破碎）' : ''), targetId: t.id, type: 'status' });
+  }
+  t.hp = Math.max(0, t.hp - dmg);
+  events.push({ msg: '💥 ' + (actor.name || '单位') + ' 蓄力重击 → ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
+  return events;
+}
+
+/* 迷惑（幻影之瞳）三选一 —— 设计依据 doc/design-v2.0.md:229：
+   ①丧失防备（防御·魂防 -45%，文档区间 15%~75%）
+   ②不分敌我误击其他敌人（伤害 ×75%，文档区间 50%~95%；无其他敌人则不触发）
+   ③牺牲自我（消耗自身最大生命 6%，文档区间 1%~10%）
+   宠物技能没有等级（宠物不走技能升级线），故取区间中位；三项数值都写在这里便于日后细分。 */
+var CONFUSE_HIT_MUL = 0.75;
+var CONFUSE_SELF_PCT = 0.06;
+
+function resolveConfusion(gb, actor) {
+  var events = [];
+  var others = (actor.side === 'ally' ? gb.enemies : gb.allies)
+    .filter(function (u) { return u.hp > 0 && u.id !== actor.id; });
+  var branch = Math.floor(gb.rng() * 3);
+  if (branch === 1 && !others.length) branch = 2;   // 文档：无其他敌人则不触发 ② → 退到 ③
+
+  if (branch === 0) {
+    applyStatus(actor, { id: 'confused_down', duration: 2 });   // duration 2：本回合内施加，写 1 会在同一回合末立刻过期
+    syncStatusDerived(actor);
+    var d = (typeof getStatusDef === 'function' ? getStatusDef('confused_down') : null) || {};
+    var pct = Math.abs((d.statModsPct && d.statModsPct.def) || 0.45);
+    events.push({ msg: '🌀 ' + actor.name + ' 迷惑 → 丧失防备（防御·魂防 -' + Math.round(pct * 100) + '%）', targetId: actor.id, type: 'status' });
+  } else if (branch === 1) {
+    var t = others[Math.floor(gb.rng() * others.length)];
+    var dmg = Math.max(1, Math.floor(effectiveStat(actor, 'atk') * CONFUSE_HIT_MUL - Math.floor(effectiveStat(t, 'def') / 2)));
+    var sh = absorbShield(t, dmg);
+    if (sh.absorbed > 0) dmg = sh.dmg;
+    t.hp = Math.max(0, t.hp - dmg);
+    events.push({ msg: '🌀 ' + actor.name + ' 迷惑 → 敌我不分，误击 ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
+  } else {
+    var self = Math.max(1, Math.floor((actor.base.hp || 0) * CONFUSE_SELF_PCT));
+    actor.hp = Math.max(0, actor.hp - self);
+    events.push({ msg: '🌀 ' + actor.name + ' 迷惑 → 牺牲自我 -' + self, targetId: actor.id, type: 'damage' });
+  }
+  return events;
+}
+
 /* ============ 命中 / 闪避（v2.1.5 引入） ============
    设计文档本就要求命中率机制（技能「闪耀：敌方命中率 -0%~40%」「打湿：提高对其命中率 0%~30%」），
    此前只有文案没有判定，这里补上，并让天赋「漆黑之眼 / 心眼」落地。
@@ -336,22 +397,10 @@ function castSkill(gb, actor, skillId) {
           t.hp = Math.max(0, t.hp - dmg);
           events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
           // 蓄力重击：蓄力状态
-          if (skillId === 'chargeup') {
-            applyStatus(actor, { id: 'charging', duration: 1 });
-            syncStatusDerived(actor);
-            events.push({ msg: '🔋 ' + actor.name + ' 蓄力中（下回合结算 400%）', targetId: actor.id, type: 'status' });
-          }
-          /* v2.1.15：改读 _chargeReady（单一事实来源，由 charging 状态过期时置位）。
-             原实现读 _charging，而 _charging 是技能效果在伤害结算**之后**才置位的，
-             时序错乱 —— 当回合就自己把自己引爆了。 */
-          if (actor._chargeReady) {
-            actor._chargeReady = false;
-            var big = Math.max(1, Math.floor(effectiveStat(actor, 'atk') * 4 - Math.floor(effectiveStat(t, 'def') / 2)));
-            var shb = absorbShield(t, big);
-            if (shb.absorbed > 0) big = shb.dmg;
-            t.hp = Math.max(0, t.hp - big);
-            events.push({ msg: '💥 ' + actor.name + ' 蓄力重击 → ' + t.name + ' ' + big + ' 伤害', targetId: t.id, type: 'damage' });
-          }
+          /* v2.1.21：蓄力重击的结算已移出 castSkill ——
+             本技能现在只负责「进入蓄力」（由 skill.js 的 effects 施加 charging 状态），
+             400% 重击改在 groupUnitTurn 的回合开始处结算（resolveChargeStrike），
+             时点与设计文档 doc/design-v2.0.md:101-105 的「下回合结算」一致。 */
         }
       });
     }
@@ -521,20 +570,37 @@ function groupUnitTurn(gb, actor) {
     return events;
   }
 
+  /* ---- v2.1.21：两种情况会「替代」本回合的正常行动 ---- */
+  var acted = false;
+
+  /* 蓄力重击结算：时点对齐设计文档（本回合蓄力 → 下回合结算 400%） */
+  if (actor._chargeReady) {
+    actor._chargeReady = false;
+    events = events.concat(resolveChargeStrike(gb, actor));
+    acted = true;
+  }
+
+  /* 迷惑（幻影之瞳）：随机执行三选一，而不是按自己的意志行动 */
+  if (!acted && hasStatus(actor, 'confused')) {
+    events = events.concat(resolveConfusion(gb, actor));
+    acted = true;
+  }
+
   // 选择行动：敌人用 AI 策略，玩家用随机/技能
   var skillId, actTarget;
-  if (actor.side === 'enemy' && typeof aiDecide === 'function') {
-    var ai = aiDecide(gb, actor);
-    skillId = ai.skillId;
-    actTarget = ai.target;
-  } else {
-    // 玩家：优先施放装备的攻击类玩家技能（陨石/冰魄/巨石）
-    var ps = playerAttackSkillPick(gb, actor)
-    if (ps) { skillId = ps; }
-    else skillId = pickSkill(actor);
+  if (!acted) {
+    if (actor.side === 'enemy' && typeof aiDecide === 'function') {
+      var ai = aiDecide(gb, actor);
+      skillId = ai.skillId;
+      actTarget = ai.target;
+    } else {
+      // 玩家：优先施放装备的攻击类玩家技能（陨石/冰魄/巨石）
+      var ps = playerAttackSkillPick(gb, actor)
+      if (ps) { skillId = ps; }
+      else skillId = pickSkill(actor);
+    }
   }
-  var acted = false;
-  if (skillId) {
+  if (!acted && skillId) {
     // 玩家技能用 playerAttackSkill，敌群技能用 castSkill
     if (actor.side === 'ally' && actor._playerSkills && actor._playerSkills[skillId] && typeof playerAttackSkill === 'function') {
       var pr = playerAttackSkill(gb, actor, skillId)
