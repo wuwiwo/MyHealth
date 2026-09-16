@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* M2b-1 测试：talent.js + enemy.js
-   1) 16 天赋全部注册
+   1) 14 天赋全部注册（词条已移到 affix.js）
    2) 天赋静态修正（强健）
    3) 天赋 hook 触发（振翅/懒惰/嗜血/再生）
    4) 敌人编成阶梯（tier → 天赋/技能数量）
@@ -12,7 +12,7 @@ const path = require('path');
 const vm = require('vm');
 
 const unitSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'unit.js'), 'utf8');
-const talentSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'talent.js'), 'utf8');
+const talentSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'talent.js', 'affix.js'), 'utf8');
 const enemySrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'enemy.js'), 'utf8');
 
 const sandbox = { Math, JSON, console };

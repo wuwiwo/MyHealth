@@ -49,9 +49,19 @@ function createEnemyUnit(opts) {
     tags: ['enemy', tier]
   });
   unit._tier = tier;
+  if (!(opts.affixes && opts.affixes.length) && typeof AFFIX_EXTRA !== 'undefined' && typeof attachAffixes === 'function') {
+    var afx = [tier === 'boss' ? AFFIX_BOSS_FIXED : AFFIX_ELITE_FIXED];
+    pickExtraAffixes(afx, 1, Math.random);
+    attachAffixes(unit, afx);
+  }
 
   // 挂天赋（含静态属性修正）
   attachTalents(unit, talentIds);
+  /* v2.1.25：词条与天赋分开装配 —— 词条是 Boss/精英的额外维度（见 affix.js） */
+  var affixIds = opts.affixes || [];
+  if (typeof attachAffixes === 'function') attachAffixes(unit, affixIds);
+  else unit._affixes = affixIds.slice();   // 未加载 affix.js（部分测试）时也不炸
+  unit._affixIds = affixIds.slice();
 
   // 应用天赋静态修正到 base（强健等 statMods）
   for (var k in (unit._talentMods || {})) {

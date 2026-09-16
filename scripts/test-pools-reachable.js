@@ -13,7 +13,7 @@ const path = require('path');
 const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
-const files = ['levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'skill.js', 'enemy.js',
+const files = ['levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'affix.js', 'skill.js', 'enemy.js',
   'terrain.js', 'battle.js', 'group-levels.js', 'battle-group.js', 'pet-codex.js'];
 
 const sandbox = { Math: Object.create(Math), JSON, console };
@@ -86,14 +86,28 @@ assert('未入池技能清单 = ' + NOT_YET_PLACED.slice().sort().join('/'),
     srcOutsideTalent.indexOf("'" + id + "'") >= 0);
 });
 
+/* v2.1.25：词条（AFFIXES）也必须可达 —— 要么在 AFFIX_EXTRA 池里，
+   要么是被 group-levels 固定指定的（cut_boss / cut_elite） */
+const affixIds = Object.keys(sandbox.AFFIXES || {});
+const groupSrc = load('group-levels.js');
+const deadAffixes = affixIds.filter(function (id) { return groupSrc.indexOf("'" + id + "'") < 0; });
+assert('没有不可达的词条（' + affixIds.length + ' 个都在 group-levels 里被引用）',
+  deadAffixes.length === 0, deadAffixes.join(','));
+assert('affix.js 的词条池与 group-levels 的局部清单一致', (function () {
+  const a = (sandbox.AFFIX_EXTRA || []).slice().sort().join(',');
+  const b = (sandbox.GROUP_AFFIX_EXTRA || []).slice().sort().join(',');
+  return a.length > 0 && a === b;
+})(), 'affix.js=' + JSON.stringify(sandbox.AFFIX_EXTRA) + ' group-levels=' + JSON.stringify(sandbox.GROUP_AFFIX_EXTRA));
+
 /* 池子里的 id 必须真实存在（防拼写错误导致静默失效） */
 const pools = {
   SKILLS_HIGH: sandbox.SKILLS_HIGH, SKILLS_LOW: sandbox.SKILLS_LOW,
-  TALENTS_EXTRA: sandbox.TALENTS_EXTRA, TALENTS_HIGH: sandbox.TALENTS_HIGH
+  /* v2.1.25：词条与天赋分家 —— 词条池在 affix.js 的 AFFIX_EXTRA，由 group-levels 消费 */
+  AFFIX_EXTRA: sandbox.AFFIX_EXTRA, TALENTS_HIGH: sandbox.TALENTS_HIGH
 };
 Object.keys(pools).forEach(function (name) {
   const bad = (pools[name] || []).filter(function (id) {
-    return !(sandbox.SKILLS[id] || sandbox.TALENTS[id]);
+    return !(sandbox.SKILLS[id] || sandbox.TALENTS[id] || sandbox.AFFIXES[id]);
   });
   assert(name + ' 里的 id 全部有效', bad.length === 0, bad.join(','));
 });

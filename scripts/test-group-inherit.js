@@ -13,7 +13,7 @@ const path = require('path');
 const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
-const files = ['levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'skill.js', 'enemy.js',
+const files = ['levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'affix.js', 'skill.js', 'enemy.js',
   'terrain.js', 'battle.js', 'group-levels.js', 'battle-group.js'];   // terrain 必须在 group-levels 之前
 
 function makeSandbox(seed) {
@@ -92,7 +92,9 @@ for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
 assert(checked + ' 关配置与 Math 种子无关', same && checked === Object.keys(sb.GROUP_LEVELS).length * 10, '比对 ' + checked + ' 关');
 
 // ---- 4. Boss / 精英只用高级池 ----
-const HIGH_T = (sb.TALENTS_HIGH || []).concat(['cut_boss', 'cut_elite'], sb.TALENTS_EXTRA || []);   // v2.1.13 起 Boss/精英改走新词条第
+/* v2.1.25：天赋与词条分家 —— 天赋走 TALENTS_HIGH，词条走 affix.js 的 AFFIX_EXTRA + 固定减伤 */
+const HIGH_T = sb.TALENTS_HIGH || [];
+const HIGH_A = (sb.GROUP_AFFIX_EXTRA || []).concat(['cut_boss', 'cut_elite']);
 const HIGH_S = sb.SKILLS_HIGH || [];
 const LOW_T = ['lazy', 'slowstart'];
 let bossBad = [], lowUsed = [];
@@ -103,22 +105,26 @@ for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
       if (HIGH_T.indexOf(t) < 0) bossBad.push('g' + lg + ':' + t);
       if (LOW_T.indexOf(t) >= 0) lowUsed.push('g' + lg + ':' + t);
     });
+    (e.affixes || []).forEach(function (a) {
+      if (HIGH_A.indexOf(a) < 0) bossBad.push('g' + lg + ':词条' + a);
+    });
     (e.skills || []).forEach(function (s) {
       if (HIGH_S.indexOf(s) < 0) bossBad.push('g' + lg + ':技能' + s);
     });
   });
 }
-assert('Boss 天赋/技能全部来自高级池（含 v2.1.13 新词条）', bossBad.length === 0, bossBad.slice(0, 5).join(','));
+assert('Boss 天赋/词条/技能全部来自各自的高级池', bossBad.length === 0, bossBad.slice(0, 5).join(','));
 assert('Boss 不再抽到 lazy / slowstart 自我削弱', lowUsed.length === 0, lowUsed.join(','));
 const anyBoss = sb.GROUP_LEVELS.g12.stages[9].enemies[0];
-assert('Boss 至少 2 天赋 + 2 技能',
-  (anyBoss.talents || []).length >= 2 && (anyBoss.skills || []).length >= 2,
-  JSON.stringify({ t: anyBoss.talents, s: anyBoss.skills }));
-assert('天赋/技能 id 都真实存在', (function () {
+assert('Boss 至少 2 词条 + 2 技能',
+  (anyBoss.affixes || []).length >= 2 && (anyBoss.skills || []).length >= 2,
+  JSON.stringify({ a: anyBoss.affixes, s: anyBoss.skills }));
+assert('天赋/词条/技能 id 都真实存在', (function () {
   for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
     for (let st = 1; st <= 10; st++) {
       (sb.GROUP_LEVELS['g' + lg].stages[st - 1].enemies || []).forEach(function (e) {
         (e.talents || []).forEach(function (t) { if (!sb.TALENTS[t]) throw new Error('天赋 ' + t); });
+        (e.affixes || []).forEach(function (a) { if (!sb.AFFIXES[a]) throw new Error('词条 ' + a); });
         (e.skills || []).forEach(function (s) { if (!sb.SKILLS[s]) throw new Error('技能 ' + s); });
       });
     }
@@ -175,23 +181,25 @@ assert('魂伤不低于 1（不会退化成无效）', soulVsDef > noSoul);
 })();
 
 // ---- 8. v2.1.13 敌群词条与场地 ----
-const bossT = sb.GROUP_LEVELS.g7.stages[9].enemies[0].talents || [];   // Boss 关
-const eliteT = sb.GROUP_LEVELS.g7.stages[4].enemies[0].talents || [];  // 精英关
+const bossT = sb.GROUP_LEVELS.g7.stages[9].enemies[0].affixes || [];   // Boss 关（词条）
+const eliteT = sb.GROUP_LEVELS.g7.stages[4].enemies[0].affixes || [];  // 精英关（词条）
 assert('Boss 固定带伤害减免·大', bossT.indexOf('cut_boss') >= 0, JSON.stringify(bossT));
 assert('精英固定带伤害减免·中', eliteT.indexOf('cut_elite') >= 0, JSON.stringify(eliteT));
 assert('Boss 词条 ≤ 3（含固定减伤）', bossT.length <= 3 && bossT.length >= 2, JSON.stringify(bossT));
 assert('精英词条 ≤ 2（含固定减伤）', eliteT.length <= 2 && eliteT.length >= 1, JSON.stringify(eliteT));
-assert('其他词条都来自 TALENTS_EXTRA', (function () {
-  const ex = sb.TALENTS_EXTRA || [];
+assert('其他词条都来自 AFFIX_EXTRA 池', (function () {
+  const ex = sb.GROUP_AFFIX_EXTRA || [];
   return bossT.concat(eliteT).every(function (t) { return t.indexOf('cut_') === 0 || ex.indexOf(t) >= 0; });
 })());
-assert('词条 id 全部存在', bossT.concat(eliteT).every(function (t) { return !!sb.TALENTS[t]; }));
+assert('词条 id 全部存在', bossT.concat(eliteT).every(function (t) { return !!sb.AFFIXES[t]; }));
 
-/* 减伤生效验证：同一目标，带 cut_boss 时受到的普攻伤害应为 ~60% */
-function hitWith(talents) {
+/* 减伤生效验证：同一目标，带 cut_boss 时受到的普攻伤害应为 ~60%
+   v2.1.25：cut_boss / cut_elite / aoe_guard / skill_guard 等已由 TALENTS 迁到 AFFIXES（page/affix.js），
+   故这里走 attachAffixes。若仍用 attachTalents 会静默找不到 → 减伤不生效而断言 misleading。 */
+function hitWith(affixIds) {
   const atk = sb.createUnit({ id: 'a', side: 'ally', name: '攻', base: { hp: 999, atk: 1000, def: 10, spd: 5 } });
   const tgt = sb.createUnit({ id: 't', side: 'enemy', name: '靶', base: { hp: 99999, atk: 1, def: 0, spd: 1 } });
-  if (talents && sb.attachTalents) sb.attachTalents(tgt, talents);
+  if (affixIds && sb.attachAffixes) sb.attachAffixes(tgt, affixIds);
   const gb = sb.createGroupBattle({ allies: [atk], enemies: [tgt] });
   gb.rng = function () { return 0.5; };
   sb.normalAttack(gb, atk, tgt);
@@ -209,14 +217,14 @@ assert('抗扩散不影响普攻（只对 AOE 生效）', stacked === withCut, s
 // 直接派发验证 isAoe 分支
 (function () {
   const tgt = sb.createUnit({ id: 'ta', side: 'enemy', name: '靶', base: { hp: 9999, atk: 1, def: 0, spd: 1 } });
-  sb.attachTalents(tgt, ['aoe_guard']);
-  const single = sb.TALENTS.aoe_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isAoe: false });
-  const aoe = sb.TALENTS.aoe_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isAoe: true });
+  sb.attachAffixes(tgt, ['aoe_guard']);
+  const single = sb.AFFIXES.aoe_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isAoe: false });
+  const aoe = sb.AFFIXES.aoe_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isAoe: true });
   assert('抗扩散：非 AOE 不减伤', !single);
   assert('抗扩散：AOE 减伤 30%', aoe && aoe.mutations[0].value === 0.30);
   // 抗技法：只对角色技能生效
-  const sg1 = sb.TALENTS.skill_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isSkill: true, fromPlayer: true });
-  const sg2 = sb.TALENTS.skill_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isSkill: true, fromPlayer: false });
+  const sg1 = sb.AFFIXES.skill_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isSkill: true, fromPlayer: true });
+  const sg2 = sb.AFFIXES.skill_guard.hooks.onDamage(tgt, { isPlayerAttack: false, isSkill: true, fromPlayer: false });
   assert('抗技法：角色技能减伤 50%', sg1 && sg1.mutations[0].value === 0.50);
   assert('抗技法：敌方技能不减伤', !sg2);
 })();

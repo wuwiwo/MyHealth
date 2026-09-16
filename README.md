@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.24
+> Personal Health Manager — 个人健身健康管理应用 v2.1.25
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -272,4 +272,6 @@ Vercel 项目设置：
 
 | **v2.1.24** | **2026-09-16** | **🔧 睡觉睡眠时长改为 1~3 回合**（作者指定；实现坑：状态在宠物自己回合内施加，回合末会先扣 1，所以 duration 必须 = 实际回合数 + 1，写 1 等于完全没睡 —— 改前就是这样）+ 补上**睡眠期间每回合回复 (防御+魂防)×0%~300%**（原先只在施放瞬间回一次）；**无影拳「5 连击」真正实装**：此前只有 1 次命中而日志却写「×5」，现在 skill.js 支持 multiHit，castSkill 传随机池，真正打 5 次且目标随机可重复；缓存版本对齐（v84）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.24**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.25** | **2026-09-16** | **🧩 结构性拆分：敌群「词条」从天赋注册表 TALENTS 独立为新注册表 AFFIXES（新增 page/affix.js），天赋与词条各归其位（纯结构改动、数值不变）；修拆分后减伤断言因按 id 取对象静默失效的问题；缓存版本对齐（v85）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.25**（设计规范：`doc/design-tokens-v2.1.md`）

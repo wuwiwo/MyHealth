@@ -1,6 +1,6 @@
 /* ============================================
    MyHealth — Enemy Talents (M2b-1)
-   16 天赋注册表。数据驱动：每个天赋 = hooks 集（对接 state-core 机制）。
+   天赋注册表（**词条不在这里**，见 affix.js）。数据驱动：每个天赋 = hooks 集（对接 state-core 机制）。
    纯逻辑，无 DOM/store。依赖 state-core.js（defineStatus 可选）、unit.js。
    ============================================ */
 
@@ -54,6 +54,17 @@ function talentDispatch(unit, hook, ctx) {
     if (r.mutations) out.mutations = out.mutations.concat(r.mutations);
     if (r.events) out.events = out.events.concat(r.events);
   });
+  /* v2.1.25：本函数派发的是「单位被动」，包含两个**独立注册表** ——
+     天赋 TALENTS（固有）+ 词条 AFFIXES（Boss/精英附加，见 affix.js）。
+     词条原先被误注册进 TALENTS，现在拆开；因为调度口在这里合并，**所有调用点无需改动**。
+     （8 条词条只用 onDamage / onTurnEnd / onAfterAction，全部经由本函数派发，
+       所以 talentAura 不必再合并一遍。） */
+  if (typeof affixDispatch === 'function') {
+    var ar = affixDispatch(unit, hook, ctx);
+    if (ar.skipAction) out.skipAction = true;
+    out.mutations = out.mutations.concat(ar.mutations);
+    out.events = out.events.concat(ar.events);
+  }
   return out;
 }
 
@@ -347,143 +358,10 @@ registerTalent({
 });
 
 /* ============================================================
-   v2.1.13 敌群专属词条（Boss / 精英）
-   约定：talentDispatch(target, 'onDamage', {...}) 里
-   ctx.isPlayerAttack === false 表示「本单位是受击方」，
-   所有减伤类词条都只在这个分支返回 dmgTakenReduce。
-   多个减伤 mutation 在 battle-group.js 里是连乘的，天然叠加。
+   v2.1.25：**词条已从本文件移出**。
+   原先 cut_boss / cut_elite / aoe_guard / skill_guard / grow_atk / grow_def /
+   doom_call / extra_act 这 8 条被注册进 TALENTS —— 但它们其实是「词条」（Affix）：
+   天赋是生物**固有**被动，词条是 Boss/精英**额外附加**的强化维度。
+   设计依据 doc/2.0 敌群设计.md:248/251（「额外 Boss 词条」「沿用现有词条系统」「独立维度」）。
+   现全部迁到 **page/affix.js** 的 AFFIXES 注册表，钩子实现一字未改（纯结构性拆分，数值不变）。
    ============================================================ */
-
-/* 伤害减免·大（Boss 固定）：受到的所有伤害 -40% */
-registerTalent({
-  id: 'cut_boss',
-  name: '伤害减免·大',
-  desc: '受到的所有伤害降低 40%',
-  hooks: {
-    onDamage: function (unit, ctx) {
-      if (ctx.isPlayerAttack) return;
-      return { mutations: [{ key: 'dmgTakenReduce', value: 0.40 }] };
-    }
-  }
-});
-
-/* 伤害减免·中（精英固定）：受到的所有伤害 -25% */
-registerTalent({
-  id: 'cut_elite',
-  name: '伤害减免·中',
-  desc: '受到的所有伤害降低 25%',
-  hooks: {
-    onDamage: function (unit, ctx) {
-      if (ctx.isPlayerAttack) return;
-      return { mutations: [{ key: 'dmgTakenReduce', value: 0.25 }] };
-    }
-  }
-});
-
-/* 抗扩散：受到 AOE 伤害 -30%（与伤害减免叠加） */
-registerTalent({
-  id: 'aoe_guard',
-  name: '抗扩散',
-  desc: '受到范围技能伤害降低 30%（与伤害减免叠加）',
-  hooks: {
-    onDamage: function (unit, ctx) {
-      if (ctx.isPlayerAttack || !ctx.isAoe) return;
-      return { mutations: [{ key: 'dmgTakenReduce', value: 0.30 }] };
-    }
-  }
-});
-
-/* 抗技法：受到角色技能伤害 -50%（与伤害减免叠加） */
-registerTalent({
-  id: 'skill_guard',
-  name: '抗技法',
-  desc: '受到角色技能伤害降低 50%（与伤害减免叠加）',
-  hooks: {
-    onDamage: function (unit, ctx) {
-      if (ctx.isPlayerAttack || !ctx.isSkill || !ctx.fromPlayer) return;
-      return { mutations: [{ key: 'dmgTakenReduce', value: 0.50 }] };
-    }
-  }
-});
-
-/* 战意高涨：每 2 回合 +3% 攻击，最多 20 层（+60%） */
-registerTalent({
-  id: 'grow_atk',
-  name: '战意高涨',
-  desc: '每 2 回合提升 3% 攻击，最多叠加 20 层',
-  hooks: {
-    onTurnEnd: function (unit) {
-      unit._growAtkT = (unit._growAtkT || 0) + 1;
-      if (unit._growAtkT < 2) return;
-      unit._growAtkT = 0;
-      var st = Math.min(20, (unit._growAtkStacks || 0) + 1);
-      unit._growAtkStacks = st;
-      if (unit._growAtkBase == null) unit._growAtkBase = unit.base.atk;
-      unit.base.atk = Math.floor(unit._growAtkBase * (1 + st * 0.03));
-      if (st % 5 === 0) return { events: [{ type: 'talent', talentId: 'grow_atk', unitId: unit.id, msg: '战意高涨: 攻击 +' + (st * 3) + '%（' + st + '/20）' }] };
-    }
-  }
-});
-
-/* 铁壁：每 2 回合 +5% 防御，最多 20 层（+100%） */
-registerTalent({
-  id: 'grow_def',
-  name: '铁壁',
-  desc: '每 2 回合提升 5% 防御，最多叠加 20 层',
-  hooks: {
-    onTurnEnd: function (unit) {
-      unit._growDefT = (unit._growDefT || 0) + 1;
-      if (unit._growDefT < 2) return;
-      unit._growDefT = 0;
-      var st = Math.min(20, (unit._growDefStacks || 0) + 1);
-      unit._growDefStacks = st;
-      if (unit._growDefBase == null) unit._growDefBase = unit.base.def;
-      unit.base.def = Math.floor(unit._growDefBase * (1 + st * 0.05));
-      if (st % 5 === 0) return { events: [{ type: 'talent', talentId: 'grow_def', unitId: unit.id, msg: '铁壁: 防御 +' + (st * 5) + '%（' + st + '/20）' }] };
-    }
-  }
-});
-
-/* 终末宣告：每 15 回合使敌方全体受到最大生命 25% 的纯粹伤害（初始处于冷却） */
-registerTalent({
-  id: 'doom_call',
-  name: '终末宣告',
-  desc: '每 15 回合使敌方全体受到最大生命 25% 的纯粹伤害（无视防御，初始冷却）',
-  hooks: {
-    onTurnEnd: function (unit, ctx) {
-      unit._doomT = (unit._doomT || 0) + 1;
-      if (unit._doomT < 15) return;
-      unit._doomT = 0;
-      var foes = (ctx && ctx.enemyUnits) || [];
-      var events = [];
-      foes.forEach(function (t) {
-        if (!t || t.hp <= 0) return;
-        var dmg = Math.max(1, Math.floor((t.base.hp || 0) * 0.25));
-        t.hp = Math.max(0, t.hp - dmg);
-        events.push({ type: 'talent', talentId: 'doom_call', unitId: unit.id, msg: '终末宣告: ' + (t.name || '敌方') + ' 受到 ' + dmg + ' 点纯粹伤害' });
-      });
-      return { events: events };
-    }
-  }
-});
-
-/* 疾影：本回合有 55% 几率额外行动 1 次，冷却 3 回合 */
-registerTalent({
-  id: 'extra_act',
-  name: '疾影',
-  desc: '本回合有 55% 几率额外行动 1 次（冷却 3 回合）',
-  hooks: {
-    onAfterAction: function (unit) {
-      if ((unit._extraCd || 0) > 0) return;
-      if (Math.random() >= 0.55) return;
-      unit._extraCd = 3;
-      return {
-        mutations: [{ key: 'extraAction', value: 1 }],
-        events: [{ type: 'talent', talentId: 'extra_act', unitId: unit.id, msg: '疾影: ' + (unit.name || '单位') + ' 额外行动一次！' }]
-      };
-    },
-    onTurnEnd: function (unit) {
-      if (unit._extraCd > 0) unit._extraCd--;
-    }
-  }
-});

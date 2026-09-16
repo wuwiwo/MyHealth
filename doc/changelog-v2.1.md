@@ -8,6 +8,48 @@ v2.1 是**设计体系版本**：不新增玩法，把散落在 31 档字号、6
 
 ---
 
+## v2.1.25
+
+**Date:** 2026-09-16
+
+### 结构性拆分：敌群「词条」从「天赋」独立出来
+
+v2.1.13 起，Boss / 精英的强化（`cut_boss` 伤害减免 40%、`cut_elite` 25%、抗扩散、抗技法、
+战意高涨、铁壁、终末宣告、疾影）被注册进了 `talent.js` 的 `TALENTS`，与天赋共用一套池子和
+「天赋」标签。但按 `doc/2.0 敌群设计.md:248/251`，**词条与天赋是两个独立维度**：
+
+| | 天赋 TALENTS（`talent.js`） | 词条 AFFIXES（`affix.js`，新增） |
+|---|---|---|
+| 语义 | 生物**固有**被动，跟着敌人种类走 | Boss / 精英**额外附加**的强化，跟着难度走 |
+
+**本次是纯结构性拆分，不改数值**：8 个词条的钩子实现一字未移改，Boss / 精英拿到的能力与改前完全一致。
+
+- 新增 `page/affix.js`：`AFFIXES` 注册表 + `AFFIX_EXTRA` 池 + `AFFIX_BOSS_FIXED` 固定减伤 + `attachAffixes()`
+- `talent.js`：移除这 8 个词条（-158 行），`TALENTS_HIGH` 收回 `flutter` / `plain` / `multitarget`
+  （它们本来就是天赋，只是此前寄放在词条池里）
+- `group-levels.js`：`TALENTS_EXTRA` / `pickExtraTalents` → `GROUP_AFFIX_FIXED` / `GROUP_AFFIX_EXTRA` /
+  `pickExtraAffixes`；局部常量而非直接读 `affix.js`，避免测试只加载到 `group-levels.js` 时整批炸掉。
+  ⚠️ 两份清单的一致性由 `test-pools-reachable.js` 守卫
+- `enemy.js`：`createEnemyUnit` 内 `attachAffixes(unit, affixIds)`
+- `index.html`：挂载 `affix.js`
+
+### 修：拆分后减伤断言静默失效
+
+`test-group-inherit.js` 的减伤验证仍在用 `attachTalents(tgt, ['cut_boss'])` 与 `sb.TALENTS.aoe_guard`。
+词条迁走后这两处**静默找不到对象** → 减伤不生效但断言看起来在跑（实测 1003 → 1003）。
+已改为 `attachAffixes` / `sb.AFFIXES`。
+→ **教训：注册表迁移时，凡是按 id 取对象的调用点都不会报错，只会安静地失效。改完必须让测试真的断言到效果。**
+
+- 全量 **36 套件 / 906 断言**通过
+
+### 文件
+
+`page/affix.js`（新增）· `page/talent.js` · `page/group-levels.js` · `page/enemy.js` ·
+`page/index.html` · `page/utils.js` ·
+`scripts/test-group-inherit.js` · `scripts/test-pools-reachable.js` · `scripts/test-enemy.js`
+
+---
+
 ## v2.1.24
 
 **Date:** 2026-09-16
@@ -1621,3 +1663,5 @@ v2.1.9 的「锚定」把难度与玩家强弱解耦，副作用是**练得再�
 | v2.1.21 | 45 | 1231 行 game-render.js | 🔧 处理 v2.1.19 核对报告 4 项待办：① 修 3 处「技能点 10 点/胜」陈旧注释（实际 4）+ group-progress 物理键名笔误 ② 实装「迷惑」（幻影之瞳，设计文档三选一：丧失防备/误击友军/牺牲自我）③ 蓄力重击结算时点对齐设计文档（改为「本回合蓄力 → 下回合自动结算 400% 并占用该次行动」）④ HANDOFF.md 对齐（v2.1.7 → v2.1.21，补 v2.1.8~21 沿革、180 关数据、§7.1 同步格式、36 套测试表、§12 新增 4 条踩坑）。顺带修可达性测试判据（原按「字符串出现」判定，误判 heal/doom/lastword 可达）→ 改按真实技能池 + 显式登记未入池清单（chargeup/doom/lastword/heal） |
 | v2.1.22 | 45 | 1269 行 game-render.js | 🎚️ 技能等级真正接进战斗（此前 `skillLevels` 只有 UI/升级逻辑在读、敌人 `unit.level` 恒为 1 → 升级技能数值不变）：新增 `skillLevelOf`/`skillValue`，区间 `[低,高]` 按等级线性插值；宠物 7 个攻击技能 + 幻影之瞳三分支补区间，敌人等级按大关号 1~10 → 幻影之瞳三个分支按等级取值（丧失防备 15%~75% / 误击 50%~95% / 牺牲自我 1%~10%）；最后 4 个未入池技能（蓄力重击/末日/遗言/治愈）按指定入池，接上 ai.js 既有的残血放大招与治疗分支；场地新增常驻可点击胶囊 🌍 + 介绍弹层（此前只在开战 toast 一次）；实测 g1~g13 维持 100%，g14 38%→3%（主要由入池驱动），平均 74%→72% |
 | v2.1.23 | 45 | 1269 行 game-render.js | 🎯「区间随基础属性成长」驱动源改正 + 补齐其余 5 处：查 `design-v2.0.md:187/383` 确认区间由**基础属性成长**决定，而宠物基础属性的成长线是**炼化**（炼化石，上限 R50/SR60/SSR80/UR100）而非技能等级（灵能，OQ-4 明确是两套材料体系）→ 驱动收敛为单个 `skillRangeT(unit)`（OQ-8 曲线待定，线性占位，定案只改这一处）；`applySkillEffects` 注入 `ctx.sv` 让 heals/statusApps/buffs 三类通道也能吃区间 → 圣光治愈、睡觉、打湿、闪耀、战意灌注 5 处补齐；顺带修 `castSkill` 不透传 `modsPct`/`data` 的真 bug（会让打湿的幅度在实战中被静默丢掉）；`statMods` 同键实例值覆盖定义值 |
+| v2.1.24 | 45 | 1269 行 game-render.js | 😴 睡觉时长改 1~3 回合（设计文档原 3~4）+ 睡眠期间每回合回复；无影拳 5 连击真正实装。踩坑：状态在宠物自己回合内施加，同一回合末 ageStatuses 会先扣 1 → duration = 想锁的回合数 + 1，写 1 等于没睡 |
+| v2.1.25 | 46 | 1268 行 game-render.js | 🧩 结构性拆分：敌群「词条」从 TALENTS 独立为新注册表 AFFIXES（page/affix.js），天赋与词条各归其位（纯结构改动、数值不变）；修拆分后减伤断言因按 id 取对象静默失效 |

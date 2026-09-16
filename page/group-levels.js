@@ -111,17 +111,27 @@ function groupRng(seed) {
 /* ============ 天赋 / 技能分级池 ============
    Boss 与精英只从「高级」池抽取：lazy（懒惰）/ slowstart（慢启动）是自我削弱，
    bite（咬击）是最基础的技能 —— 抽到这些会让 Boss 名不副实。 */
-var TALENTS_HIGH = ['blade', 'vigor', 'bloodthirst', 'regen', 'roughskin', 'vengeance', 'magicmirror', 'magicshield', 'intimidate'];
-/* v2.1.13：Boss / 精英的「其他词条」池（伤害减免之外的可选词条） */
-var TALENTS_EXTRA = ['extra_act', 'aoe_guard', 'skill_guard', 'grow_atk', 'grow_def', 'doom_call',
-  // v2.1.16：这 3 个天赋代码完整、引擎可达，但此前不在任何池里 → 实战永远见不到
+var TALENTS_HIGH = ['blade', 'vigor', 'bloodthirst', 'regen', 'roughskin', 'vengeance', 'magicmirror', 'magicshield', 'intimidate',
+  // v2.1.16 入池、v2.1.25 归位（它们本来就是天赋，只是此前寄放在词条池里）
   'flutter',     // 振翅：每回合按初始速度提速
-  'plain',       // 朴实
+  'plain',       // 朴实：能力无法被改变
   'multitarget'  // 多目标：普攻额外打 1 个目标、伤害降低
 ];
+/* v2.1.13：Boss / 精英的「其他词条」池（伤害减免之外的可选词条） */
+/* v2.1.25：原先这里混着一个「词条池」（extra_act/aoe_guard/skill_guard/grow_atk/grow_def/doom_call）与 3 个天赋（flutter/plain/multitarget）。
+   词条与天赋是两个独立维度 —— 词条池已移到 page/affix.js 的 AFFIX_EXTRA；
+   这 3 个天赋归回 TALENTS_HIGH（见上）。 */
 var GROUP_EXTRA_COUNT = { boss: 2, elite: 1 };   // 其他词条个数上限（+ 固定减伤 = 3 / 2）
-function pickExtraTalents(arr, n, rng) {
-  var pool = TALENTS_EXTRA.slice();
+/* v2.1.25：Boss / 精英的词条 id。
+   写成本文件的局部常量而不是直接读 affix.js 的 AFFIX_EXTRA / AFFIX_BOSS_FIXED ——
+   因为测试常常只加载到 group-levels.js 而不加载 affix.js（加载顺序耦合会让整批测试炸掉）。
+   ⚠️ 这两份清单必须与 page/affix.js 保持一致，由 scripts/test-pools-reachable.js 断言守卫。 */
+var GROUP_AFFIX_FIXED = { boss: 'cut_boss', elite: 'cut_elite' };
+var GROUP_AFFIX_EXTRA = ['aoe_guard', 'skill_guard', 'grow_atk', 'grow_def', 'doom_call', 'extra_act'];
+
+/* v2.1.25：抽「其他词条」（不再是天赋） */
+function pickExtraAffixes(arr, n, rng) {
+  var pool = GROUP_AFFIX_EXTRA.slice();
   for (var i = 0; i < n && pool.length; i++) {
     var idx = Math.floor(rng() * pool.length);
     arr.push(pool[idx]); pool.splice(idx, 1);
@@ -184,14 +194,16 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
   // 天赋：Boss / 精英一律从「高级」池抽（不含 lazy / slowstart 这类自我削弱）
   // v2.1.13：Boss = 伤害减免40% + 最多 2 个其他词条；精英 = 25% + 最多 1 个
   var talents = [];
+  var affixes = [];
   if (isBoss) {
-    talents.push('cut_boss');
-    pickExtraTalents(talents, GROUP_EXTRA_COUNT.boss, rng);
+    affixes.push(GROUP_AFFIX_FIXED.boss);
+    pickExtraAffixes(affixes, GROUP_EXTRA_COUNT.boss, rng);
   } else if (isElite || tier === 'elite1') {
-    talents.push('cut_elite');
-    pickExtraTalents(talents, GROUP_EXTRA_COUNT.elite, rng);
+    affixes.push(GROUP_AFFIX_FIXED.elite);
+    pickExtraAffixes(affixes, GROUP_EXTRA_COUNT.elite, rng);
   }
   if (talents.length) cfg.talents = talents;
+  if (affixes.length) cfg.affixes = affixes;
   // 技能：Boss / 精英从「高级」池抽；杂兵才可能拿低级技能
   var skills = [];
   var sp = (isBoss || isElite || tier === 'elite1' ? SKILLS_HIGH : SKILLS_LOW).slice();
@@ -418,7 +430,9 @@ if (typeof window !== 'undefined') {
   window.GROUP_INHERIT = GROUP_INHERIT;
   window.PET_GROUP_SCALE = PET_GROUP_SCALE;
   window.TALENTS_HIGH = TALENTS_HIGH;
-  window.TALENTS_EXTRA = TALENTS_EXTRA;
+  window.pickExtraAffixes = pickExtraAffixes;
+  window.GROUP_AFFIX_FIXED = GROUP_AFFIX_FIXED;
+  window.GROUP_AFFIX_EXTRA = GROUP_AFFIX_EXTRA;
   window.groupTerrainFor = groupTerrainFor;
   window.SKILLS_HIGH = SKILLS_HIGH;
   window.inheritGroupStats = inheritGroupStats;
@@ -436,7 +450,9 @@ if (typeof globalThis !== 'undefined') {
   globalThis.GROUP_INHERIT = GROUP_INHERIT;
   globalThis.PET_GROUP_SCALE = PET_GROUP_SCALE;
   globalThis.TALENTS_HIGH = TALENTS_HIGH;
-  globalThis.TALENTS_EXTRA = TALENTS_EXTRA;
+  globalThis.pickExtraAffixes = pickExtraAffixes;
+  globalThis.GROUP_AFFIX_FIXED = GROUP_AFFIX_FIXED;
+  globalThis.GROUP_AFFIX_EXTRA = GROUP_AFFIX_EXTRA;
   globalThis.groupTerrainFor = groupTerrainFor;
   globalThis.SKILLS_HIGH = SKILLS_HIGH;
   globalThis.inheritGroupStats = inheritGroupStats;
