@@ -12,14 +12,14 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const unitSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'unit.js'), 'utf8');
-const skillSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'skill.js'), 'utf8');
+const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
+// utils.js 必须最先加载：v2.1.27 起战斗随机统一走 battleRnd()，定义在这里
+const files = ['utils.js', 'unit.js', 'skill.js'];
 
 const sandbox = { Math, JSON, console };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
-vm.runInContext(unitSrc, sandbox);
-vm.runInContext(skillSrc, sandbox);
+files.forEach(f => vm.runInContext(load(f), sandbox));
 
 let pass = 0, fail = 0;
 function assert(name, cond, detail) {

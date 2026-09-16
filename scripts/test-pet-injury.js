@@ -27,7 +27,8 @@ function makeSandbox(seed) {
   const sb = { Math: M, JSON, console, store: { get: k => mem[k], set: (k, v) => { mem[k] = v; }, register: () => {} } };
   sb.window = sb; sb.globalThis = sb;
   vm.createContext(sb);
-  ['levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'skill.js', 'enemy.js',
+  // utils.js 必须最先加载：v2.1.27 起战斗随机统一走 battleRnd()，定义在这里
+  ['utils.js', 'levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'skill.js', 'enemy.js',
     'terrain.js', 'battle.js', 'orbs.js', 'pet-codex.js', 'pets.js', 'pet-store.js', 'group-levels.js', 'battle-group.js']
     .forEach(f => vm.runInContext(load(f), sb));
   return sb;

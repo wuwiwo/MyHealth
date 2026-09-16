@@ -11,16 +11,18 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const unitSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'unit.js'), 'utf8');
-const talentSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'talent.js', 'affix.js'), 'utf8');
-const enemySrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'enemy.js'), 'utf8');
+const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
+// v2.1.27：战斗随机统一走 battleRnd()，它定义在 utils.js（index.html 中最早加载）——
+//          沙箱只挑部分文件时必须显式先加载，否则 ReferenceError: battleRnd is not defined。
+// v2.1.25：词条（affix.js）从天赋（talent.js）里拆出，是两个独立维度，需分别加载。
+// enemy.js 装配默认词条时会调用 pickExtraAffixes()（定义在 group-levels.js），
+// 该函数在线上由 index.html 后加载、调用发生在运行时，沙箱里也要显式带上。
+const files = ['utils.js', 'unit.js', 'talent.js', 'affix.js', 'group-levels.js', 'enemy.js'];
 
 const sandbox = { Math, JSON, console };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
-vm.runInContext(unitSrc, sandbox);
-vm.runInContext(talentSrc, sandbox);
-vm.runInContext(enemySrc, sandbox);
+files.forEach(f => vm.runInContext(load(f), sandbox));
 
 let pass = 0, fail = 0;
 function assert(name, cond, detail) {
