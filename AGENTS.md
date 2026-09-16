@@ -16,6 +16,17 @@
 - 若用户直接指定 WorkBuddy 或其他 coding agent 开发，该 Agent 可自行完成分析、规划、实现、测试与提交。
 - 不得因为本文件提到 Codex / WorkBuddy 就擅自改变用户指定的工作流。
 
+### Default behavior
+
+默认优先服从用户当前指定的工作模式。
+
+- 用户让我设计/规划：负责分析，不主动落代码。
+- 用户让我直接开发：可以直接实现、测试、提交。
+- 用户指定 Codex 主控：Codex 负责决策与 Review，Executor 负责代码实现。
+- 用户未指定主控：当前 coding agent 可以独立完成整个任务。
+
+用户无需手工编写任务单；主控 Agent 应自行生成足够明确的执行任务。
+
 ### Version discipline
 
 每次版本更新（修改 `page/utils.js` 中的 `APP_VERSION`）时，必须同步完成以下三项：
