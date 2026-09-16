@@ -2,13 +2,14 @@
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
 > **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
-> **生成**：2026-09-02 · **最后更新**：2026-09-16（对应 **v2.1.24**）
-> **分支**：`main` —— 提交号变动频繁，**以 `git log --oneline -5` 实时输出为准**，本文档不写死
-> ⚠️ **`git status` 的 ahead/behind 在本环境会失真**（本地远端引用不更新）—— **判断"推没推"必须用 `git ls-remote`**，详见 **§0.2.1**
-> **当前版本**：`APP_VERSION` = `2.1.24` · cache-busting `?v84` · 45 个 `page/*.js` 模块
-> **测试**：36 套件 / 930 断言，全部通过（含 a11y 护栏 40/40）
+> **生成**：2026-09-02 · **最后更新**：2026-09-16
+> **当前版本**：不要相信本文档中的固定版本号，必须通过 `page/utils.js` 中的 `APP_VERSION` 实时确认
+> **当前 HEAD**：用 `git log --oneline -5` 实时确认
+> **远端 main**：用 `git ls-remote origin refs/heads/main` 实时确认
+> **cache-busting**：以 `page/index.html` 当前实际值为准，不相信本文档固定数字
+> **测试**：以 `scripts/test-*.js` 实际扫描并运行的结果为准；开始任务前先跑测试，得到实时套件数与断言数
 > **⚠️ 本仓库 2026-09-16 起有多个会话并行推进**（v2.1.16~19 一个、v2.1.20~22 另一个）——
-> **动手前先 `git log --oneline -5` 核对**，不要相信任何文档/记忆里的「当前版本」
+> **动手前先核对当前 HEAD、源码版本与工作树**，不要相信任何文档/记忆里的「当前版本」
 
 ---
 
@@ -23,7 +24,7 @@
 | §5 | 🐞 Debug 面板（五分区 + 未做的调试维度） | 排查线上问题 |
 | §6 | 玩法系统：训练属性 / 隐藏挑战 / 敌群战斗 / 玩家技能 / 宠物 / 宝珠 | 改玩法前 |
 | §7 | 数据持久化：store keys / schema 注册表 / 同步格式 | 动数据前 |
-| §8 | 测试：27 套件清单与跑法 | 改完必跑 |
+| §8 | 测试清单与跑法（数量以实时运行结果为准） | 改完必跑 |
 | §9 | 版本纪律（AGENTS.md 有权威原文） | 提交前 |
 | §10 | 待办 / 已知问题 | 找活干 |
 | §11 | 关键文件速查 | 定位代码 |
@@ -144,9 +145,18 @@ echo <远端真实SHA> > .git/refs/remotes/origin/main
 
 ### 0.3 三条必守纪律
 
-1. **改 `page/*.js` → 必须 bump** `APP_VERSION`（`page/utils.js`）+ **三项同步**（见 §9）
+1. **修改线上运行代码**（包括 `page/*.js`、`page/index.html`、`page/index.css` 等会影响部署行为的文件）→ 必须 bump `APP_VERSION`（`page/utils.js`）并执行**三项同步**（见 §9）
 2. **改 JS/CSS → 必须递增** `page/index.html` 里的 `?vNN` cache-busting，否则浏览器吃缓存，改动"看不见"
 3. **每次修改必须提交**，施工用 `feat:`/`fix:`，纯文档用 `docs:`，不留 pending 改动
+
+### 并行会话下的提交边界
+
+若工作树中存在不属于当前任务的修改：
+
+- 不得覆盖、回滚或删除；
+- 不得将其加入当前提交；
+- 提交时只暂存当前任务相关文件；
+- 如无法安全区分当前任务与其他会话的修改，暂停提交并先检查 `git diff` / `git status`，明确修改归属。
 
 ### 0.4 改完必跑
 
@@ -171,14 +181,13 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 
 | 项 | 值 |
 |---|---|
-| 当前版本 | **v2.1.24**（2026-09-16） |
-| HEAD / 远端 | **不写死** —— 用 `git log --oneline -1` 与 `git ls-remote origin refs/heads/main` 实时取（⚠️ **别信 `git status` 的 ahead 数**，见 §0.2.1） |
-| cache-busting | `?v84`（`page/index.html` 内全部 47 处；改 JS/CSS 必升） |
-| 模块数 | 45 个 `page/*.js`（+ 1 个 `page/data/exercises-dataset.js`） |
-| 最大文件 | `page/game-render.js` 1269 行，其次 `page/battle-group.js` 824 行、`page/challenge.js` 716 行 |
-| 测试 | 36 套件 / 930 断言全绿（见 §8） |
+| 当前版本 | 以 `page/utils.js` 中的 `APP_VERSION` 实时输出为准 |
+| HEAD / 远端 | 用 `git log --oneline -1` 与 `git ls-remote origin refs/heads/main` 实时取（⚠️ **别信 `git status` 的 ahead 数**，见 §0.2.1） |
+| cache-busting | 以 `page/index.html` 当前实际值为准；改 JS/CSS 必须同步递增 |
+| 模块数 / 文件规模 | 以当前源码和 `page/index.html` 的加载顺序为准 |
+| 测试 | 运行 `scripts/test-*.js` 后以实时结果为准（见 §8） |
 
-**其他分支**（远端存在，均落后于 main）：`feat/action-dataset`、`feat/uiux-batch1`、`feat/v2-m2a`、`feat/v2-m2a-rest`、`fix/version-sync`。
+**远端分支**：以 `git branch -r` 或 `git ls-remote --heads origin` 的实时结果为准，本文不维护固定分支清单。
 
 **版本沿革（近期）**：
 - **v2.0.9** — 敌群 6→9 大关（90 关）+ 难度曲线重平衡 + 宠物阶段归一化
@@ -290,7 +299,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ## 5. 🐞 Debug 面板（v2.1.1）
 
-**`page/debug.js`** — 第 45 个模块，全局诊断工具。所有 tab 右下角都有 🔍 FAB（`--touch-min` 44px 触控目标，半透明，点击展开底部抽屉）。
+**`page/debug.js`** — 全局诊断工具。所有 tab 右下角都有 🔍 FAB（`--touch-min` 44px 触控目标，半透明，点击展开底部抽屉）。
 
 ### 五个分区
 
@@ -381,9 +390,6 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
   （基础 12 个 + v2.1.15 的 3 个增益 `atkup`/`guardup`/`wideguard` + v2.1.21 的 `confused`/`confused_down`；哈欠会衍生「睡眠」子状态）
 - **`ai.js`** AI 策略：斩杀残血 / 治疗队友 / Boss 大招 / 嘲讽强制 / 集火评分
 - **`terrain.js`** 6 场地（g3 起每大关一个主题场地）
-- ⚠️ **当前未入池的技能（实战见不到）**：`chargeup` 蓄力重击 · `doom` 末日 · `lastword` 遗言 · `heal` 治愈。
-  它们**实现完整**（v2.1.21 连蓄力时点都对好了），只是不在 `SKILLS_HIGH`/`SKILLS_LOW` 里。
-  要不要入池属于平衡决策；清单由 `scripts/test-pools-reachable.js` 的 `NOT_YET_PLACED` 显式盯着（改了会红）
 - **UI**：`game-render.js` 手动/自动模式 + 1×2×4×8× 调速 + **战斗/日志双 Tab** + 单位卡（技能冷却/行动者高亮）+ 技能与天赋详情弹层 + 伤害飘字 + 技能气泡
 
 ### 6.4 玩家技能（`skills.js` 等）
@@ -455,7 +461,9 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ---
 
-## 8. 测试（36 套件 / 930 断言，全绿）
+## 8. 测试（以实时运行结果为准）
+
+> 以下测试表是最近一次记录的历史统计，不代表当前实时状态。开始任务前应实际扫描并运行 `scripts/test-*.js`，以命令输出确认当前套件数、断言数和失败项。
 
 ```bash
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
@@ -464,7 +472,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | 套件 | 断言 | 覆盖 |
 |---|---|---|
 | `test-a11y-tokens` | 40 | 🛡️ **设计体系护栏**（见 §4.3） |
-| `test-scroll-lock` | 13 | 🔒 **模态滚动锁必须归零**（防「页面无法滚动」，见 §12 第 10 条） |
+| `test-scroll-lock` | 13 | 🔒 **模态滚动锁必须归零**（防「页面无法滚动」，见 §12 PITFALL-14） |
 | `test-page-load` | 27 | 页面加载链冒烟（校验 index.html 挂载了全部模块 + 骨架容器）——**接线事故防线** |
 | `test-sync-coverage` | 20 | ☁️ **云同步键覆盖**：从源码派生 store 键做 push→pull 往返，防「新增键忘同步」（见 §7.1） |
 | `test-pools-reachable` | 19 | 🔌 **技能/天赋可达性**：按真实技能池判定 + 未入池清单显式登记（见 §6.3） |
@@ -508,7 +516,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 
 每次改 `APP_VERSION`（`page/utils.js`）必须**三项同步**，否则 `scripts/check-release.js`（pre-commit hook）会拦：
 
-1. **`page/index.html`**：全部 `?vNN` cache-busting 递增（当前 v81）
+1. **`page/index.html`**：所有相关 JS/CSS 的 `?vNN` 必须按当前版本递增；当前具体值以 `page/index.html` 实际内容为准
 2. **`doc/changelog-v<主版本>.md`**：新增版本章节 + **底部架构演化表加行**（版本 | JS 文件数 | 最大文件行数 | 摘要）
 3. **`README.md`**：顶部副标题版本号 + 版本历史表格加行 + 「当前版本」指向
 
@@ -575,7 +583,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `page/pets.js` / `pet-*.js` | 宠物系统 |
 | `page/orbs.js` | 宝珠 |
 | `page/debug.js` | 🐞 Debug 面板 |
-| `scripts/test-*.js` | 36 套测试 / 901 断言（见 §8） |
+| `scripts/test-*.js` | 测试套件与断言数以 §8 的实时运行结果为准 |
 | `scripts/test-a11y-tokens.js` | 🛡️ 设计体系护栏 |
 | `scripts/check-release.js` | 版本三项校验（pre-commit hook） |
 | `doc/design-tokens-v2.1.md` | 🎨 设计规范（唯一权威） |
@@ -586,20 +594,20 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 
 ## 12. 踩坑经验（血泪，别再踩）
 
-1. **接线事故两次**（v2.0.3 / v2.0.4）：新增模块忘挂 `index.html`、新 UI 忘写 HTML 骨架 → 线上功能整个不可见。**`test-page-load.js` 就是为此设的防线**，加模块必跑。
-2. **cache-busting 忘记递增** → 浏览器吃旧缓存，改了像没改。改 JS/CSS 必升 `?vNN`。
-3. **CSS 令牌自引用**（v2.1.0 事故）：`--blue: var(--blue)` 导致深色主题整个 `--blue` 失效，且不报错。护栏 §4.3 规则 1 已防。
-4. **静默 catch**：护栏规则 8 扫的是 catch **体内**文本，注释写在括号外面不算，必须写在体内。
-5. **JS 内联硬编码字号**：护栏规则 5 会拦，一律 `var(--fs-*)`。硬编码 hex 颜色虽不报错，但浅色主题下会不协调 —— **用令牌**。
-6. **git 工具选错**（`myhealth-git` vs `git`）：看到文档/指令写「用 `myhealth-git`」就在任何机器上照抄 → 在 Windows/Linux 上根本找不到它，白花时间。**先按 §0.2 跑两步判定**（SAF 挂载目录存在？wrapper 已安装？），两个都是才用 wrapper，否则直接用 `git`。2026-09-11 已在 Windows 端踩过一次（详见 §0.2 的实测案例）。
-7. **群战与隐藏挑战的技能点是两条独立代码路径**，调数值时别只改一处。
-8. **两条线并行开发易分叉**（v2.0.10/11 vs v2.1.0）：都改 `index.html`/`utils.js`/`README`/`changelog` 必冲突。解决经验：`index.html` 用 `git checkout --theirs` 取远端结构，再用 sed/脚本**重放自己的增量改动**（比手抠冲突块快且不会丢远端的改造）；changelog 用脚本按「远端行 + 本地行 + 本地章节 + 远端章节」重组。**2026-09-16 再次出现并行会话**（v2.1.16~19 一条线、v2.1.20~21 另一条）—— 结论同上：动手前先 `git log --oneline -5`。
-9. **云同步丢数据：硬编码的键清单**（2026-09-16 用户实测上报，v2.1.20 修）：`getAllData()` 把载荷写死成 14 个扁平字段，v2.x 新增的**宠物 / 材料袋 / 宝珠库存 / 敌群进度 / 玩家技能 / 有氧计划 / 主题**一个都没进去；`mergeServerData()` 同样硬编码，于是「推送带不走、拉取写不回」—— 往返实测 **19 键丢 5**。**教训：所有「数据集合的枚举」都不要手写清单**，从源头（`store.getAll()`）派生，并配一个**从源码自动派生清单**的往返测试（`test-sync-coverage.js`）。
-10. **通用数据入口上的静默过滤**（同一事故的另一半）：`store.mergeAll()` 曾写 `if (typeof v === 'object' && validValue(...))`，把**标量键静默丢弃**（`theme` 就是这么丢的，表现是「同步后主题回默认」）。这类条件从任何调用点都看不出来 —— **排查「数据没上来」时优先怀疑通用入口的过滤/continue**。
-11. **测试用「字符串出现」当可达性判据太松**（v2.1.21 修）：`test-pools-reachable.js` 原本判「技能 id 的引号字符串是否出现在别的源码里」，结果 `'heal'` 命中事件类型字符串 `type:'heal'`、`'doom'`/`'lastword'` 命中 ai.js 的目标逻辑，**都被误判成可达**；只有 `'chargeup'` 因为一句特判被删掉才暴露出来。现改为**按真实技能池判定** + 把「尚未入池」的显式登记在 `NOT_YET_PLACED`。**教训：守卫测试的判据要盯着「真实数据结构」，不要盯着「字符串有没有出现过」。**
-12. **改行为前先想清楚「谁在读这个标记」**：本项目反复出现同一类缺陷（v2.1.14 威吓/嘲讽、v2.1.15 九处、v2.1.20 云同步）——**写了不读的标记** 与 **算了不用的中间结果**。改完一处效果，顺手 grep 一遍「这个字段谁在读」最划算。
-9. **`git status` 的 ahead/behind 不可信**（2026-09-11 实测）：沙箱会**静默丢弃 git 对 `.git/refs/remotes/**` 的写入** —— `git fetch` 打印 `xxx..yyy main -> origin/main`、`git update-ref` 返回 exit=0、reflog 都写了，**但 ref 文件就是不落盘**；于是 git 回退去读 `packed-refs` 的旧值，`git status` 长期误报「ahead 24」（本地引用其实停在 v2.0.9）。**判断"推没推"一律用 `git ls-remote origin refs/heads/main`**（直连远端，不读本地引用）。完整对照实验与修复手法见 **§0.2.1**。
-10. **模态关掉后页面滚不动**（2026-09-11 修复，v2.1.6）：`openModal` 锁滚动的方式是给 `body` 加 `position:fixed`，**只要有一条路径没解锁，`body` 就永久 fixed，整页再也无法滚动，用户只能刷新**。两条高危写法别再写：
+PITFALL-01. **接线事故两次**（v2.0.3 / v2.0.4）：新增模块忘挂 `index.html`、新 UI 忘写 HTML 骨架 → 线上功能整个不可见。**`test-page-load.js` 就是为此设的防线**，加模块必跑。
+PITFALL-02. **cache-busting 忘记递增** → 浏览器吃旧缓存，改了像没改。改 JS/CSS 必升 `?vNN`。
+PITFALL-03. **CSS 令牌自引用**（v2.1.0 事故）：`--blue: var(--blue)` 导致深色主题整个 `--blue` 失效，且不报错。护栏 §4.3 规则 1 已防。
+PITFALL-04. **静默 catch**：护栏规则 8 扫的是 catch **体内**文本，注释写在括号外面不算，必须写在体内。
+PITFALL-05. **JS 内联硬编码字号**：护栏规则 5 会拦，一律 `var(--fs-*)`。硬编码 hex 颜色虽不报错，但浅色主题下会不协调 —— **用令牌**。
+PITFALL-06. **git 工具选错**（`myhealth-git` vs `git`）：看到文档/指令写「用 `myhealth-git`」就在任何机器上照抄 → 在 Windows/Linux 上根本找不到它，白花时间。**先按 §0.2 跑两步判定**（SAF 挂载目录存在？wrapper 已安装？），两个都是才用 wrapper，否则直接用 `git`。2026-09-11 已在 Windows 端踩过一次（详见 §0.2 的实测案例）。
+PITFALL-07. **群战与隐藏挑战的技能点是两条独立代码路径**，调数值时别只改一处。
+PITFALL-08. **两条线并行开发易分叉**（v2.0.10/11 vs v2.1.0）：都改 `index.html`/`utils.js`/`README`/`changelog` 必冲突。解决经验：`index.html` 用 `git checkout --theirs` 取远端结构，再用 sed/脚本**重放自己的增量改动**（比手抠冲突块快且不会丢远端的改造）；changelog 用脚本按「远端行 + 本地行 + 本地章节 + 远端章节」重组。**2026-09-16 再次出现并行会话**（v2.1.16~19 一条线、v2.1.20~21 另一条）—— 结论同上：动手前先 `git log --oneline -5`。
+PITFALL-09. **云同步丢数据：硬编码的键清单**（2026-09-16 用户实测上报，v2.1.20 修）：`getAllData()` 把载荷写死成 14 个扁平字段，v2.x 新增的**宠物 / 材料袋 / 宝珠库存 / 敌群进度 / 玩家技能 / 有氧计划 / 主题**一个都没进去；`mergeServerData()` 同样硬编码，于是「推送带不走、拉取写不回」—— 往返实测 **19 键丢 5**。**教训：所有「数据集合的枚举」都不要手写清单**，从源头（`store.getAll()`）派生，并配一个**从源码自动派生清单**的往返测试（`test-sync-coverage.js`）。
+PITFALL-10. **通用数据入口上的静默过滤**（同一事故的另一半）：`store.mergeAll()` 曾写 `if (typeof v === 'object' && validValue(...))`，把**标量键静默丢弃**（`theme` 就是这么丢的，表现是「同步后主题回默认」）。这类条件从任何调用点都看不出来 —— **排查「数据没上来」时优先怀疑通用入口的过滤/continue**。
+PITFALL-11. **测试用「字符串出现」当可达性判据太松**（v2.1.21 修）：`test-pools-reachable.js` 原本判「技能 id 的引号字符串是否出现在别的源码里」，结果 `'heal'` 命中事件类型字符串 `type:'heal'`、`'doom'`/`'lastword'` 命中 ai.js 的目标逻辑，**都被误判成可达**；只有 `'chargeup'` 因为一句特判被删掉才暴露出来。现改为**按真实技能池判定**。**教训：守卫测试的判据要盯着「真实数据结构」，不要盯着「字符串有没有出现过」。**
+PITFALL-12. **改行为前先想清楚「谁在读这个标记」**：本项目反复出现同一类缺陷（v2.1.14 威吓/嘲讽、v2.1.15 九处、v2.1.20 云同步）——**写了不读的标记** 与 **算了不用的中间结果**。改完一处效果，顺手 grep 一遍「这个字段谁在读」最划算。
+PITFALL-13. **`git status` 的 ahead/behind 不可信**（2026-09-11 实测）：沙箱会**静默丢弃 git 对 `.git/refs/remotes/**` 的写入** —— `git fetch` 打印 `xxx..yyy main -> origin/main`、`git update-ref` 返回 exit=0、reflog 都写了，**但 ref 文件就是不落盘**；于是 git 回退去读 `packed-refs` 里的旧值，`git status` 长期误报「ahead 24」（本地引用其实停在 v2.0.9）。**判断"推没推"一律用 `git ls-remote origin refs/heads/main`**（直连远端，不读本地引用）。完整对照实验与修复手法见 **§0.2.1**。
+PITFALL-14. **模态关掉后页面滚不动**（2026-09-11 修复，v2.1.6）：`openModal` 锁滚动的方式是给 `body` 加 `position:fixed`，**只要有一条路径没解锁，`body` 就永久 fixed，整页再也无法滚动，用户只能刷新**。两条高危写法别再写：
     - ❌ 只 `classList.remove('open')` 就算关闭 —— 遮罩只是 `display:none`，锁还在（`app.js` 的全局点击处理器就是这个 bug，且 `closest('[id]')` 会让**所有带 id 的模态**都命中）
     - ❌ 兜底 `MutationObserver` 用**共享全局**变量 —— 嵌套模态时第二个拿不到兜底，且前一个模态的 `close()` 会掐断后一个的 observer
     - ✅ 正解：observer 每个模态各自持有；`close()` 幂等且只断自己的；关闭一律走 `_close()`（`utils.js` 已实现，模态带 `data-modal-managed` 标记）
