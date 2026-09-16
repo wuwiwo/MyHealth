@@ -50,6 +50,25 @@ v2.1.22 只把「区间」用在了攻击威力上，治疗量 / 增益幅度 / 
 
 正文 v2.1.21 改过，但第 10 行「注册 `dh-group-progress` schema」仍是旧键名；已改为按**逻辑名**注册。
 
+### 7. Debug 面板扩展（7a / 7b 已做，7c / 7d 未做）
+
+**7a ☁️ 同步日志（已完成）**
+- `sync.js` 新增 `pushSyncLog(dir, ok, msg)` + `getSyncLog()`，**30 条环形缓冲、不落盘**（避免多一个 store 键）
+- 在 `apiPut` / `apiGet` 的成功与**最终失败**分支埋点（重试中途不计数）
+- Debug 面板新增「☁️ 同步」分区：上次同步时间 + 距今、最近 N 条（✅/❌ + 时刻 + ↑推送/↓拉取 + 结果）
+
+**7b ⏱ 性能（已完成）**
+- Debug 面板新增「⏱ 性能」分区：FPS（rAF 每秒采样）、本面板渲染耗时、群战单步均/峰耗时、JS 堆（若支持）
+- `debug.js` 维护 `_perf`，把 `perfMarkStep` 挂到 `window.__perfMarkStep`
+- `game-render.js` 的 `_groupStep` 包一层计时并调用（用 `typeof` 守卫，不依赖加载顺序）
+
+**7c RNG 回放 / 7d 时间旅行 —— 未做，且不该塞在本版里**
+- 7c 的前提是游戏战斗用**可播种的 RNG**。现在 `battle-group.js` 吃 `gb.rng`，
+  而游戏侧传的是 `Math.random`（只有测试沙箱才用 mulberry32 种子）。
+  要先给 `createGroupBattle` 加 `seed` 参数并让 `startGroupTrial` 记录，才能谈回放 —— 这是独立改动。
+- 7d 依赖 7c，且需要对 `gb` 做深快照（含 unit / status / talent 运行时状态），
+  序列化成本高、容易失真。建议单独排期。
+
 ### HANDOFF 同步
 
 - 无影拳「5 连击只打 1 次」→ v2.1.24（`b4f0467`）已实装，划掉

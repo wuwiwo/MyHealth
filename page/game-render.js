@@ -452,7 +452,12 @@ function _groupStep(){
   if(_groupPaused)return   // 详情弹层打开中：挂起，关闭后 resumeGroupBattle() 续跑
   if(!_groupBattle||_groupBattle.done){_groupDone();return}
   // 单步执行：一次一个单位行动（速度优先级可见）
+  var _perfT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
   var step = groupBattleStep(_groupBattle)
+  /* v2.1.26 [7b]：群战单步耗时埋点，供 Debug 面板「⏱ 性能」分区读取 */
+  try { if (typeof window.__perfMarkStep === 'function') {
+    window.__perfMarkStep(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _perfT0);
+  } } catch (e) { console.warn('[perf] 埋点失败', e); }
   // 高亮当前行动单位
   if (step.unit) _groupActing = step.unit.id
   renderGroupOverlay(false)

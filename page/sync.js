@@ -4,6 +4,16 @@
 
 /* ========== SYNC ENGINE ========== */
 var _lastSyncTime=parseInt(localStorage.getItem('dh-sync-time')||'0',10)
+/* v2.1.26 [7a] 同步日志：环形缓冲，供 Debug 面板「☁️ 同步」分区展示。
+   只记录最近 30 条，不落盘（避免又多一个 store 键）。 */
+var _syncLog=[];
+function pushSyncLog(dir,ok,msg,extra){try{
+  _syncLog.push({t:Date.now(),dir:dir,ok:!!ok,msg:msg||'',extra:extra||null});
+  if(_syncLog.length>30)_syncLog.shift();
+}catch(e){console.warn('[sync] 写同步日志失败',e)}}
+function getSyncLog(){return _syncLog.slice()}
+
+
 
 function saveSyncTime(){_lastSyncTime=Date.now();localStorage.setItem('dh-sync-time',String(_lastSyncTime))}
 
@@ -21,13 +31,13 @@ var x=new XMLHttpRequest()
 x.open('PUT','/api/data',true)
 x.setRequestHeader('Content-Type','application/json')
 x.onload=function(){
-  if(x.status===200){cb(true)}
+  if(x.status===200){pushSyncLog('push',true,'推送成功');cb(true)}
   else if(attempt<MAX_RETRY){setTimeout(function(){apiPut(data,cb,attempt+1)},400*Math.pow(2,attempt))}
-  else{cb(false)}
+  else{pushSyncLog('push',false,'推送失败 HTTP '+x.status);cb(false)}
 }
 x.onerror=function(){
   if(attempt<MAX_RETRY){setTimeout(function(){apiPut(data,cb,attempt+1)},400*Math.pow(2,attempt))}
-  else{cb(false)}
+  else{pushSyncLog('push',false,'推送失败（网络错误）');cb(false)}
 }
 x.send(JSON.stringify(data))}
 
@@ -35,13 +45,13 @@ function apiGet(cb,attempt){attempt=attempt||0
 var x=new XMLHttpRequest()
 x.open('GET','/api/data',true)
 x.onload=function(){
-  if(x.status===200&&x.responseText){try{cb(null,JSON.parse(x.responseText));return}catch(e){console.warn('[sync] 云端数据解析失败，按错误处理',e)}}
+  if(x.status===200&&x.responseText){try{pushSyncLog('pull',true,'拉取成功');cb(null,JSON.parse(x.responseText));return}catch(e){console.warn('[sync] 云端数据解析失败，按错误处理',e)}}
   if(attempt<MAX_RETRY){setTimeout(function(){apiGet(cb,attempt+1)},400*Math.pow(2,attempt))}
-  else{cb(true,null)}
+  else{pushSyncLog('pull',false,'拉取失败 HTTP '+x.status);cb(true,null)}
 }
 x.onerror=function(){
   if(attempt<MAX_RETRY){setTimeout(function(){apiGet(cb,attempt+1)},400*Math.pow(2,attempt))}
-  else{cb(true,null)}
+  else{pushSyncLog('pull',false,'拉取失败（网络错误）');cb(true,null)}
 };x.send()}
 
 /* Data summary for display */

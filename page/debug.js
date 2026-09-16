@@ -20,7 +20,7 @@
     if (errs.length > 30) errs.pop();
   });
 
-  var SECS = [['ov', '概览'], ['st', '存储'], ['at', '属性·经济'], ['ba', '⚖️ 平衡'], ['ch', '挑战'], ['er', '错误']];
+  var SECS = [['ov', '概览'], ['st', '存储'], ['at', '属性·经济'], ['ba', '⚖️ 平衡'], ['ch', '挑战'], ['sy', '☁️ 同步'], ['pf', '⏱ 性能'], ['er', '错误']];
   var state = { open: false, sec: 'ov', openKey: null, bal: null };
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -300,9 +300,93 @@
     });
   }
 
+
+  /* ================= v2.1.26 [7a] ☁️ 同步日志 ================= */
+  function fmtAgo(ts) {
+    if (!ts) return '从未';
+    var d = Date.now() - ts;
+    if (d < 0) return '刚刚';
+    var m = Math.floor(d / 60000);
+    if (m < 1) return '刚刚';
+    if (m < 60) return m + ' 分钟前';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + ' 小时前';
+    return Math.floor(h / 24) + ' 天前';
+  }
+  function fmtTime(ts) {
+    var d = new Date(ts);
+    function q(n) { return (n < 10 ? '0' : '') + n; }
+    return q(d.getHours()) + ':' + q(d.getMinutes()) + ':' + q(d.getSeconds());
+  }
+  function secSy() {
+    var L = [];
+    var last = 0;
+    /* 设计护栏：catch 体必须带日志或用户反馈，不能静默吞掉 */
+    try { last = (typeof _lastSyncTime !== 'undefined') ? _lastSyncTime : 0; } catch (e) { last = 0; console.warn('[debug] 读取上次同步时间失败，按「从未」显示', e); }
+    L.push('☁️ 云同步');
+    L.push('上次同步：<b>' + fmtAgo(last) + '</b>' + (last ? '（' + fmtTime(last) + '）' : ''));
+    L.push('');
+    var lg = [];
+    try { lg = (typeof getSyncLog === 'function') ? getSyncLog() : []; } catch (e) { lg = []; console.warn('[debug] 读取同步日志失败，按空显示', e); }
+    if (!lg.length) {
+      L.push('本次会话尚无同步操作。去设置里推一次 / 拉一次，这里就会记录。');
+    } else {
+      L.push('最近 ' + lg.length + ' 条（倒序）：');
+      lg.slice().reverse().forEach(function (e) {
+        L.push((e.ok ? '✅' : '❌') + ' ' + fmtTime(e.t) + ' ' + (e.dir === 'push' ? '↑ 推送' : '↓ 拉取') + ' · ' + (e.msg || ''));
+      });
+    }
+    return L.join('<br>');
+  }
+
+  /* ================= v2.1.26 [7b] ⏱ 性能 ================= */
+  var _perf = { fps: null, frames: 0, t0: 0, on: false, renderMs: null, stepMs: [], stepMax: null };
+  function perfNow() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+  function perfStart() {
+    if (_perf.on || typeof requestAnimationFrame !== 'function') return;
+    _perf.on = true; _perf.frames = 0; _perf.t0 = perfNow();
+    (function loop() {
+      _perf.frames++;
+      var now = perfNow(), dt = now - _perf.t0;
+      if (dt >= 1000) { _perf.fps = Math.round(_perf.frames / dt * 1000); _perf.frames = 0; _perf.t0 = now; }
+      if (_perf.on) requestAnimationFrame(loop);
+    })();
+  }
+  function perfStop() { _perf.on = false; }
+  /* 暴露给 game-render 做群战单步埋点（避免 debug.js 与 game-render 互相依赖顺序） */
+  if (typeof window !== 'undefined') window.__perfMarkStep = perfMarkStep;
+  /* 供 game-render 的群战单步埋点调用 */
+  function perfMarkStep(ms) {
+    _perf.stepMs.push(ms);
+    if (_perf.stepMs.length > 50) _perf.stepMs.shift();
+    if (_perf.stepMax === null || ms > _perf.stepMax) _perf.stepMax = ms;
+  }
+  function secPf() {
+    perfStart();
+    var L = [];
+    L.push('⏱ 性能');
+    L.push('FPS：<b>' + (_perf.fps === null ? '采样中…' : _perf.fps) + '</b>');
+    L.push('本面板渲染耗时：<b>' + (_perf.renderMs === null ? '—' : _perf.renderMs.toFixed(1) + ' ms') + '</b>');
+    if (_perf.stepMs.length) {
+      var avg = _perf.stepMs.reduce(function (a, b) { return a + b; }, 0) / _perf.stepMs.length;
+      L.push('群战单步：均 ' + avg.toFixed(1) + ' ms · 峰 ' + _perf.stepMax.toFixed(1) + ' ms（近 ' + _perf.stepMs.length + ' 步）');
+    } else {
+      L.push('群战单步：本次会话尚无战斗');
+    }
+    try {
+      if (typeof performance !== 'undefined' && performance.memory) {
+        L.push('JS 堆：' + Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB');
+      }
+    } catch (e) { console.warn('[debug] 读取 performance.memory 失败（非 Chrome 内核属正常），已忽略', e); }
+    L.push('');
+    L.push('<span style="color:var(--text3)">FPS 每秒刷新一次；群战单步在 game-render 的 _groupStep 里埋点。</span>');
+    return L.join('<br>');
+  }
+
   function render() {
     if (!drawer) return;
     if (!state.open) { drawer.className = 'modal-overlay'; return; }
+    var _rT0 = perfNow();   // v2.1.26 [7b]
     var tabs = SECS.map(function (s) {
       var act = state.sec === s[0];
       return '<span role="tab" tabindex="0" data-dsec="' + s[0] + '" aria-selected="' + (act ? 'true' : 'false') + '" style="' + TAB
@@ -314,6 +398,8 @@
       : state.sec === 'at' ? secAt()
       : state.sec === 'ba' ? secBa()
       : state.sec === 'ch' ? secCh()
+      : state.sec === 'sy' ? secSy()
+      : state.sec === 'pf' ? secPf()
       : secEr();
     drawer.innerHTML =
       '<div class="modal-sheet">'
@@ -323,6 +409,7 @@
       + '<div style="font-size:var(--fs-2xs);color:var(--text2)">' + body + '</div>'
       + '<div class="modal-actions"><button type="button" onclick="DebugPanel.close()">关闭</button></div>'
       + '</div>';
+    _perf.renderMs = perfNow() - _rT0;   // v2.1.26 [7b]
     drawer.className = 'modal-overlay open';
     drawer.querySelectorAll('[data-dsec]').forEach(function (el) {
       el.addEventListener('click', function () { state.sec = el.dataset.dsec; render(); });
