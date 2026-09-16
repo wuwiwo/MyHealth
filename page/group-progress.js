@@ -7,7 +7,8 @@
    纯逻辑 + store。
    ============================================ */
 
-/* 注册 dh-group-progress schema */
+/* 注册 groupProgress schema（物理键 dh-groupProgress-v1，由 store.js 的 physKey 规则生成；
+   此处按**逻辑名**注册，不要写成物理键） */
 if (typeof store !== 'undefined' && store.registerSchema) {
   store.registerSchema('groupProgress', {
     version: 1,
