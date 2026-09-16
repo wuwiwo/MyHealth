@@ -454,17 +454,20 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   assert('单段技能不受影响（冲撞单目标仍 1 段）',
     sb.calcSkillDamage(sb.getSkill('charge'), caster, [pool[0]], {}).hits.length === 1);
 
-  // 睡觉：1~3 回合（作者指定；设计文档原写 3~4）。duration = 实际回合数 + 1
+  /* 睡觉：1~3 回合（作者指定；设计文档原写 3~4）。duration = 实际回合数 + 1
+     v2.1.26：睡眠时长由「随机 1~3」改为**接区间随成长**（range.turns = [1,3]），
+     所以这里改为按炼化进度取 0 / 半 / 满三档，期望 duration = 2 / 3 / 4。 */
   const sleeper = sb.createUnit({ id: 'sl', side: 'ally', name: '猪', base: { hp: 500, atk: 10, def: 100, soulDef: 100, spd: 5 }, tags: ['pet', 'R'] });
-  sleeper._refineLevel = 0;
+  const R_CAP = (sb.PET_REFINE_CAP && sb.PET_REFINE_CAP.R) || 50;
   const durations = [];
-  [0.01, 0.5, 0.99].forEach(function (v) {
-    RND = v;
+  [0, Math.round(R_CAP / 2), R_CAP].forEach(function (rl) {
+    sleeper._refineLevel = rl;
     const r2 = sb.applySkillEffects(sb.getSkill('p_sleep'), sleeper, [sleeper], {});
     r2.statusApps.forEach(sa => durations.push(sa.duration));
   });
+  sleeper._refineLevel = R_CAP;
   RND = 0.5;
-  assert('睡觉时长为 1~3 回合（duration 已 +1 → 2/3/4）',
+  assert('睡觉时长随成长 1~3 回合（duration 已 +1 → 2/3/4）',
     durations.length === 3 && durations.join(',') === '2,3,4', durations.join(','));
   assert('睡觉把 healPct 带给状态实例', (() => {
     const r3 = sb.applySkillEffects(sb.getSkill('p_sleep'), sleeper, [sleeper], {});

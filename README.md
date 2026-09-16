@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.25
+> Personal Health Manager — 个人健身健康管理应用 v2.1.26
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -274,4 +274,6 @@ Vercel 项目设置：
 
 | **v2.1.25** | **2026-09-16** | **🧩 结构性拆分：敌群「词条」从天赋注册表 TALENTS 独立为新注册表 AFFIXES（新增 page/affix.js），天赋与词条各归其位（纯结构改动、数值不变）；修拆分后减伤断言因按 id 取对象静默失效的问题；缓存版本对齐（v85）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.25**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.26** | **2026-09-16** | **🎚️ 技能区间接进非攻击通道：治愈治疗量、睡觉睡眠时长（由随机改为随炼化成长）、强攻增益幅度与持续、广域防御减伤与持续、打湿持续回合全部接区间；新增 test-skill-range-channels.js 以「数值必须真随成长变化」为判据；动作媒体实测 Vercel 可访问（根目录=page/）；清理 5 个已合并的远端分支；修 group-progress 残留旧物理键注释；HANDOFF 待办同步；缓存版本对齐（v86）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.26**（设计规范：`doc/design-tokens-v2.1.md`）

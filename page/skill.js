@@ -317,9 +317,14 @@ registerSkill({
 });
 registerSkill({
   id: 'drench', name: '打湿', type: 'support', target: 'random1', cooldown: 4,
-  effects: [function (c, ts, r) {
+  /* v2.1.26：持续回合接区间（低值 = 改前固定值 2 回合）。
+     ⚠️ 状态**幅度**（魂防 / 命中）定义在 status-defs.js 的 wet 上，改它会影响所有来源，
+        风险较大，本次未动 —— 记为后续项。 */
+  range: { dur: [2, 4] },
+  effects: [function (c, ts, r, ctx) {
+    var d = Math.round(ctx.sv('dur'));
     ts.forEach(function (t) {
-      r.statusApps.push({ unitId: t.id, id: 'wet', duration: 2, chance: 1, grade: 2 });
+      r.statusApps.push({ unitId: t.id, id: 'wet', duration: d, chance: 1, grade: 2 });
     });
   }]
 });
@@ -382,8 +387,10 @@ registerSkill({
 });
 registerSkill({
   id: 'bulwark', name: '广域防御', type: 'support', target: 'all', cooldown: 6,
-  effects: [function (c, ts, r) {
-    r.buffs.push({ all: true, key: 'dmgReduce', value: 0.2, duration: 3 });
+  /* v2.1.26：减伤幅度与持续回合接区间（低值 = 改前固定值 0.2 / 3 回合） */
+  range: { dmgReduce: [0.20, 0.40], dur: [3, 5] },
+  effects: [function (c, ts, r, ctx) {
+    r.buffs.push({ all: true, key: 'dmgReduce', value: ctx.sv('dmgReduce'), duration: Math.round(ctx.sv('dur')) });
   }]
 });
 registerSkill({
@@ -402,17 +409,24 @@ registerSkill({
 });
 registerSkill({
   id: 'heal', name: '治愈', type: 'support', target: 'ally1', cooldown: 2,
-  effects: [function (c, ts, r) {
+  /* v2.1.26：治疗量接区间。低值 = 改前的固定值（魂攻×0.8 + 目标血×10%），
+     高值暂定 ×2 并标 [PLACEHOLDER]（设计文档未给治愈的上限，待定案）。 */
+  range: { healSoul: [0.8, 1.6], healHp: [0.10, 0.20] },
+  effects: [function (c, ts, r, ctx) {
+    var kSoul = ctx.sv('healSoul'), kHp = ctx.sv('healHp');
     ts.forEach(function (t) {
-      r.heals.push({ unitId: t.id, amount: Math.floor((c.base.soulAtk || 0) * 0.8) + Math.floor(t.base.hp * 0.1) });
+      r.heals.push({ unitId: t.id, amount: Math.floor((c.base.soulAtk || 0) * kSoul) + Math.floor(t.base.hp * kHp) });
     });
   }]
 });
 registerSkill({
   id: 'empower', name: '强攻', type: 'support', target: 'ally1', cooldown: 3,
-  effects: [function (c, ts, r) {
+  /* v2.1.26：增益幅度与持续回合接区间（低值 = 改前固定值 0.3 / 2 回合） */
+  range: { atkBoost: [0.30, 0.60], dur: [2, 4] },
+  effects: [function (c, ts, r, ctx) {
+    var v = ctx.sv('atkBoost'), d = Math.round(ctx.sv('dur'));
     ts.forEach(function (t) {
-      r.buffs.push({ unitId: t.id, key: 'atkBoost', value: 0.3, duration: 2 });
+      r.buffs.push({ unitId: t.id, key: 'atkBoost', value: v, duration: d });
     });
   }]
 });

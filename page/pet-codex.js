@@ -133,12 +133,15 @@ registerSkill({ id:'p_drench', name:'打湿', type:'support', target:'random1', 
       （写 1 等于完全没睡，这正是改前的状况）。
    睡眠期间**每回合结束**按 healPct 回复（由 sleep 状态的 onTurnEnd 实现）。 */
 registerSkill({ id:'p_sleep', name:'睡觉', type:'support', target:'self', cooldown:4,
-  range:{ power:[0, 300] },
+  /* v2.1.26：睡眠时长也接区间（原先是 1~3 随机，与成长无关）。
+     低值 1 回合、高值 3 回合（v2.1.24 作者指定的上限）。
+     ⚠️ duration 必须 = 实际回合数 **+1**（同回合末 ageStatuses 会先扣 1）。 */
+  range:{ power:[0, 300], turns:[1, 3] },
   effects:[function(c,ts,r,ctx){
     var pct=ctx.sv('power')/100;
+    var turns=Math.max(1, Math.round(ctx.sv('turns')));   // 1~3 回合，随成长
     ts.forEach(function(t){
       r.heals.push({ unitId: t.id, amount: Math.floor(((t.base.def||0)+(t.base.soulDef||0)) * pct) });
-      var turns = 1 + Math.floor(Math.random() * 3);   // 1~3 回合
       r.statusApps.push({ unitId: t.id, id: 'sleep', duration: turns + 1, chance: 1, grade: 1,
         data: { healPct: pct } });
       r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈 ' + Math.round(pct*100) + '%（防+魂防），睡 ' + turns + ' 回合'});
