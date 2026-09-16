@@ -56,8 +56,44 @@ function dataSummary(d){
   var logC=d.attrLog?d.attrLog.length:0
   var ctC=d.cardioTypes?d.cardioTypes.length:0
   var exC=d.exercises?d.exercises.length:0
+  /* v2.1.20：同步弹窗里也要能看见新系统 —— 否则「同步包含宠物/进度吗」只能靠猜。
+     兼容旧云端快照：没有 keys 字段时这些计数就是 0（弹窗显示「—」） */
+  var kd=(d.keys&&typeof d.keys==='object')?d.keys:{}
+  var petC=(kd.pets&&Array.isArray(kd.pets.pets))?kd.pets.pets.length:0
+  var mm=(kd.pets&&kd.pets.materials)||{}
+  var orbC=(kd.pets&&Array.isArray(kd.pets.orbs))?kd.pets.orbs.length:0
+  var grpC=(kd.groupProgress&&Array.isArray(kd.groupProgress.cleared))?kd.groupProgress.cleared.length:0
+  var skP=(kd.skills&&typeof kd.skills.points==='number')?kd.skills.points:0
   var time=d.lastUpdated?new Date(d.lastUpdated).toLocaleString('zh-CN'):'未知'
-  return{strE:strE,carE:carE,wtE:wtE,plans:plans,gameC:gameC,prsC:prsC,recC:recC,logC:logC,ctC:ctC,exC:exC,time:time}
+  return{strE:strE,carE:carE,wtE:wtE,plans:plans,gameC:gameC,prsC:prsC,recC:recC,logC:logC,ctC:ctC,exC:exC,time:time,
+    petC:petC,orbC:orbC,grpC:grpC,skP:skP,
+    nutrition:mm.nutrition||0,feed:mm.feed||0,refineNormal:mm.refineNormal||0,
+    hasExtra:!!d.keys}
+}
+
+/* 已由 getAllData 的扁平字段承载的短键 —— 不要再重复进 keys */
+var SYNC_FLAT_KEYS = ['strength', 'plans', 'missed', 'cardio', 'weight', 'profile',
+  'game', 'prs', 'records', 'attrLog', 'cardioTypes', 'exercises', 'refine', 'challenge'];
+
+/* v2.1.20：除扁平字段之外的**其余全部 store 键**。
+   改前 getAllData 是硬编码的 14 个键，v2.x 新增的系统（宠物/材料/宝珠/敌群进度/技能/主题/
+   有氧计划）一个都没进来 —— 推送时它们留在本地，拉取时又无处可写，等于「换设备就全丢」。
+   实测：19 个在用的键里丢 5 个（groupProgress / pets / skills / cardioPlans / theme）。
+   现在改为从 store.getAll() 自动派生 —— 以后新增 store 键不需要再改这里，
+   有 test-sync-coverage.js 守着。 */
+function collectOtherKeys() {
+  var out = {};
+  try {
+    var all = (typeof store !== 'undefined' && store.getAll) ? store.getAll() : {};
+    Object.keys(all).forEach(function (k) {
+      if (SYNC_FLAT_KEYS.indexOf(k) > -1) return;   // 已由扁平字段承载
+      if (k === 'mod-time') return;                 // 本地时间戳，不同步
+      var v = all[k];
+      if (v == null) return;
+      out[k] = v;
+    });
+  } catch (e) { console.warn('[sync] 收集扩展键失败', e); }
+  return out;
 }
 
 /* Data assembler */
@@ -68,12 +104,13 @@ function getAllData(){
   var c=store.get('cardio')||{entries:[]};
   var w=store.get('weight')||{records:[]};
   return{
-    version:4,lastUpdated:store.getLastModTime()||Date.now(),
+    version:5,lastUpdated:store.getLastModTime()||Date.now(),
     entries:s.entries,plans:p.plans,missed:m.notes,
     cardio:c.entries,weight:w.records,profile:getProf(),game:getGame(),
     prs:store.get('prs'),records:store.get('records'),
     attrLog:store.get('attrLog'),cardioTypes:store.get('cardioTypes'),
-    exercises:store.get('exercises'),refine:store.get('refine'),challenge:store.get('challenge')
+    exercises:store.get('exercises'),refine:store.get('refine'),challenge:store.get('challenge'),
+    keys:collectOtherKeys()
   }
 }
 
@@ -105,6 +142,17 @@ function mergeServerData(d){
     var localCh=store.get('challenge')
     var remoteMonth=(d.challenge.lastSeasonMonth||'')+'',localMonth=(localCh&&localCh.lastSeasonMonth)||''
     if(!localCh||remoteMonth>=localMonth)merge.challenge=d.challenge
+  }
+  /* v2.1.20：扩展键（宠物 / 材料袋 / 宝珠库存 / 敌群进度 / 玩家技能 / 主题 / 有氧计划…）。
+     没有它就会出现「本地有宠物、拉取后宠物消失」这种半截同步。
+     兼容旧云端快照：v4 及更早没有 keys 字段，这里自然跳过（不会把旧的空值写成删除）。 */
+  if(d.keys&&typeof d.keys==='object'&&!Array.isArray(d.keys)){
+    Object.keys(d.keys).forEach(function(k){
+      if(k==='mod-time')return
+      var v=d.keys[k]
+      if(v==null)return
+      merge[k]=v
+    })
   }
   store.mergeAll(merge)
   return true
@@ -157,6 +205,15 @@ function showSyncDialog(){
       +'<div>🎮 通关: '+localSummary.gameC+' 关</div>'
       +'<div>🏆 PR: '+localSummary.prsC+' 项</div>'
       +'<div>📜 日志: '+localSummary.logC+' 条</div><div>🏋️ 动作: '+localSummary.exC+' 个</div>'
+      +'</div>'
+      // v2.1.20：新系统摘要（本地）
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:var(--fs-xs);color:var(--text2);margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd)">'
+      +'<div>🐾 宠物: '+(localSummary.hasExtra?localSummary.petC+' 只':'—')+'</div>'
+      +'<div>🔮 宝珠: '+(localSummary.hasExtra?localSummary.orbC+' 颗':'—')+'</div>'
+      +'<div>🗺️ 敌群: '+(localSummary.hasExtra?localSummary.grpC+' 关':'—')+'</div>'
+      +'<div>💠 技能点: '+(localSummary.hasExtra?localSummary.skP:'—')+'</div>'
+      +'<div>🧪 营养液: '+(localSummary.hasExtra?localSummary.nutrition:'—')+'</div>'
+      +'<div>🍖 饲料: '+(localSummary.hasExtra?localSummary.feed:'—')+'</div>'
       +'</div></div>'
 
     // Remote card
@@ -169,7 +226,18 @@ function showSyncDialog(){
       +'<div>🎮 通关: '+remoteSummary.gameC+' 关</div>'
       +'<div>🏆 PR: '+remoteSummary.prsC+' 项</div>'
       +'<div>📜 日志: '+remoteSummary.logC+' 条</div><div>🏋️ 动作: '+remoteSummary.exC+' 个</div>'
-      +'</div></div>'
+      +'</div>'
+      // v2.1.20：新系统摘要（云端）。旧快照没有 keys → 显示「—」，提示需要重新推送
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:var(--fs-xs);color:var(--text2);margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd)">'
+      +'<div>🐾 宠物: '+(remoteSummary.hasExtra?remoteSummary.petC+' 只':'—')+'</div>'
+      +'<div>🔮 宝珠: '+(remoteSummary.hasExtra?remoteSummary.orbC+' 颗':'—')+'</div>'
+      +'<div>🗺️ 敌群: '+(remoteSummary.hasExtra?remoteSummary.grpC+' 关':'—')+'</div>'
+      +'<div>💠 技能点: '+(remoteSummary.hasExtra?remoteSummary.skP:'—')+'</div>'
+      +'<div>🧪 营养液: '+(remoteSummary.hasExtra?remoteSummary.nutrition:'—')+'</div>'
+      +'<div>🍖 饲料: '+(remoteSummary.hasExtra?remoteSummary.feed:'—')+'</div>'
+      +'</div>'
+      +(!remoteSummary.hasExtra?'<div style="margin-top:6px;font-size:var(--fs-2xs);color:var(--yellow)">⚠️ 云端是旧版快照（不含宠物/敌群进度等），推送本地一次即可补齐</div>':'')
+      +'</div>'
 
     // Suggestion
     var suggestion=''
@@ -257,6 +325,16 @@ function buildImportMap(data){
   if(data.exercises&&Array.isArray(data.exercises)){map.exercises=data.exercises}
   if(data.refine&&typeof data.refine==='object'){map.refine=data.refine}
   if(data.challenge&&typeof data.challenge==='object'){map.challenge=data.challenge}
+  /* v2.1.20：全量导出（autoBackup / 导出全量）里也带着扩展键，
+     导入时必须一并还原 —— 否则「导出备份再导入」同样会丢宠物/材料/敌群进度。 */
+  if(data.keys&&typeof data.keys==='object'&&!Array.isArray(data.keys)){
+    Object.keys(data.keys).forEach(function(k){
+      if(k==='mod-time')return
+      var v=data.keys[k]
+      if(v==null)return
+      map[k]=v
+    })
+  }
   return map
 }
 

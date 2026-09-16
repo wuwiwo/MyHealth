@@ -272,7 +272,11 @@
         if (!data.hasOwnProperty(k)) continue;
         var v = data[k];
         if (v == null) continue;
-        if (typeof v === 'object' && validValue(k, v)) {
+        /* v2.1.20：去掉这里的 `typeof v === 'object'` 限定。
+           它会把**标量键静默丢弃** —— theme（'dark'/'light'）就是这么丢的：
+           推送时带得走、拉取时写不回，表现为「同步后主题回默认」。
+           形状校验统一交给 validValue（未注册键一律接受，已注册键走各自 validate）。 */
+        if (validValue(k, v)) {
           _cache[k] = v;
           try {
             localStorage.setItem(fullKey(k), JSON.stringify(v));
