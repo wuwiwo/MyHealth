@@ -28,10 +28,16 @@ function assert(name, cond, detail) {
   else { fail++; console.log(' ✗ ' + name + (detail ? ' — ' + detail : '')); }
 }
 
-// ---- 1. 12 大关 × 10 小关 ----
+// ---- 1. N 大关 × 10 小关 ----
 const gl = sandbox.GROUP_LEVELS;
 const groupKeys = Object.keys(gl);
-assert(groupKeys.length + ' 大关', groupKeys.length === 18, '实际 ' + groupKeys.length);
+/* v2.1.29：大关数由 GROUP_STAGE_NAMES 派生，不写死字面量。
+   ⚠️ 此前写死 === 18，扩关必挂；同时「名字表加了、循环没改」的静默失败也靠这条兜住：
+      断言的是 GROUP_LEVELS 实际生成数 == 名字表条目数 == GROUP_MAX。 */
+const nameCount = Object.keys(sandbox.GROUP_STAGE_NAMES || {}).length;
+assert('GROUP_STAGE_NAMES 非空', nameCount > 0, '实际 ' + nameCount);
+assert('GROUP_MAX == 名字表条目数', sandbox.GROUP_MAX === nameCount, 'GROUP_MAX=' + sandbox.GROUP_MAX + ' 名字表=' + nameCount);
+assert(groupKeys.length + ' 大关', groupKeys.length === nameCount, '实际 ' + groupKeys.length + '，名字表 ' + nameCount);
 groupKeys.forEach(k => assert('大关 ' + k + ' 有 10 小关', (gl[k].stages || []).length === 10, '实际 ' + (gl[k].stages||[]).length));
 
 // ---- 2. 第 5 小关精英、第 10 小关 Boss ----
@@ -125,7 +131,11 @@ assert(stageCount + ' 关遍历无崩溃', crash === 0, crash + ' 崩溃');
 // 目的：后续关卡必须是「当前属性打不过、需要继续锻炼」的门槛，而不是线性外推的送分关
 function bossAtkOf(k) { return gl[k].stages[9].enemies[0].base.atk; }
 const tailKeys = groupKeys.filter(function (k) { return parseInt(k.slice(1), 10) >= 13; });
-assert('g13~g18 六个超限大关存在', tailKeys.length === 6, tailKeys.join(',') || '无');
+/* v2.1.29：超限大关数由 GROUP_MAX / GROUP_TAIL_FROM 派生（此前写死 6，扩关必挂） */
+const tailFrom = sandbox.GROUP_TAIL_FROM || 13;
+const tailWant = nameCount - tailFrom + 1;
+assert('g' + tailFrom + '~g' + nameCount + ' 共 ' + tailWant + ' 个超限大关存在',
+  tailKeys.length === tailWant, '实际 ' + tailKeys.length + '：' + (tailKeys.join(',') || '无'));
 assert('超限大关 desc 标注为超限试炼', tailKeys.every(function (k) { return gl[k].desc.indexOf('超限') >= 0; }));
 assert('g13 门槛显著高于 g12（' + bossAtkOf('g12') + ' → ' + bossAtkOf('g13') + '）',
   bossAtkOf('g13') > bossAtkOf('g12') * 1.4);

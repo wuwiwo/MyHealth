@@ -1,9 +1,11 @@
 /* ============================================
    MyHealth — Enemy Group Levels (M2b 重构)
-   12 大关卡 × 10 小关 = 120 关（程序化生成，难度递进）
+   GROUP_MAX 大关 × 10 小关（程序化生成，难度递进）
    - 每大关第 5 小关 = 精英关；第 10 小关 = Boss 关
    - 大关 1-2：敌人无魂攻/魂防，最多 2 只
-   - 大关 3-12：敌人最多 3 只（含魂攻/魂防）
+   - 大关 3+：敌人最多 3 只（含魂攻/魂防）
+   - 大关 13+：超限试炼（在基础线性曲线上叠加超线性加压，见 groupTailMul）
+   ⚠️ 大关总数由 GROUP_STAGE_NAMES 派生（GROUP_MAX），扩关只加名字、别改循环边界
    - 属性随大关/小关递增
    纯数据生成。
    ============================================ */
@@ -15,8 +17,15 @@ var GROUP_STAGE_NAMES = {
   7: '试炼·天穹', 8: '试炼·冥府', 9: '试炼·神域',
   10: '试炼·混沌', 11: '试炼·虚无', 12: '试炼·终焉',
   13: '试炼·星陨', 14: '试炼·洪荒', 15: '试炼·永夜',
-  16: '试炼·寂灭', 17: '试炼·归墟', 18: '试炼·无相'
+  16: '试炼·寂灭', 17: '试炼·归墟', 18: '试炼·无相',
+  19: '试炼·太虚', 20: '试炼·混元', 21: '试炼·无极'
 };
+
+/* v2.1.29：大关数由名字表派生。
+   ⚠️ 此前这里写死 18，而生成循环也写死 `lg <= 18` —— 只往名字表加一行的话
+      关卡数不会变、测试也不会挂，扩关会**静默失败**。
+      现在循环读 GROUP_MAX，扩关只需往上面加一行名字。 */
+var GROUP_MAX = Object.keys(GROUP_STAGE_NAMES).length;
 
 /* ============ g13+ 超限试炼：必须继续锻炼才能挑战 ============
    基础曲线是线性的（每大关 lvScale +0.9）。照此推算，实测号
@@ -247,10 +256,11 @@ function genStageEnemies(lg, st) {
   return enemies;
 }
 
-/* 生成全部 18 大关 × 10 小关（v2.1.19：由 15 大关扩展到 18，g13+ 为超限试炼） */
+/* 生成全部 GROUP_MAX 大关 × 10 小关
+   （v2.1.19 由 15 扩到 18；v2.1.29 由 18 扩到 21；g13+ 为超限试炼。循环边界由 GROUP_MAX 派生） */
 var GROUP_LEVELS = {};
 (function () {
-  for (var lg = 1; lg <= 18; lg++) {
+  for (var lg = 1; lg <= GROUP_MAX; lg++) {
     var stages = [];
     for (var st = 1; st <= 10; st++) {
       var isElite = st === 5, isBoss = st === 10;
@@ -422,6 +432,10 @@ function getGroupStage(stageId) {
 /* 测试/工具暴露 */
 if (typeof window !== 'undefined') {
   window.GROUP_LEVELS = GROUP_LEVELS;
+  window.GROUP_MAX = GROUP_MAX;
+  window.GROUP_STAGE_NAMES = GROUP_STAGE_NAMES;
+  window.GROUP_TAIL_FROM = GROUP_TAIL_FROM;
+  window.groupTailMul = groupTailMul;
   window.getGroupStage = getGroupStage;
   window.GROUP_ANCHOR = GROUP_ANCHOR;
   window.groupAnchorT = groupAnchorT;
@@ -442,6 +456,10 @@ if (typeof window !== 'undefined') {
 }
 if (typeof globalThis !== 'undefined') {
   globalThis.GROUP_LEVELS = GROUP_LEVELS;
+  globalThis.GROUP_MAX = GROUP_MAX;
+  globalThis.GROUP_STAGE_NAMES = GROUP_STAGE_NAMES;
+  globalThis.GROUP_TAIL_FROM = GROUP_TAIL_FROM;
+  globalThis.groupTailMul = groupTailMul;
   globalThis.getGroupStage = getGroupStage;
   globalThis.GROUP_ANCHOR = GROUP_ANCHOR;
   globalThis.groupAnchorT = groupAnchorT;
