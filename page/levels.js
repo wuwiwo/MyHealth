@@ -161,6 +161,33 @@ const LEVELS = {
     {id:'21-4',npc:'无界剑圣',atk:1950,def:780,hp:12400,soulAtk:955,soulDef:315},
     {id:'21-5',npc:'究极形态',atk:1900,def:845,hp:13600,soulAtk:920,soulDef:355},
     {id:'21-6',npc:'BOSS 超越·无限',atk:1760,def:890,hp:16700,soulAtk:835,soulDef:645,boss:true,dualAffix:true}
+  ]},
+  /* v2.1.32：扩到 24 章（dundun 需求）。数值沿用既有的每章 ≈1.113× 斜率，
+     关卡形态照抄 chap4 起的固定编排：x-1 均衡 / x-2 高攻低防 / x-3 高防高血 /
+     x-4 最高攻 / x-5 次高攻 / x-6 BOSS（dualAffix 双词条，chap16 起惯例）。 */
+  chap22:{name:'界限突破',levels:[
+    {id:'22-1',npc:'破界哨兵',atk:1870,def:880,hp:14450,soulAtk:825,soulDef:335},
+    {id:'22-2',npc:'极光游侠',atk:2050,def:810,hp:14150,soulAtk:985,soulDef:310},
+    {id:'22-3',npc:'次元壁垒',atk:1715,def:1030,hp:17050,soulAtk:755,soulDef:625},
+    {id:'22-4',npc:'苍穹剑主',atk:2170,def:870,hp:13800,soulAtk:1065,soulDef:350},
+    {id:'22-5',npc:'星轨守望',atk:2115,def:940,hp:15150,soulAtk:1025,soulDef:395},
+    {id:'22-6',npc:'BOSS 破界之王',atk:1960,def:990,hp:18600,soulAtk:930,soulDef:720,boss:true,dualAffix:true}
+  ]},
+  chap23:{name:'诸神黄昏',levels:[
+    {id:'23-1',npc:'黄昏使者',atk:2080,def:980,hp:16100,soulAtk:920,soulDef:375},
+    {id:'23-2',npc:'暮光刺客',atk:2280,def:900,hp:15750,soulAtk:1095,soulDef:345},
+    {id:'23-3',npc:'神陨守卫',atk:1910,def:1145,hp:19000,soulAtk:840,soulDef:695},
+    {id:'23-4',npc:'陨星魔导',atk:2415,def:970,hp:15350,soulAtk:1185,soulDef:390},
+    {id:'23-5',npc:'终末骑士',atk:2355,def:1045,hp:16850,soulAtk:1140,soulDef:440},
+    {id:'23-6',npc:'BOSS 黄昏神王',atk:2180,def:1100,hp:20700,soulAtk:1035,soulDef:800,boss:true,dualAffix:true}
+  ]},
+  chap24:{name:'万象终章',levels:[
+    {id:'24-1',npc:'终章守卫',atk:2315,def:1090,hp:17900,soulAtk:1025,soulDef:415},
+    {id:'24-2',npc:'万象游魂',atk:2540,def:1000,hp:17550,soulAtk:1220,soulDef:385},
+    {id:'24-3',npc:'终焉壁垒',atk:2125,def:1275,hp:21150,soulAtk:935,soulDef:775},
+    {id:'24-4',npc:'命运织者',atk:2690,def:1080,hp:17100,soulAtk:1320,soulDef:435},
+    {id:'24-5',npc:'万象化身',atk:2620,def:1165,hp:18750,soulAtk:1270,soulDef:490},
+    {id:'24-6',npc:'BOSS 万象终焉',atk:2425,def:1225,hp:23050,soulAtk:1150,soulDef:890,boss:true,dualAffix:true}
   ]}
 };
 

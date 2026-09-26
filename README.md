@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.1.31
+> Personal Health Manager — 个人健身健康管理应用 v2.1.32
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -52,7 +52,7 @@ page/
 ├── ex-dataset.js       动作百科数据层（1324 动作检索/关联匹配/tagHtml）
 ├── config.js           运行时配置（MEDIA_BASE 图床覆盖）
 ├── utils.js            常量、工具函数、toast、主题、openModal helper
-├── levels.js           关卡配置（21 章 117 关，单敌）
+├── levels.js           关卡配置（24 章 135 关，单敌）
 ├── date-roll.js        本地日历日/月键纯函数（DST 安全）
 ├── monthly-reset.js    自然月窗口判定（resolveMonthWindow）
 ├── stats.js            纯函数统计计算（容量加权 / 旬周期 / 炼魂升级概率）
@@ -286,4 +286,6 @@ Vercel 项目设置：
 
 | **v2.1.31** | **2026-09-26** | **🔌 修 v2.1.30 查出的「遗言开场自爆送关」**：技能定义里的 `startCooldown` 全项目**没有任何消费点**（死配置）→ 新增 `skill.js` 的 `applyStartCooldowns()` 并在 `createUnit` 统一接线，恢复设计文档要求的「战斗开始该技能进入冷却状态」（遗言起始冷却 10 回合）；效果：**g23 不再白送**（50% 门槛从 <1× 升到 ≈17.5×，1×~13× 全 0%），g19 4.8→6.5× / g20 3.5→4.3× / g21 8.3→8.7× / g22 9.6→11.5×，**g8~g13 仍 100%（不把已通关卡改难）**；`test-group-battle` 加 3 条防回归断言（11→14）；全量 38/38 套件、990 断言；缓存版本对齐（v91）** | `doc/changelog-v2.1.md` |
 
-> 当前版本：**v2.1.31**（设计规范：`doc/design-tokens-v2.1.md`）
+| **v2.1.32** | **2026-09-26** | **🗺️ 关卡试炼（单敌关）由 21 章扩到 24 章**（新增 chap22 界限突破 / chap23 诸神黄昏 / chap24 万象终章，共 **135 关**）—— 沿既有每章 ≈1.113× 斜率与固定编排（x-1 均衡 / x-2 高攻低防 / x-3 高防高血 / x-4 最高攻 / x-5 次高攻 / x-6 BOSS 双词条）；**只往 `LEVELS` 加 3 个 chap 块**，章数徽标（`Object.keys(LEVELS).length`）、解锁链、`findLevel` 全部派生，无硬编码残留。实测（基准账号 攻2883/防1145/血24800）50% 胜率门槛：chap17~20 0.625× / chap21 0.875× / chap22 0.875× / **chap23 0.975×** / **chap24 1.075×（需 +7.5% 属性）**；新增章非 BOSS 关 1× 全 100%。**同时修技能死接线**：`skillsDisabled` mutation（末日「技能不可用」）只有生产者没有消费者 → 详情页写着技能禁用、实战照样放技能；补 5 条行为断言（判据盯真实行为而非中间结构）；缓存版本对齐（v92）** | `doc/changelog-v2.1.md` |
+
+> 当前版本：**v2.1.32**（设计规范：`doc/design-tokens-v2.1.md`）

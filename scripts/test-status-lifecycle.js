@@ -490,5 +490,39 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   assert('哈欠/歌唱造成的睡眠不回血（无 healPct）', t2.hp === 100, t2.hp);
 }
 
+/* ============ 12. 末日「技能不可用」真正生效（v2.1.32） ============
+   缺陷：status-defs 的 doomed 会产出 skillsDisabled mutation，但**没有任何消费者** ——
+   详情页写着「技能不可用」，实战里照样放技能。
+   ⚠️ 判据必须盯**真实行为**（本回合打了技能还是普攻），不能像 test-status.js 那样只断言
+   mutation「被生产」—— 那正是这个 bug 藏了这么久的原因（PITFALL-11 同类）。 */
+{
+  const mkFoe = (id, nm) => sb.createUnit({ id: id, side: 'enemy', name: nm, skills: ['charge'], base: { hp: 500, atk: 50, def: 10, spd: 5 } });
+  const mkHero = (id) => sb.createUnit({ id: id, side: 'ally', name: '我方', base: { hp: 3000, atk: 10, def: 0, spd: 1 } });
+
+  // 对照组：没有末日时，只有「冲撞」的敌人会放冲撞
+  const foeA = mkFoe('dm-a', '对照敌');
+  const gbA = sb.createGroupBattle({ allies: [mkHero('h-a')], enemies: [foeA] });
+  const evA = sb.groupUnitTurn(gbA, foeA);
+  assert('对照：无末日时正常施放技能（冲撞）', /冲撞/.test(msgs(evA)), msgs(evA));
+
+  // 实验组：同一配置 + 末日 → 技能被禁用，退化为普通攻击（但仍要行动）
+  const foeB = mkFoe('dm-b', '末日敌');
+  const heroB = mkHero('h-b');
+  const gbB = sb.createGroupBattle({ allies: [heroB], enemies: [foeB] });
+  sb.applyStatus(foeB, { id: 'doomed', duration: 3, source: heroB });
+  const evB = sb.groupUnitTurn(gbB, foeB);
+  assert('末日：技能被禁用（不再施放冲撞）', !/冲撞/.test(msgs(evB)), msgs(evB));
+  assert('末日：仍会行动，退化为普通攻击', /攻击/.test(msgs(evB)), msgs(evB));
+  assert('末日：日志说明原因', /受末日影响/.test(msgs(evB)), msgs(evB));
+
+  // 末日对玩家侧同样生效（玩家技能也不可用）
+  const pFoe = sb.createUnit({ id: 'dm-pf', side: 'enemy', name: '敌', base: { hp: 3000, atk: 10, def: 0, spd: 1 } });
+  const pAlly = sb.createUnit({ id: 'dm-pa', side: 'ally', name: '玩家', skills: ['charge'], base: { hp: 500, atk: 50, def: 10, spd: 5 } });
+  const gbP = sb.createGroupBattle({ allies: [pAlly], enemies: [pFoe] });
+  sb.applyStatus(pAlly, { id: 'doomed', duration: 3, source: pFoe });
+  const evP = sb.groupUnitTurn(gbP, pAlly);
+  assert('末日对玩家侧同样禁用技能', !/冲撞/.test(msgs(evP)), msgs(evP));
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

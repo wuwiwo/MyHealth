@@ -681,9 +681,20 @@ function groupUnitTurn(gb, actor) {
     acted = true;
   }
 
+  /* v2.1.32：末日等「技能不可用」的负面。
+     状态经 onBeforeAction 产出 skillsDisabled mutation，但此前**没有任何消费者** ——
+     详情页（SKILL_DOCS.doom）写着「技能不可用」，实战里却照样放技能（PITFALL-12 同类缺陷）。
+     ⚠️ test-status.js 只断言了 mutation「被生产」，所以一直没暴露：判据要盯真实行为，不是中间结构。 */
+  var skillsBlocked = (before.mutations || []).some(function (m) {
+    return m.key === 'skillsDisabled' && m.value;
+  });
+
   // 选择行动：敌人用 AI 策略，玩家用随机/技能
   var skillId, actTarget;
-  if (!acted) {
+  if (!acted && skillsBlocked) {
+    events.push({ msg: '🌑 ' + (actor.name || '单位') + ' 受末日影响，本回合无法使用技能', targetId: actor.id, type: 'status' });
+  }
+  if (!acted && !skillsBlocked) {
     if (actor.side === 'enemy' && typeof aiDecide === 'function') {
       var ai = aiDecide(gb, actor);
       skillId = ai.skillId;
