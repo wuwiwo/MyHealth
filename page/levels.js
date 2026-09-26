@@ -242,6 +242,35 @@ const LEVELS = {
     {id:'30-4',npc:'万法剑皇',atk:5115,def:2050,hp:32505,soulAtk:2510,soulDef:830},
     {id:'30-5',npc:'真理代言',atk:4980,def:2205,hp:35645,soulAtk:2420,soulDef:930},
     {id:'30-6',npc:'BOSS 终极真理',atk:4615,def:2325,hp:43810,soulAtk:2185,soulDef:1690,boss:true,dualAffix:true}
+  ]},
+  /* v2.1.36：扩到 33 章（dundun 要求继续加 3 章）。
+     数值与编排沿用 chap22 起同一套规则：每章 ≈1.113×，x-1 均衡 / x-2 高攻低防 /
+     x-3 高防高血 / x-4 最高攻 / x-5 次高攻 / x-6 BOSS（dualAffix 双词条）。
+     ⚠️ LEVELS 是手写数据、没有斜率断言 —— 本版数值由 chap30 用脚本按 1.113× 外推后取 5 的倍数，
+        不要手抄手算算错也不会被测试拦住。 */
+  chap31:{name:'混沌纪元',levels:[
+    {id:'31-1',npc:'混沌守卫',atk:4890,def:2305,hp:37825,soulAtk:2175,soulDef:870},
+    {id:'31-2',npc:'纪元猎者',atk:5370,def:2120,hp:37165,soulAtk:2580,soulDef:820},
+    {id:'31-3',npc:'混沌壁垒',atk:4490,def:2700,hp:44745,soulAtk:1975,soulDef:1645},
+    {id:'31-4',npc:'纪元剑尊',atk:5695,def:2280,hp:36180,soulAtk:2795,soulDef:925},
+    {id:'31-5',npc:'混沌先知',atk:5545,def:2455,hp:39675,soulAtk:2695,soulDef:1035},
+    {id:'31-6',npc:'BOSS 混沌纪元',atk:5135,def:2590,hp:48760,soulAtk:2430,soulDef:1880,boss:true,dualAffix:true}
+  ]},
+  chap32:{name:'万古长夜',levels:[
+    {id:'32-1',npc:'长夜哨卫',atk:5445,def:2565,hp:42100,soulAtk:2420,soulDef:970},
+    {id:'32-2',npc:'万古刺客',atk:5975,def:2360,hp:41365,soulAtk:2870,soulDef:915},
+    {id:'32-3',npc:'永夜壁垒',atk:4995,def:3005,hp:49800,soulAtk:2200,soulDef:1830},
+    {id:'32-4',npc:'长夜剑帝',atk:6340,def:2540,hp:40270,soulAtk:3110,soulDef:1030},
+    {id:'32-5',npc:'万古守望',atk:6170,def:2730,hp:44160,soulAtk:3000,soulDef:1150},
+    {id:'32-6',npc:'BOSS 万古长夜',atk:5715,def:2885,hp:54270,soulAtk:2705,soulDef:2090,boss:true,dualAffix:true}
+  ]},
+  chap33:{name:'太虚无极',levels:[
+    {id:'33-1',npc:'太虚守卫',atk:6060,def:2855,hp:46855,soulAtk:2695,soulDef:1080},
+    {id:'33-2',npc:'无极猎者',atk:6650,def:2625,hp:46040,soulAtk:3195,soulDef:1020},
+    {id:'33-3',npc:'虚源壁垒',atk:5560,def:3345,hp:55425,soulAtk:2450,soulDef:2035},
+    {id:'33-4',npc:'无极剑神',atk:7055,def:2825,hp:44820,soulAtk:3460,soulDef:1145},
+    {id:'33-5',npc:'太虚代言',atk:6865,def:3040,hp:49150,soulAtk:3340,soulDef:1280},
+    {id:'33-6',npc:'BOSS 太虚无极',atk:6360,def:3210,hp:60405,soulAtk:3010,soulDef:2325,boss:true,dualAffix:true}
   ]}
 };
 
