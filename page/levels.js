@@ -188,6 +188,33 @@ const LEVELS = {
     {id:'24-4',npc:'命运织者',atk:2690,def:1080,hp:17100,soulAtk:1320,soulDef:435},
     {id:'24-5',npc:'万象化身',atk:2620,def:1165,hp:18750,soulAtk:1270,soulDef:490},
     {id:'24-6',npc:'BOSS 万象终焉',atk:2425,def:1225,hp:23050,soulAtk:1150,soulDef:890,boss:true,dualAffix:true}
+  ]},
+  /* v2.1.34：扩到 27 章（dundun 报 24-6 已通关，要求继续加 3 章）。
+     数值与编排沿用 chap22 起同一套规则：每章 ≈1.113×，x-1 均衡 / x-2 高攻低防 /
+     x-3 高防高血 / x-4 最高攻 / x-5 次高攻 / x-6 BOSS（dualAffix 双词条）。 */
+  chap25:{name:'彼岸之门',levels:[
+    {id:'25-1',npc:'彼岸摆渡',atk:2575,def:1215,hp:19900,soulAtk:1140,soulDef:460},
+    {id:'25-2',npc:'忘川刺客',atk:2825,def:1115,hp:19550,soulAtk:1360,soulDef:430},
+    {id:'25-3',npc:'冥河壁垒',atk:2365,def:1420,hp:23540,soulAtk:1040,soulDef:865},
+    {id:'25-4',npc:'黄泉剑主',atk:2995,def:1200,hp:19030,soulAtk:1470,soulDef:485},
+    {id:'25-5',npc:'彼岸守望',atk:2915,def:1295,hp:20870,soulAtk:1415,soulDef:545},
+    {id:'25-6',npc:'BOSS 彼岸之主',atk:2700,def:1365,hp:25650,soulAtk:1280,soulDef:990,boss:true,dualAffix:true}
+  ]},
+  chap26:{name:'神座之巅',levels:[
+    {id:'26-1',npc:'神座侍者',atk:2865,def:1350,hp:22150,soulAtk:1270,soulDef:510},
+    {id:'26-2',npc:'圣光猎手',atk:3145,def:1240,hp:21760,soulAtk:1515,soulDef:480},
+    {id:'26-3',npc:'圣殿壁垒',atk:2630,def:1580,hp:26200,soulAtk:1160,soulDef:965},
+    {id:'26-4',npc:'天启骑士',atk:3335,def:1335,hp:21180,soulAtk:1635,soulDef:540},
+    {id:'26-5',npc:'神座近卫',atk:3245,def:1440,hp:23230,soulAtk:1575,soulDef:605},
+    {id:'26-6',npc:'BOSS 神座之主',atk:3005,def:1520,hp:28550,soulAtk:1425,soulDef:1100,boss:true,dualAffix:true}
+  ]},
+  chap27:{name:'永恒尽头',levels:[
+    {id:'27-1',npc:'尽头守望者',atk:3190,def:1500,hp:24650,soulAtk:1415,soulDef:565},
+    {id:'27-2',npc:'时空游魂',atk:3500,def:1380,hp:24220,soulAtk:1685,soulDef:535},
+    {id:'27-3',npc:'永恒壁垒',atk:2925,def:1760,hp:29160,soulAtk:1290,soulDef:1075},
+    {id:'27-4',npc:'无极剑帝',atk:3710,def:1485,hp:23575,soulAtk:1820,soulDef:600},
+    {id:'27-5',npc:'永恒神使',atk:3610,def:1600,hp:25855,soulAtk:1755,soulDef:675},
+    {id:'27-6',npc:'BOSS 永恒终焉',atk:3345,def:1690,hp:31775,soulAtk:1585,soulDef:1225,boss:true,dualAffix:true}
   ]}
 };
 
