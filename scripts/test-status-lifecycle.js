@@ -524,5 +524,49 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   assert('末日对玩家侧同样禁用技能', !/冲撞/.test(msgs(evP)), msgs(evP));
 }
 
+/* ============ 13. v2.1.33：附身真正生效 / 遗言诅咒的魂防减免 ============ */
+{
+  // --- 幽魂附身：技能封锁 + 冷却暂停（判据盯真实行为，不盯 _possessed 标志） ---
+  const mkFoe = (id, nm) => sb.createUnit({ id: id, side: 'enemy', name: nm, skills: ['charge'], base: { hp: 500, atk: 50, def: 10, spd: 5 } });
+  const mkHero = (id) => sb.createUnit({ id: id, side: 'ally', name: '我方', base: { hp: 3000, atk: 5, def: 0, spd: 1 } });
+
+  const foeA = mkFoe('po-a', '对照');
+  const gbA = sb.createGroupBattle({ allies: [mkHero('ph-a')], enemies: [foeA] });
+  assert('对照：无附身时正常施放技能', /冲撞/.test(msgs(sb.groupUnitTurn(gbA, foeA))));
+
+  const foeB = mkFoe('po-b', '被附身');
+  const gbB = sb.createGroupBattle({ allies: [mkHero('ph-b')], enemies: [foeB] });
+  sb.applyStatus(foeB, { id: 'possessed', duration: 1 });
+  sb.setSkillCooldown(foeB, 'charge', 3);
+  const evB = sb.groupUnitTurn(gbB, foeB);
+  assert('附身：技能被封锁（不再施放冲撞）', !/冲撞/.test(msgs(evB)), msgs(evB));
+  assert('附身：回合开始受 8% 最大生命伤害', foeB.hp === 460, 'hp=' + foeB.hp);
+  assert('附身：技能冷却暂停（3 不递减）', sb.skillCooldownLeft(foeB, 'charge') === 3, 'cd=' + sb.skillCooldownLeft(foeB, 'charge'));
+  assert('附身：状态在本回合末到期解除', !sb.hasStatus(foeB, 'possessed'));
+
+  sb.groupUnitTurn(gbB, foeB);
+  assert('附身结束后冷却恢复递减（3 → 2）', sb.skillCooldownLeft(foeB, 'charge') === 2, 'cd=' + sb.skillCooldownLeft(foeB, 'charge'));
+}
+
+{
+  // --- 遗言诅咒：每回合伤害受自身魂防半数减免（设计文档「受到自身魂防御降低」） ---
+  const mk = (id, soulDef) => sb.createUnit({ id: id, side: 'enemy', name: '咒' + id, base: { hp: 1000, atk: 10, def: 10, soulDef: soulDef, spd: 5 } });
+
+  const a = mk('lw-a', 0);
+  sb.applyStatus(a, { id: 'lastworded', duration: 2 });
+  sb.dispatch(a, 'onTurnStart', {});
+  assert('遗言诅咒：魂防 0 → 全额 5% 最大生命（1000×5% = 50）', a.hp === 950, 'hp=' + a.hp);
+
+  const b = mk('lw-b', 60);
+  sb.applyStatus(b, { id: 'lastworded', duration: 2 });
+  sb.dispatch(b, 'onTurnStart', {});
+  assert('遗言诅咒：魂防 60 → 50 − 60/2 = 20', b.hp === 980, 'hp=' + b.hp);
+
+  const c = mk('lw-c', 200);
+  sb.applyStatus(c, { id: 'lastworded', duration: 2 });
+  sb.dispatch(c, 'onTurnStart', {});
+  assert('遗言诅咒：魂防足够高时保底 1 点', c.hp === 999, 'hp=' + c.hp);
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

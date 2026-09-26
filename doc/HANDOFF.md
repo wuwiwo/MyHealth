@@ -2,7 +2,7 @@
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
 > **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
-> **生成**：2026-09-02 · **最后更新**：2026-09-16
+> **生成**：2026-09-02 · **最后更新**：2026-09-26（v2.1.33）
 > **当前版本**：不要相信本文档中的固定版本号，必须通过 `page/utils.js` 中的 `APP_VERSION` 实时确认
 > **当前 HEAD**：用 `git log --oneline -5` 实时确认
 > **远端 main**：用 `git ls-remote origin refs/heads/main` 实时确认
@@ -10,6 +10,16 @@
 > **测试**：以 `scripts/test-*.js` 实际扫描并运行的结果为准；开始任务前先跑测试，得到实时套件数与断言数
 > **⚠️ 本仓库 2026-09-16 起有多个会话并行推进**（v2.1.16~19 一个、v2.1.20~22 另一个）——
 > **动手前先核对当前 HEAD、源码版本与工作树**，不要相信任何文档/记忆里的「当前版本」
+> **⚠️ 2026-09-26 又连做了 v2.1.30~33**（敌群扩 24 大关 → 关卡试炼扩 24 章 → 两轮技能审计），期间改动集中在关卡数据与战斗状态层
+>
+> 🚨 **最容易搞混的一点：本项目有两套独立的「关卡」系统**，听到「关卡试炼 / 挑战关卡」时务必先确认是哪一套：
+>
+> | 系统 | 文件 | 形态 | 规模 | 相关测试 |
+> |---|---|---|---|---|
+> | **关卡试炼**（单敌） | `page/levels.js` | `LEVELS.chapN.levels[]`，手写常量 | **24 章 135 关** | `test-battle` / `test-page-load` |
+> | **敌群试炼**（多对多） | `page/group-levels.js` | `GROUP_LEVELS.gN.stages[]`，程序化生成 | **24 大关 240 关** | `test-group-*` |
+>
+> 2026-09-26 曾因把用户的「关卡挑战」理解成敌群而白做一版（见 §12 PITFALL-16）。
 
 ---
 
@@ -216,6 +226,17 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 - **v2.1.20** — ☁️ 修云同步丢数据：载荷改为从 `store.getAll()` 自动派生（此前硬编码 14 键，宠物/材料/宝珠/敌群进度/技能全不同步）
 - **v2.1.21** — 🔧 修 3 处「技能点 10 点/胜」陈旧注释 + 实装「迷惑」（幻影之瞳，设计文档三选一）+ 蓄力重击结算时点对齐设计文档 + 可达性测试改为按真实技能池判定
 - **v2.1.22** — 🎚️ **技能等级真正接进战斗**（此前宠物 `skillLevels` 只有 UI/升级逻辑在读、敌人 `unit.level` 恒为 1 → 升级技能数值不变）：新增 `skillLevelOf`/`skillValue` 区间按等级插值；宠物 7 个攻击技能 + 幻影之瞳三分支补区间；敌人等级按大关号；最后 4 个未入池技能入池（接上 ai.js 既有的残血放大招/治疗分支）；场地新增常驻可点击胶囊 + 介绍弹层
+- **v2.1.23** — 🎯 改正「区间」的驱动源：由**技能等级**改为**基础属性成长**（宠物 = 炼化等级，R50/SR60/SSR80/UR100）→ 收敛为单个 `skillRangeT(unit)`；`applySkillEffects` 注入 `ctx.sv` 让治疗/状态/增益三类通道也吃区间；顺带修 `castSkill` 不透传 `modsPct`/`data` 的真 bug
+- **v2.1.24** — 😴 睡觉时长改 1~3 回合 + 睡眠期间每回合回复；**无影拳 5 连击真正实装**（此前打 1 次、日志却写 ×5）
+- **v2.1.25** — 🧩 结构性拆分：敌群「词条」从天赋注册表 `TALENTS` 独立为新注册表 `AFFIXES`（**新增 `page/affix.js`**）；修拆分后减伤断言按 id 取对象静默失效
+- **v2.1.26** — 🎚️ 技能区间接进非攻击通道（治愈/睡觉/强攻/广域防御/打湿）；新增 `test-skill-range-channels.js`（判据＝数值必须真的随 t 变化）；媒体实测 Vercel 可访问；清理 5 个已合并远端分支
+- **v2.1.27** — 🎬 7c RNG 回放 + 7d 时间旅行：战斗随机统一走 `battleRnd`（43 处 `Math.random` 改为可播种），`createGroupBattle` 支持 seed，新增 `groupSnapshot`/`groupRestore`/`groupReplay`，Debug 新增「🎬 回放」分区；新增 `test-group-determinism.js`
+- **v2.1.28** — 📈 OQ-8 定案**线性**（t = 炼化等级 ÷ 稀有度上限）；打湿补幅度区间（魂防 0→25%、命中 0→30%、持续 2→4）→ **技能随成长、场地固定**（雨天沿用固定值）
+- **v2.1.29** — 🗺️ 敌群 18 → **21 大关**；**消除大关数硬编码**（`GROUP_MAX` 由名字表派生，此前只加名字会**静默失败**）；测试两处写死改为派生
+- **v2.1.30** — 🗺️ 敌群 21 → **24 大关**（240 关）；实测查出**遗言（`lastword`）让关卡白送**（g23 一关三敌全带 → 玩家 1× 属性也有 67% 胜率）与 `startCooldown` 死配置
+- **v2.1.31** — 🔌 修 `startCooldown` 死配置：`skill.js` 新增 `applyStartCooldowns()` 并在 `createUnit` 接线 → **g23 白送消失**（<1× → ≈17.5×），g21~g24 恢复单调递增，g8~g13 零回归
+- **v2.1.32** — 🗺️ **关卡试炼（`LEVELS`）21 → 24 章**（135 关）；技能审计修「末日技能不可用」死接线（`skillsDisabled` mutation 无消费者）；另报 5 项设计↔实现 gap
+- **v2.1.33** — 🔧 修 4 项技能 gap（冰魄第二段 / 巨石降魂防按等级可叠 / 遗言诅咒魂防减免 / 附身冷却暂停），其中附身顺带查出「解除时点早于置位」导致禁技与冷却暂停**从未生效**；蓄力承伤接区间按裁决暂不改
 
 > ⚠️ **v2.0.10/2.0.11 与 v2.1.0 曾分叉**（两条线都改 `index.html`/`utils.js`/`README`/`changelog`），已于 `dd46332` 合并解决。若再见到两条线并行，合并前先看 §8 的冲突回避经验。
 
@@ -228,7 +249,7 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 ```
 store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils.js → levels.js
 → date-roll.js → monthly-reset.js → stats.js → state-core.js → status-defs.js → unit.js
-→ talent.js → skill.js → enemy.js → battle.js → battle-group.js → terrain.js
+→ talent.js → affix.js → skill.js → enemy.js → battle.js → battle-group.js → terrain.js
 → group-levels.js → group-progress.js → ai.js → challenge.js → linechart.js → app.js
 → sync.js → tab-strength.js → tab-cardio.js → tab-profile.js → game-render.js
 → game-battle.js → game-records.js → game-refine.js → tab-game.js → tab-settings.js
@@ -239,7 +260,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 **分层理解**：
 - **基础层**：`store` `utils` `date-roll` `monthly-reset` `stats` `config` `levels`
-- **战斗引擎层**：`state-core` `status-defs` `unit` `talent` `skill` `enemy` `battle` `battle-group` `terrain` `ai`
+- **战斗引擎层**：`state-core` `status-defs` `unit` `talent` `affix`（v2.1.25 新增：敌群词条注册表）`skill` `enemy` `battle` `battle-group` `terrain` `ai`
 - **内容数据层**：`group-levels` `group-progress` `ex-dataset` `data/exercises-dataset`
 - **玩法层**：`challenge`（隐藏挑战）`pets*`（宠物）`skills*`（玩家技能）`orbs`（宝珠）
 - **UI 层**：`app` `sync` `tab-*` `game-*` `*-ui` `linechart` `game-views` `debug`
@@ -301,14 +322,18 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 **`page/debug.js`** — 全局诊断工具。所有 tab 右下角都有 🔍 FAB（`--touch-min` 44px 触控目标，半透明，点击展开底部抽屉）。
 
-### 五个分区
+### 九个分区（v2.1.33 实测：`debug.js` 的 `SECS`）
 
 | 分区 | 内容 |
 |---|---|
 | **概览** | APP_VERSION / today / monthKey / 当前 tab / localStorage 键数与体积 / JS 错误数 / **旬周期状态**（`getCurrentPeriod` 完整 JSON：起止日期、名称、天数、容量阈值） |
 | **存储** | 全部 localStorage 键（含非 `dh-` 前缀），逐键显示体积，可**单键展开 JSON** + 单键复制 + **复制全部键值** |
-| **属性·经济** | 今日容量 / 本周有效时长 / 技能点全状态（点数、历史累计、本周胜局、周键、槽位、loadout、各技能等级）/ **敌群发点预演**（胜1→+10 … 胜6→+35，直接验证数值改动的效果） |
-| **挑战** | `challenge` 存档完整 JSON + `canSummon()` 判定 JSON + 今日容量 vs 召唤门槛（100kg/次）+ **挑战页内嵌诊断块开关** |
+| **属性·经济** | 今日容量 / 本周有效时长 / 技能点全状态 / **敌群发点预演** |
+| **⚖️ 平衡**（v2.1.8） | 属性来源拆解 / 碾压诊断 / 实战模拟 |
+| **挑战** | `challenge` 存档完整 JSON + `canSummon()` 判定 JSON + 今日容量 vs 召唤门槛 + **挑战页内嵌诊断块开关** |
+| **☁️ 同步**（v2.1.26） | 云同步时间线与载荷摘要 |
+| **⏱ 性能**（v2.1.26） | 各 tab 渲染耗时等 |
+| **🎬 回放**（v2.1.27） | 战斗种子 / 重放验证 / 快照回退（7c/7d：RNG 回放 + 时间旅行） |
 | **错误** | `error` + `unhandledrejection` 全局捕获，保留最近 30 条，可清空；标签页显示计数 |
 
 ### 设计要点
@@ -327,10 +352,10 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ### 尚未做的调试维度（可继续）
 
-- 战斗过程单步调试 / RNG 回放（引擎已有 `mulberry32` rng 注缝，可播种复现）
-- 时间旅行模拟（临时改日期，验证周/旬/月结算与离线结算）
-- 云同步请求日志（`sync.js` 的请求/响应时间线）
-- 性能面板（各 tab 渲染耗时、localStorage 写入次数）
+- ~~战斗过程单步调试 / RNG 回放~~ → **v2.1.27 已完成**（「🎬 回放」分区：种子 / 重放验证 / 快照回退）
+- ~~时间旅行模拟~~ → **v2.1.27 已完成**（7d，临时改日期验证周/旬/月结算与离线结算）
+- ~~云同步请求日志~~ → **v2.1.26 已完成**（「☁️ 同步」分区）
+- ~~性能面板~~ → **v2.1.26 已完成**（「⏱ 性能」分区；仍可继续细化 localStorage 写入次数）
 
 ---
 
@@ -364,7 +389,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ### 6.3 敌群多对多战斗
 
-**`group-levels.js`** —— **18 大关 × 10 小关 = 180 关**，程序化生成（`GROUP_LEVELS` 是 `{g1..g18}` 对象，每大关含 `stages[10]`，关卡数一律由数据派生、别写死）。实测数据（各段末关的**主 Boss**）：
+**`group-levels.js`** —— **24 大关 × 10 小关 = 240 关**，程序化生成（`GROUP_LEVELS` 是 `{g1..g24}` 对象，每大关含 `stages[10]`，**关卡数一律由 `GROUP_MAX` 派生、别写死**）。实测数据（各段末关的**主 Boss**）：
 
 | 大关 | 最多敌数 | 魂攻防 | 末关(gX-10) 攻 / 防 / 血 |
 |---|---|---|---|
@@ -372,14 +397,19 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 | g3–g9 | 3 | 有 | g9-10 = 392 / 200 / 2651 |
 | g10–g12 | 3 | 有 | g12-10 = 500 / 255 / 3380 |
 | g13–g15 | 3 | 有 | g15-10 = 1856 / 946 / 12528 |
-| **g16–g18** | 3 | 有 | **g18-10 = 4166 / 2124 / 28123**（+2 护卫 2708/1328/18749） |
+| g16–g18 | 3 | 有 | g18-10 = 4166 / 2124 / 28123 |
+| g19–g21 | 3 | 有 | g21-10 = 9140 / 4661 / 61700 |
+| **g22–g24** | 3 | 有 | **g24-10 = 19710 / 10052 / 133042** |
 
-- 首关 g1-1 的 atk = **14**；曲线由 `genEnemyCfg` 的 `lvScale` × `groupTailMul` 决定（g13+ 超线性加压、g16+ 斜率放缓）
-- **每大关第 5 小关为精英（`type: "elite"`）**、**第 10 小关为 Boss（`type: "boss"`）**（如 g1-5 elite、g1-10 boss）
-- **实测难度阶梯**（2026-09-16 · 账号 攻2883/防1145/血24800/魂攻532/魂防99 → 敌群继承 50%）：g1~g13 全 100%、g14 43%、g15~g18 0%；
-  达到 50% 胜率所需**属性倍率** = g14 1.17× / g15 1.86× / g16 2.38× / g17 3.23× / **g18 4.09×**
-  ⚠️ `scripts/balance-sim.js` 是项目自带扫描器，但**没加载 `ai.js` / `terrain.js`，不是实战口径**；
-  实战口径要自己写脚本走 `groupStageEnemies` + `groupTerrainFor` + `boostPetForGroup`（口径见 §12）
+- 首关 g1-1 的 atk = **14**；曲线由 `genEnemyCfg` 的 `lvScale` × `groupTailMul` 决定（g13+ 超线性加压、g16+ 斜率降为 `GROUP_TAIL_POW_EXT = 1.24`）
+- **每大关第 5 小关为精英（`type: "elite"`）**、**第 10 小关为 Boss（`type: "boss"`）**
+- **实测难度阶梯**（基准账号 攻2883/防1145/血24800/魂攻532/魂防99 → 敌群继承 50%，宠物 SR+SSR，trials=12，
+  口径 = `groupStageEnemies` + `groupTerrainFor` + `boostPetForGroup`，**必须先加载 `ai.js`/`terrain.js`**）：
+  - **v2.1.31 修复后**（当前值）：g19 6.5× / g20 4.3× / g21 8.7× / g22 11.5× / g23 ≈17.5× / g24 ≈25×
+  - g8~g13 在 1× 下仍 100%（**扩关/修复都没有把已通关卡改难**）
+  - ⚠️ **g19/g20 倒挂仍在**（6.5× vs 4.3×）：g19 Boss 抽到 `doom_call + grow_atk` 与技能 `doom`（无视防御减伤），
+    g20 抽到温和的 `grow_def + grow_atk` —— **属词条/技能的确定性随机，不是斜率问题**，待定夺
+  - ⚠️ `scripts/balance-sim.js` 是项目自带扫描器，**只适合快速对照**；实战口径建议自写脚本（见 §12 PITFALL-17 的自校验做法）
 - ✅ **v2.1.2 已修**：`desc` 由三元表达式生成，g3–g4 曾写「进阶试炼（最多 4 敌）」、g5–g9 曾写「高阶试炼（4 敌+魂攻防）」，而实际生成上限是 3 敌（Boss 关 = 1 Boss + 2 护卫、精英关 = 1 精英 + 2 杂兵、普通关至多 3）。现文案与数据一致，并由 `test-group-levels.js` 的「`desc` 敌数一致」断言（逐大关比对）锁死防回归
 
 **其他战斗模块**：
@@ -415,6 +445,20 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 ### 6.6 宝珠
 
 5 类型（血气/攻击/魂攻/防御/魂防）× 4 品质（N/R/SR/SSR），合成 65% 成功率，可分解/升级/装配，月重置，战斗属性自动应用。
+
+### 6.7 关卡试炼（单敌关，`LEVELS`）
+
+⚠️ **与 §6.3 的敌群是两套系统**：这里是**单敌**对战、手写常量 `page/levels.js`；敌群是多对多、程序化生成。
+
+- **24 章 × 每章 3~6 关 = 135 关**（chap1~3 各 3 关，**chap4 起固定 6 关**）
+- 每章末关（x-6）是 BOSS：`boss: true`，**chap16 起带 `dualAffix: true`**（双词条，见 §6.3 的 `pickBossAffix`）
+- 章数**没有硬编码**：徽标 `Object.keys(LEVELS).length`、解锁链 `allPrevCleared()`、`findLevel()`、下一关推进全部遍历 `LEVELS`
+  → **扩章只需往 `LEVELS` 加一个 chap 块**
+- 数值斜率：**每章 ≈1.113×**（五个字段一致），关卡形态固定编排：
+  x-1 均衡 / x-2 高攻低防 / x-3 高防高血 / x-4 最高攻 / x-5 次高攻 / x-6 BOSS（atk 中上、def/hp 最高）
+- **实测 50% 胜率门槛**（基准账号 攻2883/防1145/血24800，trials=12，真实单敌引擎 `battle.js`）：
+  chap17~20 **0.625×** / chap21~22 **0.875×** / chap23 **0.975×** / **chap24 1.075×**（只需再练 +7.5%）
+- 战利品与炼魂解锁与章数无关（`rollLoot` 只看是否 `boss`；炼魂解锁固定挂在 `9-6`）
 
 ---
 
@@ -463,7 +507,8 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ## 8. 测试（以实时运行结果为准）
 
-> 以下测试表是最近一次记录的历史统计，不代表当前实时状态。开始任务前应实际扫描并运行 `scripts/test-*.js`，以命令输出确认当前套件数、断言数和失败项。
+> 下表是 **2026-09-26（v2.1.33）实跑**的统计，**38 套件 / 1015 断言 / 0 失败**。
+> 数量会随版本变动，开始任务前仍应实际扫描运行一次确认。
 
 ```bash
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
@@ -471,38 +516,40 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 
 | 套件 | 断言 | 覆盖 |
 |---|---|---|
-| `test-a11y-tokens` | 40 | 🛡️ **设计体系护栏**（见 §4.3） |
-| `test-scroll-lock` | 13 | 🔒 **模态滚动锁必须归零**（防「页面无法滚动」，见 §12 PITFALL-14） |
-| `test-page-load` | 27 | 页面加载链冒烟（校验 index.html 挂载了全部模块 + 骨架容器）——**接线事故防线** |
-| `test-sync-coverage` | 20 | ☁️ **云同步键覆盖**：从源码派生 store 键做 push→pull 往返，防「新增键忘同步」（见 §7.1） |
-| `test-pools-reachable` | 19 | 🔌 **技能/天赋可达性**：按真实技能池判定 + 未入池清单显式登记（见 §6.3） |
-| `test-status-lifecycle` | 89 | 🔁 状态生命周期（递减/到期/受击解除）+ `_statMods` + 护盾 + 迷惑（三选一 + 按技能等级取值）+ 蓄力时点 + **技能等级必须影响威力** |
-| `test-group-levels` | 65 | 180 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / **`desc` 敌数与实际一致** |
-| `test-pet-codex` | 53 | 图鉴 + 参战 Unit 生成 + **天赋固有专属（防跨宠物回归）** |
+| `test-status-lifecycle` | 104 | 🔁 状态生命周期（递减/到期/受击解除）+ `_statMods` + 护盾 + 迷惑 + 蓄力时点 + 技能等级影响威力 + **末日技能禁用 / 附身禁技与冷却暂停 / 遗言诅咒魂防减免**（v2.1.32/33） |
+| `test-group-levels` | 79 | 240 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / `desc` 敌数与实际一致 |
+| `test-pet-codex` | 53 | 图鉴 + 参战 Unit 生成 + 天赋固有专属（防跨宠物回归） |
 | `test-pet-talents` | 45 | 10 个专属天赋 hook + 命中/闪避 + petOnly 隔离 + 端到端伤害分担 |
 | `test-group-inherit` | 44 | 敌群属性继承 50% / 宠物放大 / 魂攻魂防接入 |
+| `test-a11y-tokens` | 40 | 🛡️ **设计体系护栏**（见 §4.3） |
 | `test-skill` | 40 | 25 敌群技能 |
-| `test-pet-materials` | 37 | 材料 + 炼化 + **10:1 兑换 + 技能指定升级** |
-| `test-skills` | 29 | 玩家技能 |
+| `test-pet-materials` | 37 | 材料 + 炼化 + 10:1 兑换 + 技能指定升级 |
+| `test-skills` | 29 | 玩家技能（经济/升级/槽位） |
 | `test-challenge-borrow` | 27 | 隐藏挑战顺延/补召/误锁恢复 |
 | `test-orb-wiring` | 27 | 宝珠全链路（合成/装配/升级/属性生效） |
+| `test-page-load` | 27 | 页面加载链冒烟（校验 index.html 挂载了全部模块 + 骨架容器）—— **接线事故防线** |
+| `test-skill-range-channels` | 27 | 🎚️ 技能区间必须真的随成长变化（判据＝数值随 t 变） |
 | `test-enemy` | 26 | 16 天赋 + 编成阶梯 |
-| `test-status` | 26 | 状态定义 |
+| `test-player-skills` | 26 | 玩家技能挂钩 + **冰魄两段 / 巨石降魂防按等级可叠封顶**（v2.1.33） |
+| `test-status` | 26 | 状态定义 + 生命周期（附身/末日/破甲叠加） |
 | `test-state-core` | 25 | 状态框架 |
 | `test-date-roll` | 23 | 时间工具 |
-| `test-pet-injury` | 22 | 🩹 成熟期受伤系统（50% 几率 / 治疗进度 / 不可参战） |
+| `test-pet-injury` | 22 | 🩹 成熟期受伤系统 |
 | `test-exercise-rename` | 21 | 动作改名/合并四库联动 |
+| `test-pools-reachable` | 21 | 🔌 技能/天赋可达性（按**真实技能池**判定） |
 | `test-battle-log-audit` | 20 | 📜 战斗日志可读性（行动者/目标/文案口径） |
 | `test-store` | 20 | store 注册表/读写/坏值回落 |
+| `test-sync-coverage` | 20 | ☁️ 云同步键覆盖（从源码派生键做往返） |
 | `test-pets` | 19 | 宠物生命周期 |
-| `test-group-anchor` | 17 | 难锚定（默认关闭，保留实现与测试） |
+| `test-group-anchor` | 17 | 难度锚定（默认关闭，保留实现与测试） |
 | `test-orbs` | 17 | 宝珠数值表 |
-| `test-battle` | 16 | 单敌战斗 + rng |
+| `test-terrain` | 17 | 6 场地 + 数据完整性 + 对敌我双方均生效 |
+| `test-battle` | 16 | 单敌战斗 + rng 注缝 + dualAffix |
 | `test-pet-store` | 15 | 宠物持久化 |
-| `test-player-skills` | 15 | 玩家技能挂钩 |
-| `test-terrain` | 17 | 6 场地 + **数据完整性（name/desc 非空，`desc` 可拆条供介绍弹层用）+ 对敌我双方均生效** |
+| `test-group-battle` | 14 | 群战引擎 + **遗言 startCooldown 防回归**（v2.1.31） |
+| `test-group-determinism` | 14 | 🎬 同种子必须逐字节一致（RNG 回放） |
 | `test-group-progress` | 13 | 敌群解锁链 |
-| `test-group-battle` | 11 | 群战引擎 |
+| `test-scroll-lock` | 13 | 🔒 模态滚动锁必须归零（防「页面无法滚动」，见 §12 PITFALL-14） |
 | `test-pet-stage` | 10 | 宠物阶段归一化 |
 | `test-skill-store` | 10 | 技能点经济数值 |
 | `test-ai` | 7 | AI 策略 |
@@ -532,10 +579,23 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 - [x] ~~**原有 10 个宠物天赋是空壳**~~ → **v2.1.5 已全部接入实战**。幸运口袋走结算层（`game-render.js` 的 `groupVictoryReward`），其余走战斗 hook；为此同时引入了命中/闪避系统（`BASE_HIT_RATE`）
 - [~] **真机验收**：本地测试全绿，手机端手感/性能未全面验证
   → **暂缓**：dundun 2026-09-16 决定暂不需要
-- [~] **敌群数值平衡（现 180 关）**：2026-09-16 实测（账号 攻2883/防1145/血24800/魂攻532/魂防99）
-  g1~g13 全 100%、g14 43%、g15~g18 0%；达到 50% 胜率所需**属性倍率** = g14 1.17× / g15 1.86× / g16 2.38× / g17 3.23× / g18 4.09×。
-  阶梯本身是渐进的（每关约 +50~90%，不是死墙），但**瓶颈偏在防御** —— 继续堆攻的边际收益低于补防。
-  → **暂缓**：dundun 2026-09-16 决定暂不修改
+- [~] **敌群数值平衡（现 240 关）**：**v2.1.31 修复后**实测（基准账号 攻2883/防1145/血24800/魂攻532/魂防99）
+  50% 胜率所需**属性倍率** = g19 6.5× / g20 4.3× / g21 8.7× / g22 11.5× / g23 ≈17.5× / g24 ≈25×；
+  g8~g13 在 1× 下仍 100%（扩关与修复都没把已通关卡改难）。
+  - **g19/g20 倒挂**（6.5× vs 4.3×）：g19 Boss 抽 `doom_call + grow_atk` + 技能 `doom`，g20 抽温和的 `grow_def + grow_atk`
+    —— **词条/技能的确定性随机，不是斜率**（v2.1.29 起记录，2026-09-26 仍未裁决）
+  - **g23/g24 门槛极高**（17.5× / 25×）：属超限档设计问题，同样待裁决
+  - v2.1.30/31 已排除的两个「假难度」因素：遗言开场自爆（已修）、`startCooldown` 死配置（已修）
+- [ ] **`lastword`（遗言）仍在 Boss/精英共用池**：v2.1.31 修好开场冷却后不再是「白送」（敌人 10 回合后仍可作残局自爆，
+  符合设计文档本意）。**是否移出池 / 是否收紧 AI 施放条件，2026-09-26 未裁决**（dundun 只选了「修 startCooldown」）
+- [ ] **蓄力重击承伤仍是固定 +25%**（设计写 20%~35%）：`charging` 状态未接区间。
+  v2.1.32 审计发现，**dundun 2026-09-26 裁决暂不改**
+- [ ] **死元数据清理（无害，建议顺手清）**：`bossHalf`（中毒对 Boss 减半实际由 `status-defs` 按 `tags` 判定）、
+  `data.casterId`（迷惑只读 `data.level`/`data.skillId`）、`statusApps[].chance`（引擎不读，真实概率写在技能或状态里）、
+  `icebeam.freeze` / `ignoreSoulDef` / `spotlight.tauntDur`（均已硬编码等价实现）
+- [ ] **嘲讽「速度提升 200%」实装为 `spd *= 2`**（字面 +200% 应 = ×3）：设计文档措辞歧义，存疑未改
+- [ ] **场地 DOT 的「受 X% 防御降低」未实装**：设计写「沙暴受 200% 防御降低」「雨天受 300% 魂防降低」，
+  实现（`terrain.js`）都是裸 maxHP 百分比、无减免。本次审计顺带发现，未裁决
 - [x] **🐛 用户可见文案过期**：`page/group-levels.js` 的 `desc` 写「4 敌」，实际每关最多 3 敌 —— **v2.1.2 已修**（连同三处同源过期注释），并加防回归断言
 - [x] ~~**动作百科媒体待确认**~~ → **v2.1.26 已实测可访问**。Vercel 部署根目录 = `page/`，
   `/media/images/xxx.jpg` 返回 **200**（带 `page/` 前缀才是 404）；`page/media/` 共 38 个文件**已入库**；
@@ -554,7 +614,8 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 - [x] ~~**`OQ-8` 成长曲线未定**~~ → **v2.1.28 已定案为线性**：t = 炼化等级 ÷ 稀有度炼化上限（R50/SR60/SSR80/UR100），
   数值 = 下限 + (上限 − 下限) × t。实现即 `skillRangeT()` / `skillValue()`，已加回归断言（0/半/满 = 0/0.5/1）：`design-v2.0.md` §2.6 说「数值区间 = 随**基础属性**成长的下限~上限」，
   v2.1.22 暂按**技能等级**线性插值占位；定案后只需替换 `skillValue()` 的插值公式
-- [ ] **Debug 面板扩展**：RNG 回放 / 时间旅行 / 同步日志 / 性能面板（见 §5 末尾）
+- [x] ~~**Debug 面板扩展**~~ → **v2.1.26 已加「☁️ 同步」「⏱ 性能」、v2.1.27 已加「🎬 回放」（RNG 回放 + 时间旅行）**；
+  §5 末尾列的四项全部落地（性能面板仍可再细化 localStorage 写入次数）
 - [x] ~~**远端遗留分支清理**~~ → **v2.1.26 已清理**。`--merged origin/main` 显示全部 5 个已合并、`--no-merged` 为空，
   删除零风险（提交仍在 main 历史中）。远端现在只剩 `origin/main`
 - [x] ~~**`group-progress.js` 陈旧注释**~~ → **v2.1.26 已修**。正文 v2.1.21 改过，但第 10 行的
@@ -573,17 +634,18 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `page/stats.js` | 训练量 → 属性折算 |
 | `page/date-roll.js` / `monthly-reset.js` | 时间/周期工具 |
 | `page/challenge.js` | 隐藏挑战（含内嵌诊断块） |
-| `page/group-levels.js` / `group-progress.js` | 敌群 18×10=180 关生成 / 解锁链 |
+| `page/levels.js` | 🗺️ **关卡试炼**（单敌）24 章 135 关，手写常量 |
+| `page/group-levels.js` / `group-progress.js` | 敌群 24×10=240 关生成 / 解锁链 |
 | `page/sync.js` | ☁️ 云同步（载荷组装 / 拉取合并 / 导入导出；**新增 store 键无需改它**，见 §7.1） |
 | `page/battle-group.js` | 群战引擎（核心） |
-| `page/ai.js` / `talent.js` / `skill.js` / `status-defs.js` / `terrain.js` | 战斗内容层 |
+| `page/ai.js` / `talent.js` / `affix.js` / `skill.js` / `status-defs.js` / `terrain.js` | 战斗内容层（`affix.js` = v2.1.25 从天赋里拆出的**词条**注册表） |
 | `page/game-render.js` | 群战 UI（最大文件） |
 | `page/game-views.js` | 挑战页三视图骨架 |
 | `page/skills.js` / `player-skill-hooks.js` / `skill-store.js` / `skill-ui.js` | 玩家技能 |
 | `page/pets.js` / `pet-*.js` | 宠物系统 |
 | `page/orbs.js` | 宝珠 |
 | `page/debug.js` | 🐞 Debug 面板 |
-| `scripts/test-*.js` | 测试套件与断言数以 §8 的实时运行结果为准 |
+| `scripts/test-*.js` | 测试套件与断言数以 §8 的实时运行结果为准（v2.1.33：38 套件 / 1015 断言） |
 | `scripts/test-a11y-tokens.js` | 🛡️ 设计体系护栏 |
 | `scripts/check-release.js` | 版本三项校验（pre-commit hook） |
 | `doc/design-tokens-v2.1.md` | 🎨 设计规范（唯一权威） |
@@ -612,3 +674,31 @@ PITFALL-14. **模态关掉后页面滚不动**（2026-09-11 修复，v2.1.6）�
     - ❌ 兜底 `MutationObserver` 用**共享全局**变量 —— 嵌套模态时第二个拿不到兜底，且前一个模态的 `close()` 会掐断后一个的 observer
     - ✅ 正解：observer 每个模态各自持有；`close()` 幂等且只断自己的；关闭一律走 `_close()`（`utils.js` 已实现，模态带 `data-modal-managed` 标记）
     - ✅ 防回归：`scripts/test-scroll-lock.js` 断言 `_scrollLockCount()` 最终为 0。改这块代码时务必跑它
+
+PITFALL-15. **测试只断言「生产者」会给出虚假信心**（2026-09-26，v2.1.32 修）：`doomed` 状态会产出
+    `skillsDisabled` mutation，`test-status.js:85` 断言「mutation 被生产」一直是绿的 ——
+    但**全项目没有任何消费者**，末日详情页写着「技能不可用」而实战照样放技能，这个 bug 因此藏了很久。
+    **教训：防线要落在「对外可观察的行为」上**（本回合到底放没放技能），不要落在中间结构（某个字段有没有被写出来）。
+    同类：PITFALL-11（可达性用「字符串出现」当判据）、v2.1.25（按 id 取对象静默失效）。
+
+PITFALL-16. **「关卡 / 挑战」二义性**（2026-09-26 实际踩到）：用户说「关卡挑战新增 3 大关卡」，
+    我按「敌群」做了 v2.1.30（18→24 大关），实际用户指的是「关卡试炼」（`LEVELS`，单敌），
+    于是 v2.1.32 又做了一遍。两套系统见开头表格。
+    **教训：接到关卡类需求先 `grep` 两个文件确认形态**（单敌 = `levels.js`，多对多 = `group-levels.js`），
+    或直接问一句「是单敌关卡还是敌群」。
+
+PITFALL-17. **平衡扫描器必须先拿已知基准自校验**（2026-09-26）：新写扫描脚本时，先用**上一次已公布的实测值**
+    跑一遍（本次用 v2.1.29 的 g20 3.5× / g21 8.3×），数字对得上再扫新关卡 ——
+    否则无法区分「新关卡真的更难」与「我的扫描器口径不对（漏加载 ai.js/terrain.js、宠物数值硬编码等）」。
+    本项目历史上已因口径分叉得出过错误结论（v2.1.16 撤回「曲线有断崖」就是这类）。
+
+PITFALL-18. **状态「解除时点」与判据「置位时点」的先后**（2026-09-26，v2.1.33 修）：幽魂附身在 `onTurnStart` 里
+    `clearStatus`，而判据 `_possessed` 由 `onBeforeAction` 置位 —— **解除永远早于置位**，
+    导致「技能不可用 / 冷却暂停」两项从未生效（且 v2.1.15 接的判定永远走不到，是第二层死接线）。
+    附带两个修正要点：① 判据优先读**状态是否存在**（`purge`/`clearStatus` 不派发 `onExpire`，标志位会泄漏成永久禁技）；
+    ② 需要「回合内某时刻」的判定必须在**本回合内快照** —— 回合末 `ageStatuses` 会先掉光状态，晚一步判就永远 false。
+
+PITFALL-19. **PowerShell `Get-Content` 数行数会少数**（2026-09-26）：量 `game-render.js` 得 1237、
+    `battle-group.js` 得 825，与架构演化表记录的 1288 对不上，一度以为表写错了。
+    用 `node -e "fs.readFileSync(f,'utf8').split('\n').length-1"` 复核 → **1288，与表一致**。
+    **量行数一律用 node**；`git show HEAD:f > tmp` 这类重定向也会多出十几行，同样把数字带偏。

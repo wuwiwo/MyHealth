@@ -110,7 +110,12 @@ defineStatus({
   }
 });
 
-/* 幽魂附身：技能不可用 + 冷却暂停；下回合开始时解除并受最大生命值比例伤害（无视防御） */
+/* 幽魂附身：技能不可用 + 冷却暂停；回合开始受最大生命值比例伤害（无视防御）
+   ⚠️ v2.1.33：**解除时点由「下回合开始」改为「本回合结束（duration 到期）」**。
+   原实现在 onTurnStart 里 damage + `_possessed=false` + clearStatus，
+   而 `_possessed` 是 onBeforeAction 才置位的 —— **解除永远早于置位**，
+   于是「技能不可用」与「冷却暂停」两项从未生效（实测：被附身的单位照样放技能、冷照减）。
+   现在状态贯穿该单位的行动窗口（恰好 1 个回合），回合末由 onExpire 复位标志。 */
 defineStatus({
   id: 'possessed',
   name: '幽魂附身',
@@ -119,16 +124,13 @@ defineStatus({
   stacking: 'refresh',
   hooks: {
     onBeforeAction: function (unit) {
-      unit._possessed = true;   // skill.js 的 usableSkills 读这个标记
-      return { events: [{ type: 'passive', statusId: 'possessed', unitId: unit.id, msg: '👻 被幽魂附身' }] };
+      return { events: [{ type: 'passive', statusId: 'possessed', unitId: unit.id, msg: '👻 被幽魂附身：技能不可用、冷却暂停' }] };
     },
     onTurnStart: function (unit, st) {
-      // 附身解除 + 受最大生命值比例伤害（无视防御）
+      // 回合开始：受最大生命值比例伤害（无视防御）。状态本身留到本回合末自然到期。
       var dmg = Math.floor(unit.base.hp * 0.08);
       unit.hp = Math.max(0, unit.hp - dmg);
-      unit._possessed = false;
-      clearStatus(unit, 'possessed');
-      return { events: [{ type: 'dot', statusId: 'possessed', unitId: unit.id, amount: dmg, msg: '👻 附身解除: -' + dmg }] };
+      return { events: [{ type: 'dot', statusId: 'possessed', unitId: unit.id, amount: dmg, msg: '👻 附身侵蚀: -' + dmg }] };
     }
   }
 });
@@ -199,7 +201,9 @@ defineStatus({
 });
 
 /* 遗言诅咒：攻击·魂攻大幅降低 + 每回合最大生命值伤害
-   v2.1.15：固定 -15 改为按 base 比例 -25%（设计文档只说「大幅降低」，未给数值） */
+   v2.1.15：固定 -15 改为按 base 比例 -25%（设计文档只说「大幅降低」，未给数值）
+   v2.1.33：每回合伤害补上「**受到自身魂防御降低**」（设计文档原文）——
+   此前是固定 5% 最大生命、完全不减。文档未给系数，按引擎既有的「减免 = 防御/2」口径取魂防半数。 */
 defineStatus({
   id: 'lastworded',
   name: '遗言诅咒',
@@ -209,7 +213,8 @@ defineStatus({
   statModsPct: { atk: -0.25, soulAtk: -0.25 },
   hooks: {
     onTurnStart: function (unit) {
-      var dmg = Math.floor(unit.base.hp * 0.05);
+      var sdef = (unit.base && unit.base.soulDef) || 0;
+      var dmg = Math.max(1, Math.floor(unit.base.hp * 0.05) - Math.floor(sdef / 2));
       unit.hp = Math.max(0, unit.hp - dmg);
       return { events: [{ type: 'dot', statusId: 'lastworded', unitId: unit.id, amount: dmg, msg: '💀 遗言: -' + dmg }] };
     }

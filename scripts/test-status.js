@@ -68,13 +68,17 @@ assert('哈欠触发睡眠', slept);
 
 // ---- 5. 幽魂附身 ----
 const pos = sandbox.createUnit({ id: 'pos1', skills: ['charge'], base: { hp: 100, atk: 10, def: 5 } });
-sandbox.applyStatus(pos, { id: 'possessed', duration: 2 });
-sandbox.dispatch(pos, 'onBeforeAction', {});
-assert('附身标记禁技', pos._possessed === true);
+sandbox.applyStatus(pos, { id: 'possessed', duration: 1 });
 const ph = pos.hp;
-sandbox.tickStatuses(pos, 'turnStart');  // 解除 + 伤害
-assert('附身解除', pos._possessed === false && !sandbox.hasStatus(pos, 'possessed'));
-assert('附身解除伤害', pos.hp < ph, ph + '→' + pos.hp);
+sandbox.tickStatuses(pos, 'turnStart');   // 回合开始只结算伤害
+assert('附身回合开始受伤', pos.hp < ph, ph + '→' + pos.hp);
+/* v2.1.33：解除时点由「下回合开始」改为「本回合末（duration 到期）」——
+   原时点的 clearStatus 早于 onBeforeAction 的置位，「技能不可用 / 冷却暂停」永远不可能生效。
+   ⚠️ 禁技与冷却暂停的**行为**断言在 test-status-lifecycle.js 第 13 节（那里才加载 skill.js/battle-group.js），
+      本套件只加载 4 个文件，只断言状态生命周期本身。 */
+assert('附身状态回合开始不解除（留到回合末）', sandbox.hasStatus(pos, 'possessed'));
+sandbox.tickStatuses(pos, 'turnEnd');
+assert('附身回合末到期解除', !sandbox.hasStatus(pos, 'possessed'));
 
 // ---- 6. 末日 ----
 const dm = sandbox.createUnit({ id: 'dm1', base: { hp: 200, atk: 10, def: 5, soulAtk: 0 } });

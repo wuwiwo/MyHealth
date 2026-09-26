@@ -668,6 +668,10 @@ function groupUnitTurn(gb, actor) {
   /* ---- v2.1.21：两种情况会「替代」本回合的正常行动 ---- */
   var acted = false;
 
+  /* v2.1.33：附身判定必须在**本回合内**快照 —— 回合末的 ageStatuses 会先把附身状态掉光，
+     等到下面「冷却递减」那一步再判就永远是 false（所以「冷却暂停」此前怎么测都没效果）。 */
+  var possessedThisTurn = isPossessed(actor);
+
   /* 蓄力重击结算：时点对齐设计文档（本回合蓄力 → 下回合结算 400%） */
   if (actor._chargeReady) {
     actor._chargeReady = false;
@@ -759,8 +763,8 @@ function groupUnitTurn(gb, actor) {
   aged.forEach(function (e) { events.push({ msg: e.msg, targetId: e.unitId, type: e.type, reason: e.reason }); });
   if (aged.length) syncStatusDerived(actor);
 
-  // 技能冷却递减
-  tickSkillCooldowns(actor);
+  // 技能冷却递减（v2.1.33：幽魂附身期间暂停 —— 设计文档「附身状态下技能不可用，且冷却暂停」）
+  if (!possessedThisTurn) tickSkillCooldowns(actor);
 
   // 命中/闪避修正倒计时（闪耀 / 打湿）
   if (actor._hitModTurns > 0) {
@@ -857,6 +861,27 @@ function groupBattleTick(gb) {
   }
 }
 
+/* v2.1.33：冰魄光束的「下回合第二段」（OQ-12：回合开始时触发，不占用行动）。
+   由 player-skill-hooks.js 施放时把 { targetId, dmg } 挂到施放者身上，
+   本函数在回合切换处统一结算并清空。目标已阵亡则该段不再生效。 */
+function resolveIceFollowUps(gb) {
+  var events = [];
+  (gb.units || []).forEach(function (u) {
+    var pend = u._iceFollowUp;
+    if (!pend) return;
+    u._iceFollowUp = null;
+    var t = gb.units.find(function (x) { return x.id === pend.targetId; });
+    if (!t || t.hp <= 0) return;
+    var dmg = Math.max(1, pend.dmg);
+    t.hp = Math.max(0, t.hp - dmg);
+    var ev = { msg: '❄️ ' + u.name + ' 冰魄余威 → ' + t.name + ' ' + dmg + ' 魂伤害（无视魂防，不占用行动）', targetId: t.id, type: 'damage' };
+    events.push(ev);
+    gb.events.push(ev);
+    gb.log.push({ turn: gb.turn, unit: u.name, events: [ev] });
+  });
+  return events;
+}
+
 /* 单步执行：一次只行动一个单位（用于逐个行动动画，速度优先级可见）
    返回 { unit: 行动单位, events, done, winner, queueIndex, queue } */
 function groupBattleStep(gb) {
@@ -879,6 +904,10 @@ function groupBattleStep(gb) {
     refreshAllStatMods(gb.units);
     gb._stepQueue = buildActionQueue(gb);
     gb._stepIdx = 0;
+    /* v2.1.33：冰魄光束第二段 —— 设计 §1.3-6 与 OQ-12 裁决「下回合**战斗开始时**触发，不占用行动」。
+       此前只结算了施放当回合那一段（实际输出只有设计的一半，
+       与 v2.1.24 修的「无影拳 5 连击只打 1 次」同类）。放在回合切换处，故不占任何单位的行动。 */
+    resolveIceFollowUps(gb);
     // v2.1.13 场地：回合开始结算（此前只接线了 onTurnEnd，开场类场地不生效）
     if (gb.terrain && gb.terrain.onTurnStart) {
       var ts2 = gb.terrain.onTurnStart(gb);

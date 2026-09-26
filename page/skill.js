@@ -55,9 +55,19 @@ function applyStartCooldowns(unit) {
   return unit;
 }
 
+/* 幽魂附身判定：技能不可用 + 冷却暂停（两处共用同一判据，避免分叉）。
+   v2.1.33：判据改为**以状态是否存在为准** —— 状态被净化/驱散移除即立刻解除；
+   标志位 `_possessed` 只作兜底（未加载 state-core 的最小测试集，如 test-skill.js），
+   它在「purge 不派发 onExpire」的路径上会泄漏成永久禁技，故不再作为主判据。 */
+function isPossessed(unit) {
+  if (!unit) return false;
+  if (typeof hasStatus === 'function') return hasStatus(unit, 'possessed');
+  return !!unit._possessed;
+}
+
 /* 可用技能：不在冷却且未附身（幽魂附身禁技） */
 function usableSkills(unit) {
-  if (unit._possessed) return [];   // 幽魂附身：技能不可用
+  if (isPossessed(unit)) return [];   // 幽魂附身：技能不可用
   return (unit.skills || []).filter(function (id) {
     return SKILLS[id] && !skillOnCooldown(unit, id);
   });
@@ -523,7 +533,7 @@ var SKILL_DOCS = {
   shrink:     { desc: '自身闪避 +10%（上限 50%），可重复施放叠加，持续到战斗结束。' },
   yawn:       { desc: '使随机 1 名敌人获得哈欠 1 回合；其下回合开始有 55% 概率进入睡眠 1 回合。' },
   drench:     { desc: '使随机 1 名敌人潮湿 2 回合：魂防 -25%，且对其命中率 +30%。' },
-  possess:    { desc: '使随机 1 名敌人被幽魂附身 1 回合：技能不可用；下回合开始时解除并受到其最大生命 8% 的伤害（无视防御）。先制度 +1。' },
+  possess:    { desc: '使随机 1 名敌人被幽魂附身 1 回合：技能不可用且**技能冷却暂停**；下回合开始时解除并受到其最大生命 8% 的伤害（无视防御）。先制度 +1。' },
   taunt:      { desc: '自身进入嘲讽 1 回合：敌方单体攻击优先选中自身，且自身速度 ×2 参与出手排序。' },
   doom:       { desc: '使随机 1 名敌人末日 4 回合：无法被治疗、技能不可用、普攻伤害减半，且每回合开始受到施加者魂攻×50% 的伤害（无视防御与减伤）。' },
   drainbuff:  { desc: '随机 1 名敌人的增益状态时长减半，被削掉的攻击加成折算给自身（+N% 攻击，3 回合）。' },
@@ -531,7 +541,7 @@ var SKILL_DOCS = {
   cleanse:    { desc: '解除我方 1 名队友的普通~高级负面，并回复其 魂攻×50% + 20 点生命（特级负面不解除）。' },
   heal:       { desc: '使我方随机 1 名队友回复 魂攻×80% + 其最大生命 10% 的生命。' },
   empower:    { desc: '使我方 1 名角色攻击 +30%，持续 2 回合。' },
-  lastword:   { desc: '施放后自身立即阵亡，使随机 1 名敌人中「遗言诅咒」7 回合：攻击与魂攻 -25%，且每回合开始受到其最大生命 5% 的伤害。开场即进入冷却。' },
+  lastword:   { desc: '施放后自身立即阵亡，使随机 1 名敌人中「遗言诅咒」7 回合：攻击与魂攻 -25%，且每回合开始受到其最大生命 5% 的伤害（**该伤害受其魂防半数减免**）。开场即进入冷却。' },
   fortify:    { desc: '自身防御与魂防 +10%，可重复施放叠加（最多 5 层 → +50%），持续到战斗结束。' },
   clearfog:   { desc: '全场普通~高级负面状态全部解除，并使全场「能力变化」归零（攻击/防御/速度的成长与增减益一并还原）。' }
 };

@@ -164,7 +164,11 @@ function playerAttackSkill(gb, player, skillId) {
     var dmg = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
     target.hp = Math.max(0, target.hp - dmg);
     applyStatus(target, { id: 'freeze', duration: 1 });
-    events.push({ msg: '❄️ ' + player.name + ' 冰魄光束 → ' + target.name + ' ' + dmg + ' 魂伤害（冰冻 1 回合）' });
+    /* v2.1.33：第二段挂起，由 battle-group 的 resolveIceFollowUps 在**下回合开始时**结算
+       （设计 §1.3-6 + OQ-12：下回合战斗开始时触发，不占用行动）。
+       此前只打了当回合这一下、第二段从未存在 → 实际输出只有设计的一半。 */
+    player._iceFollowUp = { targetId: target.id, dmg: dmg };
+    events.push({ msg: '❄️ ' + player.name + ' 冰魄光束 → ' + target.name + ' ' + dmg + ' 魂伤害（冰冻 1 回合，下回合追加一段）' });
     return { name: '冰魄光束', events: events, cd: eff.cd };
   }
   if (skillId === 'boulder') {
@@ -172,8 +176,18 @@ function playerAttackSkill(gb, player, skillId) {
     var t2 = enemies[0];
     var dmg2 = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
     t2.hp = Math.max(0, t2.hp - dmg2);
-    applyStatus(t2, { id: 'souldown', duration: 3 });
-    events.push({ msg: '🪨 ' + player.name + ' 巨石重压 → ' + t2.name + ' ' + dmg2 + ' 魂伤害（魂防 -' + Math.round((eff.soulDefDown || 0) * 100) + '%）' });
+    /* v2.1.33：按设计「降魂防 n×1%、可叠加、上限 -60%、直到战斗结束」。
+       此前是 applyStatus(..., {duration: 3}) 直接用 souldown 的**定义值**
+       （固定 -15%、maxStacks 1 不可叠、3 回合）→ 降幅不随等级、不可叠、到期就没了，三项都不符。
+       改法与「打湿」一致：走**状态实例**的 modsPct（同键实例值覆盖定义值，不会叠成两份），
+       每次施放在已有值上继续下压，夹在 -60% 上限；duration 取极大值表示持续到战斗结束。 */
+    var down = eff.soulDefDown || 0;
+    var prev = null;
+    (t2.statuses || []).forEach(function (s) { if (s.id === 'souldown') prev = s; });
+    var stacked = Math.min(0.60, ((prev && prev.modsPct && -prev.modsPct.soulDef) || 0) + down);
+    applyStatus(t2, { id: 'souldown', duration: 999, modsPct: { soulDef: -stacked } });
+    if (typeof syncStatusDerived === 'function') syncStatusDerived(t2);
+    events.push({ msg: '🪨 ' + player.name + ' 巨石重压 → ' + t2.name + ' ' + dmg2 + ' 魂伤害（魂防 -' + Math.round(stacked * 100) + '%，持续到战斗结束）' });
     return { name: '巨石重压', events: events, cd: eff.cd };
   }
   return null;

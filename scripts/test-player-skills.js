@@ -128,6 +128,36 @@ const gbB = sb.createGroupBattle({ allies:[atkPlayer], enemies:mkEnemies() });
 const boulder = sb.playerAttackSkill(gbB, atkPlayer, 'boulder');
 assert('巨石降魂防', boulder && gbB.enemies.some(e => sb.hasStatus(e, 'souldown')), JSON.stringify(boulder && boulder.events));
 
+/* ---- 7b. v2.1.33：冰魄第二段（设计 §1.3-6 + OQ-12：下回合开始时结算、不占用行动）---- */
+{
+  const foe = sb.createEnemyUnit({ tier:'minion', name:'冰靶', base:{ hp:5000, atk:5, def:2, spd:1 } });
+  const gbIce = sb.createGroupBattle({ allies:[atkPlayer], enemies:[foe] });
+  sb.playerAttackSkill(gbIce, atkPlayer, 'icebeam');
+  const hp1 = foe.hp;
+  assert('冰魄第一段立即结算', hp1 < 5000, 'hp=' + hp1);
+  assert('冰魄第二段已挂起', !!atkPlayer._iceFollowUp && atkPlayer._iceFollowUp.targetId === foe.id, JSON.stringify(atkPlayer._iceFollowUp));
+  const follow = sb.resolveIceFollowUps(gbIce);
+  assert('冰魄第二段在回合开始时结算', foe.hp < hp1 && follow.length === 1, 'hp=' + foe.hp + ' ev=' + follow.length);
+  assert('两段伤害相等（各 魂攻×n×8%）', (5000 - hp1) === (hp1 - foe.hp), (5000 - hp1) + ' / ' + (hp1 - foe.hp));
+  assert('第二段只结算一次（挂起已清空）', sb.resolveIceFollowUps(gbIce).length === 0 && !atkPlayer._iceFollowUp);
+}
+
+/* ---- 7c. v2.1.33：巨石重压按设计「降魂防 n×1%、可叠加、上限 -60%、直到战斗结束」---- */
+{
+  const foe = sb.createEnemyUnit({ tier:'minion', name:'石靶', base:{ hp:5000, atk:5, def:2, soulDef:1000, spd:1 } });
+  const gbSt = sb.createGroupBattle({ allies:[atkPlayer], enemies:[foe] });
+  const inst = () => (foe.statuses || []).find(s => s.id === 'souldown');
+  sb.playerAttackSkill(gbSt, atkPlayer, 'boulder');   // lv10 → n×1% = 10%
+  assert('巨石降魂防按等级取值（lv10 → -10%）', !!inst() && Math.abs(inst().modsPct.soulDef + 0.10) < 1e-9, inst() && JSON.stringify(inst().modsPct));
+  assert('巨石降魂防持续到战斗结束（duration 999）', inst().duration === 999, 'dur=' + inst().duration);
+  assert('降魂防真的进 effectiveStat（1000 → 900）', sb.effectiveStat(foe, 'soulDef') === 900, sb.effectiveStat(foe, 'soulDef'));
+  sb.playerAttackSkill(gbSt, atkPlayer, 'boulder');
+  assert('巨石降魂防可叠加（第二次 -20%）', Math.abs(inst().modsPct.soulDef + 0.20) < 1e-9, JSON.stringify(inst().modsPct));
+  for (let i = 0; i < 6; i++) sb.playerAttackSkill(gbSt, atkPlayer, 'boulder');
+  assert('巨石降魂防封顶 -60%', Math.abs(inst().modsPct.soulDef + 0.60) < 1e-9, JSON.stringify(inst().modsPct));
+  assert('封顶后 effectiveStat 不低于 40%（1000 → 400）', sb.effectiveStat(foe, 'soulDef') === 400, sb.effectiveStat(foe, 'soulDef'));
+}
+
 // ---- 8. 完整战斗带技能 ----
 const fullPlayer = sb.createUnit({ id:'fp', side:'ally', name:'你', base:{hp:1000,atk:80,def:50,spd:8,soulAtk:60} });
 const st7 = sb.defaultSkillState();
