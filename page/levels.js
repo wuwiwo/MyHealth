@@ -215,6 +215,33 @@ const LEVELS = {
     {id:'27-4',npc:'无极剑帝',atk:3710,def:1485,hp:23575,soulAtk:1820,soulDef:600},
     {id:'27-5',npc:'永恒神使',atk:3610,def:1600,hp:25855,soulAtk:1755,soulDef:675},
     {id:'27-6',npc:'BOSS 永恒终焉',atk:3345,def:1690,hp:31775,soulAtk:1585,soulDef:1225,boss:true,dualAffix:true}
+  ]},
+  /* v2.1.35：扩到 30 章（dundun 报 27-6 已通关，要求继续加 3 章）。
+     数值与编排沿用 chap22 起同一套规则：每章 ≈1.113×，x-1 均衡 / x-2 高攻低防 /
+     x-3 高防高血 / x-4 最高攻 / x-5 次高攻 / x-6 BOSS（dualAffix 双词条）。 */
+  chap28:{name:'神话起源',levels:[
+    {id:'28-1',npc:'神话守卫',atk:3550,def:1670,hp:27435,soulAtk:1575,soulDef:630},
+    {id:'28-2',npc:'起源猎者',atk:3895,def:1535,hp:26955,soulAtk:1875,soulDef:595},
+    {id:'28-3',npc:'太初壁垒',atk:3255,def:1960,hp:32455,soulAtk:1435,soulDef:1195},
+    {id:'28-4',npc:'太古剑者',atk:4130,def:1655,hp:26240,soulAtk:2025,soulDef:670},
+    {id:'28-5',npc:'神话祭司',atk:4020,def:1780,hp:28775,soulAtk:1955,soulDef:750},
+    {id:'28-6',npc:'BOSS 神话之主',atk:3725,def:1880,hp:35365,soulAtk:1765,soulDef:1365,boss:true,dualAffix:true}
+  ]},
+  chap29:{name:'星海王座',levels:[
+    {id:'29-1',npc:'星海哨卫',atk:3950,def:1860,hp:30535,soulAtk:1755,soulDef:700},
+    {id:'29-2',npc:'彗星猎手',atk:4335,def:1710,hp:30000,soulAtk:2085,soulDef:660},
+    {id:'29-3',npc:'星核壁垒',atk:3625,def:2180,hp:36120,soulAtk:1595,soulDef:1330},
+    {id:'29-4',npc:'银河剑尊',atk:4595,def:1840,hp:29205,soulAtk:2255,soulDef:745},
+    {id:'29-5',npc:'星海执事',atk:4475,def:1980,hp:32025,soulAtk:2175,soulDef:835},
+    {id:'29-6',npc:'BOSS 星海之王',atk:4145,def:2090,hp:39360,soulAtk:1965,soulDef:1520,boss:true,dualAffix:true}
+  ]},
+  chap30:{name:'终极真理',levels:[
+    {id:'30-1',npc:'真理守卫',atk:4395,def:2070,hp:33985,soulAtk:1955,soulDef:780},
+    {id:'30-2',npc:'终律猎者',atk:4825,def:1905,hp:33390,soulAtk:2320,soulDef:735},
+    {id:'30-3',npc:'终极壁垒',atk:4035,def:2425,hp:40200,soulAtk:1775,soulDef:1480},
+    {id:'30-4',npc:'万法剑皇',atk:5115,def:2050,hp:32505,soulAtk:2510,soulDef:830},
+    {id:'30-5',npc:'真理代言',atk:4980,def:2205,hp:35645,soulAtk:2420,soulDef:930},
+    {id:'30-6',npc:'BOSS 终极真理',atk:4615,def:2325,hp:43810,soulAtk:2185,soulDef:1690,boss:true,dualAffix:true}
   ]}
 };
 
