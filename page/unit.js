@@ -11,7 +11,7 @@
 function createUnit(spec) {
   spec = spec || {};
   var base = spec.base || {};
-  return {
+  var unit = {
     id: spec.id || ('unit-' + Math.floor(battleRnd() * 1e6)),
     side: spec.side || 'ally',           // 'ally' | 'enemy'
     name: spec.name || 'Unit',
@@ -30,6 +30,10 @@ function createUnit(spec) {
     tags: spec.tags || [],               // boss/elite/词条 id 等标签
     counters: {}                         // 战斗内计数器（连击/蓄力，M2b+ 扩展）
   };
+  /* v2.1.31：技能「起始冷却」接线 —— 技能的 startCooldown 此前无任何消费点（死配置），
+     见 skill.js 的 applyStartCooldowns。skill.js 在本文件之后加载，故按运行时存在性判定。 */
+  if (typeof applyStartCooldowns === 'function') applyStartCooldowns(unit);
+  return unit;
 }
 
 /* 纯查询 */

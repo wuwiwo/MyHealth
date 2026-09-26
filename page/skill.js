@@ -39,6 +39,22 @@ function tickSkillCooldowns(unit) {
   }
 }
 
+/* v2.1.31：把技能定义里的 startCooldown 真正写进冷却表。
+   ⚠️ 此前这个字段**全项目没有任何消费点** —— 定义里写了「开场即进入 N 回合冷却」，
+      实战中第 1 回合就能放（属于 PITFALL-12 那类「写了不读的标记」）。
+   设计文档 doc/2.0 敌群设计.md:173「遗言」明确要求：
+      「战斗开始，该技能进入冷却状态」+「起始冷却：7-13 回合」
+      —— 这是防止「开场自爆送关」的关键保护，缺了它敌人会满血自爆。
+   在 createUnit 里统一调用，故玩家/宠物/敌人一律生效。 */
+function applyStartCooldowns(unit) {
+  if (!unit || !unit.skills || !unit.skills.length) return unit;
+  unit.skills.forEach(function (id) {
+    var d = SKILLS[id];
+    if (d && d.startCooldown > 0) setSkillCooldown(unit, id, d.startCooldown);
+  });
+  return unit;
+}
+
 /* 可用技能：不在冷却且未附身（幽魂附身禁技） */
 function usableSkills(unit) {
   if (unit._possessed) return [];   // 幽魂附身：技能不可用

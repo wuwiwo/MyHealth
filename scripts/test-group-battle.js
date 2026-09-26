@@ -58,6 +58,20 @@ const gb3 = sandbox.createGroupBattle({ allies: [sandbox.createUnit({ id: 'a9', 
 const lw = sandbox.castSkill(gb3, martyr, 'lastword');
 assert('遗言牺牲自身', martyr.hp === 0, 'hp=' + martyr.hp);
 
+/* v2.1.31：技能「起始冷却」（startCooldown）此前全项目无消费点 ——
+   设计文档要求遗言「战斗开始进入冷却状态（起始冷却 7-13 回合）」，
+   缺了这条保护，敌人会第 1 回合自爆把关卡送掉。 */
+const lwGuard = sandbox.createUnit({ id: 'lwg', side: 'enemy', name: '遗言者2', skills: ['lastword'], base: { hp: 50, atk: 10, def: 5 } });
+assert('遗言开场进入冷却（startCooldown 生效）',
+  sandbox.skillOnCooldown(lwGuard, 'lastword') === true && sandbox.usableSkills(lwGuard).indexOf('lastword') < 0,
+  'cd=' + sandbox.skillCooldownLeft(lwGuard, 'lastword'));
+for (let ci = 0; ci < 10; ci++) sandbox.tickSkillCooldowns(lwGuard);
+assert('冷却递减 10 回合后遗言恢复可用',
+  sandbox.skillOnCooldown(lwGuard, 'lastword') === false && sandbox.usableSkills(lwGuard).indexOf('lastword') >= 0,
+  'cd=' + sandbox.skillCooldownLeft(lwGuard, 'lastword'));
+assert('未声明 startCooldown 的技能不受影响（冲撞开场即可用）',
+  sandbox.usableSkills(sandbox.createUnit({ id: 'cg', side: 'enemy', name: '冲撞者', skills: ['charge'], base: { hp: 50, atk: 10, def: 5 } })).indexOf('charge') >= 0);
+
 // ---- 4. 天赋触发 ----
 const bladeEnemy = sandbox.createUnit({ id: 'be', side: 'enemy', name: '利刃敌', talents: ['blade'], base: { hp: 100, atk: 20, def: 5, spd: 2 } });
 sandbox.attachTalents(bladeEnemy, ['blade']);
