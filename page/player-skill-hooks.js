@@ -126,8 +126,50 @@ function playerSkillTurnStart(gb, player, turn) {
       player._spotPity = (player._spotPity || 1) * 1.2;
     }
   }
+  /* v2.2.5 启风（§1.3 效果①）：每回合开始，我方**随机 2 名**速度 +n×1%（满级 +10%）。
+     用状态 `haste` 承载（可被驱散、持续至战斗结束），不直接改 base。 */
+  var qfLv = player._playerSkills['qifeng'] || 0;
+  if (qfLv >= 1) {
+    var qeff = getPlayerSkill('qifeng').effect(qfLv);
+    var pool = gb.allies.filter(function (a) { return a.hp > 0; });
+    for (var qi = 0; qi < (qeff.targets || 2) && pool.length; qi++) {
+      var pick = pool.splice(Math.floor(battleRnd() * pool.length), 1)[0];
+      applyStatus(pick, { id: 'haste', duration: 999, modsPct: { spd: qeff.spdPct } });
+      if (typeof syncStatusDerived === 'function') syncStatusDerived(pick);
+      events.push({ msg: '💨 ' + pick.name + ' 启风：速度 +' + Math.round(qeff.spdPct * 100) + '%' });
+    }
+  }
   if (player._spotLock > 0) player._spotLock--;
   return events;
+}
+
+/* v2.2.5 启风（§1.3 效果②）：我方持「全场速度最快者」时，该角色每回合额外进行一次普通攻击，
+   伤害 ×n×8%（满级 80%）。由 battle-group 的群战 tick 在**每次行动之后**调用。
+   判据：① 我方有人装配启风 ② actor 是「敌我双方合并」的速度最快者 ③ 本回合尚未触发过。
+   目标复用引擎常规的 `aiPickTarget(gb, actor, null)`（普攻 = 无技能），不另立口径。 */
+function qifengExtraAttack(gb, actor) {
+  if (!gb || !actor || actor.side !== 'ally' || actor.hp <= 0) return null;
+  if (gb._qifengTurn === gb.turn) return null;                 // 每个回合只触发一次
+  var owner = null;
+  (gb.allies || []).forEach(function (a) {
+    if (a._playerSkills && (a._playerSkills['qifeng'] || 0) >= 1) owner = a;
+  });
+  if (!owner) return null;
+  var eff = getPlayerSkill('qifeng').effect(owner._playerSkills['qifeng']);
+  var all = (gb.allies || []).concat(gb.enemies || []).filter(function (u) { return u.hp > 0; });
+  var fastest = null;
+  all.forEach(function (u) {
+    if (!fastest || effectiveStat(u, 'spd') > effectiveStat(fastest, 'spd')) fastest = u;
+  });
+  if (fastest !== actor) return null;                          // 只有全场最快者能双动
+  var foes = (gb.enemies || []).filter(function (u) { return u.hp > 0; });
+  if (!foes.length) return null;
+  var target = (typeof aiPickTarget === 'function') ? aiPickTarget(gb, actor, null) : foes[0];
+  if (!target || target.hp <= 0) target = foes[0];
+  gb._qifengTurn = gb.turn;
+  var evts = normalAttack(gb, actor, target, eff.extraMult);
+  evts.unshift({ msg: '💨 ' + actor.name + ' 启风：全场最快者额外一击（伤害 ×' + Math.round(eff.extraMult * 100) + '%）' });
+  return evts;
 }
 
 /* 瞩目回合结束：全体回复 (防+魂防)×受击次数 */

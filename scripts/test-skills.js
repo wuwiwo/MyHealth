@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* M1-1 测试：玩家技能系统
-   1) 9 技能注册
+   1) 技能注册（v2.2.5 起 10 个）
    2) 升级消耗曲线
    3) 满级总投入（v2.2 后 = 15,235；设计文档的 10,585 已过期）
    4) 技能点经济（周递增）
@@ -27,7 +27,11 @@ function assert(name, cond, detail) {
 
 // ---- 1. 9 技能注册 ----
 const ids = sb.listPlayerSkills();
-assert('9 技能', ids.length === 9, '实际 ' + ids.length);
+assert('10 技能（v2.2.5 新增启风）', ids.length === 10, '实际 ' + ids.length);
+assert('启风已注册（辅助 lv10）', (function () {
+  const q = sb.getPlayerSkill('qifeng');
+  return !!q && q.type === 'support' && q.maxLevel === 10 && sb.skillTotalCost(q) === 825;
+})(), JSON.stringify(sb.getPlayerSkill('qifeng')));
 ['crit','vitality','meteor','block','momentum','icebeam','goldshield','spotlight','boulder'].forEach(id => assert('注册: '+id, sb.getPlayerSkill(id) !== null));
 
 // ---- 2. 升级消耗 ----
@@ -45,7 +49,7 @@ ids.forEach(id => allTotal += sb.skillTotalCost(sb.getPlayerSkill(id)));
 /* v2.2 WP-B：气力恢复 / 金身护盾 满级 10 → 20（各 825 → 3150），
    故总投入由 10585 → **15235**。
    ⚠️ design-v2.0.md 的「全图鉴满级总投入 ≈ 10,585」旧数字已过期（v2.2 裁决明确「点数经济不改」）。 */
-assert('全技能满级 = 15235（v2.2 后）', allTotal === 15235, '实际 ' + allTotal);
+assert('全技能满级 = 16060（v2.2.5 后，含启风 825）', allTotal === 16060, '实际 ' + allTotal);
 
 // ---- 4. 技能点经济 ----
 assert('周递增 第1次 0%', sb.weeklyBonusRate(1) === 0);

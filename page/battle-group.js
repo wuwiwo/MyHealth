@@ -7,7 +7,7 @@
    ============================================ */
 
 /* 状态中文名（日志用） */
-var STATUS_NAMES = { sleep:'睡眠', poison:'中毒', freeze:'冰冻', flinch:'畏缩', wet:'潮湿', charging:'蓄力', possessed:'幽魂附身', doomed:'末日', armorbroken:'破甲', slow:'减速', souldown:'魂防降低', lastworded:'遗言诅咒', sleepy:'哈欠', weaken:'弱化', vigil:'警戒' };
+var STATUS_NAMES = { sleep:'睡眠', poison:'中毒', freeze:'冰冻', flinch:'畏缩', wet:'潮湿', charging:'蓄力', possessed:'幽魂附身', doomed:'末日', armorbroken:'破甲', slow:'减速', souldown:'魂防降低', lastworded:'遗言诅咒', sleepy:'哈欠', weaken:'弱化', vigil:'警戒', haste:'疾风' };
 function getStatusName(id){ return STATUS_NAMES[id] || id; }
 
 /* v2.1.14 威吓削减幅度：唯一来源是 talent.js 的 INTIMIDATE_ATK_DOWN
@@ -344,7 +344,7 @@ function selectTargets(gb, actor, skillDef) {
 }
 
 /* 普通攻击（无技能时） */
-function normalAttack(gb, actor, target) {
+function normalAttack(gb, actor, target, dmgMult) {
   var events = [];
   if (!target || target.hp <= 0) return events;
   // 命中判定（v2.1.5）
@@ -358,6 +358,9 @@ function normalAttack(gb, actor, target) {
   var atkVal = effectiveStat(actor, 'atk');
   var defVal = effectiveStat(target, 'def');
   var dmg = Math.max(1, atkVal - Math.floor(defVal / 2) + Math.floor(gb.rng() * 4) + 1);
+  /* v2.2.5 启风：额外普通攻击按系数缩放（**只作用在 base 上**，其后利刃/暴击/格挡等
+     常规修正照旧生效 —— 语义就是「一次 80% 伤害的普通攻击」）。不传 = 1，行为与旧版完全一致。 */
+  if (dmgMult && dmgMult !== 1) dmg = Math.max(1, Math.floor(dmg * dmgMult));
   /* v2.1.14 威吓落地：talent.js 的 onBattleStart 只写了 target._intimidated = true，
      全项目没有任何地方读这个标记（等于威吓从未真正生效）。这里在伤害结算前统一削减。 */
   if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown())));
@@ -942,6 +945,12 @@ function groupBattleStep(gb) {
   if (wantExtra && !gb.done && actor.hp > 0
       && (actor.side === 'ally' ? gb.enemies : gb.allies).some(function (u) { return u.hp > 0; })) {
     evts = evts.concat(groupUnitTurn(gb, actor));
+  }
+  /* v2.2.5 启风（§1.3 效果②）：我方持「全场最快者」时，该角色每回合额外一次普通攻击。
+     挂在行动之后、与疾影的 extraAction 同一位置；每个**回合**只触发一次（gb._qifengTurn 守卫）。 */
+  if (!gb.done && actor.hp > 0 && typeof qifengExtraAttack === 'function') {
+    var qe = qifengExtraAttack(gb, actor);
+    if (qe && qe.length) evts = evts.concat(qe);
   }
   gb.events = gb.events.concat(evts);
   gb.log.push({ turn: gb.turn, unit: actor.name, events: evts });

@@ -110,6 +110,17 @@ registerPlayerSkill({
   effect: function(lv){ return { power: lv*0.4, soulDefDown: lv*0.01, cd: 3 }; }
 });
 
+/* 10. 启风（辅助 lv10）：**v2.2 新增技能（§1.3）**
+   ① 每回合开始，我方**随机 2 名**角色速度 +n×1%（满级 +10%）—— 按「可被驱散的状态」实现（状态 `haste`）
+   ② 若我方持有**全场速度最快者**（敌我双方合并排序），该角色每回合**额外进行一次普通攻击**，
+      该次伤害为 n×8%（满级 80%）；不满足则效果②不生效
+   消耗 (lv+1)×15（满级 825）；与气势如虹/气力恢复/瞩目同类互斥（同类型限 1 自动生效） */
+registerPlayerSkill({
+  id: 'qifeng', name: '启风', type: 'support', maxLevel: 10, costPerLevel: function(lv){ return (lv+1)*15; },
+  desc: '每回合开始我方随机2名速度+n×1%（满级10%）；我方持全场最快者时，该角色每回合额外1次普通攻击，伤害×n×8%（满级80%）',
+  effect: function(lv){ return { spdPct: lv*0.01, targets: 2, extraMult: lv*0.08 }; }
+});
+
 /* --- 技能点经济 --- */
 
 /* 技能点：敌群通关 +10 点（原 100 的 1/10），周递增（首 0%，后续 +50%/次，最高 +250%） */

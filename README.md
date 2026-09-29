@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.2.4
+> Personal Health Manager — 个人健身健康管理应用 v2.2.5
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -306,4 +306,6 @@ Vercel 项目设置：
 
 | **v2.2.4** | **2026-09-29** | **🧪 WP-B 第二批：两个「需要状态承载」的效果**（§1.1 剩余五项里最小的两项）：① **陨石轰炸减益** —— 受击敌人接下来 **2 回合 攻/魂攻 −15%**，用**新状态 `weaken` 弱化**（`statModsPct` 双属性 −15%、`refresh` 叠层）承载；② **瞩目「嘲讽期间受伤 −15%」** —— 用**新状态 `vigil` 警戒**（`onDamage` → `dmgTakenReduce 0.15`，与 `wideguard` 同一条 mutation 通道）承载，瞩目触发时挂 `duration:2`（状态在自己回合末递减，嘲讽窗口要跨过敌方这一轮）。状态总数 **15 → 17**，落点 `status-defs.js` / `STATUS_NAMES` / `statusIcon`（⬇️🛡️）/ `player-skill-hooks.js`。`test-player-skills` 29→**31**、`test-spotlight` 4→**6**，全量 **1058 断言**；缓存版本对齐（v101）。⚠️ **WP-B 仍未做（3 项，都需引擎钩子）**：**启风**新技能、**宠物共享桥**（推翻 OQ-11）、**金身护盾破盾反伤** | `doc/changelog-v2.2.md` |
 
-> 当前版本：**v2.2.4**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
+| **v2.2.5** | **2026-09-29** | **🌬️ WP-B 第三批：新技能「启风」（§1.3）** —— 技能 **9 → 10**、状态 **17 → 18**（新增 `haste` 疾风）。① 每回合开始，我方**随机 2 名**角色速度 +(n×1)%（满级 **10%**）—— 挂**状态 `haste` 疾风**（`modsPct: { spd: pct }` 实例传值，`duration: 999` 持续至战斗结束，**不直接改 base**，可被驱散）；② 我方持**全场速度最快者**（敌我双方合并排序）时，该角色**每回合额外进行一次普通攻击**、伤害 ×(n×8)%（满级 **80%**）—— 新函数 `qifengExtraAttack(gb, actor)` 由 `battle-group` 群战 tick 在**每次行动之后**调用（与疾影 `extraAction` 同位置），每回合只一次（`gb._qifengTurn` 守卫），目标复用引擎既有 `aiPickTarget(gb, actor, null)`。`normalAttack` 新增**可选**第 4 参 `dmgMult`（只乘 base，其后威吓/利刃/暴击/格挡照旧生效；**不传 = 1，旧行为完全不变**）。启风与气势如虹/气力恢复/瞩目**同类互斥**（辅助槽「同类型限 1」自动生效）。`test-skills` 29→**30**（满级总投入 15235 → **16060**）、`test-player-skills` 31→**37**，全量 **1065 断言**；缓存版本对齐（v102）。⚠️ **WP-B 只剩 2 项**（需跨单位/破盾链路）：**宠物共享桥**（推翻 OQ-11）、**金身护盾破盾反伤** | `doc/changelog-v2.2.md` |
+
+> 当前版本：**v2.2.5**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）

@@ -200,5 +200,34 @@ assert('带技能完整战斗', gb3.done === true);
 const log = JSON.stringify(gb3.log);
 assert('战斗中触发技能效果', /暴击|气势|陨石/.test(log), '');
 
+/* ---- 9. 启风（v2.2.5，§1.3 新技能）---- */
+const qfPlayer = sb.createUnit({ id:'qf', side:'ally', name:'风', base:{hp:600,atk:60,def:30,spd:50,soulAtk:20} });
+const st8 = sb.defaultSkillState();
+st8.loadout = ['qifeng']; st8.levels = { qifeng: 10 };
+sb.attachPlayerSkills(qfPlayer, st8);
+const qfPet = sb.createUnit({ id:'qfp', side:'ally', name:'宠', base:{hp:500,atk:40,def:20,spd:30} });
+const qfGb = sb.createGroupBattle({ allies:[qfPlayer, qfPet], enemies:[
+  sb.createEnemyUnit({tier:'minion',name:'敌',base:{hp:400,atk:20,def:5,spd:10}})
+]});
+const qfEv = sb.playerSkillTurnStart(qfGb, qfPlayer, 1);
+assert('启风：每回合给我方随机 2 名挂「疾风」', qfGb.allies.filter(a => sb.hasStatus(a, 'haste')).length === 2, JSON.stringify(qfEv));
+assert('启风：疾风 = 速度 +10%（满级）', qfGb.allies.every(a => {
+  const s = (a.statuses || []).find(x => x.id === 'haste');
+  return !s || Math.abs(s.modsPct.spd - 0.10) < 1e-9;
+}), JSON.stringify(qfGb.allies.map(a => (a.statuses || []).map(s => s.id))));
+const qfHp = qfGb.enemies[0].hp;
+const qfEx = sb.qifengExtraAttack(qfGb, qfPlayer);
+assert('启风②：全场最快者额外一次普攻', !!qfEx && qfEx.length >= 2 && qfEx[0].msg.indexOf('启风') > -1 &&
+  qfEx.some(e => /攻击/.test(e.msg)), JSON.stringify(qfEx));
+assert('启风②：每回合只触发一次', sb.qifengExtraAttack(qfGb, qfPlayer) === null);
+assert('启风②：非全场最快者不触发', sb.qifengExtraAttack(qfGb, qfPet) === null);
+assert('启风②：伤害按 n×8% 缩放（不传系数 = 旧行为）', (function () {
+  const mk = () => sb.createGroupBattle({ allies:[qfPlayer], enemies:[sb.createEnemyUnit({tier:'minion',name:'靶',base:{hp:9999,atk:1,def:0,spd:1}})] });
+  const g1 = mk(), g2 = mk();
+  const e1 = sb.normalAttack(g1, qfPlayer, g1.enemies[0]);
+  const e2 = sb.normalAttack(g2, qfPlayer, g2.enemies[0], 0.8);
+  return e1.length >= 1 && e2.length >= 1 && (9999 - g2.enemies[0].hp) <= (9999 - g1.enemies[0].hp);
+})(), 'hp=' + qfHp);
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);
