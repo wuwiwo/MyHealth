@@ -63,17 +63,19 @@ function petUnit(sb, rarity, base) {
 }
 const chirp = petUnit(sb, 'SR', { atk: 15, def: 10, hp: 150, spd: 6 });   // 清脆鸟
 const ice = petUnit(sb, 'SSR', { atk: 20, def: 15, hp: 200, spd: 8 });    // 小冰晶
-const gScale = (sb.PET_GROUP_SCALE || {}).SR || 16;
-const iScale = (sb.PET_GROUP_SCALE || {}).SSR || 20;
-assert('清脆鸟(SR) 攻 15 → ' + chirp.base.atk, chirp.base.atk === 15 * gScale, String(chirp.base.atk));
-assert('小冰晶(SSR) 攻 20 → ' + ice.base.atk, ice.base.atk === 20 * iScale, String(ice.base.atk));
-assert('宠物血量同步放大并回满', ice.base.hp === 200 * iScale && ice.hp === ice.base.hp);
+/* v2.2 WP-A1：PET_GROUP_SCALE 改为**百分点**表述（1200/1400/1500/1600），
+   公式 = 基础属性 ×（稀有度% + Σ宝珠%）/ 100 —— 数值与旧的 ×12/14/15/16 等价。 */
+const gScale = (sb.PET_GROUP_SCALE || {}).SR || 1400;
+const iScale = (sb.PET_GROUP_SCALE || {}).SSR || 1500;
+assert('清脆鸟(SR) 攻 15 → ' + chirp.base.atk, chirp.base.atk === Math.floor(15 * gScale / 100), String(chirp.base.atk));
+assert('小冰晶(SSR) 攻 20 → ' + ice.base.atk, ice.base.atk === Math.floor(20 * iScale / 100), String(ice.base.atk));
+assert('宠物血量同步放大并回满', ice.base.hp === Math.floor(200 * iScale / 100) && ice.hp === ice.base.hp);
 assert('宠物也有魂防下限（不再被魂攻打全额）', chirp.base.soulDef === Math.floor(chirp.base.def * 0.5), String(chirp.base.soulDef));
 // 存在感：两只宠物合计输出应达到玩家（继承后）的 40% 以上
 // v2.1.18 放大倍数下调到约 2/3 后实测 43%，故阈值由 45% 调到 40%（仍是「非摆设」的量级）
 assert('两只宠物合计攻 ' + (chirp.base.atk + ice.base.atk) + ' ≥ 玩家 ' + g.atk + ' 的 40%',
   (chirp.base.atk + ice.base.atk) >= g.atk * 0.40, (chirp.base.atk + ice.base.atk) + ' vs ' + g.atk);
-assert('未知稀有度回退到 R 档', petUnit(sb, 'XX', { atk: 15, hp: 150 }).base.atk === 15 * ((sb.PET_GROUP_SCALE || {}).R || 12));
+assert('未知稀有度回退到 R 档', petUnit(sb, 'XX', { atk: 15, hp: 150 }).base.atk === Math.floor(15 * ((sb.PET_GROUP_SCALE || {}).R || 1200) / 100));
 
 // ---- 3. 敌人配置确定性（不同 Math 种子下应完全一致）----
 const sb2 = makeSandbox(987654321);

@@ -16,18 +16,17 @@ function orbBagHtml(d) {
   var sh = (d.materials || {}).orbShard || 0;
   var h = '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:14px">';
   h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
-  h += '<div style="flex:1;font-weight:700">💎 宝珠 <span style="color:var(--text3);font-weight:400">（碎片 <b>' + sh + '</b>）</span></div>';
-  h += '<button class="speed-btn" id="petSynth" style="padding:8px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">🔮 合成 20💎（65%）</button>';
+  h += '<div style="flex:1;font-weight:700">💎 宝珠 <span style="color:var(--text3);font-weight:400">（碎片 <b>' + sh + '</b> · 仅用于升级）</span></div>';
   h += '</div>';
   var bag = d.orbs || [];
   if (!bag.length) {
-    h += '<div style="color:var(--text3);margin-top:6px">库存空 —— 合成后在宠物详情里装配</div>';
+    h += '<div style="color:var(--text3);margin-top:6px">库存空 —— 通关隐藏挑战掉落宝珠，装配在宠物详情里</div>';
   } else {
     bag.forEach(function (o) {
       var ot = ORB_TYPES[o.type] || { name: o.type };
-      var val = (typeof orbStat === 'function') ? orbStat(o) : 0;
+      var val = (typeof orbPct === 'function') ? orbPct(o) : 0;
       h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--surface-3)">';
-      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span style="color:var(--green)">+' + val + '</span></div>';
+      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span style="color:var(--green)">+' + val + '%</span></div>';
       h += '<button class="speed-btn" data-orb-bag="' + o.id + '" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">♻️ 分解 +' + ((typeof ORB_DECOMPOSE !== 'undefined' && ORB_DECOMPOSE[o.rarity]) || 0) + '</button>';
       h += '</div>';
     });
@@ -47,11 +46,13 @@ function orbSlotsHtml(pet, d) {
     var ot = ORB_TYPES[t], o = eq[t];
     h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0">';
     if (o) {
-      var val = (typeof orbStat === 'function') ? orbStat(o) : 0;
-      var maxLv = (ot.maxLv && ot.maxLv[o.rarity]) || 10;
-      var maxed = (o.level || 1) >= maxLv;
+      var val = (typeof orbPct === 'function') ? orbPct(o) : 0;
+      /* v2.2：等级上限与「满级升品质」都看 ORB_QUALITY_SPEC（旧 ORB_TYPES.maxLv 已删） */
+      var spec = ((typeof ORB_QUALITY_SPEC !== 'undefined' && ORB_QUALITY_SPEC[o.rarity]) || { maxLv: 10, next: null });
+      var maxed = !spec.next && (o.level || 1) >= spec.maxLv;
       var cost = (typeof orbUpgradeCost === 'function') ? orbUpgradeCost(o) : 0;
-      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span style="color:var(--green)">+' + val + '</span></div>';
+      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span style="color:var(--green)">+' + val + '%</span>'
+        + (spec.next ? ' <span style="color:var(--text3)">（' + spec.maxLv + ' 级 → ' + spec.next + '）</span>' : '') + '</div>';
       h += maxed
         ? '<span style="color:var(--green);font-size:var(--fs-2xs)">满级</span>'
         : '<button class="speed-btn" data-orb-op="upgrade" data-orb-type="' + t + '" data-pet-idx="__IDX__" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">⬆' + cost + '💎</button>';
@@ -163,19 +164,8 @@ function renderPetPanel() {
     else { toast(rx.reason || '兑换失败', 'e') }
     renderPetPanel()
   })
-  var synthBtn = document.getElementById('petSynth')
-  if (synthBtn) synthBtn.addEventListener('click', function(){
-    var d6 = getPetStore()
-    if (typeof synthOrb !== 'function') { toast('宝珠模块未加载', 'e'); return }
-    var r6 = synthOrb(d6.materials || (d6.materials = {}))
-    if (r6.ok && r6.success) {
-      d6.orbs = d6.orbs || []
-      d6.orbs.push(r6.orb)
-      savePetStore(d6)
-      toast('🔮 合成 ' + ((ORB_TYPES[r6.type]||{}).name||r6.type) + '（' + r6.rarity + '）', 's')
-    } else { savePetStore(d6); toast(r6.reason || '合成失败', 'e') }
-    renderPetPanel()
-  })
+  /* v2.2 WP-A2：**删除「合成宝珠」入口** —— 宝珠本体改为隐藏挑战掉落，
+     碎片只用于升级（口径见 doc/changelog-v2.2.md）。 */
   ov.querySelectorAll('[data-orb-bag]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var oid = btn.getAttribute('data-orb-bag')
@@ -277,12 +267,12 @@ function renderPetDetail(pet, idx) {
   h += '　💨 速 <b>'+(b.spd||0)+'</b>'
   h += '　👻 魂攻 <b>'+(b.soulAtk||0)+(rs.soulAtk?'<span style="color:var(--green)">+'+rs.soulAtk+'</span>':'')+'</b>'
   // v2.1.17 已装配宝珠加成
-  var _ob = (typeof orbStat === 'function' && pet.orbs) ? pet.orbs : null
+  var _ob = (typeof orbPct === 'function' && pet.orbs) ? pet.orbs : null
   if (_ob) {
     var _add = {}
-    Object.keys(_ob).forEach(function(t){ _add[t] = orbStat(_ob[t]) })
-    if (_add.hp) h += '<span style="color:var(--purple,#a855f7)">+'+_add.hp+'</span>'
-    if (_add.soulAtk) h += '<span style="color:var(--purple,#a855f7)">+'+_add.soulAtk+'</span>'
+    Object.keys(_ob).forEach(function(t){ _add[t] = orbPct(_ob[t]) })
+    if (_add.hp) h += '<span style="color:var(--purple,#a855f7)">+'+_add.hp+'%</span>'
+    if (_add.soulAtk) h += '<span style="color:var(--purple,#a855f7)">+'+_add.soulAtk+'%</span>'
   }
   h += '</div>'
   // v2.1.17 宝珠槽位

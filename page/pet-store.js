@@ -34,6 +34,16 @@ function getPetStore() {
   var d = store.get('pets');
   if (!d) { d = { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], lastSettleDate: null, monthlyKey: null }; store.set('pets', d); }
   if (!Array.isArray(d.orbs)) d.orbs = [];   // v2.1.17 老存档补齐宝珠库存
+  /* v2.2 WP-A2：**宝珠口径迁移**（幂等）—— 旧 N 档折算碎片、R/SR/SSR 品质映射 + 等级保号、
+     超过新品质等级上限则截断（口径见 doc/changelog-v2.2.md「旧宝珠迁移口径定案」）。
+     迁移后 N 档已不存在，再次调用不会命中任何分支，所以放在读取路径上是安全的。 */
+  if (typeof migrateOrbs === 'function') {
+    var mig = migrateOrbs(d);
+    if (mig.dropped || mig.clamped) {
+      savePetStore(d);
+      console.log('[orb] v2.2 迁移：N 档 ' + mig.dropped + ' 颗 → ' + mig.shards + ' 碎片；等级截断 ' + mig.clamped + ' 颗');
+    }
+  }
   return d;
 }
 

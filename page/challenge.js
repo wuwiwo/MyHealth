@@ -521,6 +521,7 @@ function startHiddenChallenge(hotBuff){
         var matDrops = []      // 材料掉落
         var skillPoints = 0    // 技能点（额外奖励）
         var petEgg = null      // 宠物蛋（5次+奖励）
+        var orbDrop = null     // v2.2 WP-A2：宝珠本体（挑战掉落）
 
         // 基础掉落（任何伤害）：
         matDrops.push({ type: 'nutrition', n: 5 + Math.floor(Math.random() * 6) })        // 5-10
@@ -570,6 +571,16 @@ function startHiddenChallenge(hotBuff){
             }
           } catch (e2) { console.warn('[challenge] 宠物蛋发放失败', e2) }
         }
+        /* v2.2 WP-A2：**宝珠本体改为挑战掉落**（碎片只用于升级，不再合成宝珠）。
+           每次胜利掉 1 颗：类型随机、品质按 ORB_DROP_RATES（R60% / SR25% / SSR12% / UR3%）。 */
+        if (typeof rollOrbDrop === 'function') {
+          var _orb = rollOrbDrop()
+          if (_orb) {
+            d.orbs = d.orbs || []
+            d.orbs.push(_orb)
+            orbDrop = _orb
+          }
+        }
         savePetStore(d)
 
         // 发放材料
@@ -585,6 +596,7 @@ function startHiddenChallenge(hotBuff){
         state.matReward = matDrops
         state.skillPointReward = skillPoints
         state.petEggReward = petEgg
+        state.orbReward = orbDrop
       }
     } catch (e) { /* 材料系统未启用时忽略 */ }
     
@@ -615,6 +627,7 @@ function startHiddenChallenge(hotBuff){
         }).join('') : '<span style="color:var(--text3)">—</span>')
       +(state.skillPointReward > 0 ? '<div style="margin-top:4px">💠 技能点 <b style="color:var(--blue)">+'+state.skillPointReward+'</b>（本周 '+weekCount+' 次额外奖励）</div>' : '')
       +(state.petEggReward ? '<div style="margin-top:4px">🥚 宠物蛋 <b style="color:var(--orange)">'+state.petEggReward.name+'</b></div>' : '')
+      +(state.orbReward ? '<div style="margin-top:4px">🔮 宝珠 <b style="color:var(--purple)">'+((ORB_TYPES[state.orbReward.type]||{}).name||state.orbReward.type)+'（'+state.orbReward.rarity+' · +'+(typeof orbPct==='function'?orbPct(state.orbReward):'?')+'%）</b></div>' : '')
       +  '</div>'
       +'</div>'
       +'<div class="ch-sec-chart" id="chSecChart"></div>'

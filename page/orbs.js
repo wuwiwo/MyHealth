@@ -1,98 +1,145 @@
 /* ============================================
-   MyHealth — Orb System (M6)
-   宠物宝珠：合成/升级/分解/装配 + 月重置。
-   5 类型 × 4 品质（N/R/SR/SSR）。
-   纯逻辑，无 DOM/store。
-   设计来源：design-v2.0.md §2.7
+   MyHealth — Orb System (M6 / v2.2 WP-A2 重构)
+   宠物宝珠：升级 / 分解 / 装配 / 掉落 / 月重置。
+
+   **v2.2 口径（dundun 2026-09-29 裁决）**
+     · 宝珠**不直接加属性值**，而是加**百分比** → 进「百分比池」，与稀有度倍率**相加**：
+       `最终属性 = 基础属性 ×（稀有度倍率 + Σ宝珠%）`
+     · 品质链 **R → SR → SSR → UR**（**删除 N 档**），**满级自动升品质**：
+       | 品质 | 起始 | 每级 | 本级上限 | 升到 |
+       |---|---|---|---|---|
+       | R   | +10%  | +1% | 10 级 | SR  |
+       | SR  | +20%  | +2% | 25 级 | SSR |
+       | SSR | +70%  | +2% | 40 级 | UR  |
+       | UR  | +150% | +3% | 50 级 | —   |
+       （UR 满级 = +150% + 49×3% = **+297% ≈ 单颗上限 +300%**）
+     · **碎片只用于升级**（不再合成宝珠）；宝珠本体由**隐藏挑战**掉落
+     · 迁移：旧 **N 档 → 每颗 20 碎片**；R/SR/SSR 按**品质映射 + 等级保号**，超新上限则截断
+
+   ⚠️ 字段名沿革：存档里仍用 `rarity` 存「品质」（存量数据兼容），语义即 R/SR/SSR/UR。
+   纯逻辑，无 DOM/store。设计来源：`design-v2.0.md` §2.7 + 2026-09-29 补充裁决。
    ============================================ */
 
-/* 宝珠类型定义 */
+/* 5 类型（**不再含数值表** —— 数值全部由品质决定） */
 var ORB_TYPES = {
-  hp:     { id:'hp',     name:'血气宝珠', base:{N:70, R:100, SR:150, SSR:200}, grow:{N:10, R:15, SR:20, SSR:25}, maxLv:{N:10, R:20, SR:30, SSR:40} },
-  atk:    { id:'atk',    name:'攻击宝珠', base:{N:2,  R:4,   SR:6,   SSR:8},   grow:{N:1,  R:2,  SR:4,  SSR:6},  maxLv:{N:10, R:20, SR:30, SSR:40} },
-  soulAtk:{ id:'soulAtk',name:'魂攻宝珠', base:{N:1,  R:2,   SR:4,   SSR:6},   grow:{N:1,  R:1,  SR:2,  SSR:3},  maxLv:{N:10, R:20, SR:30, SSR:40} },
-  def:    { id:'def',    name:'防御宝珠', base:{N:2,  R:3,   SR:5,   SSR:7},   grow:{N:1,  R:2,  SR:3,  SSR:5},  maxLv:{N:10, R:20, SR:30, SSR:40} },
-  soulDef:{ id:'soulDef',name:'魂防宝珠', base:{N:1,  R:2,   SR:3,   SSR:5},   grow:{N:0.5,R:1,  SR:1.5,SSR:2},  maxLv:{N:10, R:20, SR:30, SSR:40} }
+  hp:     { id: 'hp',      name: '血气宝珠' },
+  atk:    { id: 'atk',     name: '攻击宝珠' },
+  soulAtk:{ id: 'soulAtk', name: '魂攻宝珠' },
+  def:    { id: 'def',     name: '防御宝珠' },
+  soulDef:{ id: 'soulDef', name: '魂防宝珠' }
 };
 
-var ORB_RARITIES = ['N', 'R', 'SR', 'SSR'];
+var ORB_QUALITIES = ['R', 'SR', 'SSR', 'UR'];
 
-/* 合成品质分布 */
-var ORB_SYNTH_RATES = { N: 0.40, R: 0.30, SR: 0.20, SSR: 0.10 };
-/* 分解返还碎片 */
-var ORB_DECOMPOSE = { N: 4, R: 8, SR: 10, SSR: 20 };
-/* 合成消耗碎片 */
-var ORB_SYNTH_COST = 20;
-/* 合成成功率 */
-var ORB_SYNTH_SUCCESS = 0.65;
+/* 品质规格：数值为**百分点**（+10 = +10%）；maxLv = 本级品质的等级上限，到顶后再升即升品质 */
+var ORB_QUALITY_SPEC = {
+  R:   { base: 10,  grow: 1, maxLv: 10, next: 'SR'  },
+  SR:  { base: 20,  grow: 2, maxLv: 25, next: 'SSR' },
+  SSR: { base: 70,  grow: 2, maxLv: 40, next: 'UR'  },
+  UR:  { base: 150, grow: 3, maxLv: 50, next: null  }
+};
+
+var ORB_PCT_CAP = 300;                                   // 单颗上限 +300%
+var ORB_DECOMPOSE = { R: 8, SR: 10, SSR: 20, UR: 40 };   // 分解返还碎片（UR 为外推值）
+var ORB_UPGRADE_BASE = 2;                                // 升级消耗 =（当前等级 + 1）× 2 碎片
+var ORB_MIGRATE_N_SHARDS = 20;                           // 旧 N 档每颗折算的碎片
+/* 挑战掉落品质分布（Agent 拟定：R 为主，UR 稀有） */
+var ORB_DROP_RATES = { R: 0.60, SR: 0.25, SSR: 0.12, UR: 0.03 };
+
+function orbSpec(orb) {
+  return ORB_QUALITY_SPEC[(orb && orb.rarity) || 'R'] || ORB_QUALITY_SPEC.R;
+}
 
 /* 创建宝珠 */
 function createOrb(typeId, rarity) {
-  var t = ORB_TYPES[typeId];
-  if (!t) return null;
+  if (!ORB_TYPES[typeId]) return null;
   return {
-    id: 'orb-' + typeId + '-' + rarity + '-' + Math.floor(battleRnd() * 1e6),
+    id: 'orb-' + typeId + '-' + (rarity || 'R') + '-' + Math.floor(battleRnd() * 1e6),
     type: typeId,
-    rarity: rarity || 'N',
-    level: 1,
-    exp: 0
+    rarity: ORB_QUALITY_SPEC[rarity] ? rarity : 'R',
+    level: 1
   };
 }
 
-/* 宝珠当前属性值 */
-function orbStat(orb) {
-  var t = ORB_TYPES[orb.type];
-  var rarity = orb.rarity;
-  return t.base[rarity] + t.grow[rarity] * (orb.level - 1);
+/* 单颗宝珠的加成（**百分点**）：base + (等级−1)×grow，封顶 ORB_PCT_CAP */
+function orbPct(orb) {
+  if (!orb) return 0;
+  var s = orbSpec(orb);
+  var lv = Math.max(1, Math.min(s.maxLv, Math.floor(orb.level || 1)));
+  return Math.min(ORB_PCT_CAP, s.base + (lv - 1) * s.grow);
 }
 
-/* 合成（消耗 20 碎片，65% 成功）：
-   成功 → 随机类型 + 按分布随机品质；失败 → 碎片损失 */
-function synthOrb(bag) {
-  if (!bag || (bag.orbShard || 0) < ORB_SYNTH_COST) return { ok: false, reason: '碎片不足（需 ' + ORB_SYNTH_COST + '）' };
-  bag.orbShard -= ORB_SYNTH_COST;
-  if (battleRnd() > ORB_SYNTH_SUCCESS) return { ok: false, success: false, reason: '合成失败' };
-  var types = Object.keys(ORB_TYPES);
-  var type = types[Math.floor(battleRnd() * types.length)];
-  var roll = battleRnd();
-  var rarity = 'N';
-  var acc = 0;
-  for (var i = 0; i < ORB_RARITIES.length; i++) {
-    acc += ORB_SYNTH_RATES[ORB_RARITIES[i]];
-    if (roll < acc) { rarity = ORB_RARITIES[i]; break; }
+/* 该宝珠距下一次「升品质」还差几级（UI 用） */
+function orbLevelsToPromote(orb) {
+  var s = orbSpec(orb);
+  if (!s.next) return null;
+  return Math.max(0, s.maxLv - Math.floor(orb.level || 1) + 1);
+}
+
+/* 套装加成：把宠物已装配的宝珠按**属性**汇总成百分点表 { hp: 10, atk: 5, ... }
+   —— 供 boostPetForGroup 的百分比池使用（v2.2） */
+function petOrbPct(orbs) {
+  var out = {};
+  if (!orbs) return out;
+  Object.keys(orbs).forEach(function (t) {
+    var pct = orbPct(orbs[t]);
+    if (pct > 0) out[t] = (out[t] || 0) + pct;
+  });
+  return out;
+}
+
+/* 升级（消耗碎片；**本级满级后再升即升品质**） */
+function orbUpgradeCost(orb) {
+  if (!orb) return 0;
+  var s = orbSpec(orb);
+  if (!s.next && orb.level >= s.maxLv) return 0;   // UR 满级 = 真正到顶
+  return (Math.floor(orb.level || 1) + 1) * ORB_UPGRADE_BASE;
+}
+
+function upgradeOrb(orb, bag) {
+  if (!orb) return { ok: false, reason: '无宝珠' };
+  var s = orbSpec(orb);
+  if (!s.next && orb.level >= s.maxLv) return { ok: false, reason: '已满级' };
+  var cost = orbUpgradeCost(orb);
+  bag = bag || {};
+  if ((bag.orbShard || 0) < cost) return { ok: false, reason: '碎片不足（需 ' + cost + '）' };
+  bag.orbShard -= cost;
+  var promoted = false;
+  orb.level = Math.floor(orb.level || 1) + 1;
+  if (orb.level > s.maxLv && s.next) {   // 满级自动升品质，等级回到 1
+    orb.rarity = s.next;
+    orb.level = 1;
+    promoted = true;
   }
-  var orb = createOrb(type, rarity);
-  return { ok: true, success: true, orb: orb, type: type, rarity: rarity };
+  return { ok: true, level: orb.level, rarity: orb.rarity, promoted: promoted, pct: orbPct(orb) };
 }
 
 /* 分解宝珠 → 碎片 */
 function decomposeOrb(orb, bag) {
   if (!orb) return { ok: false, reason: '无宝珠' };
-  bag.orbShard = (bag.orbShard || 0) + ORB_DECOMPOSE[orb.rarity] || 0;
-  return { ok: true, shards: ORB_DECOMPOSE[orb.rarity] };
+  var n = ORB_DECOMPOSE[orb.rarity] || 0;
+  bag = bag || {};
+  bag.orbShard = (bag.orbShard || 0) + n;
+  return { ok: true, shards: n, rarity: orb.rarity };
 }
 
-/* 升级（消耗碎片，1 级 +1；到 maxLv 停） */
-function orbUpgradeCost(orb) {
-  var t = ORB_TYPES[orb.type];
-  var maxLv = t.maxLv[orb.rarity];
-  if (orb.level >= maxLv) return 0;
-  // 升级消耗：随等级递增（每级 = 等级×2 碎片）
-  return (orb.level + 1) * 2;
-}
-function upgradeOrb(orb, bag) {
-  var t = ORB_TYPES[orb.type];
-  var maxLv = t.maxLv[orb.rarity];
-  if (orb.level >= maxLv) return { ok: false, reason: '已满级' };
-  var cost = orbUpgradeCost(orb);
-  if ((bag.orbShard || 0) < cost) return { ok: false, reason: '碎片不足（需 ' + cost + '）' };
-  bag.orbShard -= cost;
-  orb.level++;
-  return { ok: true, level: orb.level, stat: orbStat(orb) };
+/* 挑战掉落：随机类型 + 按 ORB_DROP_RATES 抽品质 */
+function rollOrbDrop() {
+  var types = Object.keys(ORB_TYPES);
+  var type = types[Math.floor(battleRnd() * types.length)];
+  var roll = battleRnd();
+  var rarity = 'R';
+  var acc = 0;
+  for (var i = 0; i < ORB_QUALITIES.length; i++) {
+    acc += ORB_DROP_RATES[ORB_QUALITIES[i]];
+    if (roll < acc) { rarity = ORB_QUALITIES[i]; break; }
+  }
+  return createOrb(type, rarity);
 }
 
 /* 装配：宠物每类型 1 颗 */
 function equipOrb(pet, orb) {
+  if (!pet || !orb) return { ok: false, reason: '参数缺失' };
   pet.orbs = pet.orbs || {};
   pet.orbs[orb.type] = orb;
   return { ok: true };
@@ -106,55 +153,98 @@ function unequipOrb(pet, type) {
   return { ok: false, reason: '该类型未装配' };
 }
 
-/* 月重置：已合成宝珠保留本体，升级部分重置（回到 1 级）；碎片清空 */
+/* 月重置：已合成宝珠保留本体与品质，**等级回 1**；碎片清空 */
 function monthlyResetOrbs(pet, bag) {
-  if (pet.orbs) {
+  if (pet && pet.orbs) {
     for (var t in pet.orbs) {
       pet.orbs[t].level = 1;
-      pet.orbs[t].exp = 0;
+      if (pet.orbs[t].exp != null) pet.orbs[t].exp = 0;
     }
   }
-  bag.orbShard = 0;
+  if (bag) bag.orbShard = 0;
   return pet;
 }
 
-/* 宠物战斗属性应用宝珠加成 */
-function applyOrbStats(petUnit, pet) {
-  if (!pet.orbs) return petUnit;
-  for (var t in pet.orbs) {
-    var orb = pet.orbs[t];
-    var stat = orbStat(orb);
-    if (petUnit.base[t] !== undefined) petUnit.base[t] += stat;
-    else if (t === 'hp') petUnit.base.hp += stat;
+/* ============================================================
+   v2.2 存量迁移（存档只跑一次，见 pet-store.js 的迁移钩子）
+     · 旧 **N 档** → 每颗折算 ORB_MIGRATE_N_SHARDS 个碎片（新链没有 N）
+     · R / SR / SSR **按品质映射 + 等级保号**；**超过新品质等级上限则截断**
+     · 不发放任何一次性补偿（dundun 裁决）
+   处理两处：库存 `data.orbs`（数组）与每只宠的 `pet.orbs`（按类型的映射）
+   返回 { dropped, clamped, shards } 供日志/测试。
+   ============================================================ */
+function migrateOrbs(data) {
+  var out = { dropped: 0, clamped: 0, shards: 0 };
+  if (!data) return out;
+  function fix(orb) {
+    if (!orb) return null;
+    if (!ORB_QUALITY_SPEC[orb.rarity]) {          // N 档或未知品质
+      out.dropped++;
+      out.shards += ORB_MIGRATE_N_SHARDS;
+      return null;
+    }
+    var s = ORB_QUALITY_SPEC[orb.rarity];
+    var lv = Math.max(1, Math.floor(orb.level || 1));
+    if (lv > s.maxLv) { lv = s.maxLv; out.clamped++; }
+    orb.level = lv;
+    return orb;
   }
-  if (pet.orbs.hp) petUnit.hp += orbStat(pet.orbs.hp);
-  return petUnit;
+  if (Array.isArray(data.orbs)) {
+    var kept = [];
+    data.orbs.forEach(function (o) { var k = fix(o); if (k) kept.push(k); });
+    data.orbs = kept;
+  }
+  (data.pets || []).forEach(function (p) {
+    if (!p.orbs) return;
+    Object.keys(p.orbs).forEach(function (t) {
+      if (!fix(p.orbs[t])) delete p.orbs[t];
+    });
+  });
+  if (out.shards) {
+    data.materials = data.materials || {};
+    data.materials.orbShard = (data.materials.orbShard || 0) + out.shards;
+  }
+  return out;
 }
 
 /* 测试/工具暴露 */
 if (typeof window !== 'undefined') {
   window.ORB_TYPES = ORB_TYPES;
+  window.ORB_QUALITIES = ORB_QUALITIES;
+  window.ORB_QUALITY_SPEC = ORB_QUALITY_SPEC;
+  window.ORB_PCT_CAP = ORB_PCT_CAP;
+  window.ORB_DROP_RATES = ORB_DROP_RATES;
   window.createOrb = createOrb;
-  window.orbStat = orbStat;
-  window.synthOrb = synthOrb;
-  window.decomposeOrb = decomposeOrb;
+  window.orbPct = orbPct;
+  window.orbSpec = orbSpec;
+  window.orbLevelsToPromote = orbLevelsToPromote;
+  window.petOrbPct = petOrbPct;
   window.orbUpgradeCost = orbUpgradeCost;
   window.upgradeOrb = upgradeOrb;
+  window.decomposeOrb = decomposeOrb;
+  window.rollOrbDrop = rollOrbDrop;
   window.equipOrb = equipOrb;
   window.unequipOrb = unequipOrb;
   window.monthlyResetOrbs = monthlyResetOrbs;
-  window.applyOrbStats = applyOrbStats;
+  window.migrateOrbs = migrateOrbs;
 }
 if (typeof globalThis !== 'undefined') {
   globalThis.ORB_TYPES = ORB_TYPES;
+  globalThis.ORB_QUALITIES = ORB_QUALITIES;
+  globalThis.ORB_QUALITY_SPEC = ORB_QUALITY_SPEC;
+  globalThis.ORB_PCT_CAP = ORB_PCT_CAP;
+  globalThis.ORB_DROP_RATES = ORB_DROP_RATES;
   globalThis.createOrb = createOrb;
-  globalThis.orbStat = orbStat;
-  globalThis.synthOrb = synthOrb;
-  globalThis.decomposeOrb = decomposeOrb;
+  globalThis.orbPct = orbPct;
+  globalThis.orbSpec = orbSpec;
+  globalThis.orbLevelsToPromote = orbLevelsToPromote;
+  globalThis.petOrbPct = petOrbPct;
   globalThis.orbUpgradeCost = orbUpgradeCost;
   globalThis.upgradeOrb = upgradeOrb;
+  globalThis.decomposeOrb = decomposeOrb;
+  globalThis.rollOrbDrop = rollOrbDrop;
   globalThis.equipOrb = equipOrb;
   globalThis.unequipOrb = unequipOrb;
   globalThis.monthlyResetOrbs = monthlyResetOrbs;
-  globalThis.applyOrbStats = applyOrbStats;
+  globalThis.migrateOrbs = migrateOrbs;
 }

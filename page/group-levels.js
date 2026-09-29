@@ -60,11 +60,9 @@ var ENEMY_NAMES = {
    直接进敌群会把敌人压成 1 点伤害。改为：敌群战斗里玩家只继承一定比例。
    宠物同步放大（否则基础 atk 15~20 在玩家面前等于摆设）。 */
 var GROUP_INHERIT = 0.50;                                  // 玩家在敌群中继承的属性比例
-/* v2.1.19：改为 12/14/15/16（dundun 指定）。
-   相比 v2.1.18 的 8/11/14/18，低稀有度抬得更多、UR 略降 —— 稀有度差距收窄，
-   不再「只有 UR 能用」。 */
-var PET_GROUP_SCALE = { R: 12, SR: 14, SSR: 15, UR: 16 };   // 宠物按稀有度放大到同量级
-var PET_GROUP_REFINE = 1.5;                                // 宠物炼化加成在敌群中的额外权重
+/* v2.2 WP-A1：稀有度倍率改为**百分比表述**（与宝珠% 同一坐标系，直接相加）
+   1200 / 1400 / 1500 / 1600（百分点）≡ 旧的 ×12 / ×14 / ×15 / ×16（v2.1.19 dundun 指定）。 */
+var PET_GROUP_SCALE = { R: 1200, SR: 1400, SSR: 1500, UR: 1600 };
 
 /* 按真实属性算出敌群战斗属性（玩家） */
 function inheritGroupStats(stats, ratio) {
@@ -81,17 +79,22 @@ function inheritGroupStats(stats, ratio) {
   out.soulDef = Math.max(out.soulDef, Math.floor(out.def * 0.5));
   return out;
 }
-/* 宠物放大到与玩家同量级（就地改 base，仅在敌群参战时调用） */
+/* 宠物放大到与玩家同量级（就地改 base，仅在敌群参战时调用）
+   **v2.2 WP-A1：公式改为「基础属性 × 百分比池」**，逐属性独立、速度不参与：
+     百分比池 = 稀有度倍率（1200/1400/1500/1600）+ Σ宝珠%（宠物已装配宝珠的百分点之和）
+   ⚠️ 宝珠自 v2.2 起是**百分比**（不是扁平加点），所以 v2.1.17 那个
+      「宝珠加成不参与放大、原样保留」的历史特例**已删除** ——
+      百分比进池后天然与稀有度倍率同尺度，不会再被放大成天文数字。
+      （该特例原本靠一个 orbBonus 增量字段实现，本文件已不再出现该字段。） */
 function boostPetForGroup(unit) {
   if (!unit || !unit.base) return unit;
   var tag = ((unit.tags || [])[1] || 'R');
-  var k = PET_GROUP_SCALE[tag] || PET_GROUP_SCALE.R;
-  // 只放大「非宝珠」部分：宝珠加成（_orbBonus）原样保留，否则会被 ×12~26 放大成天文数字
-  var ob = unit._orbBonus || {};
+  var rarityPct = PET_GROUP_SCALE[tag] || PET_GROUP_SCALE.R;
+  var orbMap = unit._orbPct || {};
   ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].forEach(function (s) {
     if (unit.base[s] == null) return;
-    var orbPart = ob[s] || 0;
-    unit.base[s] = Math.max(1, Math.floor((unit.base[s] - orbPart) * k) + orbPart);
+    var poolPct = rarityPct + (orbMap[s] || 0);
+    unit.base[s] = Math.max(1, Math.floor(unit.base[s] * poolPct / 100));
   });
   // 宠物同样给魂防下限，否则被敌人魂攻打全额
   unit.base.soulDef = Math.max(unit.base.soulDef || 0, Math.floor((unit.base.def || 0) * 0.5));
