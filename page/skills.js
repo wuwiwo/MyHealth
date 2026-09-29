@@ -35,32 +35,38 @@ function skillTotalCost(skill) {
 
 /* --- 9 技能注册 --- */
 
-/* 1. 暴击（被动 lv20）：几率 n×1%，暴伤 125%+n×5% */
+/* 1. 暴击（被动 lv20）：**v2.2 WP-B 裁决** —— 玩家 30% / 300%（原 20% / 225%）
+   ⚠️ 宠物档（15% / 160%）随「玩家被动共享给宠物」一起实现，见 player-skill-hooks.js */
 registerPlayerSkill({
   id: 'crit', name: '暴击', type: 'passive', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*10; },
-  desc: '攻击有 n×1% 几率暴击，造成 125%+n×5% 暴击伤害',
-  effect: function(lv){ return { chance: lv*0.01, critMult: 1.25 + lv*0.05 }; }
+  desc: '攻击有 n×1.5% 几率暴击，造成 150%+n×7.5% 暴击伤害（满级 30% / 300%）',
+  effect: function(lv){ return { chance: lv*0.015, critMult: 1.50 + lv*0.075 }; }
 });
 
-/* 2. 气力恢复（辅助 lv10）：每4回合后2回合，每回合回 防御×n×10% */
+/* 2. 气力恢复（辅助 lv20）：每4回合后2回合，每回合回 (防御+魂防)×n×10%
+   v2.2 WP-B：满级 10 → 20；公式由「防御」改为「**防御+魂防**」 */
 registerPlayerSkill({
-  id: 'vitality', name: '气力恢复', type: 'support', maxLevel: 10, costPerLevel: function(lv){ return (lv+1)*15; },
-  desc: '每4回合后的2回合，每回合回复 防御×n×10% 血量',
+  id: 'vitality', name: '气力恢复', type: 'support', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*15; },
+  desc: '每4回合后的2回合，每回合回复 (防御+魂防)×n×10% 血量（满级 200%）',
   effect: function(lv){ return { healPct: lv*0.1 }; }
 });
 
-/* 3. 陨石轰炸（攻击 lv20）：随机3敌各1次，魂攻×n×20%，CD5 */
+/* 3. 陨石轰炸（攻击 lv20）：v2.2 WP-B：魂攻×400% → **×500%** */
 registerPlayerSkill({
   id: 'meteor', name: '陨石轰炸', type: 'attack', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*5; },
-  desc: '随机3敌各1次轰炸，魂攻×n×20%，CD5',
-  effect: function(lv){ return { power: lv*0.2, targets: 3, cd: 5 }; }
+  desc: '随机3敌各1次轰炸，魂攻×n×25%（满级 500%），CD5',
+  effect: function(lv){ return { power: lv*0.25, targets: 3, cd: 5 }; }
 });
 
-/* 4. 格挡（被动 lv10）：几率 n×2%，减伤 25%+n×5%，pity 乘算 */
+/* 4. 格挡（被动 lv10）：**v2.2 WP-B 口径改造**
+   旧：「几率 20%+lv×2%、减伤 25%+lv×5%」
+   新：**几率固定 20%**（不随等级）+ **减伤随等级成长**（满级 75%）+ **常驻减伤 10%**
+       + **5% 完美格挡（减伤 90%~99% 随机）** */
 registerPlayerSkill({
   id: 'block', name: '格挡', type: 'passive', maxLevel: 10, costPerLevel: function(lv){ return (lv+1)*15; },
-  desc: '受到伤害有 n×2% 几率格挡，减伤 25%+n×5%，失败几率×1.2',
-  effect: function(lv){ return { chance: lv*0.02, reduce: 0.25 + lv*0.05 }; }
+  desc: '常驻减伤 10%；20% 几率格挡，减伤 45%+n×3%（满级 75%）；5% 几率完美格挡，减伤 90%~99%（随机）',
+  effect: function(lv){ return { chance: 0.20, reduce: 0.45 + lv*0.03, passiveReduce: 0.10,
+    perfectChance: 0.05, perfectMin: 0.90, perfectMax: 0.99 }; }
 });
 
 /* 5. 气势如虹（辅助 lv20）：几率 10%+n×2%，全队攻击+n×3% ×2回合，触发锁3回合 */
@@ -70,32 +76,38 @@ registerPlayerSkill({
   effect: function(lv){ return { chance: 0.10 + lv*0.02, atkBoost: lv*0.03, dur: 2, lock: 3 }; }
 });
 
-/* 6. 冰魄光束（攻击 lv20）：单敌冰冻1回合+两段无视魂防伤害 魂攻×n×8%，CD5 */
+/* 6. 冰魄光束（攻击 lv20）：冰冻1回合 + 两段无视魂防伤害 魂攻×n×9%（满级 180%），CD5
+   v2.2 WP-B：160% → **180%** */
 registerPlayerSkill({
   id: 'icebeam', name: '冰魄光束', type: 'attack', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*6; },
-  desc: '单敌冰冻1回合+两段无视魂防伤害 魂攻×n×8%，CD5',
-  effect: function(lv){ return { power: lv*0.08, freeze: 1, ignoreSoulDef: true, cd: 5 }; }
+  desc: '单敌冰冻1回合+两段无视魂防伤害 魂攻×n×9%（满级 180%），CD5',
+  effect: function(lv){ return { power: lv*0.09, freeze: 1, ignoreSoulDef: true, cd: 5 }; }
 });
 
-/* 7. 金身护盾（被动 lv10）：开战全队盾 (攻+魂攻)×n×30%，免疫普通+高级负面 */
+/* 7. 金身护盾（被动 lv20）：开战全队盾 (攻+魂攻)×n×25%（满级 500%），免疫普通+高级负面
+   v2.2 WP-B：满级 10 → 20；盾 300% → **500%**
+   ⚠️ 裁决另含「**破盾时对敌造成初始护盾×20% 伤害（受魂防减免）**」—— 需破盾钩子，见待办 */
 registerPlayerSkill({
-  id: 'goldshield', name: '金身护盾', type: 'passive', maxLevel: 10, costPerLevel: function(lv){ return (lv+1)*15; },
-  desc: '开战全队护盾=(攻+魂攻)×n×30%，免疫普通+高级负面',
-  effect: function(lv){ return { shieldPct: lv*0.3 }; }
+  id: 'goldshield', name: '金身护盾', type: 'passive', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*15; },
+  desc: '开战全队护盾=(攻+魂攻)×n×25%（满级 500%），免疫普通+高级负面',
+  effect: function(lv){ return { shieldPct: lv*0.25 }; }
 });
 
-/* 8. 瞩目（辅助 lv10）：几率 n×3% 嘲讽1回合；回合末全体回复 */
+/* 8. 瞩目（辅助 lv10）：几率 n×4%（满级 40%）嘲讽1回合；回合末全体回复 (防+魂防)×受击次数
+   v2.2 WP-B：30% → **40%**
+   ⚠️ 裁决另含「**嘲讽期间受到伤害 -15%**」—— 需减伤钩子，见待办 */
 registerPlayerSkill({
   id: 'spotlight', name: '瞩目', type: 'support', maxLevel: 10, costPerLevel: function(lv){ return (lv+1)*10; },
-  desc: '几率 n×3% 嘲讽1回合；回合末全体回复 (防+魂防)×受击次数',
-  effect: function(lv){ return { chance: lv*0.03, tauntDur: 1 }; }
+  desc: '几率 n×4%（满级 40%）嘲讽1回合；回合末全体回复 (防+魂防)×受击次数',
+  effect: function(lv){ return { chance: lv*0.04, tauntDur: 1 }; }
 });
 
-/* 9. 巨石重压（攻击 lv20）：单敌 魂攻×n×30%，降魂防 n×1%，CD3 */
+/* 9. 巨石重压（攻击 lv20）：单敌 魂攻×n×40%（满级 800%），降魂防 n×1%（**叠至 80%**），CD3
+   v2.2 WP-B：600% → **800%**；降魂防上限 60% → **80%**（上限写在本文件外的 hook 里，已同步） */
 registerPlayerSkill({
   id: 'boulder', name: '巨石重压', type: 'attack', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*5; },
-  desc: '单敌 魂攻×n×30%，降魂防 n×1%（叠至60%），CD3',
-  effect: function(lv){ return { power: lv*0.3, soulDefDown: lv*0.01, cd: 3 }; }
+  desc: '单敌 魂攻×n×40%（满级 800%），降魂防 n×1%（叠至80%），CD3',
+  effect: function(lv){ return { power: lv*0.4, soulDefDown: lv*0.01, cd: 3 }; }
 });
 
 /* --- 技能点经济 --- */

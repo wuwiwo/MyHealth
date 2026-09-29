@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* M1-2 测试：玩家技能战斗挂钩
    1) attachPlayerSkills
-   2) 暴击（lv20 20% 几率，225% 伤害）
+   2) 暴击（v2.2：lv20 30% 几率，300% 伤害）
    3) 格挡（pity 递增）
    4) 金身护盾开战
    5) 气势如虹回合触发
@@ -17,7 +17,7 @@ const vm = require('vm');
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const files = ['utils.js', 'date-roll.js','levels.js','group-levels.js','unit.js','state-core.js','status-defs.js','talent.js','skill.js','enemy.js','battle.js','battle-group.js','terrain.js','ai.js','pets.js','pet-materials.js','pet-codex.js','skills.js','player-skill-hooks.js'];
 // v2.1.5：群战引入 5% 基础命中率，测试改用可复现伪随机（mulberry32）
-// 不能用恒定 0.5 —— 本套件断言依赖概率分支（暴击 225%、气势如虹），钉死会让分支永不触发
+// 不能用恒定 0.5 —— 本套件断言依赖概率分支（暴击 300%、气势如虹），钉死会让分支永不触发
 function mulberry32(a) {
   return function () {
     a |= 0; a = a + 0x6D2B79F5 | 0;
@@ -48,28 +48,34 @@ sb.attachPlayerSkills(player, st);
 assert('挂载技能', player._playerSkills.crit === 20 && player._playerSkills.meteor === 10);
 
 // ---- 2. 暴击 ----
-// lv20: 20% 几率，225% 伤害。多次调用应出现暴击
+/* v2.2 WP-B：lv20 = **30% 几率 / 300% 伤害**（旧 20% / 225%） */
 let critOccurred = false;
-for (let i = 0; i < 100; i++) {
+for (let i = 0; i < 200; i++) {
   const d = sb.playerCritHook(player, 100);
-  if (d === 225) { critOccurred = true; break; }
+  if (d === 300) { critOccurred = true; break; }
 }
-assert('暴击触发（225%）', critOccurred);
+assert('暴击触发（300%）', critOccurred);
 assert('暴击未触发时原值', sb.playerCritHook(player, 100) === 100 || true);
 
-// ---- 3. 格挡（pity）----
+// ---- 3. 格挡（v2.2 WP-B 口径：常驻减伤 10% + 20% 格挡 + 5% 完美格挡）----
 const defPlayer = sb.createUnit({ id:'dp', side:'ally', name:'防', base:{hp:500,atk:10,def:50,spd:3} });
 const st2 = sb.defaultSkillState();
 st2.loadout = ['block'];
-st2.levels = { block: 10 };  // 20% 几率，减伤 75%
+st2.levels = { block: 10 };  // 几率固定 20%；减伤随等级（lv10 = 75%）
 sb.attachPlayerSkills(defPlayer, st2);
-let blocked = false;
-for (let i = 0; i < 200; i++) {
+assert('常驻减伤 10% 必定生效（结果恒 ≤ 90）', sb.playerBlockHook(defPlayer, 100) <= 90);
+let blocked = false, perfect = false, minD = 100;
+for (let i = 0; i < 400; i++) {
   const d = sb.playerBlockHook(defPlayer, 100);
-  if (d < 100) { blocked = true; break; }
+  if (d < 100) blocked = true;
+  if (d <= 10) perfect = true;   // 完美格挡 90%~99% → 90×(1−0.9)=9 起
+  if (d < minD) minD = d;
 }
-assert('格挡触发', blocked);
-assert('pity 递增', defPlayer._blockPity >= 1);
+assert('格挡触发（lv10 减伤 75% → 90×0.25 ≈ 22）', blocked && minD <= 23, 'minD=' + minD);
+assert('完美格挡可触发（减伤 ≥90% → ≤ 10）', perfect, 'minD=' + minD);
+assert('pity 乘算仍作用在普通格挡档', defPlayer._blockPity >= 1);
+assert('等级只影响减伤、不影响几率（lv10 与 lv1 的 chance 相同）',
+  sb.getPlayerSkill('block').effect(10).chance === sb.getPlayerSkill('block').effect(1).chance);
 
 // ---- 4. 金身护盾 ----
 const shieldPlayer = sb.createUnit({ id:'sp', side:'ally', name:'盾', base:{hp:500,atk:50,def:30,spd:5,soulAtk:40} });
@@ -80,7 +86,17 @@ sb.attachPlayerSkills(shieldPlayer, st3);
 const gb = sb.createGroupBattle({ allies:[shieldPlayer], enemies:[sb.createEnemyUnit({tier:'minion',name:'敌',base:{hp:50,atk:5,def:2,spd:1}})] });
 const evs = sb.playerSkillBattleStart(gb, shieldPlayer);
 assert('金身护盾开战', evs.length === 1 && shieldPlayer._shield > 0, 'shield=' + shieldPlayer._shield);
-assert('护盾值 = (攻+魂攻)×300%', shieldPlayer._shield === 270, '实际 ' + shieldPlayer._shield);  // (50+40)*3=270
+assert('护盾值 = (攻+魂攻)×n×25%（lv10 → 225）', shieldPlayer._shield === 225, '实际 ' + shieldPlayer._shield);  // (50+40)*2.5=225
+/* v2.2 WP-B：满级 20 时 = ×500% */
+assert('护盾满级 20 = (攻+魂攻)×500%', (function () {
+  const st = sb.defaultSkillState();
+  st.loadout = ['goldshield']; st.levels = { goldshield: 20 };
+  const p = sb.createUnit({ id: 'sp20', side: 'ally', name: '盾', base: { hp: 500, atk: 50, def: 30, spd: 5, soulAtk: 40 } });
+  sb.attachPlayerSkills(p, st);
+  const gb0 = sb.createGroupBattle({ allies: [p], enemies: [sb.createEnemyUnit({ tier: 'minion', name: '敌', base: { hp: 50, atk: 5, def: 2, spd: 1 } })] });
+  sb.playerSkillBattleStart(gb0, p);
+  return p._shield === 450;   // (50+40)*5=450
+})(), 'shield=' + shieldPlayer._shield);
 
 // ---- 5. 气势如虹 ----
 const momPlayer = sb.createUnit({ id:'mp', side:'ally', name:'气', base:{hp:500,atk:50,def:30,spd:5} });
@@ -154,8 +170,8 @@ assert('巨石降魂防', boulder && gbB.enemies.some(e => sb.hasStatus(e, 'soul
   sb.playerAttackSkill(gbSt, atkPlayer, 'boulder');
   assert('巨石降魂防可叠加（第二次 -20%）', Math.abs(inst().modsPct.soulDef + 0.20) < 1e-9, JSON.stringify(inst().modsPct));
   for (let i = 0; i < 6; i++) sb.playerAttackSkill(gbSt, atkPlayer, 'boulder');
-  assert('巨石降魂防封顶 -60%', Math.abs(inst().modsPct.soulDef + 0.60) < 1e-9, JSON.stringify(inst().modsPct));
-  assert('封顶后 effectiveStat 不低于 40%（1000 → 400）', sb.effectiveStat(foe, 'soulDef') === 400, sb.effectiveStat(foe, 'soulDef'));
+  assert('巨石降魂防封顶（v2.2：上限 80%）', Math.abs(inst().modsPct.soulDef + 0.80) < 1e-6, JSON.stringify(inst().modsPct));
+  assert('封顶后 effectiveStat 不低于 20%（1000 → 200）', sb.effectiveStat(foe, 'soulDef') === 200, sb.effectiveStat(foe, 'soulDef'));
 }
 
 // ---- 8. 完整战斗带技能 ----

@@ -50,19 +50,26 @@ function playerCritHook(player, dmg) {
   return dmg;
 }
 
-/* 受击钩子：格挡（pity 机制） */
+/* 受击钩子：格挡（**v2.2 WP-B 口径改造**）
+   常驻减伤 10%（必定生效）→ 5% 完美格挡（减伤 90%~99%，**随机值**）→ 20% 普通格挡（减伤随等级，满级 75%）
+   ⚠️ 几率**固定不随等级**；pity 仍作用在「普通格挡」那一档（失败几率 ×1.2） */
 function playerBlockHook(player, dmg) {
   if (!player || !player._playerSkills) return dmg;
   var lv = player._playerSkills['block'] || 0;
   if (lv < 1) return dmg;
   var eff = getPlayerSkill('block').effect(lv);
-  var chance = eff.chance * (player._blockPity || 1);
-  if (battleRnd() < chance) {
+  var out = Math.floor(dmg * (1 - (eff.passiveReduce || 0)));
+  if (battleRnd() < eff.perfectChance) {
+    var pr = eff.perfectMin + battleRnd() * (eff.perfectMax - eff.perfectMin);
     player._blockPity = 1;
-    return Math.floor(dmg * (1 - eff.reduce));
+    return Math.floor(out * (1 - pr));
+  }
+  if (battleRnd() < eff.chance * (player._blockPity || 1)) {
+    player._blockPity = 1;
+    return Math.floor(out * (1 - eff.reduce));
   }
   player._blockPity = (player._blockPity || 1) * 1.2;
-  return dmg;
+  return out;
 }
 
 /* 回合开始钩子：气势如虹（全队攻击+，触发锁3回合）/ 气力恢复（每4回合后2回合回血） */
@@ -92,7 +99,8 @@ function playerSkillTurnStart(gb, player, turn) {
   var vitLv = player._playerSkills['vitality'] || 0;
   if (vitLv >= 1 && turn >= 5 && ((turn - 5) % 4 === 0 || (turn - 5) % 4 === 1)) {
     var veff = getPlayerSkill('vitality').effect(vitLv);
-    var heal = Math.floor(player.base.def * veff.healPct);
+    /* v2.2 WP-B：回复公式由「防御×n×10%」改为「**(防御+魂防)**×n×10%」（满级 200%） */
+    var heal = Math.floor(((player.base.def || 0) + (player.base.soulDef || 0)) * veff.healPct);
     player.hp = Math.min(player.base.hp, player.hp + heal);
     events.push({ msg: '💚 ' + player.name + ' 气力恢复 +' + heal });
   }
@@ -184,7 +192,10 @@ function playerAttackSkill(gb, player, skillId) {
     var down = eff.soulDefDown || 0;
     var prev = null;
     (t2.statuses || []).forEach(function (s) { if (s.id === 'souldown') prev = s; });
-    var stacked = Math.min(0.60, ((prev && prev.modsPct && -prev.modsPct.soulDef) || 0) + down);
+    /* v2.2 WP-B：上限 60% → 80%。⚠️ 规整到 1e-6，避免 0.2 累加出 0.7999999999999999
+       被 statMods 的 floor 少算 1 点属性（实测 1000 魂防会变成 201 而非 200）。 */
+    var stacked = Math.min(0.80, ((prev && prev.modsPct && -prev.modsPct.soulDef) || 0) + down);
+    stacked = Math.round(stacked * 1e6) / 1e6;
     applyStatus(t2, { id: 'souldown', duration: 999, modsPct: { soulDef: -stacked } });
     if (typeof syncStatusDerived === 'function') syncStatusDerived(t2);
     events.push({ msg: '🪨 ' + player.name + ' 巨石重压 → ' + t2.name + ' ' + dmg2 + ' 魂伤害（魂防 -' + Math.round(stacked * 100) + '%，持续到战斗结束）' });
