@@ -184,11 +184,17 @@
     var base = { hp: s.hp, atk: s.atk, def: s.def, spd: 10, soulAtk: s.soulAtk || 0, soulDef: s.soulDef || 0 };
     var petUnits = [];
     try {
+      /* v2.2 WP-A3/A4：上限 2 → 4；并统一走 pet-store.js 的唯一入口
+         （建单位 → 稀有度放大 → 团队凝聚 / 共鸣），否则 Debug 体检会与实战不一致。 */
+      var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4;
       var petIds = (typeof _petBattlePicks !== 'undefined' && _petBattlePicks && _petBattlePicks.length) ? _petBattlePicks
-        : (typeof autoPickPets === 'function' ? autoPickPets(2) : []);
-      if (typeof createPetUnitsForBattle === 'function') petUnits = createPetUnitsForBattle(petIds, 2) || [];
-      // v2.1.10：宠物在敌群里会按稀有度放大，体检要一起算进去
-      if (typeof boostPetForGroup === 'function') petUnits.forEach(boostPetForGroup);
+        : (typeof autoPickPets === 'function' ? autoPickPets(_petMax) : []);
+      if (typeof buildGroupBattlePets === 'function') petUnits = buildGroupBattlePets(petIds, _petMax) || [];
+      else {
+        if (typeof createPetUnitsForBattle === 'function') petUnits = createPetUnitsForBattle(petIds, _petMax) || [];
+        // v2.1.10：宠物在敌群里会按稀有度放大，体检要一起算进去
+        if (typeof boostPetForGroup === 'function') petUnits.forEach(boostPetForGroup);
+      }
     } catch (e) { petUnits = []; console.warn('[debug] 体检未能构建宠物，按 0 宠模拟', e); }
     // v2.1.10：玩家在敌群里只继承一定比例，用继承后的属性模拟
     var gBase = (typeof inheritGroupStats === 'function') ? inheritGroupStats(base) : base;

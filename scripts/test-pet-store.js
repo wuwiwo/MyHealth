@@ -97,5 +97,66 @@ assert('宠物战斗有行动', gb.log.some(l => l.unit !== '你'), 'units=' + g
 const saved = sb.store.get('pets');
 assert('store 已保存', saved && Array.isArray(saved.pets) && saved.pets.length >= 1);
 
+/* ============ 7. v2.2 WP-A3/A4：4 只上限 + 团队凝聚 / 共鸣 ============ */
+assert('参战上限常量 PET_BATTLE_MAX = 4', sb.PET_BATTLE_MAX === 4, String(sb.PET_BATTLE_MAX));
+
+// 造够 4 只可参战宠物（第 1 只已存在）
+(function () {
+  const dd = sb.getPetStore();
+  ['sparkle', 'chirpbird', 'dream'].forEach(function (sid, i) {
+    const p = sb.createPet({ speciesId: sid, rarity: (sb.getPetCodex(sid) || {}).rarity || 'R', name: '替补' + i });
+    p.stage = 'mature'; p.isDead = false; p.injured = false;
+    dd.pets.push(p);
+  });
+  sb.savePetStore(dd);
+})();
+const dd2 = sb.getPetStore();
+assert('存档现有 4 只宠物', dd2.pets.length === 4, 'len=' + dd2.pets.length);
+
+const fieldedPet = dd2.pets[0];
+const benchPets = dd2.pets.slice(1);
+
+// 团队凝聚 = 未上场宠物「基础属性 ×10%」的**固定值**（在稀有度放大之后叠加，不被倍率再放大）
+const coh = sb.teamCohesionBonus(benchPets);
+const expCohAtk = benchPets.reduce(function (s, p) {
+  const u = sb.createPetUnit(p);
+  return s + Math.floor(u.base.atk * 0.1);
+}, 0);
+assert('团队凝聚 = 未上场宠物属性 ×10%（攻 ' + coh.atk + '）', coh.atk === expCohAtk, coh.atk + ' vs ' + expCohAtk);
+
+// 共鸣：按持有总数取档（4 只 → >3 → 5%），此前该函数零消费点
+const resPct = sb.resonanceBonus(dd2.pets.length);
+assert('共鸣按持有总数取档（4 只 → 5%）', resPct === 0.05, String(resPct));
+
+const u1 = sb.createPetUnitsForBattle([fieldedPet.speciesId], sb.PET_BATTLE_MAX);
+const atkBeforeBonus = u1[0].base.atk;
+sb.applyBattlePetBonuses(u1);
+const expAdd = coh.atk + Math.floor(atkBeforeBonus * resPct);
+assert('参战宠物吃到「凝聚固定值 + 共鸣%」（+' + (u1[0].base.atk - atkBeforeBonus) + '）',
+  u1[0].base.atk - atkBeforeBonus === expAdd, (u1[0].base.atk - atkBeforeBonus) + ' vs ' + expAdd);
+assert('加成后血量回满', u1[0].hp === u1[0].base.hp);
+
+// 受伤 / 未成熟的替补不计入凝聚
+const injuredBench = benchPets[0];
+injuredBench.injured = true;
+const cohInjured = sb.teamCohesionBonus(sb.getPetStore().pets.slice(1).filter(sb.canPetBattle));
+assert('受伤替补不贡献凝聚（' + cohInjured.atk + ' < ' + coh.atk + '）', cohInjured.atk < coh.atk);
+injuredBench.injured = false;
+
+// 上限 4：给 5 个 id 也只建 4 个
+const manyIds = dd2.pets.map(function (p) { return p.speciesId; }).concat([fieldedPet.speciesId]);
+const capped = sb.createPetUnitsForBattle(manyIds, sb.PET_BATTLE_MAX);
+assert('createPetUnitsForBattle 最多 4 只', capped.length === 4, 'len=' + capped.length);
+
+// 唯一入口存在 + 三个调用点都已接线（防「三处各自判断」的口径分叉）
+assert('唯一入口 buildGroupBattlePets 存在', typeof sb.buildGroupBattlePets === 'function');
+(function () {
+  ['game-render.js', 'pet-ui.js', 'debug.js'].forEach(function (f) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
+    assert(f + ' 已接线 buildGroupBattlePets', src.indexOf('buildGroupBattlePets') >= 0);
+    assert(f + ' 不再写死参战上限 2', src.indexOf('createPetUnitsForBattle(petIds, 2)') < 0);
+  });
+})();
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

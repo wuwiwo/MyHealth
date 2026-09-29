@@ -17,7 +17,7 @@ var PET_CONFIG = {
   },
   growthPerDay: [1, 7],   // 健康达标每天成长 +1%~7%
   matureHungerUse: [20, 35],  // 成熟后每天消耗饥饿 20%~35%
-  maxRoster: 2,           // 每场最多上 2 只
+  maxRoster: 4,           // v2.2 WP-A3：每场最多上 4 只（真正的上限常量见 pet-store.js 的 PET_BATTLE_MAX）
   /* v2.1.19 受伤系统：成熟期参战失败 → 50% 几率受伤；受伤期间无法出战。
      恢复进度 injuryHeal 0→100，到 100 解除受伤。
      营养液 每次 +10%~15%（约 7~10 次）；饲料 每次 +4%~5%（约 20~25 次）。 */

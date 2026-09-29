@@ -127,7 +127,8 @@ function renderPetPanel() {
   // 参战选择（成熟宠物）
   var ready = d.pets.filter(function(p){return p.stage==='mature'&&!p.isDead})
   if (ready.length) {
-    h += '<div style="margin-top:10px;font-size:var(--fs-xs)">⚔️ 选择参战宠物（最多 2 只）</div>'
+    var _petMaxLabel = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
+    h += '<div style="margin-top:10px;font-size:var(--fs-xs)">⚔️ 选择参战宠物（最多 '+_petMaxLabel+' 只）</div>'
     h += '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">'
     ready.forEach(function(p, ri) {
       var sel = (_petBattlePicks||[]).includes(p.speciesId)
@@ -222,9 +223,10 @@ function renderPetPanel() {
       var sid = btn.getAttribute('data-pet-pick')
       _petBattlePicks = _petBattlePicks || []
       var i = _petBattlePicks.indexOf(sid)
+      var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
       if (i > -1) _petBattlePicks.splice(i, 1)
-      else if (_petBattlePicks.length < 2) _petBattlePicks.push(sid)
-      else { toast('最多携带 2 只宠物 ⚔️', 'e'); return }
+      else if (_petBattlePicks.length < _petMax) _petBattlePicks.push(sid)
+      else { toast('最多携带 ' + _petMax + ' 只宠物 ⚔️', 'e'); return }
       renderPetPanel()
     })
   })
@@ -376,8 +378,11 @@ function startGroupTrialWithPets(groupId, petIds) {
   // v2.1.10：敌群是独立属性空间，玩家只继承一定比例
   var gs = (typeof inheritGroupStats === 'function') ? inheritGroupStats(stats) : stats
   var player = createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:gs.hp,atk:gs.atk,def:gs.def,spd:10,soulAtk:gs.soulAtk||0,soulDef:gs.soulDef||0}})
-  var petUnits = createPetUnitsForBattle(petIds, 2)
-  if (typeof boostPetForGroup === 'function') petUnits.forEach(boostPetForGroup)
+  /* v2.2 WP-A3/A4：统一走 pet-store.js 的唯一入口（建单位 → 稀有度放大 → 凝聚/共鸣） */
+  var _petMax2 = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
+  var petUnits = (typeof buildGroupBattlePets === 'function')
+    ? buildGroupBattlePets(petIds, _petMax2)
+    : createPetUnitsForBattle(petIds, _petMax2)
   var allies = [player].concat(petUnits)
   var gStage = (glv.stages || [])[0]
   var cfgList = (typeof groupStageEnemies === 'function' && gStage) ? groupStageEnemies(groupId, gStage, allies) : glv.enemies

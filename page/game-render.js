@@ -411,10 +411,13 @@ function startGroupTrial(groupId){
     attachPlayerSkills(player, getSkillState())
   }
   // 默认带宠物：优先 _petBattlePicks，否则自动带成熟宠物
-  var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(2)
-  // 宠物放大到与玩家同量级，否则基础 atk 15~20 等于摆设
-  var petUnits = createPetUnitsForBattle(petIds, 2)
-  if (typeof boostPetForGroup === 'function') petUnits.forEach(boostPetForGroup)
+  /* v2.2 WP-A3/A4：上限 2 → 4，并统一走 pet-store.js 的**唯一入口**
+     buildGroupBattlePets（建单位 → 稀有度放大 → 团队凝聚 / 共鸣）。 */
+  var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
+  var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(_petMax)
+  var petUnits = (typeof buildGroupBattlePets === 'function')
+    ? buildGroupBattlePets(petIds, _petMax)
+    : createPetUnitsForBattle(petIds, _petMax)
   var allies = [player].concat(petUnits)
   var anchorG = String(stage ? String(groupId).split('-')[0] : groupId)
   // 锚定默认关闭（见 GROUP_ANCHOR.enabled），开启时按我方阵容反推敌人属性

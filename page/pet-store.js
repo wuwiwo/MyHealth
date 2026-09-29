@@ -157,10 +157,14 @@ function getBattleReadyPets() {
   return d.pets.filter(function (p) { return canPetBattle(p); });
 }
 
+/* v2.2 WP-A3：参战宠物上限 2 → 4（dundun 2026-09-29 裁决）——
+   全项目唯一来源，别在调用点再写死数字。 */
+var PET_BATTLE_MAX = 4;
+
 /* 生成参战 Unit（最多 maxRoster 只） */
 function createPetUnitsForBattle(petIds, maxRoster) {
   var d = getPetStore();
-  var max = maxRoster || 2;
+  var max = maxRoster || PET_BATTLE_MAX;
   var units = [];
   (petIds || []).slice(0, max).forEach(function (pid) {
     var pet = d.pets.find(function (p) { return p.speciesId === pid || p.name === pid; });
@@ -172,8 +176,74 @@ function createPetUnitsForBattle(petIds, maxRoster) {
   return units;
 }
 
+/* ============================================================
+   v2.2 WP-A4：团队凝聚（新）+ 共鸣（接线）
+   两者**共存**，都作用于已放大的参战宠物：
+
+   · **团队凝聚**（2026-09-29 新增）：所有「成熟 + 未受伤 + 未上场」的宠物，
+     各把自己的属性 **×10%** 贡献给参战宠物。
+     ⚠️「不受百分比加成影响」= 按**固定值**叠加（在稀有度放大**之后**），
+        且取的是该宠物的**基础属性**（图鉴 + 炼化 + 天赋静态修正），不含百分比倍率。
+   · **共鸣**（design-v2.0.md §2.3 / OQ-15）：按**持有总数**档位（>1 ×3% / >3 ×5% /
+     >6 ×7% / >10 ×10%），对上场宠物自身的属性加成。
+     ⚠️ 此前 `resonanceBonus()` 全项目零消费点（只有测试断言它），本版正式接入战斗。
+
+   实现要点：两处都必须在 `boostPetForGroup()` **之后**调用 ——
+   否则凝聚的固定值会被稀有度倍率（×12~16）再次放大，违背「不受百分比加成影响」。
+   ============================================================ */
+var TEAM_COHESION_RATE = 0.10;
+
+/* 未上场宠物贡献的凝聚固定值（按基础属性求和） */
+function teamCohesionBonus(benchPets) {
+  var sum = { hp: 0, atk: 0, def: 0, soulAtk: 0, soulDef: 0 };
+  (benchPets || []).forEach(function (pet) {
+    var u = createPetUnit(pet);
+    if (!u || !u.base) return;
+    Object.keys(sum).forEach(function (k) {
+      sum[k] += Math.floor((u.base[k] || 0) * TEAM_COHESION_RATE);
+    });
+  });
+  return sum;
+}
+
+/* 参战宠物的战斗加成入口（凝聚 + 共鸣）。返回被加成的单位数组（就地修改）。 */
+function applyBattlePetBonuses(units) {
+  if (!units || !units.length) return units;
+  var d = getPetStore();
+  var fielded = {};
+  units.forEach(function (u) { fielded[u._petSpecies] = true; });
+  var bench = (d.pets || []).filter(function (p) {
+    return canPetBattle(p) && !fielded[p.speciesId];
+  });
+  var coh = teamCohesionBonus(bench);
+  var resPct = (typeof resonanceBonus === 'function') ? resonanceBonus((d.pets || []).length) : 0;
+  units.forEach(function (u) {
+    ['hp', 'atk', 'def', 'soulAtk', 'soulDef'].forEach(function (k) {
+      var base = u.base[k] || 0;
+      var add = Math.floor((coh[k] || 0) + base * resPct);
+      if (add > 0) u.base[k] = base + add;
+    });
+    u.hp = u.base.hp;   // 加成后回满（与 boostPetForGroup 同口径）
+  });
+  return units;
+}
+
+/* ============================================================
+   v2.2 WP-A3/A4：敌群参战宠物的**唯一入口**
+   = 建单位 → 稀有度放大（boostPetForGroup）→ 团队凝聚 / 共鸣。
+   三个调用点（`game-render.js` / `pet-ui.js` / `debug.js`）统一走这里，
+   避免「三处各自判断导致口径分叉」（同 `groupStageEnemies` 的教训）。
+   ============================================================ */
+function buildGroupBattlePets(petIds, maxRoster) {
+  var units = createPetUnitsForBattle(petIds, maxRoster);
+  units.forEach(function (u) { if (typeof boostPetForGroup === 'function') boostPetForGroup(u); });
+  return applyBattlePetBonuses(units);
+}
+
 /* 测试/工具暴露 */
 if (typeof window !== 'undefined') {
+  window.PET_BATTLE_MAX = PET_BATTLE_MAX;
+  window.TEAM_COHESION_RATE = TEAM_COHESION_RATE;
   window.getPetStore = getPetStore;
   window.savePetStore = savePetStore;
   window.grantStarterPet = grantStarterPet;
@@ -183,8 +253,13 @@ if (typeof window !== 'undefined') {
   window.hatchAllEggs = hatchAllEggs;
   window.getBattleReadyPets = getBattleReadyPets;
   window.createPetUnitsForBattle = createPetUnitsForBattle;
+  window.teamCohesionBonus = teamCohesionBonus;
+  window.applyBattlePetBonuses = applyBattlePetBonuses;
+  window.buildGroupBattlePets = buildGroupBattlePets;
 }
 if (typeof globalThis !== 'undefined') {
+  globalThis.PET_BATTLE_MAX = PET_BATTLE_MAX;
+  globalThis.TEAM_COHESION_RATE = TEAM_COHESION_RATE;
   globalThis.getPetStore = getPetStore;
   globalThis.savePetStore = savePetStore;
   globalThis.grantStarterPet = grantStarterPet;
@@ -194,4 +269,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.hatchAllEggs = hatchAllEggs;
   globalThis.getBattleReadyPets = getBattleReadyPets;
   globalThis.createPetUnitsForBattle = createPetUnitsForBattle;
+  globalThis.teamCohesionBonus = teamCohesionBonus;
+  globalThis.applyBattlePetBonuses = applyBattlePetBonuses;
+  globalThis.buildGroupBattlePets = buildGroupBattlePets;
 }
