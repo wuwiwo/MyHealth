@@ -130,11 +130,23 @@ assert('共鸣按持有总数取档（4 只 → 5%）', resPct === 0.05, String(
 
 const u1 = sb.createPetUnitsForBattle([fieldedPet.speciesId], sb.PET_BATTLE_MAX);
 const atkBeforeBonus = u1[0].base.atk;
-sb.applyBattlePetBonuses(u1);
-const expAdd = coh.atk + Math.floor(atkBeforeBonus * resPct);
-assert('参战宠物吃到「凝聚固定值 + 共鸣%」（+' + (u1[0].base.atk - atkBeforeBonus) + '）',
+sb.applyBattlePetBaseBonuses(u1);
+/* dundun 2026-09-29 口径：凝聚与共鸣**同形** —— 都把「未上场宠物的基础属性」按比例
+   加成到参战宠物的**基础属性**上（不是按参战宠物自身属性算百分比）。 */
+const resSum = sb.benchBonusSum(benchPets, resPct);
+const expAdd = coh.atk + resSum.atk;
+assert('参战宠物基础属性吃到「凝聚 + 共鸣」（+' + (u1[0].base.atk - atkBeforeBonus) + '）',
   u1[0].base.atk - atkBeforeBonus === expAdd, (u1[0].base.atk - atkBeforeBonus) + ' vs ' + expAdd);
-assert('加成后血量回满', u1[0].hp === u1[0].base.hp);
+assert('共鸣取的是未上场宠物属性（> 0）', resSum.atk > 0, 'res=' + resSum.atk);
+assert('加成后血量同步', u1[0].hp === u1[0].base.hp);
+
+/* 顺序守卫：基础值加成必须排在「稀有度放大（百分比池）」之前 —— 顺序反了两类加成的性质就变了 */
+(function () {
+  const psSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'pet-store.js'), 'utf8');
+  const iBonus = psSrc.indexOf('applyBattlePetBaseBonuses(units)');
+  const iBoost = psSrc.indexOf('boostPetForGroup(u)');
+  assert('基础值加成排在稀有度放大之前', iBonus >= 0 && iBoost > iBonus, iBonus + ' vs ' + iBoost);
+})();
 
 // 受伤 / 未成熟的替补不计入凝聚
 const injuredBench = benchPets[0];

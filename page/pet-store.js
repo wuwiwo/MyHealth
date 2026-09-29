@@ -178,66 +178,84 @@ function createPetUnitsForBattle(petIds, maxRoster) {
 
 /* ============================================================
    v2.2 WP-A4：团队凝聚（新）+ 共鸣（接线）
-   两者**共存**，都作用于已放大的参战宠物：
+   两者**共存可叠加**，且**同形**：都把「未上场宠物的基础属性」按比例加成到
+   **参战宠物的基础属性**上 —— 之后随参战宠物一起进入百分比池。
 
-   · **团队凝聚**（2026-09-29 新增）：所有「成熟 + 未受伤 + 未上场」的宠物，
-     各把自己的属性 **×10%** 贡献给参战宠物。
-     ⚠️「不受百分比加成影响」= 按**固定值**叠加（在稀有度放大**之后**），
-        且取的是该宠物的**基础属性**（图鉴 + 炼化 + 天赋静态修正），不含百分比倍率。
-   · **共鸣**（design-v2.0.md §2.3 / OQ-15）：按**持有总数**档位（>1 ×3% / >3 ×5% /
-     >6 ×7% / >10 ×10%），对上场宠物自身的属性加成。
-     ⚠️ 此前 `resonanceBonus()` 全项目零消费点（只有测试断言它），本版正式接入战斗。
+   📌 dundun 2026-09-29 口径（总模型）：
+     **只要「直接加属性值」的就属于基础属性部分；写成百分比的才进可叠加的百分比池。**
+     · 基础属性 = 图鉴基础 + 炼化加成 + 天赋静态修正 + **团队凝聚** + **共鸣**
+     · 百分比池 = 稀有度倍率 + Σ宝珠%
+     · 最终属性 = 基础属性 × 百分比池
+     所以两处都必须加在 `boostPetForGroup()`（百分比池）**之前**。
 
-   实现要点：两处都必须在 `boostPetForGroup()` **之后**调用 ——
-   否则凝聚的固定值会被稀有度倍率（×12~16）再次放大，违背「不受百分比加成影响」。
+   · **团队凝聚**：所有「成熟 + 未受伤 + 未上场」的宠物，各把基础属性 ×**10%** 贡献给参战宠物
+   · **共鸣**（design-v2.0.md §2.3 / OQ-15）：同样的贡献，但比例按**持有总数**取档
+     （>1 ×3% / >3 ×5% / >6 ×7% / >10 ×10%）
+   ⚠️「不受百分比加成影响」= 计算源取的是未上场宠物的**基础属性**，
+      不是它们被百分比放大后的最终属性。
    ============================================================ */
 var TEAM_COHESION_RATE = 0.10;
+var PET_BONUS_ATTRS = ['hp', 'atk', 'def', 'soulAtk', 'soulDef'];   // 速度不参与（与 A1 公式一致）
 
-/* 未上场宠物贡献的凝聚固定值（按基础属性求和） */
-function teamCohesionBonus(benchPets) {
+/* 未上场宠物按比例贡献的基础属性合计；只取「基础属性部分」（剔除宝珠的扁平贡献，A2 后自然为 0） */
+function benchBonusSum(benchPets, rate) {
   var sum = { hp: 0, atk: 0, def: 0, soulAtk: 0, soulDef: 0 };
+  if (!rate) return sum;
   (benchPets || []).forEach(function (pet) {
     var u = createPetUnit(pet);
     if (!u || !u.base) return;
-    Object.keys(sum).forEach(function (k) {
-      sum[k] += Math.floor((u.base[k] || 0) * TEAM_COHESION_RATE);
+    var orb = u._orbBonus || {};
+    PET_BONUS_ATTRS.forEach(function (k) {
+      var baseOnly = (u.base[k] || 0) - (orb[k] || 0);
+      sum[k] += Math.floor(baseOnly * rate);
     });
   });
   return sum;
 }
 
-/* 参战宠物的战斗加成入口（凝聚 + 共鸣）。返回被加成的单位数组（就地修改）。 */
-function applyBattlePetBonuses(units) {
-  if (!units || !units.length) return units;
+/* 团队凝聚：未上场宠物基础属性 ×10% */
+function teamCohesionBonus(benchPets) {
+  return benchBonusSum(benchPets, TEAM_COHESION_RATE);
+}
+
+/* 「成熟 + 未受伤 + 未上场」的宠物 = 提供加成的后备阵容 */
+function benchPetList(units) {
   var d = getPetStore();
   var fielded = {};
-  units.forEach(function (u) { fielded[u._petSpecies] = true; });
-  var bench = (d.pets || []).filter(function (p) {
-    return canPetBattle(p) && !fielded[p.speciesId];
-  });
-  var coh = teamCohesionBonus(bench);
-  var resPct = (typeof resonanceBonus === 'function') ? resonanceBonus((d.pets || []).length) : 0;
+  (units || []).forEach(function (u) { fielded[u._petSpecies] = true; });
+  return (d.pets || []).filter(function (p) { return canPetBattle(p) && !fielded[p.speciesId]; });
+}
+
+/* 把「团队凝聚 + 共鸣」加进参战宠物的**基础属性**（必须在 boostPetForGroup 之前调用） */
+function applyBattlePetBaseBonuses(units) {
+  if (!units || !units.length) return units;
+  var d = getPetStore();
+  var bench = benchPetList(units);
+  var coh = benchBonusSum(bench, TEAM_COHESION_RATE);
+  var resRate = (typeof resonanceBonus === 'function') ? resonanceBonus((d.pets || []).length) : 0;
+  var res = benchBonusSum(bench, resRate);
   units.forEach(function (u) {
-    ['hp', 'atk', 'def', 'soulAtk', 'soulDef'].forEach(function (k) {
-      var base = u.base[k] || 0;
-      var add = Math.floor((coh[k] || 0) + base * resPct);
-      if (add > 0) u.base[k] = base + add;
+    PET_BONUS_ATTRS.forEach(function (k) {
+      var add = (coh[k] || 0) + (res[k] || 0);
+      if (add > 0) u.base[k] = (u.base[k] || 0) + add;
     });
-    u.hp = u.base.hp;   // 加成后回满（与 boostPetForGroup 同口径）
+    u.hp = u.base.hp;   // 基础值变动后同步当前血量
   });
   return units;
 }
 
 /* ============================================================
    v2.2 WP-A3/A4：敌群参战宠物的**唯一入口**
-   = 建单位 → 稀有度放大（boostPetForGroup）→ 团队凝聚 / 共鸣。
+   = 建单位 → 基础值加成（团队凝聚 / 共鸣）→ 稀有度放大（百分比池）。
+   ⚠️ 顺序不能反：基础值必须在百分比池之前进入，否则两类加成的性质就变了。
    三个调用点（`game-render.js` / `pet-ui.js` / `debug.js`）统一走这里，
    避免「三处各自判断导致口径分叉」（同 `groupStageEnemies` 的教训）。
    ============================================================ */
 function buildGroupBattlePets(petIds, maxRoster) {
   var units = createPetUnitsForBattle(petIds, maxRoster);
+  applyBattlePetBaseBonuses(units);
   units.forEach(function (u) { if (typeof boostPetForGroup === 'function') boostPetForGroup(u); });
-  return applyBattlePetBonuses(units);
+  return units;
 }
 
 /* 测试/工具暴露 */
@@ -254,7 +272,9 @@ if (typeof window !== 'undefined') {
   window.getBattleReadyPets = getBattleReadyPets;
   window.createPetUnitsForBattle = createPetUnitsForBattle;
   window.teamCohesionBonus = teamCohesionBonus;
-  window.applyBattlePetBonuses = applyBattlePetBonuses;
+  window.benchBonusSum = benchBonusSum;
+  window.benchPetList = benchPetList;
+  window.applyBattlePetBaseBonuses = applyBattlePetBaseBonuses;
   window.buildGroupBattlePets = buildGroupBattlePets;
 }
 if (typeof globalThis !== 'undefined') {
@@ -270,6 +290,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.getBattleReadyPets = getBattleReadyPets;
   globalThis.createPetUnitsForBattle = createPetUnitsForBattle;
   globalThis.teamCohesionBonus = teamCohesionBonus;
-  globalThis.applyBattlePetBonuses = applyBattlePetBonuses;
+  globalThis.benchBonusSum = benchBonusSum;
+  globalThis.benchPetList = benchPetList;
+  globalThis.applyBattlePetBaseBonuses = applyBattlePetBaseBonuses;
   globalThis.buildGroupBattlePets = buildGroupBattlePets;
 }
