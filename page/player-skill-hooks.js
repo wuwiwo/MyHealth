@@ -117,7 +117,11 @@ function playerSkillTurnStart(gb, player, turn) {
       player._spotLock = 2;
       player._spotTauntTurn = turn;
       player._spotHits = 0;   // 本回合受击计数
-      events.push({ msg: '🎯 ' + player.name + ' 瞩目：吸引敌方全体攻击 1 回合' });
+      /* v2.2 WP-B：嘲讽期间受到伤害 −15% —— 用「警戒」状态承载（dmgTakenReduce 0.15）。
+         duration 取 2：状态在**自己的回合末**递减，嘲讽窗口要跨过敌方这一轮攻击。 */
+      applyStatus(player, { id: 'vigil', duration: 2 });
+      if (typeof syncStatusDerived === 'function') syncStatusDerived(player);
+      events.push({ msg: '🎯 ' + player.name + ' 瞩目：吸引敌方全体攻击 1 回合（受伤 −15%）' });
     } else {
       player._spotPity = (player._spotPity || 1) * 1.2;
     }
@@ -163,6 +167,11 @@ function playerAttackSkill(gb, player, skillId) {
       var dmg = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
       t.hp = Math.max(0, t.hp - dmg);
       events.push({ msg: '☄️ ' + player.name + ' 陨石轰炸 → ' + t.name + ' ' + dmg + ' 魂伤害' });
+      /* v2.2 WP-B：受击敌人「接下来 2 回合 攻/魂攻 −15%」（同一目标只记一次） */
+      var hasWeak = (t.statuses || []).some(function (s) { return s.id === 'weaken'; });
+      applyStatus(t, { id: 'weaken', duration: 2 });
+      if (typeof syncStatusDerived === 'function') syncStatusDerived(t);
+      if (!hasWeak) events.push({ msg: '⬇️ ' + t.name + ' 弱化：攻/魂攻 −15%（2 回合）' });
     }
     return { name: '陨石轰炸', events: events, cd: eff.cd };
   }

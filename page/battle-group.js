@@ -7,7 +7,7 @@
    ============================================ */
 
 /* 状态中文名（日志用） */
-var STATUS_NAMES = { sleep:'睡眠', poison:'中毒', freeze:'冰冻', flinch:'畏缩', wet:'潮湿', charging:'蓄力', possessed:'幽魂附身', doomed:'末日', armorbroken:'破甲', slow:'减速', souldown:'魂防降低', lastworded:'遗言诅咒', sleepy:'哈欠' };
+var STATUS_NAMES = { sleep:'睡眠', poison:'中毒', freeze:'冰冻', flinch:'畏缩', wet:'潮湿', charging:'蓄力', possessed:'幽魂附身', doomed:'末日', armorbroken:'破甲', slow:'减速', souldown:'魂防降低', lastworded:'遗言诅咒', sleepy:'哈欠', weaken:'弱化', vigil:'警戒' };
 function getStatusName(id){ return STATUS_NAMES[id] || id; }
 
 /* v2.1.14 威吓削减幅度：唯一来源是 talent.js 的 INTIMIDATE_ATK_DOWN

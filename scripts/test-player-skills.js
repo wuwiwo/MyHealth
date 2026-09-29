@@ -137,6 +137,18 @@ function mkEnemies(){
 const gbM = sb.createGroupBattle({ allies:[atkPlayer], enemies:mkEnemies() });
 const meteor = sb.playerAttackSkill(gbM, atkPlayer, 'meteor');
 assert('陨石轰炸', meteor && meteor.events.length >= 1 && gbM.enemies.some(e => e.hp < 2000), JSON.stringify(meteor && meteor.events));
+/* v2.2 WP-B：陨石命中者「攻/魂攻 −15% / 2 回合」= 弱化状态 */
+assert('陨石命中 → 弱化状态', gbM.enemies.every(e => sb.hasStatus(e, 'weaken')),
+  JSON.stringify(gbM.enemies.map(e => (e.statuses || []).map(s => s.id))));
+assert('弱化 → 攻/魂攻各 −15%', (function () {
+  const d = sb.getStatusDef('weaken') || {};
+  const mp = d.statModsPct || {};
+  const u = sb.createUnit({ id: 'wk', side: 'enemy', name: 'E', base: { hp: 100, atk: 200, def: 10, spd: 1, soulAtk: 100 } });
+  sb.applyStatus(u, { id: 'weaken', duration: 2 });
+  sb.syncStatusDerived(u);
+  return mp.atk === -0.15 && mp.soulAtk === -0.15 &&
+    sb.effectiveStat(u, 'atk') === 170 && sb.effectiveStat(u, 'soulAtk') === 85;
+})(), JSON.stringify(sb.getStatusDef('weaken')));
 const gbI = sb.createGroupBattle({ allies:[atkPlayer], enemies:mkEnemies() });
 const ice = sb.playerAttackSkill(gbI, atkPlayer, 'icebeam');
 assert('冰魄冰冻', ice && gbI.enemies.some(e => sb.hasStatus(e, 'freeze')), JSON.stringify(ice && ice.events));

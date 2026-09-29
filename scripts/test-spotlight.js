@@ -26,6 +26,14 @@ for (let t = 1; t <= 50; t++) {
 }
 assert('瞩目触发嘲讽', taunted);
 assert('瞩目设置嘲讽标记', player._taunting === true);
+/* v2.2 WP-B：嘲讽期间受到伤害 −15% —— 由「警戒」状态承载（dmgTakenReduce 0.15） */
+assert('嘲讽时挂上「警戒」状态', sb.hasStatus(player, 'vigil'));
+assert('警戒 → dmgTakenReduce 0.15', (function () {
+  const def = sb.getStatusDef('vigil');
+  if (!def || !def.hooks || typeof def.hooks.onDamage !== 'function') return false;
+  const r = def.hooks.onDamage(player);
+  return !!(r && r.mutations && r.mutations.some(m => m.key === 'dmgTakenReduce' && Math.abs(m.value - 0.15) < 1e-9));
+})(), JSON.stringify((sb.getStatusDef('vigil') || {}).hooks && 'hooks'));
 // 受击计数 + 回合结束回复
 const gb = sb.createGroupBattle({ allies:[player], enemies:[sb.createEnemyUnit({tier:'minion',name:'敌',base:{hp:50,atk:5,def:2,spd:1}})] });
 player._spotTauntTurn = 1; player._spotHits = 0;

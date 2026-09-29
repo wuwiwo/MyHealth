@@ -1086,7 +1086,7 @@ function renderGroupDetail(u){
 
 /* 状态图标映射（title 用中文名，避免英文 id 外露） */
 function statusIcon(id){
-  var map={sleep:'💤',poison:'☠️',freeze:'❄️',flinch:'😵',wet:'💧',charging:'🔋',possessed:'👻',doomed:'🌑',armorbroken:'💔',slow:'🐌',souldown:'🔮',lastworded:'💀',sleepy:'😪'}
+  var map={sleep:'💤',poison:'☠️',freeze:'❄️',flinch:'😵',wet:'💧',charging:'🔋',possessed:'👻',doomed:'🌑',armorbroken:'💔',slow:'🐌',souldown:'🔮',lastworded:'💀',sleepy:'😪',weaken:'⬇️',vigil:'🛡️'}
   var nm=(typeof getStatusName==='function')?getStatusName(id):id
   return '<span title="'+escHtml(nm)+'">'+(map[id]||'')+'</span>'
 }

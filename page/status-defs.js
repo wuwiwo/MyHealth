@@ -200,6 +200,33 @@ defineStatus({
   hooks: {}
 });
 
+/* ============ v2.2 WP-B 新增：弱化（陨石轰炸）/ 警戒（瞩目） ============ */
+
+/* 弱化：攻击与魂攻 −15%（v2.2 裁决：陨石轰炸命中者接下来 2 回合攻/魂攻 −15%） */
+defineStatus({
+  id: 'weaken',
+  name: '弱化',
+  grade: 1,
+  maxStacks: 1,
+  stacking: 'refresh',
+  statModsPct: { atk: -0.15, soulAtk: -0.15 },
+  hooks: {}
+});
+
+/* 警戒：受到伤害 −15%（v2.2 裁决：瞩目「嘲讽期间受到伤害 −15%」） */
+defineStatus({
+  id: 'vigil',
+  name: '警戒',
+  grade: 1,
+  maxStacks: 1,
+  stacking: 'refresh',
+  hooks: {
+    onDamage: function (unit) {
+      return { mutations: [{ key: 'dmgTakenReduce', value: 0.15 }] };
+    }
+  }
+});
+
 /* 遗言诅咒：攻击·魂攻大幅降低 + 每回合最大生命值伤害
    v2.1.15：固定 -15 改为按 base 比例 -25%（设计文档只说「大幅降低」，未给数值）
    v2.1.33：每回合伤害补上「**受到自身魂防御降低**」（设计文档原文）——
