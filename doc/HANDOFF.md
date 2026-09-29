@@ -732,3 +732,11 @@ PITFALL-19. **PowerShell `Get-Content` 数行数会少数**（2026-09-26）：�
     `battle-group.js` 得 825，与架构演化表记录的 1288 对不上，一度以为表写错了。
     用 `node -e "fs.readFileSync(f,'utf8').split('\n').length-1"` 复核 → **1288，与表一致**。
     **量行数一律用 node**；`git show HEAD:f > tmp` 这类重定向也会多出十几行，同样把数字带偏。
+
+PITFALL-20. **PowerShell 会吃掉反引号后的字符，静默污染文档**（2026-09-29 连踩两次）：用
+    `node -e "…"` 在 PowerShell 里生成含 **反引号代码段**的 markdown 时，反引号是 PowerShell 的转义符 ——
+    `` `r `` 被解释成 CR、`` `b `` 被解释成退格，于是文档里的 `` `resonanceBonus() `` 变成 `esonanceBonus()`、
+    `` `buildGroupBattlePets `` 变成 `uildGroupBattlePets`，**不报错、只是悄悄少一个字符**（还混入控制字符）。
+    ✅ 正解：**把脚本写成文件再 `node 文件.js` 执行**（或直接用 `write_file` 写文档），
+    需要反引号时用 `String.fromCharCode(96)` 构造；**别把带反引号的代码塞进 PowerShell 双引号命令**。
+    事后自检：`grep -P "[\x00-\x08\x0b\x0c\x0e-\x1f]"` 扫一遍文件是否混入控制字符。
