@@ -40,6 +40,14 @@ v2.2 是**宠物体系 / 宝珠 / 等级系统 / 技能平衡**版本。规划�
 - **新增套件 `test-lucky-pocket.js`（30 断言）** → 全量 **39 套件 / 1167 断言 / 0 失败**（基线 38 / 1137）
 - `APP_VERSION` 2.2.12 → **2.2.13** · `page/index.html` `?v109` → `?v110`
 
+### 补记：版本戳漏 bump 事件（已修）
+
+本版落地时，主控用 inline `node -e` 改 `APP_VERSION` 时**引号写错**，导致 `page/utils.js` 的 `APP_VERSION` **没跟着升到 2.2.13**，
+而 changelog / README 已是 v2.2.13 —— 且因为 `utils.js` 未变更，**pre-commit 的版本校验被跳过**（规则只在 `utils.js` 变更时触发），不一致被放过了。
+随后单独提交补齐 `APP_VERSION` 时，钩子又因「版本号变更但本提交内没有版本文档」而拦下 —— **两次都是钩子在做正确的事**。修法：补这一条 changelog 记录，与 `utils.js` 同提交。
+
+> 教训：**改 `APP_VERSION` 不要用 inline `node -e` + PowerShell 双引号**（反引号/引号会被吃掉，PITFALL-20 的同一类坑）；用脚本文件或 `edit_file`。
+
 ### ⚠️ 残留（子代理上报，未擅自扩大范围）
 
 `groupVictoryReward()` 的**基础掉落**（非幸运口袋那一段）**仍用 `Math.random()`** —— 奖励层不在 `test-group-determinism` 的种子重放覆盖内，当前不影响；若要奖励完全可复现，需另开一项把基础掉落一并改走 `gb.rng`。
