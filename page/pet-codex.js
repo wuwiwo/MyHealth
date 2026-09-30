@@ -282,14 +282,18 @@ registerTalent({ id:'holy_guard', name:'圣光守护', desc:'血量>50%时承担
    v2.3.0 WP-D（§3.5 评审「需要接入其他辅助效果」+ §3.12-2 裁决「全通道适用」）：
      · 治疗通道自 v2.1.5 起即生效（onBeforeHeal → healBoost ±0.25），**行为不变**；
      · 新增 `onBeforeSupportEffect` → `supportScale ±0.25`，供**非治疗**的辅助通道用。
-       消费点（battle-group.js 的 castSkill）：`fx.buffs` 的增益幅度（atkup 的 modsPct.atk）、
-       `fx.statusApps` 的**实例 modsPct** 幅度（如敌方「打湿」落到本宠物身上时魂防削减 ×0.75）。
+       消费点（battle-group.js 的 castSkill）：`fx.buffs` 的增益幅度（atkup 的 modsPct.atk、
+       wideguard 的 data.reduce）、`fx.statusApps` 的**实例 modsPct** 幅度
+       （如敌方「打湿」落到本宠物身上时魂防削减 ×0.75）。
        判定与治疗一致：来源与自身同阵营 → +25%，异阵营 → -25%；非 support 类技能不派发。
-     ⚠️ §3.12-2 点名的另两条通道在当前代码里**没有可缩放的数值载体**，本版无法接入：
-        · 护盾量 —— 群战技能里没有给盾通道（唯一的盾来自玩家技能「金身护盾」，
-          在 player-skill-hooks.js 的 playerSkillBattleStart 直接写 _shield，本文件与
-          battle-group.js 都没有派发点）；
-        · 状态解除（净化）—— 二元语义（解/不解），无「幅度」可乘。 */
+   v2.3.0 WP-E（§3.12-2 剩余三通道的现状）：
+     · 护盾量 —— **已接入**：唯一的给盾载体是玩家技能「金身护盾」（它是被动技能，不走
+       castSkill），派发点放在 player-skill-hooks.js 的唯一写入点 playerSkillBattleStart，
+       用 supportEffectMul() 按阵营缩放（本技能恒为我方来源 → 只会放大 ×1.25）；
+     · 状态解除（净化）—— 二元语义（解/不解），没有可乘的「幅度」→ 仍无载体；
+     · 吸血 —— 群战技能层没有吸血类**辅助**技能：吸血目前只存在于 talent.js 的「嗜血」，
+       它是**攻击方自身**的天赋（onAfterDamage 回血），不是施加到持有者身上的辅助效果
+       （§2.14 给 p_warmight 规划的「吸血 5%~50% / 技能吸血 7.5%~32.5%」属 WP-C，尚未实装）。 */
 registerTalent({ id:'mirror_field', name:'镜像结界', desc:'受我方辅助效果+25%，受敌方辅助效果-25%', petOnly:true,
   hooks: {
     onBeforeHeal: function (unit, ctx) {

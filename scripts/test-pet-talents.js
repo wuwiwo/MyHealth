@@ -8,6 +8,7 @@
    6) WP-D（v2.3.0）：斗者本能 × 宠物暴击档「取最高、分别判定」
    7) WP-D（v2.3.0）：§3 其余 9 条 petOnly 天赋的对齐
       （圣光守护自身 -10% / 镜像结界全通道 / 不动如山 >95% / 威压领域 -10%·>70% 翻倍 …）
+   8) WP-E（v2.3.0）：wideguard/bulwark 死字段清理 + 镜像结界剩余通道（护盾量 / dmgReduce 缩放）
 */
 'use strict';
 const fs = require('fs');
@@ -434,6 +435,95 @@ assert('defScale → 不传时不写字段（默认行为/形状不变）', uDsD
 
 assert('§3.5 镜像结界 E2E → 「漆黑之眼/心眼/灵感涌动」等其余天赋不受影响（无天赋单位倍率 1）',
   sandbox.supportEffectMul(mkSide('ally', TGT, ['dark_eye', 'mind_eye']), { side: 'enemy', id: 'e' }) === 1);
+
+/* ---- 8. WP-E：wideguard/bulwark 死字段清理 + 镜像结界剩余通道 ---- */
+console.log('\n[8] WP-E wideguard 死字段 / 镜像结界剩余通道');
+
+/* 8a. 减伤幅度的**唯一来源**：skill.js 的 bulwark 按成长推送 b.value（0.20~0.40），
+   改前它在 battle-group 的 buff 落地处被丢弃，而 status-defs 把 0.20 硬编码。
+   现在：单源 = SKILLS.bulwark.range.dmgReduce，经实例 data.reduce 携带 → 由 wideguard.onDamage 消费。 */
+assert('WP-E wideguard → 技能区间低值 = 兜底值（单源不变式：bulwark 0.20 与旧硬编码一致）',
+  sandbox.getSkill('bulwark').range.dmgReduce[0] === 0.20);
+
+const wgPlain = mkSide('ally', { hp: 1000, atk: 10, def: 0, spd: 5 });
+sandbox.applyStatus(wgPlain, { id: 'wideguard', duration: 3 });
+const wgPlainMut = sandbox.dispatch(wgPlain, 'onDamage', {}).mutations.filter(m => m.key === 'dmgTakenReduce');
+assert('WP-E wideguard → 无 data 的实例仍按 20% 兜底（旧行为/旧存档形状不变）',
+  wgPlainMut.length === 1 && wgPlainMut[0].value === 0.20, JSON.stringify(wgPlainMut));
+
+const wgInst = mkSide('ally', { hp: 1000, atk: 10, def: 0, spd: 5 });
+sandbox.applyStatus(wgInst, { id: 'wideguard', duration: 3, data: { reduce: 0.40 } });
+const wgInstMut = sandbox.dispatch(wgInst, 'onDamage', {}).mutations.filter(m => m.key === 'dmgTakenReduce');
+assert('WP-E wideguard → 实例 data.reduce 真正被消费（0.40，而非硬编码 0.20）',
+  wgInstMut.length === 1 && wgInstMut[0].value === 0.40, JSON.stringify(wgInstMut));
+sandbox.applyStatus(wgInst, { id: 'wideguard', duration: 3, data: { reduce: 0.25 } });
+assert('WP-E wideguard → refresh 时 data 同步覆盖（0.40 → 0.25，不被首次施放锁死）',
+  sandbox.dispatch(wgInst, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.25),
+  JSON.stringify(sandbox.dispatch(wgInst, 'onDamage', {}).mutations));
+
+/* 8b. E2E：敌人施放「广域防御」（level 10 → 区间上端 0.40）→ b.value 真正进入减伤结算 */
+function bulwarkDamage(withBulwark) {
+  const tank = mkSide('enemy', { hp: 5000, atk: 10, def: 0, spd: 1 });
+  const caster = mkSide('enemy', { hp: 500, atk: 10, def: 0, spd: 9, soulAtk: 0 }, null, 10);
+  const atk = mkSide('ally', { hp: 500, atk: 100, def: 0, spd: 5 });
+  const gb = sandbox.createGroupBattle({ allies: [atk], enemies: [caster, tank], rng: function () { return 0; } });
+  gb.turn = 1;
+  if (withBulwark) sandbox.castSkill(gb, caster, 'bulwark');
+  const hp0 = tank.hp;
+  sandbox.normalAttack(gb, atk, tank);
+  const inst = statusOf(tank, 'wideguard');
+  return { dealt: hp0 - tank.hp, reduce: inst && inst.data ? inst.data.reduce : null };
+}
+const bwOff = bulwarkDamage(false), bwOn = bulwarkDamage(true);
+assert('WP-E 广域防御 E2E → 无盾时满伤 101', bwOff.dealt === 101, 'dealt=' + bwOff.dealt);
+assert('WP-E 广域防御 E2E → 区间上端 0.40 写进实例并被消费（101 → 60）',
+  near(bwOn.reduce, 0.40) && bwOn.dealt === 60,
+  'reduce=' + bwOn.reduce + ' dealt=' + bwOn.dealt);
+
+/* 8c. 镜像结界 × 广域防御：增益幅度通道现在也覆盖 dmgReduce（此前无载体，只有 atkBoost）
+   ⚠️ 可达性说明：线上 bulwark 只发给**敌方**（SKILLS_HIGH 是敌方池），镜像持有者在敌方时
+      才会被缩放到；这里用「我方施法者」构造同一条代码路径，断言缩放确实按阵营作用于 data.reduce。
+      （镜像持有人站我方 → 我方来源 ×1.25；这条分支目前无线上载体，属接线断言。） */
+function mirrorWideguardDamage(withMirror) {
+  const caster = mkSide('ally', { hp: 500, atk: 10, def: 0, spd: 9, soulAtk: 0 }, null, 10);
+  const holder = mkSide('ally', { hp: 5000, atk: 10, def: 0, spd: 1 }, withMirror ? ['mirror_field'] : null);
+  const foe = mkSide('enemy', { hp: 500, atk: 100, def: 0, spd: 5 });
+  const gb = sandbox.createGroupBattle({ allies: [caster, holder], enemies: [foe], rng: function () { return 0; } });
+  gb.turn = 1;
+  sandbox.castSkill(gb, caster, 'bulwark');
+  const inst = statusOf(holder, 'wideguard');
+  const hp0 = holder.hp;
+  sandbox.normalAttack(gb, foe, holder);
+  return { dealt: hp0 - holder.hp, reduce: inst && inst.data ? inst.data.reduce : null };
+}
+const mwOff = mirrorWideguardDamage(false), mwOn = mirrorWideguardDamage(true);
+assert('WP-E 镜像结界 × 广域防御 → 我方来源 data.reduce ×1.25（0.40 → 0.50）',
+  near(mwOff.reduce, 0.40) && near(mwOn.reduce, 0.50), 'off=' + mwOff.reduce + ' on=' + mwOn.reduce);
+assert('WP-E 镜像结界 × 广域防御 E2E → 受击减伤按缩放后幅度（101 → 50，而非 61）',
+  mwOff.dealt === 60 && mwOn.dealt === 50, 'off=' + mwOff.dealt + ' on=' + mwOn.dealt);
+
+/* 8d. 镜像结界 × 护盾量（§3.12-2 第 2 条通道）：唯一的给盾载体 = 玩家技能「金身护盾」
+   （被动，不走 castSkill）→ 派发点放在 player-skill-hooks.js 的唯一写入点。 */
+function goldShieldFor(mirror) {
+  const player = mkSide('ally', { hp: 1000, atk: 100, def: 5, spd: 5, soulAtk: 100 });
+  player._playerSkills = { goldshield: 20 };   // shieldPct = 20×0.25 = 500%
+  const pet = mkSide('ally', { hp: 1000, atk: 10, def: 0, spd: 1 }, mirror ? ['mirror_field'] : null);
+  const gb = sandbox.createGroupBattle({ allies: [player, pet], enemies: [] });
+  sandbox.playerSkillBattleStart(gb, player);
+  return pet._shield;
+}
+assert('WP-E 镜像结界 × 护盾量 → 无镜像时护盾不变（(攻10+魂攻0)×500% = 50）',
+  goldShieldFor(false) === 50, 'shield=' + goldShieldFor(false));
+assert('WP-E 镜像结界 × 护盾量 → 我方来源技能护盾 ×1.25（50 → 62）',
+  goldShieldFor(true) === 62, 'shield=' + goldShieldFor(true));
+assert('WP-E 护盾通道只在持有者身上缩放（施法者自己仍是满额 1000）', (function () {
+  const player = mkSide('ally', { hp: 1000, atk: 100, def: 5, spd: 5, soulAtk: 100 });
+  player._playerSkills = { goldshield: 20 };
+  const pet = mkSide('ally', { hp: 1000, atk: 10, def: 0, spd: 1 }, ['mirror_field']);
+  const gb = sandbox.createGroupBattle({ allies: [player, pet], enemies: [] });
+  sandbox.playerSkillBattleStart(gb, player);
+  return player._shield === 1000;
+})());
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

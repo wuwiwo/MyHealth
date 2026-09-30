@@ -26,13 +26,20 @@ function playerSkillBattleStart(gb, player) {
   if (shieldLv >= 1) {
     var eff = getPlayerSkill('goldshield').effect(shieldLv);
     gb.allies.forEach(function (a) {
-      var shield = Math.floor((a.base.atk + (a.base.soulAtk || 0)) * eff.shieldPct);
+      var base = Math.floor((a.base.atk + (a.base.soulAtk || 0)) * eff.shieldPct);
+      /* v2.3.0 WP-E（§3.5 + §3.12-2「护盾量」通道）：镜像结界 —— 我方来源的技能护盾
+         对持有者 ×1.25（敌方来源 ×0.75；本技能恒为我方来源，故实际只会放大）。
+         这是「护盾量」通道**唯一的给盾载体**（群战技能层 SKILLS 里没有给盾技能），
+         所以派发点就近放在这个唯一写入点，而不是 battle-group 的 castSkill。
+         supportEffectMul 对未持有镜像的单位恒返回 1 → 既有单位行为不变。 */
+      var mul = (typeof supportEffectMul === 'function') ? supportEffectMul(a, player) : 1;
+      var shield = (mul === 1) ? base : Math.max(0, Math.floor(base * mul));
       a._shield = (a._shield || 0) + shield;
       /* v2.1.15：盾与免疫都真正生效了 ——
          _shield 由 absorbShield() 在伤害结算前吸收，吸收到 0 时自动撤掉 _shieldImmune。
          此前这两个字段只置位、全项目无消费方（盾不挡伤害、也不免负面）。 */
       a._shieldImmune = a._shield > 0;   // 护盾存在期间免疫普通+高级负面
-      events.push({ msg: '🛡️ ' + a.name + ' 金身护盾 +' + shield + '（吸收伤害；盾存在期间免疫普通~高级负面）' });
+      events.push({ msg: '🛡️ ' + a.name + ' 金身护盾 +' + shield + (mul !== 1 ? '（镜像结界 ×' + mul + '）' : '') + '（吸收伤害；盾存在期间免疫普通~高级负面）' });
     });
   }
   return events;

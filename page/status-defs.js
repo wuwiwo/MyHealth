@@ -289,7 +289,13 @@ defineStatus({
   hooks: {}
 });
 
-/* 广域防御：受到的伤害降低 20% */
+/* 广域防御：受到的伤害降低 —— 幅度由技能实例携带，定义值仅作**兜底**
+   v2.3.0 WP-E（死字段清理）：改前这里把减伤**硬编码 0.20**，而 skill.js 的 bulwark（广域防御）
+   按成长推送 0.20~0.40 的 `b.value` —— 该值在 battle-group 的 buff 落地处被整个丢弃（死字段），
+   结果减伤恒为 20%、且镜像结界没有可缩放的数值载体。现在：
+     · 单源 = `SKILLS.bulwark.range.dmgReduce`（低值 0.20，与旧兜底一致），经实例 `data.reduce` 携带；
+     · 无 `data` 的实例（直接 `applyStatus({id:'wideguard'})`、旧存档/快照）仍按 0.20 兜底 →
+       旧行为与实例形状不变（test-status-lifecycle 的「103 → 82」不变）。 */
 defineStatus({
   id: 'wideguard',
   name: '广域防御',
@@ -298,10 +304,11 @@ defineStatus({
   maxStacks: 1,
   stacking: 'refresh',
   hooks: {
-    onDamage: function (unit) {
+    onDamage: function (unit, st) {
+      var reduce = (st && st.data && typeof st.data.reduce === 'number') ? st.data.reduce : 0.20;
       return {
-        mutations: [{ key: 'dmgTakenReduce', value: 0.20 }],
-        events: [{ type: 'passive', statusId: 'wideguard', unitId: unit.id, msg: '🛡️ 广域防御：伤害 -20%' }]
+        mutations: [{ key: 'dmgTakenReduce', value: reduce }],
+        events: [{ type: 'passive', statusId: 'wideguard', unitId: unit.id, msg: '🛡️ 广域防御：伤害 -' + Math.round(reduce * 100) + '%' }]
       };
     }
   }

@@ -33,6 +33,8 @@ function listStatusDefs() { return Object.keys(STATUS_DEFS); }
    v2.3.0 新增 defScale：**按实例缩放状态定义里的 statMods / statModsPct**（默认 1 = 不缩放）。
    用途：镜像结界（§3.5 + §3.12-2「全通道」）—— 定义驱动的状态幅度在 status-defs.js 里是
    全局共享的固定值，按实例 scale 不了；指定 defScale 后该实例只贡献「定义值 × defScale」。
+   v2.3.0 WP-E：刷新（stacking='refresh'）时 `data` 与 `modsPct` 同步覆盖 —— 幅度类效果
+   （如「广域防御」的 data.reduce）重申时不会被旧实例锁住。
    ⚠️ 只在传了才写字段（默认不写），旧存档 / 快照形状不受影响。 */
 function applyStatus(unit, opts) {
   opts = opts || {};
@@ -51,6 +53,11 @@ function applyStatus(unit, opts) {
     if (def.stacking === 'refresh') {
       existing.duration = Math.max(existing.duration, opts.duration || 1);
       if (opts.modsPct) existing.modsPct = opts.modsPct;
+      /* v2.3.0 WP-E：`data` 与 `modsPct` 一样按**实例覆盖**。
+         起因：「广域防御」的减伤幅度改由 `data.reduce` 携带（见 status-defs.js）；
+         若刷新时不同步，重申一次更强的广域防御会沿用第一次的旧幅度（数值卡死）。
+         只在此处（refresh）覆盖 —— 现有携带 data 的状态（湿/睡眠/遗言诅咒/广域防御）全是 refresh。 */
+      if (opts.data) existing.data = opts.data;
       if (opts.defScale != null) existing.defScale = opts.defScale;   // v2.3.0：镜像结界按实例缩放定义值
       if (opts.noStatMods) existing.noStatMods = true;   // v2.3.0：朴实「只挡能力部分」
       events.push({ type: 'refresh', statusId: opts.id, unitId: unit.id });
