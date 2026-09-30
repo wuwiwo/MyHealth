@@ -9,7 +9,9 @@
      「提升灵能产出（变为2倍）」
    三类 = **宝珠碎片 orbShard ×3** / **炼化石（普通 refineNormal + 高级 refineHigh）×2** / **灵能 spirit ×2**。
    ⚠️ 倍率只在这一处定义：新掉落点一律走 applyDropMult() / applyDropMults()，别在掉落点另写数字。
-   ⚠️ 已知未覆盖：敌群胜利掉落（game-render.js 的 groupVictoryReward）本批次白名单外，见校准说明。 */
+   ✅ 覆盖范围（v2.2 WP-H8 补线后）：本文件的挑战掉落（基础 + 每周次数奖励）+ 敌群胜利的**基础掉落**
+      （game-render.js 的 groupVictoryReward，v2.2.22 起改走 applyDropMults()）。
+      ⚠️ 有意不覆盖：宠物天赋「幸运口袋」那几笔天赋独立产出（见 game-render.js 该处注释）。 */
 var DROP_MULT = { orbShard: 3, refineNormal: 2, refineHigh: 2, spirit: 2 };
 
 function dropMultFor(type){ return DROP_MULT[type] || 1 }

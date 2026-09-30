@@ -45,11 +45,18 @@ assert('威吓 onBattleStart 已被派发', !!(foeA._intimidated || foeB._intimi
 const openingEntry = gb.log.filter(l => l.turn === 0);
 assert('威吓事件写进 gb.log（回合 0 开场）', openingEntry.some(l => /威吓/.test(msgsOf(l.events))),
   JSON.stringify(gb.log.map(l => l.turn + ':' + msgsOf(l.events))).slice(0, 220));
-assert('威吓日志写明「谁威吓了谁」', /😱 威吓：威吓者 → 敌[甲乙] 攻击 -40%/.test(msgsOf(openingEntry.reduce((a, l) => a.concat(l.events), []))),
+assert('威吓日志写明「谁威吓了谁」', /😱 威吓：威吓者 → 敌[甲乙] 攻击 -10%/.test(msgsOf(openingEntry.reduce((a, l) => a.concat(l.events), []))),
   msgsOf(openingEntry.reduce((a, l) => a.concat(l.events), [])));
+/* v2.2.22 §5.1.7：幅度改单位级区间 [10%, 50%]（t 随大关号）——
+   hero 未设 level → 默认 1 → t=0 → 10%（旧口径是固定 40%）。 */
+assert('威吓幅度落在单位级区间下限（无等级 → level 1 → 10%）',
+  [[foeA, foeB]].flat().some(u => u._intimidated && u._intimidateDown === 0.10),
+  JSON.stringify([[foeA, foeB]].flat().map(u => ({ i: u._intimidated, d: u._intimidateDown }))));
 assert('威吓命中目标身上留下标记', !!(foeA._intimidated || foeB._intimidated));
 
-/* ---- 2. 威吓的攻击削减真正生效 ---- */
+/* ---- 2. 威吓的攻击削减真正生效 ----
+   v2.2.22：幅度是**单位级** `_intimidateDown`；本段只置旧标记（无单位级字段）
+   → 走 talent.js 的全局兜底常量 40%（兜底路径的回归）。单位级各档在 test-talent-growth.js [6]。 */
 const atk1 = sandbox.createUnit({ id: 'a1', side: 'ally', name: '正常', base: { hp: 300, atk: 60, def: 10, spd: 5 } });
 const atk2 = sandbox.createUnit({ id: 'a2', side: 'ally', name: '被威吓', base: { hp: 300, atk: 60, def: 10, spd: 5 } });
 atk2._intimidated = true;
@@ -58,7 +65,7 @@ const tgt2 = sandbox.createUnit({ id: 't2', side: 'enemy', name: '靶2', base: {
 const gb2 = sandbox.createGroupBattle({ allies: [atk1, atk2], enemies: [tgt1, tgt2] });
 const dNormal = dmgIn(sandbox.normalAttack(gb2, atk1, tgt1));
 const dNerfed = dmgIn(sandbox.normalAttack(gb2, atk2, tgt2));
-assert('威吓使普攻伤害降低约 40%', dNerfed === Math.max(1, Math.floor(dNormal * 0.6)),
+assert('威吓（无单位级字段 → 兜底 40%）使普攻伤害降低 40%', dNerfed === Math.max(1, Math.floor(dNormal * 0.6)),
   'normal=' + dNormal + ' nerfed=' + dNerfed);
 
 /* ---- 3. 嘲讽会复位 + 速度加成不会永久 ---- */

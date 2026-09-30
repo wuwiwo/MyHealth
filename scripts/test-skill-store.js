@@ -15,7 +15,7 @@ function assert(n,c,d){ if(c){pass++;console.log(' ✓ '+n);} else {fail++;conso
 // 1. 初始状态
 const st = sb.getSkillState();
 assert('初始 0 点', st.points === 0 && st.totalEarned === 0);
-assert('初始 1 槽', st.slotsUnlocked === 1);
+assert('初始 3 槽（v2.2 WP-H10：文档/裁决「立即开放后 2 个槽位」）', st.slotsUnlocked === 3, 'slotsUnlocked=' + st.slotsUnlocked);
 // 2. 技能点获取（周递增）
 sb.recordSkillWin('2026-W1');
 const r1 = sb.awardSkillPoints(1);
@@ -24,9 +24,12 @@ assert('第1次 ' + BASE + ' 点', r1.gained === BASE && st.points === BASE);
 sb.recordSkillWin('2026-W1');
 const r2 = sb.awardSkillPoints(2);
 assert('第2次 ' + Math.round(BASE * 1.5) + ' 点（周递增）', r2.gained === Math.round(BASE * 1.5) && st.points === Math.round(BASE * 2.5));
-// 3. 槽位解锁
-assert('12关 2槽', sb.unlockSkillSlots(12) === 2);
-assert('20关 3槽', sb.unlockSkillSlots(20) === 3);
+// 3. 槽位（v2.2 WP-H10：立即开放 3 槽，12/20 关里程碑作废）
+assert('槽位总数唯一来源 SKILL_SLOT_TOTAL = 3', sb.SKILL_SLOT_TOTAL === 3, String(sb.SKILL_SLOT_TOTAL));
+assert('SLOT_MILESTONES 已作废（空表，不再门槛）', Array.isArray(sb.SLOT_MILESTONES) && sb.SLOT_MILESTONES.length === 0,
+  JSON.stringify(sb.SLOT_MILESTONES));
+assert('unlockSkillSlots：0 关也返回 3（里程碑不再门槛）', sb.unlockSkillSlots(0) === 3, String(sb.unlockSkillSlots(0)));
+assert('unlockSkillSlots：12 / 20 关仍是 3（只升不降，不回收）', sb.unlockSkillSlots(12) === 3 && sb.unlockSkillSlots(20) === 3);
 // 4. 升级/装备持久化
 const up = sb.skillUpgrade('crit');
 assert('升级暴击', up.ok === true && st.levels.crit === 1);
@@ -59,5 +62,17 @@ assert('月重置幂等：同月第二次不生效', r7.ok === false && r7.alrea
 const r8 = sb.monthlyResetSkillState(new Date(2026, 9, 1));    // 2026-10
 assert('月重置跨月：新月份再次生效', r8.ok === true && st2.points === 0 && st2.levels.crit === 4 && st2.monthlyKey === '2026-10',
   JSON.stringify({ points: st2.points, crit: st2.levels.crit, mk: st2.monthlyKey }));
+// 7. 旧存档迁移（v2.2 WP-H10：文档未写迁移机制 —— 按「立即开放」语义定案，幂等）
+//    旧存档 slotsUnlocked 恒为 1（旧解锁入口全项目无调用点），必须一并抬到 3，否则老账号仍是 9 选 1
+sb.store._data.skills = { version: 1, points: 0, totalEarned: 0, weekKey: null, winCountThisWeek: 0,
+  levels: {}, loadout: [], slotsUnlocked: 1 };
+const mig = sb.getSkillState();
+assert('迁移：旧存档 slotsUnlocked 1 → 3', mig.slotsUnlocked === 3, 'slotsUnlocked=' + mig.slotsUnlocked);
+assert('迁移：写回 store（只写一次、其它字段不动）',
+  sb.store.get('skills').slotsUnlocked === 3 && sb.store.get('skills').points === 0);
+mig.points = 42; sb.saveSkillState(mig);
+const mig2 = sb.getSkillState();
+assert('迁移幂等：重复读取仍是 3，不覆盖其它字段', mig2.slotsUnlocked === 3 && mig2.points === 42,
+  'slots=' + mig2.slotsUnlocked + ' points=' + mig2.points);
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail>0?1:0);

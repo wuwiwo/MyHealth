@@ -140,6 +140,20 @@ function earnSkillPoints(base, winCountThisWeek) {
   return Math.floor(base * (1 + rate));
 }
 
+/* ============================================================
+   装备槽位（v2.2 WP-H10）
+   文档原话（doc/2.2 修改-补充.md）：
+     「装备槽位（1/3，同类型限1）」
+     「实装解锁后面2个槽位」
+   裁决回执 #9：装备槽位 → **立即开放**后 2 个（1/3，同类型限 1）。
+
+   → 3 个槽位**默认全部可用**，不再按「本月通关 12 / 20 关」的里程碑解锁
+     （旧口径见 design-v2.0.md §1 / OQ-10，已被本次裁决覆盖）。
+   → `SKILL_SLOT_TOTAL` 是槽位总数的**唯一来源**：默认存档 / 解锁函数 / 校验 / UI 文案都读它。
+   → 「同类型限 1」由 `equipPlayerSkill()` 保留（槽位变多不放开类型约束）。
+   ============================================================ */
+var SKILL_SLOT_TOTAL = 3;
+
 /* 默认技能状态 */
 function defaultSkillState() {
   return {
@@ -149,12 +163,13 @@ function defaultSkillState() {
     winCountThisWeek: 0,  // 本周胜局数
     levels: {},           // {skillId: level}
     loadout: [],          // [skillId|null, ...] 槽位
-    slotsUnlocked: 1      // 初始 1 槽
+    slotsUnlocked: SKILL_SLOT_TOTAL   // v2.2 立即开放：3 槽全开（此前为 1）
   };
 }
 
-/* 槽位解锁里程碑（本月通关数） */
-var SLOT_MILESTONES = [12, 20];
+/* 槽位解锁里程碑（本月通关数）—— v2.2 裁决「立即开放」后**已作废**。
+   保留空表以兼容旧调用点 / 旧测试；`unlockSkillSlots()` 现在只保证「至少 SKILL_SLOT_TOTAL 槽」。 */
+var SLOT_MILESTONES = [];
 
 /* 升级技能：扣点数，等级+1 */
 function upgradePlayerSkill(state, skillId) {
@@ -171,7 +186,8 @@ function upgradePlayerSkill(state, skillId) {
 
 /* 装备技能到槽位：同类型最多 1 个 */
 function equipPlayerSkill(state, slotIdx, skillId) {
-  if (slotIdx >= state.slotsUnlocked) return { ok: false, reason: '槽位未解锁' };
+  /* 上限由 SKILL_SLOT_TOTAL 兜底（防止旧存档里 slotsUnlocked 被写成更大值而绕过总数约束） */
+  if (slotIdx >= state.slotsUnlocked || slotIdx >= SKILL_SLOT_TOTAL) return { ok: false, reason: '槽位未解锁' };
   var skill = getPlayerSkill(skillId);
   if (!skill) return { ok: false, reason: '技能不存在' };
   var lv = state.levels[skillId] || 0;
@@ -216,6 +232,7 @@ if (typeof window !== 'undefined') {
   window.equipPlayerSkill = equipPlayerSkill;
   window.unequipPlayerSkill = unequipPlayerSkill;
   window.monthlyResetSkills = monthlyResetSkills;
+  window.SKILL_SLOT_TOTAL = SKILL_SLOT_TOTAL;
   window.SLOT_MILESTONES = SLOT_MILESTONES;
 }
 if (typeof globalThis !== 'undefined') {
@@ -232,5 +249,6 @@ if (typeof globalThis !== 'undefined') {
   globalThis.equipPlayerSkill = equipPlayerSkill;
   globalThis.unequipPlayerSkill = unequipPlayerSkill;
   globalThis.monthlyResetSkills = monthlyResetSkills;
+  globalThis.SKILL_SLOT_TOTAL = SKILL_SLOT_TOTAL;
   globalThis.SLOT_MILESTONES = SLOT_MILESTONES;
 }

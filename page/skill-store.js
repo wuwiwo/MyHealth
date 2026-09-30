@@ -18,7 +18,13 @@ if (typeof store !== 'undefined' && store.registerSchema) {
 function getSkillState() {
   if (typeof store === 'undefined') return Object.assign({ version: 1 }, defaultSkillState());
   var d = store.get('skills');
-  if (!d) { d = Object.assign({ version: 1 }, defaultSkillState()); store.set('skills', d); }
+  if (!d) { d = Object.assign({ version: 1 }, defaultSkillState()); store.set('skills', d); return d; }
+  /* v2.2 WP-H10 存档迁移（文档未写机制；按裁决「立即开放后 2 个槽位」定案，幂等）：
+     旧存档的 slotsUnlocked 恒为 1 —— 因为旧解锁入口 unlockSkillSlots() 全项目**没有调用点**
+     （见 doc/mechanics-biopsy-v2.0.4.md 第 3 条），所以「立即开放」必须同时覆盖老账号，
+     否则作者自己的存档仍是 9 选 1。这里在**读路径**上一次性抬到 SKILL_SLOT_TOTAL，只写一次。 */
+  var want = (typeof SKILL_SLOT_TOTAL === 'number') ? SKILL_SLOT_TOTAL : 3;
+  if (!(d.slotsUnlocked >= want)) { d.slotsUnlocked = want; store.set('skills', d); }
   return d;
 }
 function saveSkillState(d) {
@@ -51,14 +57,13 @@ function recordSkillWin(weekKey) {
   return d.winCountThisWeek;
 }
 
-/* 槽位解锁检查（本月通关数） */
+/* 槽位解锁检查
+   v2.2 WP-H10：文档裁决「立即开放后 2 个槽位」→ 里程碑（12 / 20 关）作废，
+   本函数只保证「槽位数 ≥ SKILL_SLOT_TOTAL」（只升不降，沿用旧的 Math.max 不回收语义）。
+   `monthlyCleared` 参数为**签名兼容**保留（旧调用点/测试仍会传），已不参与判定。 */
 function unlockSkillSlots(monthlyCleared) {
   var d = getSkillState();
-  var unlocked = 1;
-  SLOT_MILESTONES.forEach(function (m) {
-    if ((monthlyCleared || 0) >= m) unlocked++;
-  });
-  d.slotsUnlocked = Math.min(3, Math.max(unlocked, d.slotsUnlocked || 1));
+  d.slotsUnlocked = Math.max(SKILL_SLOT_TOTAL, d.slotsUnlocked || 1);
   saveSkillState(d);
   return d.slotsUnlocked;
 }

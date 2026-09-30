@@ -17,10 +17,12 @@ function renderSkillPanel() {
     +'<span style="font-size:var(--fs-lg);font-weight:700;color:var(--blue,#3b82f6)">💠 '+st.points+' 点</span>'
     +'</div>'
   // 槽位
+  // v2.2 WP-H10：槽位总数读 skills.js 的 SKILL_SLOT_TOTAL（唯一来源），不再写死 3
+  var _slotTotal = (typeof SKILL_SLOT_TOTAL === 'number') ? SKILL_SLOT_TOTAL : 3
   h += '<div style="font-size:var(--fs-sm);background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:14px">'
-    +'<div style="font-weight:700;margin-bottom:10px;font-size:var(--fs-base)">🎯 装备槽位（'+st.slotsUnlocked+'/3，同类型限1）</div>'
+    +'<div style="font-weight:700;margin-bottom:10px;font-size:var(--fs-base)">🎯 装备槽位（'+st.slotsUnlocked+'/'+_slotTotal+'，同类型限1）</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-  for (var i = 0; i < 3; i++) {
+  for (var i = 0; i < _slotTotal; i++) {
     var sid = (st.loadout || [])[i] || null
     var s = sid ? getPlayerSkill(sid) : null
     h += '<div style="flex:1;min-width:96px;border:1px solid var(--bg2);border-radius:12px;padding:10px 8px;text-align:center;'+(i>=st.slotsUnlocked?'opacity:.35':'')+'">'

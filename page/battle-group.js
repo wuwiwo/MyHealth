@@ -10,9 +10,13 @@
 var STATUS_NAMES = { sleep:'睡眠', poison:'中毒', freeze:'冰冻', flinch:'畏缩', wet:'潮湿', charging:'蓄力', possessed:'幽魂附身', doomed:'末日', armorbroken:'破甲', slow:'减速', souldown:'魂防降低', lastworded:'遗言诅咒', sleepy:'哈欠', weaken:'弱化', vigil:'警戒', haste:'疾风' };
 function getStatusName(id){ return STATUS_NAMES[id] || id; }
 
-/* v2.1.14 威吓削减幅度：唯一来源是 talent.js 的 INTIMIDATE_ATK_DOWN
-   （talent.js 在本文件之前加载）。这里做一次兜底读取，避免加载顺序意外变化时静默失效。 */
-function intimidateAtkDown() {
+/* 威吓削减幅度（v2.1.14 落地；v2.2.22 §5.1.7 改为**单位级**）：
+   talent.js 在 `onBattleStart` 把区间取值（[10%, 50%]，随关卡/敌人级别）写进**被威吓单位**的
+   `_intimidateDown` —— 本文件所有消费点传的就是那个被威吓的 `actor`，故直接读它。
+   只有该字段缺失时（旧存档形状 / 未接线的第三入口）才回落到 talent.js 的全局兜底常量
+   `INTIMIDATE_ATK_DOWN`（talent.js 在本文件之前加载；`typeof` 守卫防加载顺序意外变化）。 */
+function intimidateAtkDown(actor) {
+  if (actor && typeof actor._intimidateDown === 'number') return actor._intimidateDown;
   return (typeof INTIMIDATE_ATK_DOWN === 'number') ? INTIMIDATE_ATK_DOWN : 0.4;
 }
 
@@ -431,8 +435,9 @@ function normalAttack(gb, actor, target, dmgMult) {
      常规修正照旧生效 —— 语义就是「一次 80% 伤害的普通攻击」）。不传 = 1，行为与旧版完全一致。 */
   if (dmgMult && dmgMult !== 1) dmg = Math.max(1, Math.floor(dmg * dmgMult));
   /* v2.1.14 威吓落地：talent.js 的 onBattleStart 只写了 target._intimidated = true，
-     全项目没有任何地方读这个标记（等于威吓从未真正生效）。这里在伤害结算前统一削减。 */
-  if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown())));
+     全项目没有任何地方读这个标记（等于威吓从未真正生效）。这里在伤害结算前统一削减。
+     v2.2.22：幅度读**单位级** `_intimidateDown`（见 intimidateAtkDown 的说明），兜底才是全局常量。 */
+  if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown(actor))));
   // 天赋 hook: 利刃加成 / 多目标惩罚 / 末日减半
   var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: dmg, isPhysical: true, attacker: actor, target: target });
   td.mutations.forEach(function (m) {
@@ -609,7 +614,8 @@ function castSkill(gb, actor, skillId, opts) {
           var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: h.amount, isPhysical: h.dmgType === 'physical', attacker: actor, target: t });
           var dmg = h.amount;
           // v2.1.14 威吓：被威吓者的技能伤害同样削减（此前只标记不生效）
-          if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown())));
+          // v2.2.22：与普攻同一口径 —— 读单位级 `_intimidateDown`
+          if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown(actor))));
           td.mutations.forEach(function (m) { if (m.key === 'dmgBoost') dmg = Math.floor(dmg * (1 + m.value)); });
           // v2.1.13：目标侧减伤词条（伤害减免 / 抗扩散 / 抗技法）。
           // 此前技能伤害只派发攻击方，导致减伤类词条对技能完全无效。

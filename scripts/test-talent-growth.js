@@ -10,7 +10,7 @@
    [3] 逐条：t=0 / t=1 的 hook 输出真的不同，且等于区间端点
    [4] 实战通道（normalAttack / groupBattleStep）里的数值随等级变化
    [5] 负向对照：不接成长的 4 条（vigor / magicmirror / plain / vengeance）**逐条不变**
-   [6] 受阻项登记：intimidate 的幅度（消费点在禁改的 battle-group.js，读全局常量）
+   [6] 威吓幅度（§5.1.7「10%~50%」）—— v2.2.22 解封为**单位级**（此前记作受阻项）
 */
 'use strict';
 const fs = require('fs');
@@ -306,20 +306,65 @@ Object.keys(DESIGN_RANGES).forEach(function (id) {
 })();
 
 /* ============================================================
-   [6] 受阻项登记：威吓的幅度（10%~50%）
+   [6] v2.2.22 解封：威吓幅度（§5.1.7「10%~50%」）做成**单位级**
    ============================================================ */
 (function () {
   const bg = load('battle-group.js');
-  assert('威吓：幅度仍未接成长（INTIMIDATE_ATK_DOWN = 0.4 固定，且未声明 range）',
-    sb.INTIMIDATE_ATK_DOWN === 0.4 && sb.TALENTS.intimidate.range === undefined,
-    sb.INTIMIDATE_ATK_DOWN + ' / ' + JSON.stringify(sb.TALENTS.intimidate.range));
-  assert('受阻原因（登记）：消费点在 battle-group.js，读**全局常量**而非单位级字段 —— 3 处消费点 + 无单位级入口',
-    /function intimidateAtkDown\(\)/.test(bg) &&
-    (bg.match(/intimidateAtkDown\(\)/g) || []).length >= 3 &&
-    !/_intimidateDown/.test(bg),
-    'intimidateAtkDown 调用次数=' + (bg.match(/intimidateAtkDown\(\)/g) || []).length);
-  assert('对照（为什么魔法盾能接）：它的消费端读 mutation 的 m.value（单位级），不读全局常量',
-    /soulDmgReduce'\)\s*dmg = Math\.floor\(dmg \* \(1 - m\.value\)\)/.test(bg));
+  assert('威吓：区间 = §5.1.7 的「10%~50%」',
+    eq(sb.TALENTS.intimidate.range, { atkDown: [0.10, 0.50] }),
+    JSON.stringify(sb.TALENTS.intimidate.range));
+  assert('威吓：区间端点随大关成长（Lv1 = 10% / Lv10 = 50%）',
+    Math.abs(val('intimidate', 'atkDown', 1) - 0.10) < 1e-9 && Math.abs(val('intimidate', 'atkDown', 10) - 0.50) < 1e-9,
+    val('intimidate', 'atkDown', 1) + ' → ' + val('intimidate', 'atkDown', 10));
+  assert('威吓：中段连续（Lv5 = 10% + 40%×4/9 ≈ 27.8%）',
+    Math.abs(val('intimidate', 'atkDown', 5) - (0.10 + 0.40 * (4 / 9))) < 1e-9, String(val('intimidate', 'atkDown', 5)));
+
+  /* 单位级落地：onBattleStart 把区间取值写进**被威吓单位**的 `_intimidateDown` */
+  function startAt(level) {
+    const caster = en('im' + level, ['intimidate'], level, { hp: 100, atk: 10, def: 0, spd: 5 });
+    const victim = sb.createUnit({ id: 'im-v' + level, side: 'enemy', name: '靶', level: 1, base: { hp: 500, atk: 100, def: 0, spd: 1 } });
+    const ev = sb.talentDispatch(caster, 'onBattleStart', { enemyUnits: [victim] });
+    return { down: victim._intimidateDown, mark: victim._intimidated, msg: (ev.events || []).map(e => e.msg).join(' ') };
+  }
+  const s1 = startAt(1), s10 = startAt(10);
+  assert('威吓：onBattleStart 写入单位级 `_intimidateDown`（Lv1 → 0.10 / Lv10 → 0.50）',
+    s1.mark === true && s10.mark === true && Math.abs(s1.down - 0.10) < 1e-9 && Math.abs(s10.down - 0.50) < 1e-9,
+    JSON.stringify([s1.down, s10.down]));
+  assert('威吓：日志幅度如实反映本次取值（不再是写死的 -40%）',
+    /攻击 -10%/.test(s1.msg) && /攻击 -50%/.test(s10.msg), s1.msg + ' || ' + s10.msg);
+  assert('威吓：解除时清掉单位级幅度（不留残字段）',
+    /e\._intimidateDown = undefined/.test(load('talent.js')));
+
+  /* 消费端：battle-group.js 读单位级字段（两个消费点各传 actor），缺失才回落全局常量 */
+  assert('威吓：消费端读单位级 `_intimidateDown`（battle-group 两个消费点各传 actor）',
+    /function intimidateAtkDown\(actor\)/.test(bg) && /actor\._intimidateDown/.test(bg) &&
+    (bg.match(/intimidateAtkDown\(actor\)/g) || []).length >= 2,
+    'intimidateAtkDown(actor) 调用次数=' + (bg.match(/intimidateAtkDown\(actor\)/g) || []).length);
+  assert('威吓：全局常量保留作旧兜底（INTIMIDATE_ATK_DOWN = 0.4）',
+    sb.INTIMIDATE_ATK_DOWN === 0.4, String(sb.INTIMIDATE_ATK_DOWN));
+  assert('威吓：UI 文案不再硬编码「攻-40%」（game-render 改读单位级）',
+    /function intimidatePct\(u\)/.test(load('game-render.js')) &&
+    load('game-render.js').indexOf('攻-40%') < 0);
+
+  /* 端到端：单位级幅度真的改变普攻伤害；无字段时回落兜底 40% */
+  function hitWith(down, legacy) {
+    const foe = en('im-c-' + String(down) + String(!!legacy), [], 1, { hp: 999999, atk: 1, def: 0, spd: 1 });
+    const hero = sb.createUnit({ id: 'im-h-' + String(down) + String(!!legacy), side: 'ally', name: '勇者',
+      base: { hp: 9999, atk: 60, def: 0, spd: 9 } });
+    if (legacy) hero._intimidated = true;                       // 只有旧标记 → 走全局兜底
+    else if (down != null) { hero._intimidated = true; hero._intimidateDown = down; }
+    const gb = sb.createGroupBattle({ allies: [hero], enemies: [foe], rng: function () { return 0; } });
+    const ev = sb.normalAttack(gb, hero, foe);
+    const m = /→ (\d+) 伤害/.exec((ev || []).map(e => e.msg || '').join(' | '));
+    return m ? +m[1] : null;
+  }
+  const base = hitWith(null);
+  const h10 = hitWith(0.10), h50 = hitWith(0.50), hLegacy = hitWith(null, true);
+  assert('威吓（端到端）：幅度 10% → 90% 伤害、50% → 50% 伤害（不再恒为 40%）',
+    h10 === Math.max(1, Math.floor(base * 0.9)) && h50 === Math.max(1, Math.floor(base * 0.5)) && h10 > h50,
+    base + ' → ' + h10 + ' / ' + h50);
+  assert('威吓（端到端兜底）：无单位级字段时回落全局常量 40%',
+    hLegacy === Math.max(1, Math.floor(base * 0.6)), base + ' → ' + hLegacy);
 })();
 
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');

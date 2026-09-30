@@ -185,12 +185,11 @@ function resetAbilityChanges(unit) {
    ✅ **已接成长**（区间见各定义上的 `range`，t 由 `talentRangeT` 给出）：
      blade（10%~50%）· flutter（5%~20%）· roughskin（10%~50%）· magicshield（15%~45%）·
      slowstart（2~4 回合）· lazy（减伤 20%~40%）· multitarget（降伤 20%~30% + 额外 1~2 个）·
-     bloodthirst（10%~35%）· regen（每 2~3 回合 + 回复 3%~8%）
+     bloodthirst（10%~35%）· regen（每 2~3 回合 + 回复 3%~8%）·
+     **intimidate（幅度 10%~50%，v2.2.22 解封 —— 见该定义处的单位级落地说明）**
    ⏸ **判定不接成长**（§5.1 未给区间，不发明数值）：
      vigor（评审只重申「加成无法被清除迷雾还原」）· magicmirror / plain（评审只说作用面）·
      vengeance（§5.6-6：每层维持现状 +10%）
-   ⛔ **受阻**：intimidate 的幅度（10%~50%）—— 消费点在禁改文件 `battle-group.js`，
-     它读的是**全局常量** `INTIMIDATE_ATK_DOWN` 而非单位级字段（详见该定义处）。
    ============================================================ */
 
 /* --- 天赋注册（14 条） --- */
@@ -339,37 +338,38 @@ registerTalent({
 });
 
 /* 威吓：战斗开始时恐吓敌方随机 1 名，攻击力大幅降低。
-   v2.1.14：本天赋唯一可读的削减幅度常量，battle-group.js 直接读取，避免两处各写一个魔法数。
+   v2.1.14：削减幅度常量在此，battle-group.js 直接读，避免两处各写一个魔法数。
    v2.3.0（§5.1.7 评审 + §5.6-5）：解除条件由「仅施加者 <50% 血」扩为**先到者解除** ——
    ① 施加者血量 <50%，或 ② 持续回合数（**开场随机 5~10 回合**）走完。
-   ⛔ **幅度仍未接成长（WP-F 受阻项，未硬塞）**：§5.1.7 评审要求「根据关卡与敌人级别，降低10%~50%」，
-      但该幅度的**唯一消费点在禁改文件 `page/battle-group.js`**：它读的是**全局常量**
-      `INTIMIDATE_ATK_DOWN`（经 `intimidateAtkDown()`，见 battle-group.js:13-17 / :435 / :612），
-      **不是单位级字段** → 本文件即使算出单位级的区间值也无处落。
-      · 且它同时被 3 处消费点（普攻/魂攻/技能伤害各一处）+ UI 文案（`game-render.js:937/1011`
-        的「攻-40%」硬编码）绑定，改口径必须同时动那两个禁改文件。
-      → 因此**保持 40% 固定**，把口径留给下一批：建议 battle-group 改为读
-        `actor._intimidateDown`（由本文件在 onBattleStart 写入区间取值），届时本条 3 行即可接通。
-      （同一批次里 `magicshield` 之所以能接成长，是因为它的消费端统一读 mutation 的 `m.value`。） */
-var INTIMIDATE_ATK_DOWN = 0.4;
+   v2.2.22（§5.1.7 评审「根据关卡与敌人级别，降低10%~50%」—— 上批受阻项解封）：
+   幅度改为**单位级**：本 hook 按区间 `range.atkDown [0.10, 0.50]` 取值（t 随大关号，同其余 9 条
+   接成长的天赋口径），写进**被威吓单位**的 `_intimidateDown`；`battle-group.js` 的两个消费点
+   （普攻 normalAttack / 技能 castSkill 伤害通道）改读该字段，缺失时才回落到本文件的全局兜底
+   常量 `INTIMIDATE_ATK_DOWN`（0.4 —— 旧口径，保留作向后兼容）。
+   · UI 文案（`game-render.js` 的单位卡徽标与详情行）同步改为读 `_intimidateDown`，不再写死「攻-40%」。 */
+var INTIMIDATE_ATK_DOWN = 0.4;  // 兜底默认值：单位级 `_intimidateDown` 缺失时才使用（旧口径）
 var INTIMIDATE_TURN_MIN = 5;    // §5.6-5：持续 5~10 回合**随机**
 var INTIMIDATE_TURN_MAX = 10;
 registerTalent({
   id: 'intimidate',
   name: '威吓',
-  desc: '战斗开始时，恐吓敌方随机1名，攻击力大幅降低（持续 5~10 回合，或施加者血量<50%）',
+  desc: '战斗开始时，恐吓敌方随机1名，攻击力大幅降低（10%~50%，随关卡与敌人级别；持续 5~10 回合，或施加者血量<50%）',
+  range: { atkDown: [0.10, 0.50] },   // §5.1.7「降低10%~50%」
   hooks: {
     onBattleStart: function (unit, ctx) {
       var enemies = (ctx && ctx.enemyUnits) || [];
       if (!enemies.length) return;
       var target = enemies[Math.floor(battleRnd() * enemies.length)];
       var turns = INTIMIDATE_TURN_MIN + Math.floor(battleRnd() * (INTIMIDATE_TURN_MAX - INTIMIDATE_TURN_MIN + 1));
+      // 幅度唯一出口：区间 → config → 兜底常量（hook 里不写死字面量）
+      var down = talentValue('intimidate', 'atkDown', unit, INTIMIDATE_ATK_DOWN);
       unit._intimidateTurns = turns;
       target._intimidated = true;
       target._intimidateBy = unit.name || '威吓者';
+      target._intimidateDown = down;   // 单位级：被威吓者身上携带本次幅度（battle-group 消费）
       return { events: [{ type: 'talent', talentId: 'intimidate', unitId: unit.id,
         targetId: target.id,
-        msg: '😱 威吓：' + (unit.name || '单位') + ' → ' + target.name + ' 攻击 -' + Math.round(INTIMIDATE_ATK_DOWN * 100) + '%（持续 5~10 回合随机：本次 ' + turns + ' 回合，或施加者血量 <50%）' }] };
+        msg: '😱 威吓：' + (unit.name || '单位') + ' → ' + target.name + ' 攻击 -' + Math.round(down * 100) + '%（持续 5~10 回合随机：本次 ' + turns + ' 回合，或施加者血量 <50%）' }] };
     },
     onTurnStart: function (unit, ctx) {
       var turn = (ctx && ctx.turn) || 0;
@@ -379,7 +379,8 @@ registerTalent({
       // 解除（v2.1.14：解除时补一条日志，此前静默失效，玩家无从察觉；v2.3.0 补上解除原因）
       var freed = [];
       ((ctx && ctx.enemyUnits) || []).forEach(function (e) {
-        if (e._intimidated) { e._intimidated = false; e._intimidateBy = ''; freed.push(e.name); }
+        // v2.2.22：解除时一并清掉单位级幅度，避免残留字段被后续路径误读
+        if (e._intimidated) { e._intimidated = false; e._intimidateBy = ''; e._intimidateDown = undefined; freed.push(e.name); }
       });
       if (!freed.length) return;
       var why = lowHp ? '血量低于 50%' : ('持续 ' + unit._intimidateTurns + ' 回合已到');

@@ -5,7 +5,7 @@
    3) 满级总投入（v2.2 后 = 15,235；设计文档的 10,585 已过期）
    4) 技能点经济（周递增）
    5) 升级/点数不足
-   6) 槽位约束（同类型限1）
+   6) 槽位（v2.2 WP-H10：3 槽立即开放，同类型限 1）
    7) 月重置减半
 */
 'use strict';
@@ -69,21 +69,23 @@ assert('连续升级', state.levels.crit === 6);
 const rPoor = sb.upgradePlayerSkill(state, 'meteor');  // 点数可能不足
 assert('点数不足拒绝或成功', rPoor.ok === true || rPoor.reason.includes('不足'));
 
-// ---- 6. 槽位约束 ----
+// ---- 6. 槽位约束（v2.2 WP-H10：3 槽立即开放；同类型限 1 保留） ----
 const st2 = sb.defaultSkillState();
-st2.slotsUnlocked = 3;
+assert('默认槽位 = SKILL_SLOT_TOTAL = 3（立即开放，不依赖通关里程碑）',
+  st2.slotsUnlocked === 3 && sb.SKILL_SLOT_TOTAL === 3, st2.slotsUnlocked + '/' + sb.SKILL_SLOT_TOTAL);
 st2.points = 9999;
 // 升到 lv1 可装备
-['crit','block'].forEach(id => sb.upgradePlayerSkill(st2, id));
-sb.upgradePlayerSkill(st2, 'momentum');
+['crit','block','momentum','icebeam'].forEach(id => sb.upgradePlayerSkill(st2, id));
 const eq1 = sb.equipPlayerSkill(st2, 0, 'crit');
 assert('装备暴击槽0', eq1.ok === true);
 const eq2 = sb.equipPlayerSkill(st2, 1, 'block');
 assert('同类型(被动)拒绝', eq2.ok === false, eq2.reason);  // crit+block 都是被动
 const eq3 = sb.equipPlayerSkill(st2, 1, 'momentum');
 assert('不同类型可装备', eq3.ok === true);  // momentum 辅助
-const eqLocked = sb.equipPlayerSkill(st2, 2, 'meteor');  // 槽2 未解锁（slotsUnlocked=3 但 loadout 长度）
-assert('未解锁槽拒绝或需先升', eqLocked.ok === true || eqLocked.ok === false);
+const eq4 = sb.equipPlayerSkill(st2, 2, 'icebeam');  // 第 3 槽：v2.2 起**立即开放**
+assert('第 3 槽真的可用（立即开放，非里程碑解锁）', eq4.ok === true && st2.loadout[2] === 'icebeam', eq4.reason);
+const eqOver = sb.equipPlayerSkill(st2, 3, 'meteor');  // 超出 SKILL_SLOT_TOTAL
+assert('超出总数（槽 3）拒绝', eqOver.ok === false, eqOver.reason);
 
 // ---- 7. 月重置 ----
 const st3 = sb.defaultSkillState();

@@ -660,6 +660,13 @@ function groupVictoryReward(gb) {
   ]
   if (enemyCount >= 3) drops.push({ type: 'refineNormal', n: 1 })
   if (enemyCount >= 4) drops.push({ type: 'spirit', n: 1 + Math.floor(Math.random() * 2) })
+  /* v2.2 WP-H8 补线：敌群胜利掉落套用**同一份**掉落倍率常量
+     （challenge.js 顶部的倍率表 / applyDropMults：宝珠碎片 ×3 / 炼化石（普通+高级）×2 / 灵能 ×2；
+       challenge.js 在 index.html 里先于 game-render.js 加载，运行时全局可见）。
+     ⚠️ 只套在**基础掉落**上（上面这几条）：幸运口袋那几笔是天赋的独立产出，
+        与挑战路径「基础+每周奖励」同一口径，不随本次倍率放大。
+     ⚠️ 别在这里写倍率数字 —— 数值的唯一来源是 challenge.js 顶部那张表。 */
+  if (typeof applyDropMults === 'function') drops = applyDropMults(drops)
   /* 幸运口袋（小负鼠天赋 §3.1）：三类材料**各自独立判定**
      （营养液 10%~20%→0~2 / 宠物饲料 20%~30%→0~4 / 宠物灵能 5%~10%→0~5），
      概率与数量都在区间内均匀随机。规则本体在 pet-codex.js 的 luckyPocketDrops()（纯函数）。
@@ -945,6 +952,15 @@ function renderGroupOrder(gb){
   return out
 }
 
+/* 威吓幅度文案（v2.2.22）：不再写死「攻击 -40%」。
+   取值优先单位级 `_intimidateDown`（talent.js onBattleStart 按 §5.1.7 区间 [10%,50%] 写入），
+   缺失时回落到 talent.js 的兜底常量 INTIMIDATE_ATK_DOWN（旧口径 0.4）。 */
+function intimidatePct(u){
+  var d=(u&&typeof u._intimidateDown==='number')?u._intimidateDown
+       :((typeof INTIMIDATE_ATK_DOWN==='number')?INTIMIDATE_ATK_DOWN:0.4)
+  return Math.round(d*100)
+}
+
 /* 渲染单个群战单位（可点击：详情；触摸区 ≥44px）
    信息层次：名称/行动标记/血条/属性/状态/技能冷却/天赋
    v2.1.14 三处升级：
@@ -967,8 +983,8 @@ function renderGroupUnit(u,side){
     var nm=(typeof getStatusName==='function')?getStatusName(s.id):s.id
     return '<span class="gb-badge st" title="'+escHtml(nm)+'">'+ic+(d?' '+d:'')+'</span>'
   }).join('')
-  // 威吓标记（此前被威吓的单位在界面上完全看不出来）
-  var scared=u._intimidated?'<span class="gb-badge scared" title="被威吓：攻击 -40%">😱 攻-40%</span>':''
+  // 威吓标记（此前被威吓的单位在界面上完全看不出来；v2.2.22 幅度如实显示，不再写死 -40%）
+  var scared=u._intimidated?'<span class="gb-badge scared" title="被威吓：攻击 -'+intimidatePct(u)+'%">😱 攻-'+intimidatePct(u)+'%</span>':''
   var skillChips=renderUnitSkillChips(u)
   var talentChips=renderUnitTalentChips(u)
   /* v2.1.15：属性显示改为「有效值 + 修正箭头」。
@@ -1042,7 +1058,7 @@ function renderGroupDetail(u){
   h+='　'+dCell('💨 速','spd',(typeof effectiveSpeed==='function')?effectiveSpeed(u):(u.base.spd||0))
     +(dEff('soulAtk')?'　'+dCell('👻 魂攻','soulAtk'):'')+(dEff('soulDef')?'　'+dCell('🔮 魂防','soulDef'):'')+'</div>'
   if (u._shield > 0)h+='<div class="det-line warn">🛡️ 护盾剩余 <b>'+u._shield+'</b>（吸收伤害；盾存在期间免疫普通~高级负面）</div>'
-  if(u._intimidated)h+='<div class="det-line warn">😱 被威吓中：攻击 -40%（持续 5~10 回合，或威吓者血量低于 50% 时解除）</div>'
+  if(u._intimidated)h+='<div class="det-line warn">😱 被威吓中：攻击 -'+intimidatePct(u)+'%（幅度随关卡/敌人级别 10%~50%；持续 5~10 回合，或威吓者血量低于 50% 时解除）</div>'
   if(u._taunting)h+='<div class="det-line warn">🎯 嘲讽中：被优先选中，速度 ×2 参与出手排序（持续到本次行动结束）</div>'
   h+='</div>'
   // 技能（兼容：敌群技能 u.skills + 玩家技能 _playerSkills）
