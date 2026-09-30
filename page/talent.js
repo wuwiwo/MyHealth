@@ -98,7 +98,21 @@ function resetAbilityChanges(unit) {
   return back;
 }
 
-/* --- 16 天赋注册 --- */
+/* ============================================================
+   v2.3.0 WP-D 逐条对齐说明（对照 doc/2.2-修改提案.md §5.1 的逐条评审）
+
+   §5.1 对这 14 条的评审绝大多数写的是「根据关卡与敌人级别，数值为 X~Y」——
+   那是**随大关/等级成长**的口径，按施工计划 §1.1 属 **WP-F（敌群天赋接成长）** 的范畴，
+   连同 §5.4F 的死配置清理一起留给 WP-F。
+   WP-D（施工计划 §6.4）只做「数值直接给、不走 t 成长」的那几条 + 死壳修复：
+
+   本轮**判定无改动**（成长化＝WP-F）：blade / flutter / roughskin / vigor /
+   magicshield / slowstart / lazy / multitarget / bloodthirst / regen
+   本轮**实际改动**：magicmirror（补 `onBeforeSupport` 派发点）/ plain（作用面边界）/
+   intimidate（持续回合 5~10 随机 + 先到者解除）/ vengeance（每层间隔 25%→20%）
+   ============================================================ */
+
+/* --- 天赋注册（14 条） --- */
 
 /* 利刃：攻击造成伤害提升 10%-50%（按 level 取） */
 registerTalent({
@@ -162,11 +176,18 @@ registerTalent({
   }
 });
 
-/* 魔法镜：受指向性辅助技能时几率免疫并反弹 */
+/* 魔法镜：受到**敌方指向的辅助类型技能**时，有几率免疫那次效果并反弹给施加者。
+   ⚠️ v2.3.0（§5.1.5 / §5.6-3）：本天赋此前是**死壳** —— `onBeforeSupport` 全项目没有派发点、
+   `reflectSupport` mutation 无消费者，「免疫」与「反弹」两项从未生效。
+   现由 `battle-group.js` 的 `castSkill` 在辅助技能对**每个目标**生效前派发
+   （见那里的 `mirrorBlocked` 计算），且**只在「对手指向本单位」的辅助技能**上触发 ——
+   队友给的增益/治疗不算（评审：受到**敌人**的指向性辅助类型技能时触发）。
+   反弹语义（§5.6-3）：**只反弹负面/减益类辅助**；治疗/增益类**仅免疫、不反弹**
+   （否则等于反过来给敌方回血 / 加攻）。反射由 `castSkill` 消费 `reflectSupport` 时执行。 */
 registerTalent({
   id: 'magicmirror',
   name: '魔法镜',
-  desc: '受到指向性辅助类技能时，有几率免疫那次效果并反弹',
+  desc: '受到敌方指向性辅助技能时有几率免疫；负面/减益类额外反弹给施加者',
   hooks: {
     onBeforeSupport: function (unit, ctx) {
       if (ctx.targeted && ctx.support) {
@@ -175,7 +196,7 @@ registerTalent({
           return {
             skipAction: true,
             mutations: [{ key: 'reflectSupport', value: ctx.sourceId || null }],
-            events: [{ type: 'talent', talentId: 'magicmirror', unitId: unit.id, msg: '魔法镜: 免疫并反弹' }]
+            events: [{ type: 'talent', talentId: 'magicmirror', unitId: unit.id, msg: '🪞 魔法镜: ' + (unit.name || '单位') + ' 免疫并反弹' }]
           };
         }
       }
@@ -183,48 +204,80 @@ registerTalent({
   }
 });
 
-/* 朴实：自身能力无法被任何效果影响（免疫所有状态） */
+/* 朴实：自身的能力（攻击/防御/魂攻/魂防/速度…）无法被任何增益或减益影响。
+   v2.3.0（§5.6-1 + 施工计划 §6.4）作用面边界裁决：
+     · 只挡**直接影响属性**的增益/减益 —— 判据 = 状态定义里的 `statMods` / `statModsPct`，
+       或本次施加实例自带的 `modsPct`；
+     · **不**直接改属性的照常生效：中毒/灼烧这类只扣血的，冰冻/睡眠/末日这类控制与禁技，
+       以及「造成伤害提升/降低」这类伤害修正，一律不受影响；
+     · 同一效果**既有增减益又有附加效果**时，只挡能力部分、附加部分照常生效
+       —— 由状态定义上的 `extraEffect` 标记识别（现仅 `lastworded`：降攻魂攻 + 每回合掉血），
+       命中时返回 `stripStatMods`，由 castSkill 以 `noStatMods` 落库（属性部分被剥掉、状态照挂）。 */
 registerTalent({
   id: 'plain',
   name: '朴实',
-  desc: '自身的能力无法被任何效果影响',
+  desc: '自身的能力无法被任何增益/减益影响（不直接改属性的效果照常生效）',
   hooks: {
     onBeforeStatus: function (unit, ctx) {
-      return { skipAction: true, events: [{ type: 'talent', talentId: 'plain', unitId: unit.id, msg: '朴实: 免疫状态' }] };
+      ctx = ctx || {};
+      var def = (typeof getStatusDef === 'function') ? getStatusDef(ctx.statusId) : null;
+      var direct = false;
+      if (def) {
+        if (def.statMods && Object.keys(def.statMods).length) direct = true;
+        if (def.statModsPct && Object.keys(def.statModsPct).length) direct = true;
+      }
+      if (ctx.modsPct && Object.keys(ctx.modsPct).length) direct = true;
+      if (!direct) return;   // 不直接改属性 → 照常生效
+      if (def && def.extraEffect) {
+        return {
+          mutations: [{ key: 'stripStatMods', value: true }],
+          events: [{ type: 'talent', talentId: 'plain', unitId: unit.id, msg: '朴实: 免疫能力变化（附加效果照常）' }]
+        };
+      }
+      return { skipAction: true, events: [{ type: 'talent', talentId: 'plain', unitId: unit.id, msg: '朴实: 免疫能力变化' }] };
     }
   }
 });
 
-/* 威吓：战斗开始时恐吓敌方随机 1 名，攻击力大幅降低，持续到自身血量<50%
-   v2.1.14：本天赋唯一可读的削减幅度常量，battle-group.js 直接读取，避免两处各写一个魔法数。 */
+/* 威吓：战斗开始时恐吓敌方随机 1 名，攻击力大幅降低。
+   v2.1.14：本天赋唯一可读的削减幅度常量，battle-group.js 直接读取，避免两处各写一个魔法数。
+   v2.3.0（§5.1.7 评审 + §5.6-5）：解除条件由「仅施加者 <50% 血」扩为**先到者解除** ——
+   ① 施加者血量 <50%，或 ② 持续回合数（**开场随机 5~10 回合**）走完。
+   ⚠️ 削减幅度仍是 40%（评审的「10%~50% 随关卡成长」属 WP-F，本轮不接成长）。 */
 var INTIMIDATE_ATK_DOWN = 0.4;
+var INTIMIDATE_TURN_MIN = 5;    // §5.6-5：持续 5~10 回合**随机**
+var INTIMIDATE_TURN_MAX = 10;
 registerTalent({
   id: 'intimidate',
   name: '威吓',
-  desc: '战斗开始时，恐吓敌方随机1名，攻击力大幅降低（持续到自身血量<50%）',
+  desc: '战斗开始时，恐吓敌方随机1名，攻击力大幅降低（持续 5~10 回合，或施加者血量<50%）',
   hooks: {
     onBattleStart: function (unit, ctx) {
       var enemies = (ctx && ctx.enemyUnits) || [];
       if (!enemies.length) return;
       var target = enemies[Math.floor(battleRnd() * enemies.length)];
+      var turns = INTIMIDATE_TURN_MIN + Math.floor(battleRnd() * (INTIMIDATE_TURN_MAX - INTIMIDATE_TURN_MIN + 1));
+      unit._intimidateTurns = turns;
       target._intimidated = true;
       target._intimidateBy = unit.name || '威吓者';
       return { events: [{ type: 'talent', talentId: 'intimidate', unitId: unit.id,
         targetId: target.id,
-        msg: '😱 威吓：' + (unit.name || '单位') + ' → ' + target.name + ' 攻击 -' + Math.round(INTIMIDATE_ATK_DOWN * 100) + '%（持续到威吓者血量 <50%）' }] };
+        msg: '😱 威吓：' + (unit.name || '单位') + ' → ' + target.name + ' 攻击 -' + Math.round(INTIMIDATE_ATK_DOWN * 100) + '%（持续 5~10 回合随机：本次 ' + turns + ' 回合，或施加者血量 <50%）' }] };
     },
     onTurnStart: function (unit, ctx) {
-      // 血量<50% 解除威吓（v2.1.14：解除时补一条日志，此前静默失效，玩家无从察觉）
-      if (unit.hp < unit.base.hp * 0.5) {
-        var freed = [];
-        ((ctx && ctx.enemyUnits) || []).forEach(function (e) {
-          if (e._intimidated) { e._intimidated = false; e._intimidateBy = ''; freed.push(e.name); }
-        });
-        if (freed.length) {
-          return { events: [{ type: 'talent', talentId: 'intimidate', unitId: unit.id,
-            msg: '😤 威吓解除：' + (unit.name || '单位') + ' 血量低于 50%，' + freed.join('、') + ' 攻击恢复' }] };
-        }
-      }
+      var turn = (ctx && ctx.turn) || 0;
+      var lowHp = unit.hp < unit.base.hp * 0.5;
+      var expired = (unit._intimidateTurns != null) && turn > unit._intimidateTurns;
+      if (!lowHp && !expired) return;
+      // 解除（v2.1.14：解除时补一条日志，此前静默失效，玩家无从察觉；v2.3.0 补上解除原因）
+      var freed = [];
+      ((ctx && ctx.enemyUnits) || []).forEach(function (e) {
+        if (e._intimidated) { e._intimidated = false; e._intimidateBy = ''; freed.push(e.name); }
+      });
+      if (!freed.length) return;
+      var why = lowHp ? '血量低于 50%' : ('持续 ' + unit._intimidateTurns + ' 回合已到');
+      return { events: [{ type: 'talent', talentId: 'intimidate', unitId: unit.id,
+        msg: '😤 威吓解除：' + (unit.name || '单位') + ' ' + why + '，' + freed.join('、') + ' 攻击恢复' }] };
     }
   }
 });
@@ -313,15 +366,18 @@ registerTalent({
   }
 });
 
-/* 复仇：生命值每降低一定比例，攻击与魂攻击提升 */
+/* 复仇：生命值每降低一定比例，攻击与魂攻击提升
+   v2.3.0（§5.1.13 评审 + §5.6-6）：**每层间隔由 25% 生命改为 20%**；每层 +10% 维持现状。 */
 registerTalent({
   id: 'vengeance',
   name: '复仇',
-  desc: '自身生命值每降低一定比例，攻击力与魂攻击提升',
+  desc: '自身生命值每降低 20%，攻击力与魂攻击提升（每层 +10%）',
   hooks: {
     onTurnStart: function (unit) {
       var lost = 1 - (unit.hp / unit.base.hp);
-      var stacks = Math.floor(lost / 0.25);
+      /* v2.3.0：间隔 20%（评审「每损失 20% 生命」）。+1e-9 抵消浮点误差
+         （hp = 0.8×base.hp 时 lost 会算出 0.19999999999999996，直接 floor 会少一层）。 */
+      var stacks = Math.floor(lost / 0.20 + 1e-9);
       if (stacks > (unit._vengeStacks || 0)) {
         /* v2.1.15：改为「按快照重算」，而不是「在当前值上再叠一次」。
            原实现在已经提升过的 base 上再乘一次，随层数复利放大

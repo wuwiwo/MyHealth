@@ -12,7 +12,10 @@ const vm = require('vm');
 
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const files = ['utils.js', 'date-roll.js', 'levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js',
-  'skill.js', 'enemy.js', 'battle.js', 'battle-group.js', 'pets.js', 'pet-materials.js', 'pet-codex.js'];
+  'skill.js', 'enemy.js', 'battle.js', 'battle-group.js', 'pets.js', 'pet-materials.js', 'pet-codex.js',
+  /* v2.3.0 WP-D：暴击「取最高、分别判定」要把斗者本能与玩家/宠物暴击档合到一处判定，
+     合并函数 groupCritMult 读 player-skill-hooks.js 的 playerCritInfo()，故需加载这两个文件。 */
+  'skills.js', 'player-skill-hooks.js'];
 const sandbox = { Math, JSON, console, Date };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
@@ -62,7 +65,7 @@ assert('心眼 → 命中率不会被降低', near(sandbox.groupHitChance(me, de
 // 斗者本能
 const fi = mkUnit('fi', ['fighter_instinct']);
 const crit = sandbox.talentCrit(fi);
-assert('斗者本能 → 暴击率 25%', near(crit.chance, 0.25), String(crit.chance));
+assert('斗者本能 → 暴击率 30%（v2.3.0：25% → 30%）', near(crit.chance, 0.30), String(crit.chance));
 assert('斗者本能 → 暴击倍率 150%', near(crit.mult, 1.5), String(crit.mult));
 assert('无此天赋 → 暴击率 0', sandbox.talentCrit(mkUnit('none')).chance === 0);
 // 凛冬之核
@@ -142,6 +145,105 @@ assert('普攻命中（rng=0 < 0.95）且伤害被分担', victim.hp < vHp0 && v
 assert('圣光守护者承担了伤害', guardUnit.hp < gHp0, 'guard ' + gHp0 + '→' + guardUnit.hp);
 assert('目标实际承伤 = 全额 − 分担额', (vHp0 - victim.hp) === 101 - Math.floor(101 * 0.2),
   '受 ' + (vHp0 - victim.hp));
+
+/* ---- 5. WP-D（v2.3.0）：page/talent.js 14 条的对齐改动 ---- */
+console.log('\n[5] WP-D 改动（talent.js）');
+/* 天赋 hook 内部走全局 battleRnd()，临时钉死为确定值以便断言 */
+const _origBattleRnd = sandbox.battleRnd;
+sandbox.battleRnd = function () { return 0; };
+
+// 魔法镜：补上 onBeforeSupport 派发点（此前全项目无派发点 = 死壳）
+const caster = mkUnit('caster', null, { hp: 500, atk: 10, def: 5, spd: 5 });
+const foeMM = sandbox.createUnit({ id: 'mm', side: 'enemy', name: '镜敌', level: 1, base: { hp: 500, atk: 10, def: 5, spd: 1 } });
+sandbox.attachTalents(foeMM, ['magicmirror']);
+const gbMM = sandbox.createGroupBattle({ allies: [caster], enemies: [foeMM], rng: function () { return 0; } });
+const evMM = sandbox.castSkill(gbMM, caster, 'p_drench');   // 辅助技能，目标 random1 → 镜敌
+assert('魔法镜 → 对手指向的辅助技能触发（onBeforeSupport 真的被派发）',
+  evMM.some(e => /魔法镜/.test(e.msg || '')), evMM.map(e => e.msg).join(' | ').slice(0, 180));
+assert('魔法镜 → 目标免疫那次效果（镜敌未获得潮湿）', !sandbox.hasStatus(foeMM, 'wet'));
+assert('魔法镜 → 负面/减益类反弹给施加者（施加者获得潮湿）', sandbox.hasStatus(caster, 'wet'));
+
+// 魔法镜：队友给的辅助不算「敌方指向」→ 不触发
+const allyMM = mkUnit('allyMM', ['magicmirror'], { hp: 500, atk: 10, def: 5, spd: 5, soulAtk: 100 });
+const healer = mkUnit('healer', null, { hp: 500, atk: 10, def: 5, spd: 6, soulAtk: 100 });
+allyMM.hp = 100;
+const gbHeal = sandbox.createGroupBattle({ allies: [healer, allyMM], enemies: [], rng: function () { return 0; } });
+const evHeal = sandbox.castSkill(gbHeal, healer, 'p_holylight');   // 辅助技能，目标 ally1 → 队友
+assert('魔法镜 → 队友给的辅助不触发（只在「敌方指向」时）',
+  !evHeal.some(e => /魔法镜/.test(e.msg || '')), evHeal.map(e => e.msg).join(' | ').slice(0, 180));
+
+// 朴实：只挡「直接影响属性」的增益/减益（§5.6-1）
+const pl = mkUnit('pl', ['plain']);
+assert('朴实 → 挡直接改属性的负面（潮湿 statModsPct）',
+  sandbox.talentDispatch(pl, 'onBeforeStatus', { statusId: 'wet', grade: 2 }).skipAction === true);
+assert('朴实 → 挡靠实例 modsPct 改属性的状态（疾风）',
+  sandbox.talentDispatch(pl, 'onBeforeStatus', { statusId: 'haste', grade: 1, modsPct: { spd: 0.1 } }).skipAction === true);
+['poison', 'freeze', 'doomed', 'sleep'].forEach(function (id) {
+  assert('朴实 → 不挡「不直接改属性」的效果（' + id + '）',
+    sandbox.talentDispatch(pl, 'onBeforeStatus', { statusId: id, grade: 3 }).skipAction === false);
+});
+assert('朴实 → 不挡伤害修正类附加（广域防御）',
+  sandbox.talentDispatch(pl, 'onBeforeStatus', { statusId: 'wideguard', grade: 1 }).skipAction === false);
+const lwGuard = sandbox.talentDispatch(pl, 'onBeforeStatus', { statusId: 'lastworded', grade: 3 });
+assert('朴实 → 混合型（遗言诅咒）只剥属性、保留附加效果',
+  lwGuard.skipAction !== true && lwGuard.mutations.some(m => m.key === 'stripStatMods'));
+const uNoMods = mkUnit('uNoMods'); sandbox.applyStatus(uNoMods, { id: 'weaken', duration: 2, noStatMods: true }); sandbox.syncStatusDerived(uNoMods);
+const uMods = mkUnit('uMods'); sandbox.applyStatus(uMods, { id: 'weaken', duration: 2 }); sandbox.syncStatusDerived(uMods);
+assert('朴实 → noStatMods 实例真的不贡献属性修正', !(uNoMods._statMods && uNoMods._statMods.atk), JSON.stringify(uNoMods._statMods));
+assert('对照：未标 noStatMods 的弱化会降攻', (uMods._statMods.atk || 0) < 0, JSON.stringify(uMods._statMods));
+
+// 威吓：持续回合 5~10 随机 + 与「施加者 <50% 血」先到者解除（§5.1.7 / §5.6-5）
+const imA = mkUnit('imA', ['intimidate']);
+const foesA = [mkUnit('fA1'), mkUnit('fA2')];
+sandbox.talentDispatch(imA, 'onBattleStart', { enemyUnits: foesA });
+assert('威吓 → 开场随机持续 5~10 回合（rng=0 → 5）', imA._intimidateTurns === 5, String(imA._intimidateTurns));
+assert('威吓 → 命中 1 名并留标记', foesA.filter(f => f._intimidated).length === 1);
+const imB = mkUnit('imB', ['intimidate']);
+sandbox.battleRnd = function () { return 0.999; };
+sandbox.talentDispatch(imB, 'onBattleStart', { enemyUnits: [mkUnit('fB1')] });
+assert('威吓 → 持续回合上界 10（rng≈1 → 10）', imB._intimidateTurns === 10, String(imB._intimidateTurns));
+sandbox.battleRnd = function () { return 0; };
+const relEv1 = sandbox.talentDispatch(imA, 'onTurnStart', { turn: 4, enemyUnits: foesA });
+assert('威吓 → 未到期且血量 ≥50% 时不解除', !((relEv1 || {}).events || []).length);
+const relEv2 = sandbox.talentDispatch(imA, 'onTurnStart', { turn: 6, enemyUnits: foesA });
+assert('威吓 → 持续回合走完自动解除（turn > 5）',
+  foesA.every(f => !f._intimidated) && /威吓解除/.test((((relEv2 || {}).events) || []).map(e => e.msg).join(' ')),
+  JSON.stringify(relEv2));
+
+// 复仇：每层间隔 25% → 20%（§5.1.13 / §5.6-6）
+const vg = mkUnit('vg', ['vengeance'], { hp: 100, atk: 100, def: 10, spd: 5, soulAtk: 100 });
+vg.hp = 80;   // 损失 20% → 1 层（旧 25% 间隔口径下是 0 层）
+sandbox.talentDispatch(vg, 'onTurnStart', {});
+assert('复仇 → 损失 20% 即 1 层（间隔改 20%）', vg._vengeStacks === 1, String(vg._vengeStacks));
+assert('复仇 → 1 层 = 攻 100×1.1 = 110', vg.base.atk === 110, String(vg.base.atk));
+
+/* ---- 6. 斗者本能 × 宠物暴击档「取最高、分别判定」（§3.12-1） ---- */
+console.log('\n[6] 暴击合并（§3.12-1）');
+const mg = mkUnit('mg', ['fighter_instinct'], { hp: 100, atk: 100, def: 0, spd: 5 });
+mg._petShared = { crit: { chance: 0.15, critMult: 1.6 } };   // 宠物暴击档（玩家装配暴击后共享）
+const pcInfo = sandbox.playerCritInfo(mg);
+assert('playerCritInfo → 读出宠物暴击档 15% / 160%',
+  !!pcInfo && near(pcInfo.chance, 0.15) && near(pcInfo.critMult, 1.6));
+function seqRng(arr) { let i = 0; return function () { return arr[i++ % arr.length]; }; }
+const dummyFoe = () => sandbox.createUnit({ id: 'v9', side: 'enemy', name: '靶', level: 1, base: { hp: 99999, atk: 1, def: 0, spd: 1 } });
+const gbBoth = sandbox.createGroupBattle({ allies: [mg], enemies: [dummyFoe()], rng: function () { return 0; } });
+assert('都触发 → 取较高倍率 1.6（不再是 1.5×1.6 双暴击叠乘）', sandbox.groupCritMult(gbBoth, mg) === 1.6,
+  String(sandbox.groupCritMult(gbBoth, mg)));
+const gbOnlyTalent = sandbox.createGroupBattle({ allies: [mg], enemies: [dummyFoe()], rng: seqRng([0.10, 0.50]) });
+assert('只有斗者本能触发 → 150%', sandbox.groupCritMult(gbOnlyTalent, mg) === 1.5, String(sandbox.groupCritMult(gbOnlyTalent, mg)));
+const gbOnlyPet = sandbox.createGroupBattle({ allies: [mg], enemies: [dummyFoe()], rng: seqRng([0.50, 0.10]) });
+assert('只有宠物暴击档触发 → 160%', sandbox.groupCritMult(gbOnlyPet, mg) === 1.6, String(sandbox.groupCritMult(gbOnlyPet, mg)));
+const gbNoneT = sandbox.createGroupBattle({ allies: [mg], enemies: [dummyFoe()], rng: seqRng([0.50, 0.50]) });
+assert('都不触发 → 0', sandbox.groupCritMult(gbNoneT, mg) === 0, String(sandbox.groupCritMult(gbNoneT, mg)));
+const gbE2E = sandbox.createGroupBattle({ allies: [mg], enemies: [dummyFoe()], rng: function () { return 0; } });
+const evE2E = sandbox.normalAttack(gbE2E, mg, gbE2E.enemies[0]);
+const evText = (evE2E || []).map(e => (e && e.msg) || '').join(' | ');
+const dmgMatch = /→\s+(\d+)\s+伤害/.exec(evText);
+const dmgE2E = dmgMatch ? +dmgMatch[1] : null;
+assert('普攻：基伤 101 × 1.6 = 161（旧实现会二次暴击成 241）', dmgE2E === 161, 'dmg=' + dmgE2E + ' | ' + evText.slice(0, 180));
+assert('普攻：只出一条暴击日志', (evE2E || []).filter(e => /暴击/.test(e.msg || '')).length === 1);
+
+sandbox.battleRnd = _origBattleRnd;
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

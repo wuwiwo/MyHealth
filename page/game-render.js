@@ -1005,7 +1005,7 @@ function renderGroupDetail(u){
   h+='　'+dCell('💨 速','spd',(typeof effectiveSpeed==='function')?effectiveSpeed(u):(u.base.spd||0))
     +(dEff('soulAtk')?'　'+dCell('👻 魂攻','soulAtk'):'')+(dEff('soulDef')?'　'+dCell('🔮 魂防','soulDef'):'')+'</div>'
   if (u._shield > 0)h+='<div class="det-line warn">🛡️ 护盾剩余 <b>'+u._shield+'</b>（吸收伤害；盾存在期间免疫普通~高级负面）</div>'
-  if(u._intimidated)h+='<div class="det-line warn">😱 被威吓中：攻击 -40%（威吓者血量低于 50% 时解除）</div>'
+  if(u._intimidated)h+='<div class="det-line warn">😱 被威吓中：攻击 -40%（持续 5~10 回合，或威吓者血量低于 50% 时解除）</div>'
   if(u._taunting)h+='<div class="det-line warn">🎯 嘲讽中：被优先选中，速度 ×2 参与出手排序（持续到本次行动结束）</div>'
   h+='</div>'
   // 技能（兼容：敌群技能 u.skills + 玩家技能 _playerSkills）

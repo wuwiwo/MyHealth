@@ -40,12 +40,18 @@ function playerSkillBattleStart(gb, player) {
 
 /* 普攻钩子：暴击（取高）
    v2.2.5（WP-B 共享桥，推翻 OQ-11）：玩家按**玩家档**、上场宠物按**宠物档**（15%/160%）同时受益。
-   斗者本能（talent.js）的 25%/150% 在战斗里另行取高判定，见 §3.12-1「分别判定、取最高」。 */
+   v2.3.0（WP-D §3.12-1）：与斗者本能（天赋暴击 30%/150%）的关系定为「**取最高、分别判定**」——
+   两者各自掷骰、都触发时取较高倍率、**只结算一次**。合并实现在 battle-group.js 的 `groupCritMult()`
+   （它同时读本函数的 `playerCritInfo()` 与 talent.js 的 `talentCrit()`）；
+   `playerCritHook` 保留原语义（本档位单独掷骰），供不需要合并的场景/旧测试使用。 */
+function playerCritInfo(unit) {
+  if (!unit) return null;
+  if (unit._playerSkills && (unit._playerSkills['crit'] || 0) >= 1) return getPlayerSkill('crit').effect(unit._playerSkills['crit']);
+  if (unit._petShared && unit._petShared.crit) return unit._petShared.crit;
+  return null;
+}
 function playerCritHook(unit, dmg) {
-  if (!unit) return dmg;
-  var eff = null;
-  if (unit._playerSkills && (unit._playerSkills['crit'] || 0) >= 1) eff = getPlayerSkill('crit').effect(unit._playerSkills['crit']);
-  else if (unit._petShared && unit._petShared.crit) eff = unit._petShared.crit;
+  var eff = playerCritInfo(unit);
   if (!eff) return dmg;
   if (battleRnd() < eff.chance) {
     return Math.floor(dmg * eff.critMult);

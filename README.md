@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.2.9
+> Personal Health Manager — 个人健身健康管理应用 v2.2.10
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -316,4 +316,6 @@ Vercel 项目设置：
 
 | **v2.2.9** | **2026-09-29** | **🛡️ WP-B 收尾：金身护盾「破盾反伤」** —— 护盾被击破时对**攻击者**造成 **初始护盾 × 20%** 伤害（**受魂防减免**）。**关键判断：不动 `absorbShield`** —— 它签名里**没有攻击者**，且被普攻/魂伤/AoE 三条链**复用 5 处**（`:70 :127 :412 :427 :490`），就地结算会**重复触发**。改为在**群战 tick 的行动前后夹一层**：行动前 `shieldPreSnapshot(gb)` 记护盾现值（并把满盾值记进 `_shieldReflect.initial`）→ 行动后 `shieldReflectAfter(gb, actor)`（此刻 `actor` **就是刚刚出手的人**）判定「行动前 >0、行动后 =0」→ 破盾者 = actor → 结算反伤。反伤 = `初始护盾 × 20%`（系数在 `skills.js` 的 `effect().reflectPct`，**唯一数值来源**）− `魂防/2`（沿用引擎既有「减免 = 防御/2」）；**一击一次**（`used` 标记）、**我方自己出手不误判**（要求不同阵营）、放在启风钩子**之前**（反伤可能直接打死敌人）。`battle-group.js` 只加两处一行调用，**5 个调用点一个未动**。`test-player-skills` 45→**53**（含精确数值校验 450×20%−100/2=40、只触发一次、不误判、未装配不反伤、源码级接线断言），全量 **1081 断言**；缓存版本对齐（v106）。✅ **WP-B 全部完成**（v2.2.3~v2.2.9） | `doc/changelog-v2.2.md` |
 
-> 当前版本：**v2.2.9**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
+| **v2.2.10** | **2026-09-29** | **🐾 WP-D：宠物/敌群天赋 14 条对齐（page/talent.js）+ WP-B 遗留收口** —— ① 🔴 **修死壳 `magicmirror`（魔法镜）**：`onBeforeSupport` 此前**全项目没有派发点**、`reflectSupport` mutation **无消费者** → 「免疫」与「反弹」两项**从未生效**。现由 `castSkill` 在**辅助技能对每个目标生效前**派发，且**只在「对手指向本单位」的辅助技能**上触发（队友给的增益/治疗不算）；反弹语义按 §5.6-3 = **只反弹负面/减益类**，治疗/增益类**仅免疫不反弹**（反射落在 `statusApps`/`heals`/`buffs` 三条通道上）。② **`plain`（朴实）作用面边界**（§5.6-1）：只挡**直接影响属性**的增益/减益（判据 = 状态定义的 `statMods`/`statModsPct` 或实例 `modsPct`）；**不**直接改属性的（中毒/冰冻/睡眠/末日/伤害修正）照常生效；「既有增减益又有附加效果」的（`lastworded`，新标 `extraEffect`）**只剥属性部分**、附加效果照常 —— 新增状态实例标记 `noStatMods`（`applyStatus` 收 + `statMods()` 跳过）。③ **`intimidate`（威吓）**：解除条件由「仅施加者 <50% 血」改为**先到者解除** —— 施加者 <50% 血**或**持续回合走完；持续回合**开场随机 5~10**（§5.1.7 + §5.6-5）。④ **`vengeance`（复仇）**：每层间隔 **25% → 20%** 生命（每层 +10% 维持），并加 `1e-9` 抵消浮点误差（`hp=0.8×base` 会算出 `0.19999999999999996`）。⑤ **WP-B 遗留收口**：斗者本能 **25% → 30%**（§3.8/§3.11A），并与**宠物暴击档（15%/160%）**按 **§3.12-1「取最高、分别判定」**合并 —— 新增 `groupCritMult()`：两边各自掷骰、**都触发取较高倍率**、**只结算一次**（旧实现是 `playerCritHook` 乘一次 + `talentCrit` 再乘一次 = 双重暴击叠乘 ×1.5×1.6）；`player-skill-hooks.js` 新增 `playerCritInfo()` 供合并读取。⚠️ 其余 10 条（blade/flutter/roughskin/vigor/magicshield/slowstart/lazy/multitarget/bloodthirst/regen）的评审都是「根据关卡与敌人级别 X~Y」= **随大关成长**，按施工计划 §1.1 属 **WP-F（敌群天赋接成长）**，本版**判定无改动**；§5.4F 的死配置清理（`_slowRounds`/`_multiExtra`/`soulDmgReduce` 消费端硬编码）同属 WP-F，未动。`test-pet-talents` 45→**73**（魔法镜派发点 / 朴实边界 / 威吓回合 / 复仇间隔 / 暴击合并 5 组新断言），全量 **1109 断言**；缓存版本对齐（v107） | `doc/changelog-v2.2.md` |
+
+> 当前版本：**v2.2.10**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）

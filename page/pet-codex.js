@@ -256,9 +256,13 @@ registerTalent({ id:'inspiration', name:'灵感涌动', desc:'每回合开始随
 registerTalent({ id:'mind_eye', name:'心眼', desc:'自身命中率不会被降低', petOnly:true,
   hooks: { onBeforeHit: function () { return { mutations: [{ key:'noAccPenalty', value:true }] }; } } });
 
-/* 无念熊：斗者本能 —— 普攻 25% 暴击，暴击 150% 伤害 */
-registerTalent({ id:'fighter_instinct', name:'斗者本能', desc:'普攻25%暴击，暴击150%伤害', petOnly:true,
-  hooks: { onBeforeCrit: function () { return { mutations: [{ key:'critChance', value:0.25 }, { key:'critMult', value:1.5 }] }; } } });
+/* 无念熊：斗者本能 —— 普攻 30% 暴击，暴击 150% 伤害
+   v2.3.0 WP-D（§3.8 评审 + §3.11A + §3.12-1）：触发率 25% → **30%**；
+   与「宠物暴击档」（玩家装配暴击后共享给宠物，15% / 160%，见 skills.js 的 petEffect）的
+   关系按 §3.12-1 裁决 = **取最高、分别判定** —— 两者各自掷骰，都触发时取较高倍率、只结算一次。
+   合并落在 battle-group.js 的 `groupCritMult()`，不在本钩子里做。 */
+registerTalent({ id:'fighter_instinct', name:'斗者本能', desc:'普攻30%暴击，暴击150%伤害', petOnly:true,
+  hooks: { onBeforeCrit: function () { return { mutations: [{ key:'critChance', value:0.30 }, { key:'critMult', value:1.5 }] }; } } });
 
 /* 圣光麒麟：不动如山 —— 满血时免疫普通~高级负面，且受到伤害 -50% */
 registerTalent({ id:'immovable', name:'不动如山', desc:'满血时免疫普通~高级负面，受伤-50%', petOnly:true,

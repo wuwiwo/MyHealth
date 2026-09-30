@@ -199,6 +199,22 @@ function talentCrit(actor) {
   return { chance: chance, mult: mult };
 }
 
+/* v2.3.0（WP-D §3.12-1）：斗者本能（天赋 **30%** / 150%）×「宠物暴击档」（玩家装配暴击后共享，
+   15% / 160%，见 skills.js 的 petEffect）按裁决「**取最高、分别判定**」合并。
+   此前两处各自独立结算 —— 同一单位同时具备两者时会**连续两次暴击**叠乘（×1.5×1.6），
+   与「都触发则取最高、只有一个触发按触发的那一项」不符。
+   现在：两边**各自掷骰**，取触发项里**较高的倍率**，只结算一次；都没触发返回 0。 */
+function groupCritMult(gb, actor) {
+  var best = 0;
+  var tc = talentCrit(actor);
+  if (tc.chance > 0 && gb.rng() < tc.chance) best = Math.max(best, tc.mult);
+  if (typeof playerCritInfo === 'function') {
+    var pc = playerCritInfo(actor);
+    if (pc && pc.chance > 0 && gb.rng() < pc.chance) best = Math.max(best, pc.critMult);
+  }
+  return best;
+}
+
 /* 伤害结算前的通用处理：目标阵营的「圣光守护」分担 + 天赋承伤修正
    返回 {dmg, events}，dmg 已扣掉被队友分担的部分 */
 function applyAllyDamageShare(gb, target, dmg, events) {
@@ -386,16 +402,13 @@ function normalAttack(gb, actor, target, dmgMult) {
     if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * 0.7);
     if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));   // 不动如山 / 广域防御
   });
-  // 玩家暴击技能（取高）
-  if (actor.side === 'ally' && typeof playerCritHook === 'function') {
-    var critDmg = playerCritHook(actor, dmg);
-    if (critDmg > dmg) { dmg = critDmg; events.push({ msg: '💥 暴击！' }); }
-  }
-  // 天赋暴击（斗者本能：普攻 25% 暴击 / 150% 伤害）
-  var tc = talentCrit(actor);
-  if (tc.chance > 0 && gb.rng() < tc.chance) {
-    dmg = Math.floor(dmg * tc.mult);
-    events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + tc.mult });
+  /* v2.3.0（WP-D §3.12-1）：暴击统一走 groupCritMult —— 天赋暴击（斗者本能 30%/150%）与
+     玩家/宠物暴击档（玩家 30%/300%、宠物 15%/160%）**分别判定、都触发取最高、只结算一次**。
+     此前是「playerCritHook 先乘一次 → talentCrit 再乘一次」= 可能双重暴击叠乘。 */
+  var critMult = groupCritMult(gb, actor);
+  if (critMult > 1) {
+    dmg = Math.floor(dmg * critMult);
+    events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + critMult });
   }
   // 玩家受击：瞩目计数
   if (target.side === 'ally' && target._spotTauntTurn) {
@@ -508,6 +521,28 @@ function castSkill(gb, actor, skillId) {
   // v2.1.14：把当前回合喂给技能效果（skill.js 的「嘲讽」需要它记录失效时点）
   // v2.1.15：再带上 units —— 「清除迷雾」要作用全场，而 selectTargets('all') 只给对侧
   var fx = applySkillEffects(def, actor, targets, { turn: gb.turn + 1, units: gb.units, gb: gb });
+  /* v2.3.0（WP-D §5.1.5 / §5.6-3）：魔法镜的**派发点**。
+     此前 `onBeforeSupport` 全项目没有任何调用点、`reflectSupport` 也无消费者 → 该天赋的
+     「免疫」与「反弹」两项从未生效（死壳）。这里在辅助技能的每个目标生效前派发，且**只在
+     「对手指向本单位」的辅助技能**上触发（队友给的增益/治疗不算）。
+     `mirrorBlocked[targetId]` = 是否可反弹（负面/减益才反弹；治疗/增益**仅免疫**）。
+     注：`fx.events` 是「技能自身的文案」，不属于施加到目标的辅助效果，故不拦截。 */
+  var mirrorBlocked = {};
+  if (def.type === 'support') {
+    targets.forEach(function (t) {
+      if (!t || t.hp <= 0 || t.id === actor.id || t.side === actor.side) return;
+      var mr = talentDispatch(t, 'onBeforeSupport', { targeted: true, support: true, sourceId: actor.id, source: actor, target: t });
+      if (!mr.skipAction) return;
+      var reflect = false;
+      mr.mutations.forEach(function (m) { if (m.key === 'reflectSupport') reflect = true; });
+      mirrorBlocked[t.id] = reflect;
+      var mmsg = '';
+      for (var mi = 0; mi < mr.events.length; mi++) {
+        if (mr.events[mi] && mr.events[mi].msg) { mmsg = mr.events[mi].msg; break; }
+      }
+      events.push({ msg: mmsg || ('🪞 ' + t.name + ' 魔法镜：免疫'), targetId: t.id, type: 'talent' });
+    });
+  }
   fx.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   fx.statusApps.forEach(function (sa) {
     var t = gb.units.find(function (u) { return u.id === sa.unitId; });
@@ -519,14 +554,28 @@ function castSkill(gb, actor, skillId) {
         events.push({ msg: '🛡️ ' + t.name + ' 受护盾庇护，免疫【' + getStatusName(sa.id) + '】（剩余 ' + t._shield + '）', targetId: t.id, type: 'status' });
         return;
       }
-      // 朴实：免疫状态；不动如山：满血免疫普通~高级
-      var selfGuard = talentDispatch(t, 'onBeforeStatus', { statusId: sa.id, grade: grade });
+      /* v2.3.0 魔法镜：被免疫；**负面/减益类**反射给施加者，治疗/增益类仅免疫（§5.6-3） */
+      if (Object.prototype.hasOwnProperty.call(mirrorBlocked, t.id)) {
+        var isPos = (typeof isPositiveStatus === 'function') && isPositiveStatus(sa.id);
+        if (mirrorBlocked[t.id] && !isPos && actor && actor.hp > 0 && actor.id !== t.id) {
+          applyStatus(actor, { id: sa.id, duration: sa.duration, source: t, modsPct: sa.modsPct, data: sa.data });
+          syncStatusDerived(actor);
+          events.push({ msg: '🪞 魔法镜反弹：【' + getStatusName(sa.id) + '】→ ' + actor.name, targetId: actor.id, type: 'status' });
+        }
+        return;
+      }
+      /* 朴实：只挡「直接影响属性」的增益/减益（§5.6-1）；不动如山：满血免疫普通~高级。
+         `modsPct` 一并下传，供朴实判断「本次实例是否直接改属性」。 */
+      var selfGuard = talentDispatch(t, 'onBeforeStatus', { statusId: sa.id, grade: grade, modsPct: sa.modsPct });
+      /* v2.3.0：朴实对「既有增减益又有附加效果」的状态只剥属性部分（stripStatMods → noStatMods） */
+      var stripMods = false;
+      selfGuard.mutations.forEach(function (m) { if (m.key === 'stripStatMods') stripMods = true; });
       // 阵营光环守卫（凛冬之核：我方全体免疫冰冻）
       var mates = (t.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return u.hp > 0; });
       var auraGuard = talentAura(mates, 'onAllyStatus', { statusId: sa.id, grade: grade, target: t });
       if (!selfGuard.skipAction && !auraGuard.skipAction) {
         // v2.1.14：区分「施加 / 刷新 / 叠层」，并去掉日志里外泄的英文状态 id（如 (poison)）
-        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor, modsPct: sa.modsPct, data: sa.data });
+        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor, modsPct: sa.modsPct, data: sa.data, noStatMods: stripMods });
         syncStatusDerived(t);   // v2.1.15：状态变了就重算 _statMods，否则减速/破甲不生效
         var verb = ar.refreshed ? '刷新' : '施加';
         var extra = '';
@@ -548,6 +597,11 @@ function castSkill(gb, actor, skillId) {
   });
   fx.heals.forEach(function (h) {
     var t = gb.units.find(function (u) { return u.id === h.unitId; });
+    /* v2.3.0 魔法镜：治疗属「增益类」→ **仅免疫、不反弹**（§5.6-3） */
+    if (t && Object.prototype.hasOwnProperty.call(mirrorBlocked, t.id)) {
+      events.push({ msg: '🪞 ' + t.name + ' 魔法镜：免疫治疗', targetId: t.id, type: 'talent' });
+      return;
+    }
     if (t) {
       // 末日阻断治疗
       var doom = dispatch(t, 'onHeal', {});
@@ -582,6 +636,8 @@ function castSkill(gb, actor, skillId) {
     var applied = [];
     recv.forEach(function (t) {
       if (!t || t.hp <= 0) return;
+      /* v2.3.0 魔法镜：增益属「增益类」→ **仅免疫、不反弹**（§5.6-3） */
+      if (Object.prototype.hasOwnProperty.call(mirrorBlocked, t.id)) return;
       if (b.key === 'dmgReduce') applyStatus(t, { id: 'wideguard', duration: dur });
       else if (b.key === 'atkBoost') applyStatus(t, { id: 'atkup', duration: dur, modsPct: { atk: b.value } });
       else return;

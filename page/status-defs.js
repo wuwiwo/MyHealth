@@ -248,6 +248,9 @@ defineStatus({
   grade: 3,
   maxStacks: 1,
   stacking: 'refresh',
+  /* v2.3.0（朴实作用面，§5.6-1）：本状态**既有能力增减（降攻/降魂攻）又有附加效果（每回合掉血）**，
+     `extraEffect` 让「朴实」只剥掉其属性修正、保留掉血 —— 对应裁决「只生效附加效果」。 */
+  extraEffect: true,
   statModsPct: { atk: -0.25, soulAtk: -0.25 },
   hooks: {
     onTurnStart: function (unit) {

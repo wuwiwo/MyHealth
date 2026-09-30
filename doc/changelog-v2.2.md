@@ -13,6 +13,128 @@ v2.2 是**宠物体系 / 宝珠 / 等级系统 / 技能平衡**版本。规划�
 
 ---
 
+## v2.2.10
+
+**Date:** 2026-09-29
+
+> **🐾 WP-D：`page/talent.js` 的 14 条天赋逐条对齐 + WP-D 收口 WP-B 遗留（斗者本能 25%→30% 取最高合并）**
+
+> ⚠️ **口径提醒（施工计划 §6.4 的措辞与文档编号有出入）**：§6.4 把这 14 条称作「**宠物天赋 14 条**」，
+> 但它们的 id 与实现都在 **`page/talent.js`**（`blade / flutter / roughskin / vigor / magicmirror / plain /
+> intimidate / magicshield / slowstart / lazy / multitarget / bloodthirst / vengeance / regen`），
+> 逐条评审在 `doc/2.2-修改提案.md` **§5.1** —— **不是 §3**（§3 是 `page/pet-codex.js` 里那 10 个
+> `petOnly` 天赋：幸运口袋 / 漆黑之眼 / … / 威压领域）。本版按 **§5.1 + §5.4 + §5.5 + §5.6**
+> 与施工计划 **§6.4 的裁决要点**实施；§3.12-1 的那一条（斗者本能）确实属 §3，已一并收口。
+
+### 一、实际改动（4 条天赋 + 1 处 WP-B 收口）
+
+| # | 天赋 | 裁决来源 | 改动 |
+|---|---|---|---|
+| 1 | `magicmirror` 魔法镜 | §5.1.5 + §5.6-3 | 🔴 **修死壳**：`onBeforeSupport` 此前**全项目没有派发点**、`reflectSupport` mutation **无消费者** → 「免疫」与「反弹」**两项从未生效**。现补派发点（见下） |
+| 2 | `plain` 朴实 | §5.6-1 | **作用面边界**：只挡**直接影响属性**的增益/减益；不直接改属性的照常生效；混合型只剥属性部分 |
+| 3 | `intimidate` 威吓 | §5.1.7 + §5.6-5 | 解除条件改**先到者解除**；持续回合**开场随机 5~10** |
+| 4 | `vengeance` 复仇 | §5.1.13 + §5.6-6 | 每层间隔 **25% → 20%** 生命（每层 +10% 维持） |
+| 5 | `fighter_instinct` 斗者本能 | §3.8 + §3.11A + §3.12-1 | **25% → 30%**；与宠物暴击档按「**取最高、分别判定**」合并 |
+
+#### 1. 魔法镜：补 `onBeforeSupport` 派发点（§5.1.5）
+
+派发点在 `battle-group.js` 的 `castSkill`：**辅助类型技能**（`def.type === 'support'`）对**每个目标**生效前，
+若该目标是**施法者的对手**（`t.side !== actor.side`、`t.id !== actor.id`），派发 `onBeforeSupport`
+（ctx = `{targeted, support, sourceId, source, target}`）。命中 30% 时：
+
+- 目标**免疫**那次效果；`mirrorBlocked[targetId]` 记录「是否可反弹」；
+- 反射落在 `statusApps` / `heals` / `buffs` **三条通道**上：
+  · **负面/减益类**（`!isPositiveStatus(id)`）→ **反弹给施加者**（同一 statusApp 改施于 `actor`）；
+  · **治疗 / 增益类** → **仅免疫、不反弹**（§5.6-3：否则等于反过来给敌方回血 / 加攻）。
+
+> 队友给的增益/治疗**不算**「敌方指向」，不触发（评审原文：受到**敌人**的指向性辅助类型技能时触发）。
+
+#### 2. 朴实：作用面边界（§5.6-1）
+
+判据 = 状态定义里的 `statMods` / `statModsPct`，或本次施加实例自带的 `modsPct`（故 `castSkill` 把
+`sa.modsPct` 一并下传给 `onBeforeStatus`）。
+
+- **直接改属性** → `skipAction`（整个状态免疫）：潮湿 / 减速 / 破甲 / 魂防降低 / 弱化 / 疾风 / 坚壁 / 攻击提升…
+- **不直接改属性** → 照常生效：中毒、冰冻、睡眠、末日（控制/禁技）、广域防御（伤害修正）…
+- **既有增减益又有附加效果** → **只剥属性部分、附加效果照常**：由状态定义新标记 **`extraEffect`** 识别
+  （现仅 `lastworded` 遗言诅咒 = 降攻降魂攻 **+** 每回合掉血），命中时返回 `stripStatMods`，
+  由 `castSkill` 以 **`noStatMods`** 落库。
+
+配套：`state-core.js` 的 `applyStatus` 接收 `opts.noStatMods`（`refresh`/`stack`/新实例三条路径都覆盖），
+`statMods()` 遇到 `st.noStatMods` **跳过该实例的全部属性贡献**（定义值与实例 `modsPct` 都不算），
+但状态的 **hooks 照常派发**。`noStatMods` 只在为 true 时才写字段（`undefined` 不进 JSON），
+**旧存档 / 快照形状不受影响**。
+
+#### 3. 威吓：持续回合 5~10 随机 + 先到者解除（§5.1.7 / §5.6-5）
+
+- `onBattleStart`：新增 `_intimidateTurns = 5 + floor(rnd × 6)`（**5~10 随机**），日志写明本次回合数；
+- `onTurnStart`：解除条件由「仅施加者 <50% 血」改为 **① 施加者 <50% 血 或 ② `turn > _intimidateTurns`**，
+  日志补上解除原因。
+- ⚠️ 削减幅度仍为 **40%**（`INTIMIDATE_ATK_DOWN`）—— 评审的「10%~50% 随关卡成长」属 **WP-F**。
+- `game-render.js` 详情页文案同步（「持续 5~10 回合，或威吓者血量低于 50% 时解除」）。
+
+#### 4. 复仇：间隔 20%（§5.1.13 + §5.6-6）
+
+`Math.floor(lost / 0.25)` → `Math.floor(lost / 0.20 + 1e-9)`；**每层 +10% 维持现状**。
+`+1e-9` 抵消浮点：`hp = 0.8×base.hp` 时 `lost` 会算出 `0.19999999999999996`，直接 `floor` 会**少一层**。
+
+#### 5. WP-B 遗留收口：斗者本能 30% + 「取最高、分别判定」（§3.12-1）
+
+`pet-codex.js` 的 `fighter_instinct`：`critChance 0.25 → 0.30`（`critMult 1.5` 不变）。
+
+合并落在 `battle-group.js` 新增的 **`groupCritMult(gb, actor)`**：
+
+```js
+var tc = talentCrit(actor);                       // 斗者本能（天赋 30%/150%）
+if (tc.chance > 0 && gb.rng() < tc.chance) best = Math.max(best, tc.mult);
+var pc = playerCritInfo(actor);                   // 玩家档 30%/300% 或宠物档 15%/160%
+if (pc && pc.chance > 0 && gb.rng() < pc.chance) best = Math.max(best, pc.critMult);
+```
+
+- 两边**各自掷骰**（「分别判定」）；**都触发取较高倍率**（1.6 > 1.5）；**只有一个触发按触发那一项**；都没触发返回 0。
+- 旧实现是 `playerCritHook` 先乘一次、`talentCrit` 再乘一次 → 同一单位同时具备两者时会
+  **双重暴击叠乘（×1.5×1.6 = ×2.4）**，与裁决不符。`normalAttack` 的两段暴击结算**合成一段**，日志只出**一条**。
+- `player-skill-hooks.js` 抽出 **`playerCritInfo(unit)`**（返回 `{chance, critMult}` 不掷骰）供合并读取；
+  `playerCritHook` 保留原语义（单独掷骰），供不需要合并的场景与既有测试使用。
+- ⚠️ `castSkill` 里**只**有天赋暴击（技能伤害本来就不吃玩家/宠物暴击档），**行为未动**。
+
+### 二、其余 10 条：判定无改动（成长化＝WP-F）
+
+`blade` / `flutter` / `roughskin` / `vigor` / `magicshield` / `slowstart` / `lazy` / `multitarget` /
+`bloodthirst` / `regen` —— §5.1 对它们的评审几乎都写「**根据关卡与敌人级别**，数值为 X~Y」，
+即**随大关/等级成长**的口径；按施工计划 §1.1，**敌群天赋接成长属 WP-F**（连同 §5.4F 的死配置清理：
+`_slowRounds`/`config.rounds`、`_multiExtra`/`config.extra`/`config.penalty`、`soulDmgReduce` 消费端硬编码）。
+本版**不接成长、不动数值**，在 `talent.js` 顶部留下一段说明注释标明归属。
+
+### 三、测试
+
+`test-pet-talents` **45 → 73 断言**（+28，新增 2 个分区）：
+
+- `[5] WP-D 改动`：
+  · 魔法镜 —— 派发点真的被调用（对手指向的辅助技能触发）、目标免疫、**负面类反弹给施加者**、**队友给的辅助不触发**；
+  · 朴实 —— 挡 `statModsPct`（潮湿）/ 实例 `modsPct`（疾风）、**不挡**中毒/冰冻/末日/睡眠/广域防御、
+    混合型（遗言诅咒）只返回 `stripStatMods`、`noStatMods` 实例**真的不贡献属性**（含正向对照）；
+  · 威吓 —— 5~10 随机（rng=0→5、rng≈1→10）、命中 1 名、未到期不解除、**回合走完自动解除**；
+  · 复仇 —— 损失 20% 即 1 层（旧 25% 间隔下为 0 层）、1 层 = 攻 ×1.1。
+- `[6] 暴击合并（§3.12-1）`：`playerCritInfo` 读档正确、**都触发取 1.6**、只有天赋→1.5、只有宠物档→1.6、
+  都不触发→0、**端到端普攻 101×1.6 = 161**（旧实现会二次暴击成 241）、**只出一条暴击日志**。
+- 沙箱新增加载 `skills.js` / `player-skill-hooks.js`（合并函数要读 `playerCritInfo`）。
+
+全量 **38/38 套件、1109 断言、0 失败**（v2.2.9 为 1081）。
+
+### 四、版本
+
+- `APP_VERSION` 2.2.9 → **2.2.10** · `page/index.html` `?v106` → **`?v107`**（48 处全量替换）
+- 改动文件：`page/talent.js`、`page/pet-codex.js`、`page/battle-group.js`、`page/player-skill-hooks.js`、
+  `page/state-core.js`、`page/status-defs.js`、`page/game-render.js`、`scripts/test-pet-talents.js`
+  （**本版无新增/删除文件**）
+- ⚠️ **未做（留给后续 WP，按 §1.1 归属）**：WP-F 的「敌群天赋接成长（12 条按 t）」+ 天赋**固化进关卡配置** +
+  §5.4F 死配置清理 + §5.4C 补写设计原文；WP-C 的宠物技能（§2 十三条）；§3 其余 9 个 `petOnly` 天赋的
+  裁决（幸运口袋三类独立判定 / 圣光守护自身 −10% / 镜像结界全通道 / 不动如山 >95% / 威压领域 −10%·70% 翻倍）
+  —— 本版**只**收口了其中的斗者本能（§3.12-1）。`doc/design-v2.0.md:250` 仍写「斗者本能 25%」，未同步。
+
+---
+
 ## v2.2.9
 
 **Date:** 2026-09-29
@@ -513,3 +635,4 @@ v2.2.0 把它们加在了 `boostPetForGroup()`（百分比池）**之后**，且
 | v2.2.7 | 46 | 1292 行 game-render.js | 🔬 **测量口径修复：平衡脚本此前完全没挂玩家技能** —— `scripts/balance-pets-ab.js` 沙箱 `FILES` 缺 `skills.js`/`player-skill-hooks.js`，`runOne()` 也从不 `attachPlayerSkills` → **v2.2.0~v2.2.6 全部平衡数字都是「无技能」口径**；**v2.2.2 的「g17 是墙、瓶颈在玩家魂防 177」结论错误**（只是没技能的产物）。修复=补载两文件 + 新增 `--skills` 开关（不传保留旧口径）。复测（dundun 当前属性，12 trials，Boss 关）：**g15 83→100%、g17 0→83/92%、g18 0→92%、g19 0%（真正的新墙）、g20 8/0%、g21+ 0%**，g6~g14 仍 100%。⚠️ 仍不含宠物共享档（缺 skill-store.js）与斗者本能合并（WP-D）→ 实际更强。教训：平衡脚本必须与 `startGroupTrial` 同源挂技能。**仅改 scripts/**，无线上代码变更 |
 | v2.2.8 | 46 | 1292 行 game-render.js | 🔬 **测量口径补完：宠物共享档也真正挂上**（接 v2.2.7）。`attachPetSharedSkills(pets, stateOverride)` 加**可选**第二参（离线工具显式传装配，绕开 `getSkillState()`；**线上不传 → 行为一字不变**）；脚本 `--skills` 同时挂玩家技能 + 宠物档（两列同一装配公平对照）。复测：**与「仅玩家技能」完全一致** —— g17 83/92%、g18 92%、**g19 0%（真正的墙）**、g20 8/0% → **g17~g19 上宠物档不构成决定因素**（15%/160% 相对 30%/300% 是小项 + 高关卡宠物存活短），v2.2.7 结论成立且**口径缺口已补齐**。全量 1073 断言 |
 | v2.2.9 | 46 | 1292 行 game-render.js | 🛡️ **WP-B 收尾：金身护盾破盾反伤**（初始护盾×**20%**，受魂防减免）。**关键判断：不动 `absorbShield`**（签名无攻击者 + 被普攻/魂伤/AoE 复用 5 处 → 就地结算会重复触发）→ 改在**群战 tick 行动前后夹层**：`shieldPreSnapshot(gb)` 记现值/满盾值 → `shieldReflectAfter(gb, actor)`（actor = 刚出手者）判定「前>0 后=0」→ 反伤 = 初始盾×20%（系数写 `skills.js` 的 `reflectPct`）− 魂防/2（既有「减免=防御/2」口径）；**一击一次**、**不同阵营才判**（我方不误判）、放在启风**之前**（反伤可能秒敌）。battle-group 仅加两处一行，**5 个调用点未动**。test-player-skills 45→**53**（精确校验 450×20%−100/2=40 + 只触发一次 + 不误判 + 源码级接线），全量 **1081 断言**。✅ **WP-B 全部完成**（v2.2.3~v2.2.9） |
+| v2.2.10 | 46 | 1291 行 game-render.js | 🐾 **WP-D：`page/talent.js` 14 条天赋对齐 + WP-B 遗留收口**。① 🔴 修死壳 **`magicmirror`**：`onBeforeSupport` 无派发点、`reflectSupport` 无消费者 → `castSkill` 现对**辅助技能**的每个目标派发，**只在「对手指向本单位」**时触发，**只反弹负面/减益类**（治疗/增益仅免疫）；反射落在 statusApps/heals/buffs 三条通道。② **`plain` 作用面边界**（§5.6-1）：只挡**直接影响属性**的增益/减益（`statMods`/`statModsPct`/实例 `modsPct`）；不直接改属性的照常生效；混合型（`lastworded`，新标 `extraEffect`）**只剥属性** → `applyStatus` 新增 `noStatMods`、`statMods()` 跳过该实例。③ **`intimidate`** 持续回合**开场随机 5~10** + 与「施加者 <50% 血」**先到者解除**。④ **`vengeance`** 间隔 25%→**20%**（+1e-9 防浮点少一层）。⑤ **斗者本能 25%→30%**（§3.8/§3.11A）并与**宠物暴击档 15%/160%** 按 §3.12-1 **「取最高、分别判定」**合并 → 新增 `groupCritMult()`（两边各自掷骰、都触发取较高倍率、**只结算一次**；旧实现 `playerCritHook` × `talentCrit` 会双重暴击 ×2.4）、`player-skill-hooks` 抽出 `playerCritInfo()`。⚠️ 其余 10 条（blade/flutter/roughskin/vigor/magicshield/slowstart/lazy/multitarget/bloodthirst/regen）评审均为「随关卡与敌人级别成长」→ 按 §1.1 属 **WP-F**，**判定无改动**；§5.4F 死配置清理同属 WP-F。test-pet-talents 45→**73**，全量 **1109 断言**。⚠️ 注：本行行数改用 node 复核得 **1291**，v2.2.4~v2.2.9 行写的 1292 系 +1 误差 |

@@ -258,6 +258,7 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 - **v2.2.8** — 🔬 **测量口径补完**：`attachPetSharedSkills(pets, stateOverride)` 加可选第二参（离线工具显式传装配，绕开 `getSkillState()`；线上不传 → 行为不变）；脚本 `--skills` 同时挂玩家技能 + 宠物档。复测：**与仅玩家技能那次完全一致**（g17 83/92%、g18 92%、g19 0%、g20 8/0%）→ **g17~g19 上宠物档不是决定因素**；v2.2.7 结论成立、口径缺口已补。**当前真实进度：可稳过到 g18，g19 是墙**
 - **v2.2.9** — 🛡️ **WP-B 收尾：金身护盾破盾反伤**（初始护盾×20%，受魂防减免）。**取位：不动 `absorbShield`**（签名无攻击者 + 5 处复用会重复触发）→ 改用**群战 tick 行动前后夹层**：`shieldPreSnapshot(gb)`（记现值 + 满盾值）+ `shieldReflectAfter(gb, actor)`（actor = 刚出手者，判「前>0 后=0」）→ 反伤 = 初始盾×20% − 魂防/2；一击一次、不同阵营才判。battle-group 只加两处一行。**✅ WP-B（v2.2.3~v2.2.9）全部完成**，下一步 WP-C/D；WP-D 需把斗者本能 25%/150% → 30% 并与宠物暴击档「取最高、分别判定」收口（§3.12-1）
   > ✅ **已裁决（2026-09-29）**：宝珠 `ORB_QUALITY_SPEC` 的 % 基数**不上调**（接受「弱基础宠物收益低于旧扁平值」的差异）。⏭️ 下一步 **WP-C/WP-D 宠物技能与天赋**，起点清单见 `doc/plans/v2.2-施工计划.md` §6.4
+- **v2.2.10** — 🐾 **WP-D：`page/talent.js` 的 14 条天赋对齐 + WP-B 遗留收口**。① 🔴 **修死壳 `magicmirror`**：`onBeforeSupport` 全项目无派发点、`reflectSupport` 无消费者 → `castSkill` 现对**辅助技能**的每个目标派发，**只在「对手指向本单位」**时触发，**只反弹负面/减益类**（治疗/增益仅免疫），反射落 statusApps/heals/buffs 三通道；② **`plain` 作用面边界**（§5.6-1）：只挡**直接影响属性**的增益/减益（`statMods`/`statModsPct`/实例 `modsPct`），不直接改属性的照常生效，混合型（`lastworded` 新标 `extraEffect`）**只剥属性** → `applyStatus` 新增 `noStatMods`、`statMods()` 跳过该实例；③ **`intimidate`** 持续回合**开场随机 5~10** 且与「施加者 <50% 血」**先到者解除**；④ **`vengeance`** 每层间隔 25% → **20%**；⑤ **斗者本能 25% → 30%**（§3.8/§3.11A）并与**宠物暴击档 15%/160%** 按 §3.12-1 **「取最高、分别判定」**合并 → 新增 `groupCritMult()`（两边各自掷骰、都触发取较高倍率、**只结算一次**；旧实现 `playerCritHook` × `talentCrit` 会双重暴击 ×2.4）+ `player-skill-hooks` 的 `playerCritInfo()`。⚠️ 其余 10 条（blade/flutter/roughskin/vigor/magicshield/slowstart/lazy/multitarget/bloodthirst/regen）评审均写「根据关卡与敌人级别 X~Y」= **随大关成长**，按施工计划 §1.1 属 **WP-F**，本版**判定无改动**（§5.4F 死配置清理同属 WP-F）。⚠️ **文档编号坑**：施工计划 §6.4 把这 14 条称作「宠物天赋」且任务单让人「按 §3 对齐」，但 §3 其实是 `pet-codex.js` 那 10 个 `petOnly` 天赋、§5.1 才是这 14 条 → 以**文件 + id 为准**。test-pet-talents 45→**73**，全量 **1109 断言**
 
 > ⚠️ **v2.0.10/2.0.11 与 v2.1.0 曾分叉**（两条线都改 `index.html`/`utils.js`/`README`/`changelog`），已于 `dd46332` 合并解决。若再见到两条线并行，合并前先看 §8 的冲突回避经验。
 
@@ -487,8 +488,8 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 - **炼化石兑换**（v2.1.3）：普通 → 高级 **10:1**（`exchangeRefineStones`），普通石只在炼化 Lv<50 可用，后期靠兑换消化
 - **技能升级**（v2.1.3）：`upgradePetSkill(pet, bag, skillId)` 指定技能，消耗 ✨ 灵能、递增（Lv0→1 与 Lv1→2 各 1，之后每级 +1），上限 **Lv10**；旧的 `useSpirit`（随机升级）保留但 UI 已不用
 - ~~**天赋槽解锁**（v2.1.3）~~ **已整块回退**（v2.1.4）：该机制与 `design-v2.0.md` §2.6「天赋是宠物固有专属」直接冲突，导致一只 SSR 能同时挂三只宠物的专属天赋。天赋不可跨宠物装配，`getPetTalents()` 恒取图鉴值、忽略存档 `talentIds`
-- ✅ **10 个宠物专属天赋已全部接入实战**（v2.1.5）：漆黑之眼（必中）/ 心眼（命中不被降低）/ 斗者本能（25% 暴击·150%）/ 凛冬之核（我方免疫冰冻）/ 圣光守护（分担队友 20% 伤害）/ 镜像结界（受辅助 ±25%）/ 灵感涌动（回合开始随机友方魂攻 +20%）/ 不动如山（满血免疫 grade≤2 负面 + 受伤 −50%）/ 威压领域（敌方治疗 −20%）/ 幸运口袋（结算追加材料）。均带 `petOnly` 标记，敌人不会抽到
-- ⚔️ **命中 / 闪避系统**（v2.1.5）：`battle-group.js` 的 `BASE_HIT_RATE = 0.95`；命中率 = 基础 + `_accMod` − `_eva`，clamp `[5%, 100%]`。天赋 hook 新增 `onBeforeHit`（guaranteedHit / noAccPenalty）、`onBeforeCrit`、`onAllyStatus`、`onAllyDamage`、`onBeforeHeal`、`onFoeHeal`；新增 mutation `dmgTakenReduce` / `damageShare` / `healBoost` / `healReduce` / `critChance` / `critMult`。**单敌 `battle.js` 未改动，行为不变**
+- ✅ **10 个宠物专属天赋已全部接入实战**（v2.1.5）：漆黑之眼（必中）/ 心眼（命中不被降低）/ 斗者本能（**30%** 暴击·150% —— v2.2.10 由 25% 上调，并与宠物暴击档 15%/160% 按「取最高、分别判定」合并）/ 凛冬之核（我方免疫冰冻）/ 圣光守护（分担队友 20% 伤害）/ 镜像结界（受辅助 ±25%）/ 灵感涌动（回合开始随机友方魂攻 +20%）/ 不动如山（满血免疫 grade≤2 负面 + 受伤 −50%）/ 威压领域（敌方治疗 −20%）/ 幸运口袋（结算追加材料）。均带 `petOnly` 标记，敌人不会抽到
+- ⚔️ **命中 / 闪避系统**（v2.1.5）：`battle-group.js` 的 `BASE_HIT_RATE = 0.95`；命中率 = 基础 + `_accMod` − `_eva`，clamp `[5%, 100%]`。天赋 hook 新增 `onBeforeHit`（guaranteedHit / noAccPenalty）、`onBeforeCrit`、`onAllyStatus`、`onAllyDamage`、`onBeforeHeal`、`onFoeHeal`；**v2.2.10 补上 `onBeforeSupport` 的派发点**（魔法镜，此前全项目零派发点 = 死壳）；新增 mutation `dmgTakenReduce` / `damageShare` / `healBoost` / `healReduce` / `critChance` / `critMult`（v2.2.10 又加 `reflectSupport` 的消费者与 `stripStatMods`）。**单敌 `battle.js` 未改动，行为不变**
 - 图鉴 14 只（3R+4SR+4SSR+3UR）；成熟宠物可参战（独立行动）
 - 阶段值读取时实时归一化（防旧存档越界值）
 
@@ -571,7 +572,8 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ## 8. 测试（以实时运行结果为准）
 
-> 下表是 **2026-09-29（v2.2.6）实跑**的统计，**38 套件 / 1073 断言 / 0 失败**。
+> 下表是 **2026-09-29（v2.2.10）实跑**的统计，**38 套件 / 1109 断言 / 0 失败**。
+> （v2.2.6 时点为 1073；v2.2.10 由 `test-pet-talents` 45→73 带来 +28。）
 > 数量会随版本变动，开始任务前仍应实际扫描运行一次确认。
 
 ```bash
@@ -583,7 +585,7 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `test-status-lifecycle` | 104 | 🔁 状态生命周期（递减/到期/受击解除）+ `_statMods` + 护盾 + 迷惑 + 蓄力时点 + 技能等级影响威力 + **末日技能禁用 / 附身禁技与冷却暂停 / 遗言诅咒魂防减免**（v2.1.32/33） |
 | `test-group-levels` | 79 | 240 关生成 / 精英 Boss / 数量魂攻防规则 / 难度递增 / `desc` 敌数与实际一致 |
 | `test-pet-codex` | 53 | 图鉴 + 参战 Unit 生成 + 天赋固有专属（防跨宠物回归） |
-| `test-pet-talents` | 45 | 10 个专属天赋 hook + 命中/闪避 + petOnly 隔离 + 端到端伤害分担 |
+| `test-pet-talents` | 45 → **73** | 10 个专属天赋 hook + 命中/闪避 + petOnly 隔离 + 端到端伤害分担 + **v2.2.10：魔法镜派发点 / 朴实作用面边界 / 威吓 5~10 回合 + 先到者解除 / 复仇间隔 20% / 斗者本能 30% 与宠物暴击档「取最高、分别判定」合并** |
 | `test-group-inherit` | 44 | 敌群属性继承 50% / 宠物放大 / 魂攻魂防接入 |
 | `test-a11y-tokens` | 40 | 🛡️ **设计体系护栏**（见 §4.3） |
 | `test-skill` | 40 | 25 敌群技能 |

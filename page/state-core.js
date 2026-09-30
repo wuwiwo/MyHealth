@@ -46,11 +46,13 @@ function applyStatus(unit, opts) {
     if (def.stacking === 'refresh') {
       existing.duration = Math.max(existing.duration, opts.duration || 1);
       if (opts.modsPct) existing.modsPct = opts.modsPct;
+      if (opts.noStatMods) existing.noStatMods = true;   // v2.3.0：朴实「只挡能力部分」
       events.push({ type: 'refresh', statusId: opts.id, unitId: unit.id });
       return { applied: false, refreshed: true, events: events };
     } else if (def.stacking === 'stack') {
       existing.stacks = Math.min(def.maxStacks || 3, existing.stacks + stacks);
       existing.duration = Math.max(existing.duration, opts.duration || 1);
+      if (opts.noStatMods) existing.noStatMods = true;
       events.push({ type: 'stack', statusId: opts.id, unitId: unit.id, stacks: existing.stacks });
       return { applied: false, refreshed: true, events: events };
     }
@@ -65,6 +67,11 @@ function applyStatus(unit, opts) {
     data: opts.data || {},
     modsPct: opts.modsPct || null
   };
+  /* v2.3.0（朴实作用面）：noStatMods = 本次实例**不贡献任何属性修正**
+     （定义里的 statMods / statModsPct 与实例 modsPct 都跳过），但状态的 hooks / 附加效果照常 ——
+     对应 §5.6-1「同一效果既有增减益又有附加效果时，只生效附加效果」。
+     ⚠️ 只在为 true 时写字段（undefined 不进 JSON），旧存档/快照形状不受影响。 */
+  if (opts.noStatMods) inst.noStatMods = true;
   unit.statuses.push(inst);
   events.push({ type: 'apply', statusId: opts.id, unitId: unit.id, stacks: inst.stacks });
   if (def.hooks && def.hooks.onApply) {
@@ -225,6 +232,9 @@ function statMods(unit) {
     var st = list[i];
     var def = STATUS_DEFS[st.id];
     if (!def) continue;
+    /* v2.3.0（朴实）：实例被标记 noStatMods 时**不贡献任何属性修正**（定义值与实例 modsPct 都跳过），
+       但状态的 hooks 照常派发 —— 用于「既有增减益又有附加效果」的效果只挡能力部分。 */
+    if (st.noStatMods) continue;
     var n = Math.max(1, st.stacks || 1);
     var k;
     if (def.statMods) for (k in def.statMods) flat[k] = (flat[k] || 0) + def.statMods[k] * n;
