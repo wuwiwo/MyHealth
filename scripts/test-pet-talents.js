@@ -4,6 +4,10 @@
    2) 10 个专属天赋的 hook 行为
    3) 敌人天赋池隔离（petOnly 不被随机抽取）
    4) 端到端：圣光守护在真实普攻中分担伤害
+   5) WP-D（v2.3.0）：page/talent.js 14 条的对齐改动
+   6) WP-D（v2.3.0）：斗者本能 × 宠物暴击档「取最高、分别判定」
+   7) WP-D（v2.3.0）：§3 其余 9 条 petOnly 天赋的对齐
+      （圣光守护自身 -10% / 镜像结界全通道 / 不动如山 >95% / 威压领域 -10%·>70% 翻倍 …）
 */
 'use strict';
 const fs = require('fs');
@@ -72,34 +76,57 @@ assert('无此天赋 → 暴击率 0', sandbox.talentCrit(mkUnit('none')).chance
 const wc = mkUnit('wc', ['winter_core']);
 assert('凛冬之核 → 免疫冰冻', sandbox.talentDispatch(wc, 'onAllyStatus', { statusId: 'freeze' }).skipAction === true);
 assert('凛冬之核 → 不免疫中毒', sandbox.talentDispatch(wc, 'onAllyStatus', { statusId: 'poison' }).skipAction === false);
-// 不动如山
+// 不动如山（v2.3.0 §3.9：触发阈值由「满血」改为「血量 **> 95%**」，两个 hook 同一阈值）
 const im = mkUnit('im', ['immovable']);
-assert('不动如山 → 满血免疫普通负面(grade1)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === true);
-assert('不动如山 → 满血免疫高级负面(grade2)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'freeze', grade: 2 }).skipAction === true);
+assert('不动如山 → 血量>95% 免疫普通负面(grade1)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === true);
+assert('不动如山 → 血量>95% 免疫高级负面(grade2)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'freeze', grade: 2 }).skipAction === true);
 assert('不动如山 → 特级负面免疫不了(grade3)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'doomed', grade: 3 }).skipAction === false);
-assert('不动如山 → 满血受伤 -50%', sandbox.talentDispatch(im, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.5));
-im.hp = 50;
-assert('不动如山 → 非满血不减伤也不免疫', sandbox.talentDispatch(im, 'onDamage', {}).mutations.length === 0
+assert('不动如山 → 血量>95% 受伤 -50%', sandbox.talentDispatch(im, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.5));
+im.hp = 96;
+assert('不动如山 → 96% 血仍触发（>95%）',
+  sandbox.talentDispatch(im, 'onDamage', {}).mutations.length === 1
+  && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === true);
+im.hp = 95;
+assert('不动如山 → 恰好 95% 血不触发（严格大于 95%）',
+  sandbox.talentDispatch(im, 'onDamage', {}).mutations.length === 0
   && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === false);
-// 威压领域
+im.hp = 50;
+assert('不动如山 → 半血不减伤也不免疫', sandbox.talentDispatch(im, 'onDamage', {}).mutations.length === 0
+  && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === false);
+// 威压领域（v2.3.0 §3.10：无条件 -10%；自身血量 **>70%** 时翻倍为 -20%）
 const pf = mkUnit('pf', ['pressure_field']);
-assert('威压领域 → 血量>75% 治疗 -20%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
+assert('威压领域 → 满血(>70%) 治疗 -20%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
+pf.hp = 71;
+assert('威压领域 → 71% 血（>70%）仍 -20%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
 pf.hp = 70;
-assert('威压领域 → 血量≤75% 不生效', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.length === 0);
-// 镜像结界
+assert('威压领域 → 恰好 70% 血回落为 -10%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.1));
+pf.hp = 1;
+assert('威压领域 → 残血仍有 -10%（不再「完全不生效」）', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.1));
+// 镜像结界：治疗通道（v2.1.5 起）+ 其它辅助通道（v2.3.0 §3.5 + §3.12-2 全通道）
 const mf = mkUnit('mf', ['mirror_field']);
-assert('镜像结界 → 受我方辅助 +25%', sandbox.talentDispatch(mf, 'onBeforeHeal', { isSupport: true, source: { side: 'ally' } })
+assert('镜像结界 → 治疗：受我方辅助 +25%', sandbox.talentDispatch(mf, 'onBeforeHeal', { isSupport: true, source: { side: 'ally' } })
   .mutations.some(m => m.key === 'healBoost' && m.value === 0.25));
-assert('镜像结界 → 受敌方辅助 -25%', sandbox.talentDispatch(mf, 'onBeforeHeal', { isSupport: true, source: { side: 'enemy' } })
+assert('镜像结界 → 治疗：受敌方辅助 -25%', sandbox.talentDispatch(mf, 'onBeforeHeal', { isSupport: true, source: { side: 'enemy' } })
   .mutations.some(m => m.key === 'healBoost' && m.value === -0.25));
-assert('镜像结界 → 非辅助效果不触发', sandbox.talentDispatch(mf, 'onBeforeHeal', { isSupport: false, source: { side: 'enemy' } }).mutations.length === 0);
-// 圣光守护
+assert('镜像结界 → 治疗：非辅助效果不触发', sandbox.talentDispatch(mf, 'onBeforeHeal', { isSupport: false, source: { side: 'enemy' } }).mutations.length === 0);
+assert('镜像结界 → 其它辅助通道：我方来源 +25%（supportScale）', sandbox.talentDispatch(mf, 'onBeforeSupportEffect', { support: true, source: { side: 'ally' } })
+  .mutations.some(m => m.key === 'supportScale' && m.value === 0.25));
+assert('镜像结界 → 其它辅助通道：敌方来源 -25%（supportScale）', sandbox.talentDispatch(mf, 'onBeforeSupportEffect', { support: true, source: { side: 'enemy' } })
+  .mutations.some(m => m.key === 'supportScale' && m.value === -0.25));
+assert('镜像结界 → 非辅助效果不派发 supportScale', sandbox.talentDispatch(mf, 'onBeforeSupportEffect', { support: false, source: { side: 'enemy' } }).mutations.length === 0);
+assert('supportEffectMul → 我方 1.25 / 敌方 0.75 / 无天赋 1',
+  sandbox.supportEffectMul(mf, { side: 'ally', id: 'a' }) === 1.25
+  && sandbox.supportEffectMul(mf, { side: 'enemy', id: 'e' }) === 0.75
+  && sandbox.supportEffectMul(mkUnit('noTalent'), { side: 'ally', id: 'a' }) === 1);
+// 圣光守护（v2.3.0 §3.4：分担不变 + 新增「自身受到伤害 -10%」，**全程无条件**）
 const hg = mkUnit('hg', ['holy_guard'], { hp: 100 });
 assert('圣光守护 → 血量>50% 分担 20%', sandbox.talentDispatch(hg, 'onAllyDamage', { amount: 100 })
   .mutations.some(m => m.key === 'damageShare' && m.value === 20));
 assert('圣光守护 → 分担者自己掉血 20', hg.hp === 80, 'hp=' + hg.hp);
 hg.hp = 40;
 assert('圣光守护 → 血量≤50% 不再分担', sandbox.talentDispatch(hg, 'onAllyDamage', { amount: 100 }).mutations.length === 0);
+assert('圣光守护 → 自身受到伤害 -10%（半血时仍生效 = 与血线无关）',
+  sandbox.talentDispatch(hg, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.1));
 // 灵感涌动
 const insB = { hp: 100, atk: 10, def: 5, spd: 5, soulAtk: 50 };
 const ins = mkUnit('ins', ['inspiration'], insB);
@@ -244,6 +271,100 @@ assert('普攻：基伤 101 × 1.6 = 161（旧实现会二次暴击成 241）', 
 assert('普攻：只出一条暴击日志', (evE2E || []).filter(e => /暴击/.test(e.msg || '')).length === 1);
 
 sandbox.battleRnd = _origBattleRnd;
+
+/* ---- 7. WP-D（v2.3.0）：§3 其余 9 条 petOnly 天赋的对齐（端到端） ---- */
+console.log('\n[7] §3 petOnly 天赋对齐（v2.3.0）');
+
+/* 构造带阵营/等级的单位（等级决定技能区间 t：敌人 t = (level−1)/9，故 level 10 = 区间上端） */
+let _uid = 0;
+function mkSide(side, base, talents, level) {
+  const u = sandbox.createUnit({ id: 'u' + (++_uid), side: side, name: side + _uid, level: level || 1,
+    base: Object.assign({}, base) });
+  if (talents) sandbox.attachTalents(u, talents);
+  return u;
+}
+const statusOf = (u, id) => (u.statuses || []).filter(s => s.id === id)[0];
+const HIT = { hp: 500, atk: 100, def: 0, spd: 5 };   // 攻方：普攻 100−0+0+1 = 101
+const TGT = { hp: 500, atk: 10, def: 0, spd: 1 };
+
+/* §3.4 圣光守护：自身受到伤害 -10%（真实普攻通道消费 dmgTakenReduce） */
+function takeHit(talents) {
+  const t = mkSide('ally', TGT, talents);
+  const foe = mkSide('enemy', HIT);
+  const gb = sandbox.createGroupBattle({ allies: [t], enemies: [foe], rng: function () { return 0; } });
+  sandbox.normalAttack(gb, foe, t);
+  return TGT.hp - t.hp;
+}
+const hitPlain = takeHit(null);
+assert('§3.4 圣光守护 E2E → 自身承伤 ×0.9', hitPlain > 0 && takeHit(['holy_guard']) === Math.floor(hitPlain * 0.9),
+  'plain=' + hitPlain + ' guard=' + takeHit(['holy_guard']));
+
+/* §3.9 不动如山：>95% 血 → 真实普攻受伤减半 */
+assert('§3.9 不动如山 E2E → 血量>95% 时受伤 ×0.5', hitPlain > 0 && takeHit(['immovable']) === Math.floor(hitPlain * 0.5),
+  'plain=' + hitPlain + ' immovable=' + takeHit(['immovable']));
+
+/* §3.10 威压领域：无条件 -10%，自身>70% 血翻倍为 -20%（真实治疗通道消费 healReduce）
+   ⚠️ 口径说明：selectTargets('ally1') 恒从 **gb.allies** 取目标，故要让「敌方治疗」落到
+      aura 的判定面内，威压持有者须站在**敌方**（治疗目标是 gb.allies 单位 → foes 侧含持有者）。 */
+function pfHeal(holderHpRatio) {
+  const vict = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 5 });
+  vict.hp = 100;
+  const foes = [];
+  if (holderHpRatio != null) {
+    const holder = mkSide('enemy', { hp: 400, atk: 10, def: 5, spd: 1 }, ['pressure_field']);
+    holder.hp = Math.round(holder.base.hp * holderHpRatio);
+    foes.push(holder);
+  }
+  foes.push(mkSide('enemy', { hp: 500, atk: 10, def: 5, spd: 6, soulAtk: 100 }, null, 10));
+  const gb = sandbox.createGroupBattle({ allies: [vict], enemies: foes, rng: function () { return 0; } });
+  sandbox.castSkill(gb, foes[foes.length - 1], 'heal');
+  return vict.hp - 100;
+}
+const pfBase = pfHeal(null);
+assert('§3.10 威压领域 E2E → 无持有者时全额治疗（对照）', pfBase > 0, 'base=' + pfBase);
+assert('§3.10 威压领域 E2E → 持有者 >70% 血时治疗 ×0.8', pfHeal(1) === Math.floor(pfBase * 0.8), 'got=' + pfHeal(1) + ' base=' + pfBase);
+assert('§3.10 威压领域 E2E → 持有者 70% 血时治疗 ×0.9（不再完全不生效）', pfHeal(0.70) === Math.floor(pfBase * 0.9), 'got=' + pfHeal(0.70));
+
+/* §3.5 / §3.12-2 镜像结界全通道 */
+// ① 治疗通道：友方「治愈」落到持有者 → +25%
+function mirrorHeal(withMirror) {
+  const healer = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 6, soulAtk: 100 }, null, 10);
+  const t = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 5 }, withMirror ? ['mirror_field'] : null);
+  t.hp = 100;
+  const gb = sandbox.createGroupBattle({ allies: [healer, t], enemies: [], rng: function () { return 0; } });
+  sandbox.castSkill(gb, healer, 'heal');
+  return t.hp - 100;
+}
+const healBase = mirrorHeal(false);
+assert('§3.5 镜像结界 E2E → 治疗通道 ×1.25', healBase > 0 && mirrorHeal(true) === Math.floor(healBase * 1.25),
+  'base=' + healBase + ' mirror=' + mirrorHeal(true));
+// ② 增益幅度通道：友方「强攻」落到持有者 → modsPct.atk ×1.25
+function empowerAtk(withMirror) {
+  const healer = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 6, soulAtk: 100 }, null, 10);
+  const t = mkSide('ally', { hp: 500, atk: 100, def: 5, spd: 5 }, withMirror ? ['mirror_field'] : null, 10);
+  const gb = sandbox.createGroupBattle({ allies: [healer, t], enemies: [], rng: function () { return 0; } });
+  sandbox.castSkill(gb, healer, 'empower');
+  const st = statusOf(t, 'atkup');
+  return st && st.modsPct ? st.modsPct.atk : null;
+}
+const empBase = empowerAtk(false);
+assert('§3.5 镜像结界 E2E → 增益幅度通道 ×1.25（强攻 modsPct.atk）',
+  empBase != null && near(empowerAtk(true), empBase * 1.25), 'base=' + empBase + ' mirror=' + empowerAtk(true));
+// ③ 状态实例幅度通道：敌方「打湿」落到持有者 → 实例 modsPct.soulDef ×0.75
+function drenchSoulDef(withMirror) {
+  const t = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 5, soulDef: 100 }, withMirror ? ['mirror_field'] : null);
+  const foe = mkSide('enemy', { hp: 500, atk: 10, def: 5, spd: 1 }, null, 10);   // level 10 → 区间上端（魂防 -25%）
+  const gb = sandbox.createGroupBattle({ allies: [t], enemies: [foe], rng: function () { return 0; } });
+  sandbox.castSkill(gb, foe, 'drench');
+  const st = statusOf(t, 'wet');
+  return st && st.modsPct ? st.modsPct.soulDef : null;
+}
+const drenchBase = drenchSoulDef(false);
+assert('§3.5 镜像结界 E2E → 敌方辅助状态幅度 ×0.75（打湿 魂防 −25% → −18.75%）',
+  drenchBase !== null && drenchBase !== 0 && near(drenchSoulDef(true), drenchBase * 0.75),
+  'base=' + drenchBase + ' mirror=' + drenchSoulDef(true));
+assert('§3.5 镜像结界 E2E → 「漆黑之眼/心眼/灵感涌动」等其余天赋不受影响（无天赋单位倍率 1）',
+  sandbox.supportEffectMul(mkSide('ally', TGT, ['dark_eye', 'mind_eye']), { side: 'enemy', id: 'e' }) === 1);
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

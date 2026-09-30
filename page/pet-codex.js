@@ -198,9 +198,28 @@ registerSkill({ id:'p_warmight', name:'战意灌注', type:'support', target:'al
 if (typeof registerTalent === 'function') {
 
 /* ---- 宠物专属天赋（v2.1.5 起真实生效）
-   petOnly 标记 = 不会被 enemy.js 的 pickRandomTalents 抽给敌人 ---- */
+   petOnly 标记 = 不会被 enemy.js 的 pickRandomTalents 抽给敌人 ----
 
-/* 小负鼠：幸运口袋 —— 结算期生效，见 game-render.js 的 groupVictoryReward() */
+   ============================================================
+   v2.3.0 WP-D 逐条对齐（对照 doc/2.2-修改提案.md §3.1~§3.10）
+   本轮**实际改动**（4 条）：
+     · holy_guard   —— §3.4：新增「自身受到伤害 -10%」（全程无条件，见该条注释）
+     · mirror_field —— §3.5 + §3.12-2：治疗以外的辅助通道（增益幅度 / 状态幅度）
+                        也按来源阵营 ±25%（新增 onBeforeSupportEffect）
+     · immovable    —— §3.9：触发阈值由「满血(100%)」改为「血量 > 95%」
+     · pressure_field —— §3.10：改为「无条件 -10%，自身血量 > 70% 时翻倍为 -20%」
+   本轮**判定无改动**（评审为「不变 / 保持 / 回合开始触发」）：
+     lucky_pocket（另有欠账，见该条注释）/ dark_eye / winter_core / inspiration / mind_eye
+   v2.2.10 已收口（本版跳过）：fighter_instinct（§3.8 30% 触发 + §3.11A/§3.12-1 暴击取最高）
+   §3.11B 裁决「天赋不需要升级」→ 本文件所有天赋**一律不接成长区间**，保持固定值。
+   ============================================================ */
+
+/* 小负鼠：幸运口袋 —— 结算期生效，见 game-render.js 的 groupVictoryReward()
+   ⚠️ 欠账（§3.1 + §3.11C 裁决）：设计/裁决要求**三类材料各自独立判定**
+     （营养液 10%~20% → 0~2 个；宠物饲料 20%~30% → 0~4 个；宠物灵能 5%~10% → 0~5 个），
+     现状仍是「单一 35% 命中后 3 选 1 ×2 个」。
+   该逻辑的消费端在 **`page/game-render.js` 的 `groupVictoryReward()`**（不在本文件），
+   而本文件没有派发点可挂，故本版**未改** —— 需在 game-render.js 里改（见 v2.2.10 施工记录 §4-6）。 */
 registerTalent({ id:'lucky_pocket', name:'幸运口袋', desc:'战斗胜利结算几率获得随机额外材料', petOnly:true });
 
 /* 黑暗鸦：漆黑之眼 —— 必定命中 */
@@ -215,23 +234,51 @@ registerTalent({ id:'winter_core', name:'凛冬之核', desc:'自身在场时我
     }
   } } });
 
-/* 光之精灵：圣光守护 —— 血量>50% 时承担队友 20% 伤害 */
-registerTalent({ id:'holy_guard', name:'圣光守护', desc:'血量>50%时承担队友20%伤害', petOnly:true,
-  hooks: { onAllyDamage: function (unit, ctx) {
-    if (unit.hp > unit.base.hp * 0.5 && ctx.amount > 0) {
-      var share = Math.max(1, Math.floor(ctx.amount * 0.2));
-      unit.hp = Math.max(0, unit.hp - share);
-      return { mutations: [{ key:'damageShare', value: share }], events: [{ msg:'✨ 圣光守护: ' + unit.name + ' 分担 ' + share }] };
+/* 光之精灵：圣光守护 —— 血量>50% 时承担队友 20% 伤害；自身受到伤害 -10%（全程）
+   v2.3.0 WP-D（§3.4 评审「增加：自身受到伤害 -10%（全程生效）」）：
+     分担部分（>50% 血才生效）维持 v2.1.5 的实现不变；
+     新增 `onDamage` → `dmgTakenReduce 0.1`，**无条件、全程生效**（不看过血线）。
+     消费端是 battle-group.js 既有的两条伤害通道（普攻 line ~403 / 技能 line ~496，
+     与「广域防御」「不动如山」同一条），无需新增派发点。 */
+registerTalent({ id:'holy_guard', name:'圣光守护', desc:'血量>50%时承担队友20%伤害；自身受到伤害-10%', petOnly:true,
+  hooks: {
+    onAllyDamage: function (unit, ctx) {
+      if (unit.hp > unit.base.hp * 0.5 && ctx.amount > 0) {
+        var share = Math.max(1, Math.floor(ctx.amount * 0.2));
+        unit.hp = Math.max(0, unit.hp - share);
+        return { mutations: [{ key:'damageShare', value: share }], events: [{ msg:'✨ 圣光守护: ' + unit.name + ' 分担 ' + share }] };
+      }
+    },
+    onDamage: function () {
+      return { mutations: [{ key:'dmgTakenReduce', value:0.1 }] };
     }
-  } } });
+  } });
 
-/* 梦幻：镜像结界 —— 受我方辅助效果 +25%，受敌方辅助效果 -25% */
-registerTalent({ id:'mirror_field', name:'镜像结界', desc:'受我方辅助+25%，受敌方辅助-25%', petOnly:true,
-  hooks: { onBeforeHeal: function (unit, ctx) {
-    if (!ctx.isSupport) return;
-    var fromAlly = ctx.source && ctx.source.side === unit.side;
-    return { mutations: [{ key:'healBoost', value: fromAlly ? 0.25 : -0.25 }] };
-  } } });
+/* 梦幻：镜像结界 —— 受我方辅助效果 +25%，受敌方辅助效果 -25%
+   v2.3.0 WP-D（§3.5 评审「需要接入其他辅助效果」+ §3.12-2 裁决「全通道适用」）：
+     · 治疗通道自 v2.1.5 起即生效（onBeforeHeal → healBoost ±0.25），**行为不变**；
+     · 新增 `onBeforeSupportEffect` → `supportScale ±0.25`，供**非治疗**的辅助通道用。
+       消费点（battle-group.js 的 castSkill）：`fx.buffs` 的增益幅度（atkup 的 modsPct.atk）、
+       `fx.statusApps` 的**实例 modsPct** 幅度（如敌方「打湿」落到本宠物身上时魂防削减 ×0.75）。
+       判定与治疗一致：来源与自身同阵营 → +25%，异阵营 → -25%；非 support 类技能不派发。
+     ⚠️ §3.12-2 点名的另两条通道在当前代码里**没有可缩放的数值载体**，本版无法接入：
+        · 护盾量 —— 群战技能里没有给盾通道（唯一的盾来自玩家技能「金身护盾」，
+          在 player-skill-hooks.js 的 playerSkillBattleStart 直接写 _shield，本文件与
+          battle-group.js 都没有派发点）；
+        · 状态解除（净化）—— 二元语义（解/不解），无「幅度」可乘。 */
+registerTalent({ id:'mirror_field', name:'镜像结界', desc:'受我方辅助效果+25%，受敌方辅助效果-25%', petOnly:true,
+  hooks: {
+    onBeforeHeal: function (unit, ctx) {
+      if (!ctx.isSupport) return;
+      var fromAlly = ctx.source && ctx.source.side === unit.side;
+      return { mutations: [{ key:'healBoost', value: fromAlly ? 0.25 : -0.25 }] };
+    },
+    onBeforeSupportEffect: function (unit, ctx) {
+      if (!ctx || !ctx.support) return;
+      var fromAlly = ctx.source && ctx.source.side === unit.side;
+      return { mutations: [{ key:'supportScale', value: fromAlly ? 0.25 : -0.25 }] };
+    }
+  } });
 
 /* 梦幻：灵感涌动 —— 每回合开始随机 1 名友方魂攻 +20%（持续到本回合结束） */
 registerTalent({ id:'inspiration', name:'灵感涌动', desc:'每回合开始随机友方魂攻+20%', petOnly:true,
@@ -264,23 +311,33 @@ registerTalent({ id:'mind_eye', name:'心眼', desc:'自身命中率不会被降
 registerTalent({ id:'fighter_instinct', name:'斗者本能', desc:'普攻30%暴击，暴击150%伤害', petOnly:true,
   hooks: { onBeforeCrit: function () { return { mutations: [{ key:'critChance', value:0.30 }, { key:'critMult', value:1.5 }] }; } } });
 
-/* 圣光麒麟：不动如山 —— 满血时免疫普通~高级负面，且受到伤害 -50% */
-registerTalent({ id:'immovable', name:'不动如山', desc:'满血时免疫普通~高级负面，受伤-50%', petOnly:true,
+/* 圣光麒麟：不动如山 —— 血量>95% 时免疫普通~高级负面，且受到伤害 -50%
+   v2.3.0 WP-D（§3.9 评审「生命值高于95%触发这个天赋」）：
+     触发阈值由原来的「满血（hp ≥ base.hp）」放宽为「**血量 > 95%**」（严格大于）。
+     两个 hook（onBeforeStatus / onDamage）用同一个阈值，保持「免疫」与「减伤」同时开合。
+     ⚠️ 该效果与「广域防御」「圣光守护自身 -10%」共用 battle-group 的 dmgTakenReduce 通道，
+        多个来源会按 (1-v) 连乘，属既有口径。 */
+registerTalent({ id:'immovable', name:'不动如山', desc:'血量>95%时免疫普通~高级负面，受伤-50%', petOnly:true,
   hooks: {
     onBeforeStatus: function (unit, ctx) {
-      if (unit.hp >= unit.base.hp && (!ctx.grade || ctx.grade <= 2)) {
+      if (unit.hp > unit.base.hp * 0.95 && (!ctx.grade || ctx.grade <= 2)) {
         return { skipAction:true, events: [{ msg:'🛡️ 不动如山: ' + unit.name + ' 免疫' + (ctx.statusId || '负面') }] };
       }
     },
     onDamage: function (unit) {
-      if (unit.hp >= unit.base.hp) return { mutations: [{ key:'dmgTakenReduce', value:0.5 }] };
+      if (unit.hp > unit.base.hp * 0.95) return { mutations: [{ key:'dmgTakenReduce', value:0.5 }] };
     }
   } });
 
-/* 圣光麒麟：威压领域 —— 血量>75% 时敌方全体治疗效果 -20% */
-registerTalent({ id:'pressure_field', name:'威压领域', desc:'血量>75%时敌方治疗-20%', petOnly:true,
+/* 圣光麒麟：威压领域 —— 敌方全体治疗效果 -10%；自身血量>70% 时翻倍为 -20%
+   v2.3.0 WP-D（§3.10 评审「降低敌方全体受到的10%治疗效果，如果自身生命值高于70%则这个天赋
+     效果变为2倍」）：原实现为「血量>75% 时 -20%，否则完全不生效」——
+     现在改为**无条件 -10%**，仅在高血线（>70%）时翻倍。
+     消费端仍是 battle-group.js 的 talentAura(foes, 'onFoeHeal') → healReduce。 */
+registerTalent({ id:'pressure_field', name:'威压领域', desc:'敌方全体治疗-10%；自身血量>70%时翻倍为-20%', petOnly:true,
   hooks: { onFoeHeal: function (unit) {
-    if (unit.hp > unit.base.hp * 0.75) return { mutations: [{ key:'healReduce', value:0.2 }] };
+    var doubled = unit.hp > unit.base.hp * 0.70;
+    return { mutations: [{ key:'healReduce', value: doubled ? 0.2 : 0.1 }] };
   } } });
 
 }

@@ -215,6 +215,19 @@ function groupCritMult(gb, actor) {
   return best;
 }
 
+/* v2.3.0 WP-D（§3.5 评审 + §3.12-2 裁决「全通道适用」）：**镜像结界**对辅助型技能效果的缩放。
+   持有者（梦幻）收到**我方来源**的辅助效果 ×1.25、**敌方来源**的 ×0.75。
+   治疗通道仍走 `onBeforeHeal` 的 `healBoost`（v2.1.5 起的历史口径，行为不变），
+   本函数只服务**非治疗**通道（增益幅度 / 状态实例幅度），由 castSkill 消费。
+   返回倍率；未持有该天赋（或非辅助效果）= 1。 */
+function supportEffectMul(unit, source) {
+  if (!unit) return 1;
+  var td = talentDispatch(unit, 'onBeforeSupportEffect', { support: true, source: source, sourceId: source ? source.id : null, target: unit });
+  var v = 0;
+  td.mutations.forEach(function (m) { if (m.key === 'supportScale') v += m.value; });
+  return v === 0 ? 1 : Math.max(0, 1 + v);
+}
+
 /* 伤害结算前的通用处理：目标阵营的「圣光守护」分担 + 天赋承伤修正
    返回 {dmg, events}，dmg 已扣掉被队友分担的部分 */
 function applyAllyDamageShare(gb, target, dmg, events) {
@@ -543,11 +556,25 @@ function castSkill(gb, actor, skillId) {
       events.push({ msg: mmsg || ('🪞 ' + t.name + ' 魔法镜：免疫'), targetId: t.id, type: 'talent' });
     });
   }
+  /* v2.3.0 WP-D（§3.5 + §3.12-2）：本次施放是否为辅助型技能；是则目标侧的辅助效果
+     要过一遍「镜像结界」的阵营缩放（仅非治疗通道；治疗走 onBeforeHeal 的 healBoost）。 */
+  var isSupportCast = def.type === 'support';
+  function supportMulFor(t) { return isSupportCast ? supportEffectMul(t, actor) : 1; }
+
   fx.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   fx.statusApps.forEach(function (sa) {
     var t = gb.units.find(function (u) { return u.id === sa.unitId; });
     if (t && t.hp > 0) {
       var grade = sa.grade || 1;
+      /* v2.3.0 WP-D（§3.12-2 全通道）：镜像结界 —— 敌方辅助技能加到持有者身上的状态，
+         其**实例幅度**（modsPct）按阵营缩放（我方 ×1.25 / 敌方 ×0.75）。
+         只缩放实例 modsPct：状态定义里的 statModsPct 是全局共享的，不能按实例改。 */
+      var applyModsPct = sa.modsPct;
+      var supMul = supportMulFor(t);
+      if (supMul !== 1 && applyModsPct) {
+        applyModsPct = {};
+        for (var mk in sa.modsPct) applyModsPct[mk] = sa.modsPct[mk] * supMul;
+      }
       /* v2.1.15：金身护盾的「护盾期免疫普通+高级负面」。
          此前 _shieldImmune 只置位、无消费方 → 开战护盾既不挡伤害也不免负面。 */
       if (t._shieldImmune && t._shield > 0 && grade <= 2) {
@@ -564,9 +591,9 @@ function castSkill(gb, actor, skillId) {
         }
         return;
       }
-      /* 朴实：只挡「直接影响属性」的增益/减益（§5.6-1）；不动如山：满血免疫普通~高级。
-         `modsPct` 一并下传，供朴实判断「本次实例是否直接改属性」。 */
-      var selfGuard = talentDispatch(t, 'onBeforeStatus', { statusId: sa.id, grade: grade, modsPct: sa.modsPct });
+      /* 朴实：只挡「直接影响属性」的增益/减益（§5.6-1）；不动如山：血量>95% 免疫普通~高级（§3.9）。
+         `modsPct` 一并下传，供朴实判断「本次实例是否直接改属性」（用**缩放后**的幅度）。 */
+      var selfGuard = talentDispatch(t, 'onBeforeStatus', { statusId: sa.id, grade: grade, modsPct: applyModsPct });
       /* v2.3.0：朴实对「既有增减益又有附加效果」的状态只剥属性部分（stripStatMods → noStatMods） */
       var stripMods = false;
       selfGuard.mutations.forEach(function (m) { if (m.key === 'stripStatMods') stripMods = true; });
@@ -575,7 +602,7 @@ function castSkill(gb, actor, skillId) {
       var auraGuard = talentAura(mates, 'onAllyStatus', { statusId: sa.id, grade: grade, target: t });
       if (!selfGuard.skipAction && !auraGuard.skipAction) {
         // v2.1.14：区分「施加 / 刷新 / 叠层」，并去掉日志里外泄的英文状态 id（如 (poison)）
-        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor, modsPct: sa.modsPct, data: sa.data, noStatMods: stripMods });
+        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor, modsPct: applyModsPct, data: sa.data, noStatMods: stripMods });
         syncStatusDerived(t);   // v2.1.15：状态变了就重算 _statMods，否则减速/破甲不生效
         var verb = ar.refreshed ? '刷新' : '施加';
         var extra = '';
@@ -613,7 +640,7 @@ function castSkill(gb, actor, skillId) {
           if (m.key === 'healBoost') amount = Math.floor(amount * (1 + m.value));
           if (m.key === 'healReduce') amount = Math.floor(amount * (1 - m.value));
         });
-        // 威压领域：血量>75% 时敌方全体治疗效果 -20%
+        // 威压领域：敌方治疗 -10%；持有者血量>70% 时翻倍为 -20%（§3.10）
         var foes = (t.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; });
         var pf = talentAura(foes, 'onFoeHeal', { target: t, amount: amount });
         pf.mutations.forEach(function (m) { if (m.key === 'healReduce') amount = Math.floor(amount * (1 - m.value)); });
@@ -634,12 +661,20 @@ function castSkill(gb, actor, skillId) {
       : gb.units.filter(function (u) { return u.id === b.unitId; });
     var dur = b.duration || 3;
     var applied = [];
+    var mirrorNote = '';
     recv.forEach(function (t) {
       if (!t || t.hp <= 0) return;
       /* v2.3.0 魔法镜：增益属「增益类」→ **仅免疫、不反弹**（§5.6-3） */
       if (Object.prototype.hasOwnProperty.call(mirrorBlocked, t.id)) return;
+      /* v2.3.0 WP-D（§3.12-2 全通道）：镜像结界 —— 增益**幅度**按来源阵营缩放
+         （我方来源 ×1.25 / 敌方来源 ×0.75）。
+         ⚠️ `dmgReduce`（广域防御）这条子通道没有可缩放的载体：状态定义 wideguard 里的
+            dmgTakenReduce 是固定 0.20，`b.value` 目前无人消费（既有死字段，归 WP-E 的
+            bulwark 改版），故只对 `atkBoost` 生效。 */
+      var mul = supportMulFor(t);
+      if (mul !== 1) mirrorNote = '（镜像结界 ×' + mul + '）';
       if (b.key === 'dmgReduce') applyStatus(t, { id: 'wideguard', duration: dur });
-      else if (b.key === 'atkBoost') applyStatus(t, { id: 'atkup', duration: dur, modsPct: { atk: b.value } });
+      else if (b.key === 'atkBoost') applyStatus(t, { id: 'atkup', duration: dur, modsPct: { atk: b.value * mul } });
       else return;
       syncStatusDerived(t);
       applied.push(t.name);
@@ -648,7 +683,7 @@ function castSkill(gb, actor, skillId) {
     var label = (b.key === 'dmgReduce') ? ('受到伤害 -' + Math.round(b.value * 100) + '%')
       : (b.key === 'atkBoost') ? ('攻击 +' + Math.round(b.value * 100) + '%')
         : ('增益 +' + Math.round(b.value * 100) + '%');
-    events.push({ msg: '🛡️ ' + actor.name + ' ' + def.name + ' → ' + applied.join('、') + ' ' + label + '（' + dur + ' 回合）', type: 'buff' });
+    events.push({ msg: '🛡️ ' + actor.name + ' ' + def.name + ' → ' + applied.join('、') + ' ' + label + mirrorNote + '（' + dur + ' 回合）', type: 'buff' });
   });
 
   // 遗言：自身阵亡
