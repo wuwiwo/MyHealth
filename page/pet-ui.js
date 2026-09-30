@@ -85,6 +85,8 @@ function renderPetPanel() {
     +'</div>'
   // 材料
   var m = d.materials || {}
+  /* v2.2 WP-H5：一键治疗的候选 = 成熟 + 未阵亡 + 受伤（已死亡 / 未成熟不参与） */
+  var injuredN = d.pets.filter(function(p){ return p.stage==='mature' && !p.isDead && p.injured }).length
   h += '<div style="font-size:var(--fs-sm);background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;line-height:1.6">'
     +'<span>🧪 营养液 <b style="font-size:var(--fs-base)">'+m.nutrition+'</b></span>'
     +'<span>🍖 饲料 <b style="font-size:var(--fs-base)">'+m.feed+'</b></span>'
@@ -92,6 +94,7 @@ function renderPetPanel() {
     +'<span>🪨 炼化石 <b style="font-size:var(--fs-base)">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:var(--fs-base)">'+m.refineHigh+'</b></span>'
     +'<span>💎 宝珠碎片 <b style="font-size:var(--fs-base)">'+m.orbShard+'</b></span>'
     +'<button class="speed-btn" id="petExchange" title="10 个普通炼化石兑换 1 个高级炼化石" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">🔄 兑换 10→1</button>'
+    +'<button class="speed-btn" id="petHealAll" title="自动消耗营养液，把所有受伤宠物一次治好（已阵亡/未成熟的不参与）" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)'+(injuredN?';border-color:var(--red);color:var(--red)':'')+'">🧪 一键治疗'+(injuredN?'（'+injuredN+'）':'')+'</button>'
     +'</div>'
   // v2.1.17 宝珠：合成 / 库存分解
   h += orbBagHtml(d)
@@ -164,6 +167,21 @@ function renderPetPanel() {
     var rx = exchangeRefineStones(d5.materials, 1)
     if (rx.ok) { savePetStore(d5); toast('🔄 '+rx.spent+' 普通炼化石 → '+rx.gained+' 高级炼化石', 's') }
     else { toast(rx.reason || '兑换失败', 'e') }
+    renderPetPanel()
+  })
+  /* v2.2 WP-H5：一键修复受伤（自动消耗营养液）—— 逻辑全在 pet-store.js 的 healAllInjuredPets()，
+     这里只负责提示。已阵亡 / 未成熟 / 未受伤的宠物在那边就已被排除，不会误治、不会误耗。 */
+  var healAll = document.getElementById('petHealAll')
+  if (healAll) healAll.addEventListener('click', function(){
+    var hr = (typeof healAllInjuredPets === 'function') ? healAllInjuredPets() : { ok:false, reason:'宠物模块未加载' }
+    if (!hr.ok) { toast(hr.reason || '没有需要治疗的宠物', 'e') }
+    else {
+      var seg = []
+      if (hr.healed.length) seg.push('✅ ' + hr.healed.join('、') + ' 已痊愈')
+      if (hr.partial.length) seg.push('⚠️ ' + hr.partial.join('、') + ' 未愈（营养液不足）')
+      seg.push('消耗 🧪' + hr.consumed)
+      toast(seg.join(' · '), hr.partial.length ? 'e' : 's')
+    }
     renderPetPanel()
   })
   /* v2.2 WP-A2：**删除「合成宝珠」入口** —— 宝珠本体改为隐藏挑战掉落，
@@ -265,23 +283,32 @@ function renderPetDetail(pet, idx) {
     +'<div style="height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:var(--brand-fill);border-radius:4px;transition:width .3s"></div></div>'
     +'<div style="margin-top:6px;color:var(--text3)">成功率：普通石 '+(rateN ? rateN+'%' : '不可用（Lv≥50）')+'　·　高级石 '+rateH+'%</div>'
     +'</div>'
-  // 基础属性（codex + 炼化）
-  var b = codex.base || {}
-  var rs = pet.refineStats || {}
+  /* v2.2 WP-H5：属性拆解 —— 基础 ＋ 加成（凝聚 / 共鸣 / 宝珠%）→ 最终属性。
+     ⚠️ **只改展示**：四个数全部来自 pet-store.js 的 `petStatBreakdown()`（它又直接复用
+     createPetUnit / benchBonusSum / resonanceBonus / boostPetForGroup 这套数值口径），
+     本处**不另算一套**、不写存档。 */
+  var bd = (typeof petStatBreakdown === 'function') ? petStatBreakdown(pet) : null
   h += '<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">📊 属性（基础+炼化）</div>'
-  h += '❤️ HP <b>'+(b.hp||0)+(rs.hp?'<span style="color:var(--green)">+'+rs.hp+'</span>':'')+'</b>'
-  h += '　⚔️ 攻 <b>'+(b.atk||0)+(rs.atk?'<span style="color:var(--green)">+'+rs.atk+'</span>':'')+'</b>'
-  h += '　🛡️ 防 <b>'+(b.def||0)+(rs.def?'<span style="color:var(--green)">+'+rs.def+'</span>':'')+'</b>'
-  h += '　💨 速 <b>'+(b.spd||0)+'</b>'
-  h += '　👻 魂攻 <b>'+(b.soulAtk||0)+(rs.soulAtk?'<span style="color:var(--green)">+'+rs.soulAtk+'</span>':'')+'</b>'
-  // v2.1.17 已装配宝珠加成
-  var _ob = (typeof orbPct === 'function' && pet.orbs) ? pet.orbs : null
-  if (_ob) {
-    var _add = {}
-    Object.keys(_ob).forEach(function(t){ _add[t] = orbPct(_ob[t]) })
-    if (_add.hp) h += '<span style="color:var(--purple,#a855f7)">+'+_add.hp+'%</span>'
-    if (_add.soulAtk) h += '<span style="color:var(--purple,#a855f7)">+'+_add.soulAtk+'%</span>'
+  h += '<div style="font-weight:700;margin-bottom:4px">📊 属性 <span style="color:var(--text3);font-weight:400">（基础 ＋ 加成 → 最终）</span></div>'
+  if (!bd || !bd.ok) {
+    h += '<div style="color:var(--text3)">（属性拆解暂不可用）</div>'
+  } else {
+    h += '<div style="color:var(--text3)">百分比池（逐属性）＝ 稀有度 <b style="color:var(--text2)">' + bd.rarityPct + '%</b> ＋ Σ宝珠%（速度不参与）</div>'
+    h += '<div style="color:var(--text3)">加成来源＝团队凝聚（未上场 ' + bd.benchCount + ' 只 ×10%）＋共鸣 ' + Math.round((bd.resonanceRate || 0) * 100) + '%　·　按此宠上场计算</div>'
+    ;[['❤️','HP','hp'],['⚔️','攻','atk'],['🛡️','防','def'],['👻','魂攻','soulAtk'],['🌫️','魂防','soulDef'],['💨','速','spd']].forEach(function(r){
+      var k = r[2]
+      var bv = bd.base[k] || 0
+      var ch = bd.cohesion[k] || 0, rr = bd.resonance[k] || 0
+      var add = ch + rr
+      var src = []
+      if (ch) src.push('凝聚 ' + ch)
+      if (rr) src.push('共鸣 ' + rr)
+      h += '<div>' + r[0] + ' ' + r[1] + ' <b style="color:var(--brand-fill)">' + (bd.final[k] || 0) + '</b>'
+        + '<span style="color:var(--text3)">＝ 基础 ' + bv
+        + (add ? ' ＋加成 <span style="color:var(--green)">' + add + '</span>（' + src.join('＋') + '）' : '')
+        + (k === 'spd' ? '（不参与百分比）' : ' ×' + (bd.poolPct[k] || 0) + '%')
+        + '</span></div>'
+    })
   }
   h += '</div>'
   // v2.1.17 宝珠槽位

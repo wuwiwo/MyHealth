@@ -267,6 +267,37 @@ function renderRecordView() {
   h += statCell('🛡️','最高防御',stats.def)
   h += statCell('❤️','最高生命',stats.hp)
   h += '</div>'
+
+  /* ===== v2.2 WP-H4：每月挑战记录（文档「挑战页面 - 增加每个月最高记录查看」） =====
+     数据源 = challenge.js 的 listChallengeMonthly()：按自然月分桶归档（跨月自动开新桶，旧月保留）。
+     口径：每次通关计 1 次；「单次最高伤害」= 该月伤害最高的一次；属性奖励为该月累计。 */
+  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">📅 每月挑战记录 <span style="font-size:var(--fs-xs);color:var(--text3)">隐藏挑战 · 跨月归档</span></div>'
+  var months = (typeof listChallengeMonthly === 'function') ? (listChallengeMonthly() || []) : []
+  if (!months.length) {
+    h += '<div style="background:var(--bg2);border-radius:12px;padding:20px;text-align:center;font-size:var(--fs-base);color:var(--text3)">本月暂无挑战记录<br><span style="font-size:var(--fs-xs)">完成隐藏挑战后按月归档，可回看每月最高记录</span></div>'
+  } else {
+    var curMk = (typeof chMonthOf === 'function') ? chMonthOf() : ''
+    h += '<div style="max-height:280px;overflow-y:auto">'
+    months.forEach(function (m) {
+      var isCur = m.month === curMk
+      h += '<div style="background:var(--bg2);border:1px solid ' + (isCur ? 'var(--orange-g)' : 'var(--bd-l)') + ';border-radius:12px;padding:12px;margin-bottom:8px">'
+        + '<div style="display:flex;align-items:center;gap:8px">'
+        +   '<span style="font-size:var(--fs-base);font-weight:700">' + m.month + '</span>'
+        +   (isCur ? '<span style="font-size:var(--fs-3xs);color:var(--orange);border:1px solid var(--orange-g);border-radius:var(--rad-full);padding:1px 6px">本月</span>' : '')
+        +   '<span style="flex:1"></span>'
+        +   '<span style="font-size:var(--fs-xs);color:var(--text3)">' + (m.count || 0) + ' 次</span>'
+        + '</div>'
+        + '<div style="font-size:var(--fs-xs);color:var(--text2);line-height:1.8;margin-top:4px">'
+        +   '🥇 单次最高伤害 <b style="color:var(--orange)">' + (m.bestDmg || 0) + '</b>'
+        +   (m.bestDate ? '<span style="color:var(--text3)">（' + m.bestDate + '）</span>' : '')
+        +   '<br>🎁 属性奖励合计 ⚔️+' + (m.atk || 0) + ' 🛡️+' + (m.def || 0) + ' ❤️+' + (m.hp || 0)
+        +   '<br>💥 累计伤害 ' + (m.totalDmg || 0)
+        + '</div>'
+        + '</div>'
+    })
+    h += '</div>'
+  }
+
   v.innerHTML = h
 }
 

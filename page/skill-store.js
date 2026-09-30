@@ -63,12 +63,36 @@ function unlockSkillSlots(monthlyCleared) {
   return d.slotsUnlocked;
 }
 
-/* 月度重置（技能减半） */
-function monthlyResetSkillState() {
+/* ============================================================
+   月度重置（v2.2 WP-H9）
+   文档原文（doc/2.2 修改-补充.md）：
+     「玩家技能点（未用完，全部清空）」
+     「玩家已学习技能（变为一半等级，不返还技能点）」
+   即：**未使用的技能点清零** + **已学技能等级减半**，已投入的点数一律不返还。
+
+   边界口径（文档未写，此处定案并写进 test-skill-store.js）：
+   · 取整 = **向下取整**（沿用 skills.js 既有 monthlyResetSkills 的 Math.floor）；
+     等级 1 → 0（技能条目保留在 levels 里，不会从「已学技能」里删掉）。
+   · **不返还点数**：totalEarned（历史累计）不动，只清 points（可用点数）。
+   · **已装配（loadout）保持不动**：装配关系不是「已学技能」的组成部分，
+     本批次只按文档改「点数 + 等级」两项；等级掉到 0 的技能即使仍在槽位，
+     战斗侧 effect(0) 恒为 0 值，不会产生额外收益（见 player-skill-hooks.attachPlayerSkills）。
+   · 升级是**原子**的（upgradePlayerSkill 同时扣点+升级），不存在「升级中」的中间态，
+     故不存在「正在升级中的点数」需要特殊处理。
+
+   幂等：以**月度键 monthlyKey** 记账（写法与 pet-store.js 的 monthlyResetPets 同款）。
+   同一自然月内重复调用只生效一次 —— 否则每次进 app 都会再减半一次。
+   ============================================================ */
+function monthlyResetSkillState(now) {
   var d = getSkillState();
-  monthlyResetSkills(d);
+  var cur = (typeof monthKey === 'function') ? monthKey(now || new Date())
+          : (function () { var n = now || new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); })();
+  if (d.monthlyKey === cur) return { ok: false, reason: '本月已重置', monthlyKey: cur, alreadyReset: true };
+  d.points = 0;                 // 未使用的技能点全部清空（已投入的不返还）
+  monthlyResetSkills(d);        // 已学技能等级减半（向下取整）
+  d.monthlyKey = cur;
   saveSkillState(d);
-  return d;
+  return { ok: true, monthlyKey: cur, points: d.points, levels: d.levels, loadout: d.loadout };
 }
 
 /* 升级/装备（包装，自动保存） */

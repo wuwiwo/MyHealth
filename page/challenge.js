@@ -2,6 +2,31 @@
    MyHealth — Hidden Challenge (隐藏挑战召唤)
    ============================================ */
 
+/* ========== v2.2 WP-H8：掉落产出倍率（唯一可调常量） ==========
+   来源 doc/2.2 修改-补充.md 原文：
+     「提升宝珠碎片的掉落数量（变为3倍）」
+     「提升炼化石产出（变为2倍）」
+     「提升灵能产出（变为2倍）」
+   三类 = **宝珠碎片 orbShard ×3** / **炼化石（普通 refineNormal + 高级 refineHigh）×2** / **灵能 spirit ×2**。
+   ⚠️ 倍率只在这一处定义：新掉落点一律走 applyDropMult() / applyDropMults()，别在掉落点另写数字。
+   ⚠️ 已知未覆盖：敌群胜利掉落（game-render.js 的 groupVictoryReward）本批次白名单外，见校准说明。 */
+var DROP_MULT = { orbShard: 3, refineNormal: 2, refineHigh: 2, spirit: 2 };
+
+function dropMultFor(type){ return DROP_MULT[type] || 1 }
+
+/* 单条数量套倍率：向下取整（数量本为整数，取整只防浮点尾数） */
+function applyDropMult(type, n){
+  var v=(typeof n==='number'&&isFinite(n))?n:0
+  return Math.floor(v*dropMultFor(type))
+}
+
+/* 对一批掉落条目统一套倍率（纯函数：返回新数组，不改入参） */
+function applyDropMults(drops){
+  return (drops||[]).map(function(d){
+    return { type:d.type, n:applyDropMult(d.type,d.n), lucky:d.lucky }
+  })
+}
+
 /* ========== SUMMON LOGIC ========== */
 function getChallenge(){
   var c=store.get('challenge')||{}
@@ -24,6 +49,10 @@ function getChallenge(){
   c.madeUpUsed=num(c.madeUpUsed,0)
   c.pendingIsMakeup=!!c.pendingIsMakeup
   c.history=Array.isArray(c.history)?c.history:[]
+  // v2.2 WP-H4：每月记录归档（monthly = { 'YYYY-MM': {...} }；monthlyKey = 当前归档月键，写法同 pet-store.js）
+  c.monthlyKey=str(c.monthlyKey,'')
+  c.monthly=(c.monthly&&typeof c.monthly==='object'&&!Array.isArray(c.monthly))?c.monthly:{}
+  c.lastSeasonMonth=str(c.lastSeasonMonth,'')
   // 清理 v1.9.1 时代遗留字段（已无使用）
   if(c.todayFailCount!==undefined){delete c.todayFailCount}
   if(c.failDate!==undefined){delete c.failDate}
@@ -505,14 +534,19 @@ function startHiddenChallenge(hotBuff){
     applyChallengeSettle(c, c.pendingIsMakeup === true)
     // 记录历史成绩（含 buff）
     c.history=c.history||[]
-    c.history.push({
+    /* v2.2 WP-H4：旧存档一次性回填月份桶（幂等）—— 必须在 push 之前，
+       否则新成绩会被「回填」与「合并」各计一次 */
+    ensureChallengeMonthly(c)
+    var _rec={
       date:today(),dmg:dmg,hits:state.hitCount,
       avgRate:state.duration>0?Math.round(state.hitCount/state.duration*10)/10:0,
       crits:state.critCount,maxHit:state.maxHit,
       atk:bonusAtk,def:bonusDef,hp:bonusHp,
       buff:state.hotBuff||null
-    })
+    }
+    c.history.push(_rec)
     if(c.history.length>50)c.history=c.history.slice(-50)
+    recordChallengeMonth(c,_rec)
     saveChallenge(c)
 
     // 隐藏挑战材料掉落（基础掉落 + 每周次数额外奖励）
@@ -581,6 +615,11 @@ function startHiddenChallenge(hotBuff){
             orbDrop = _orb
           }
         }
+        /* v2.2 WP-H8：三类掉落产出倍率统一在这里套用 ——
+           宝珠碎片 ×3 / 炼化石（普通+高级）×2 / 灵能 ×2（倍率常量唯一来源 = 文件顶部 DROP_MULT）。
+           ⚠️ 放在发放之前，让结果面板显示的数量与实际发放一致。 */
+        matDrops = applyDropMults(matDrops)
+
         savePetStore(d)
 
         // 发放材料
@@ -712,13 +751,150 @@ function showChallengeHistory(){
   modal.addEventListener('click',function(e){if(e.target===e.currentTarget)modal.remove()})
 }
 
+/* ========== v2.2 WP-H4：挑战页「每月最高记录」 ==========
+   文档原文（doc/2.2 修改-补充.md）只有一句：
+     「挑战页面 - 增加每个月最高记录查看」
+   → 未给字段口径，本实现在此定义并写进测试锁定：
+     每月一条记录：count 通关次数 / totalDmg 累计伤害 / bestDmg 单次最高伤害（bestDate）
+                   atk·def·hp 属性奖励合计 / bestAtk·bestDef·bestHp 单次最高奖励那一场的奖励
+                   firstDate·lastDate 首末日期
+   归档与重置：按**月键（YYYY-MM）分桶** —— 跨月自动开新桶（新月从 0 开始），旧月桶原样保留即「归档」；
+   本月键记在 `c.monthlyKey`（写法与 pet-store.js 的 monthlyKey 同款），
+   同月重复调用**幂等**（不会重复计入，也不会把旧月数据清掉）。 */
+
+/* 归档保留的月份数上限（防存档无限膨胀） */
+var CHALLENGE_MONTH_KEEP = 24;
+
+/* 取「所属自然月」键：传日期串 'YYYY-MM-DD'、Date 对象，或不传（=今天） */
+function chMonthOf(when){
+  if(when==null)return today().slice(0,7)
+  if(when instanceof Date){
+    if(typeof monthKey==='function')return monthKey(when)
+    return when.getFullYear()+'-'+String(when.getMonth()+1).padStart(2,'0')
+  }
+  return String(when).slice(0,7)
+}
+
+function blankChallengeMonth(mk){
+  return { month:mk, count:0, totalDmg:0, bestDmg:0, bestDate:'',
+           atk:0, def:0, hp:0, bestAtk:0, bestDef:0, bestHp:0,
+           firstDate:'', lastDate:'' }
+}
+
+/* 把一条成绩并入某月桶（内部共用；不碰 c.monthlyKey） */
+function mergeChallengeMonth(m, rec){
+  rec=rec||{}
+  m.count=(m.count||0)+1
+  m.totalDmg=(m.totalDmg||0)+(rec.dmg||0)
+  m.atk=(m.atk||0)+(rec.atk||0)
+  m.def=(m.def||0)+(rec.def||0)
+  m.hp=(m.hp||0)+(rec.hp||0)
+  if((rec.dmg||0)>(m.bestDmg||0)){
+    m.bestDmg=rec.dmg||0; m.bestDate=rec.date||''
+    m.bestAtk=rec.atk||0; m.bestDef=rec.def||0; m.bestHp=rec.hp||0
+  }
+  if(!m.firstDate||(rec.date&&rec.date<m.firstDate))m.firstDate=rec.date||''
+  if(!m.lastDate||(rec.date&&rec.date>m.lastDate))m.lastDate=rec.date||''
+  return m
+}
+
+/* 一次性迁移回填：旧存档没有 c.monthlyKey 时，用现存 history 兜底建桶（幂等：有键即跳过）。
+   ⚠️ 调用点必须在「push 新成绩之前」，否则新成绩会被回填与合并各计一次。 */
+function ensureChallengeMonthly(c){
+  c=c||getChallenge()
+  if(c.monthlyKey)return c
+  c.monthly=(c.monthly&&typeof c.monthly==='object'&&!Array.isArray(c.monthly))?c.monthly:{}
+  ;(c.history||[]).forEach(function(r){
+    if(!r||!r.date)return
+    var mk=chMonthOf(r.date)
+    var m=c.monthly[mk]
+    if(!m||typeof m!=='object'){m=blankChallengeMonth(mk);c.monthly[mk]=m}
+    mergeChallengeMonth(m,r)
+  })
+  c.monthlyKey=chMonthOf()
+  return c
+}
+
+/* 归档上限：只保留最近 CHALLENGE_MONTH_KEEP 个月（从最旧开始删；keep 指定的月永不删） */
+function trimChallengeMonthly(c, keep){
+  var keys=Object.keys(c.monthly||{}).sort()
+  while(keys.length>CHALLENGE_MONTH_KEEP){
+    var oldest=keys.shift()
+    if(oldest!==keep)delete c.monthly[oldest]
+  }
+}
+
+/* 一次挑战结算后并入所属月份桶（endChallenge 调用；返回该月桶） */
+function recordChallengeMonth(c, rec){
+  c=c||getChallenge()
+  ensureChallengeMonthly(c)
+  var mk=chMonthOf(rec&&rec.date)
+  c.monthly=(c.monthly&&typeof c.monthly==='object'&&!Array.isArray(c.monthly))?c.monthly:{}
+  var m=c.monthly[mk]
+  if(!m||typeof m!=='object'){m=blankChallengeMonth(mk);c.monthly[mk]=m}
+  mergeChallengeMonth(m,rec)
+  trimChallengeMonthly(c, mk)
+  c.monthlyKey=chMonthOf()
+  return m
+}
+
+/* 跨月归档/重置：把「本月键」推进到 now 所指自然月（不传 = 今天）。
+   - 旧月桶原样保留 = 归档；新月尚无桶 → 首次记录时自动开桶（显示端视为「本月 0 次」）
+   - 幂等：同月重复调用只把键写回同值，不重复计入任何数据 */
+function challengeMonthlyRollover(now){
+  var c=getChallenge()
+  ensureChallengeMonthly(c)
+  var cur=chMonthOf(now)
+  var prev=c.monthlyKey||''
+  var rolled=!!prev&&prev!==cur
+  trimChallengeMonthly(c, cur)
+  c.monthlyKey=cur
+  saveChallenge(c)
+  return { rolled:rolled, monthKey:cur, prevMonthKey:prev }
+}
+
+/* 月份记录列表（新→旧），供挑战页「每月记录」渲染 */
+function listChallengeMonthly(c){
+  c=c||getChallenge()
+  ensureChallengeMonthly(c)
+  var out=[]
+  Object.keys(c.monthly||{}).forEach(function(k){
+    var m=c.monthly[k]
+    if(m&&typeof m==='object')out.push(m)
+  })
+  out.sort(function(a,b){return String(b.month||'').localeCompare(String(a.month||''))})
+  return out
+}
+
+/* 本月记录（无则返回空骨架，便于 UI 直接显示 0） */
+function currentChallengeMonth(c){
+  c=c||getChallenge()
+  ensureChallengeMonthly(c)
+  var mk=chMonthOf()
+  var m=(c.monthly||{})[mk]
+  return (m&&typeof m==='object')?m:blankChallengeMonth(mk)
+}
+
 /* ========== INTEGRATION ========== */
 // Called from checkMonthlyReset to clear season bonus
 function resetChallengeSeason(){
+  /* v2.2 WP-H4：跨月归档 —— 旧月桶保留（=归档），本月键推进到新自然月（幂等）。
+     先跑归档再读一次存档，避免覆盖下面写回的本月奖励清零。 */
+  challengeMonthlyRollover()
   var c=getChallenge()
   c.seasonBonus={atk:0,def:0,hp:0}
   c.lastSeasonMonth=today().slice(0,7)
   saveChallenge(c)
+  /* v2.2 WP-H9：月度重置（**未用技能点清零** + **已学技能等级减半**，不返还点数）。
+     ⚠️ app.js 的 checkMonthlyReset() 是本项目唯一的月度触发点，而它调用本函数；
+     本批次白名单不含 app.js，故重置在此接线。monthlyResetSkillState() 自带月度键幂等，
+     即便被重复调用，同一自然月内也只扣减一次。 */
+  if(typeof monthlyResetSkillState==='function'){
+    try{
+      var _sk=monthlyResetSkillState()
+      if(_sk&&_sk.ok)toast('📅 月度重置：未用技能点已清零，技能等级减半','s')
+    }catch(e){console.warn('[challenge] 技能月度重置失败',e)}
+  }
   toast('🔬 隐藏挑战奖励已重置','s')
 }
 
@@ -727,3 +903,35 @@ function getChallengeBonus(){
   var c=getChallenge()
   return c.seasonBonus||{atk:0,def:0,hp:0}
 }
+
+/* 测试/工具暴露（v2.2 WP-H4 / H8） */
+(function(){
+  if(typeof window!=='undefined'){
+    window.DROP_MULT=DROP_MULT;
+    window.dropMultFor=dropMultFor;
+    window.applyDropMult=applyDropMult;
+    window.applyDropMults=applyDropMults;
+    window.CHALLENGE_MONTH_KEEP=CHALLENGE_MONTH_KEEP;
+    window.chMonthOf=chMonthOf;
+    window.blankChallengeMonth=blankChallengeMonth;
+    window.ensureChallengeMonthly=ensureChallengeMonthly;
+    window.recordChallengeMonth=recordChallengeMonth;
+    window.challengeMonthlyRollover=challengeMonthlyRollover;
+    window.listChallengeMonthly=listChallengeMonthly;
+    window.currentChallengeMonth=currentChallengeMonth;
+  }
+  if(typeof globalThis!=='undefined'){
+    globalThis.DROP_MULT=DROP_MULT;
+    globalThis.dropMultFor=dropMultFor;
+    globalThis.applyDropMult=applyDropMult;
+    globalThis.applyDropMults=applyDropMults;
+    globalThis.CHALLENGE_MONTH_KEEP=CHALLENGE_MONTH_KEEP;
+    globalThis.chMonthOf=chMonthOf;
+    globalThis.blankChallengeMonth=blankChallengeMonth;
+    globalThis.ensureChallengeMonthly=ensureChallengeMonthly;
+    globalThis.recordChallengeMonth=recordChallengeMonth;
+    globalThis.challengeMonthlyRollover=challengeMonthlyRollover;
+    globalThis.listChallengeMonthly=listChallengeMonthly;
+    globalThis.currentChallengeMonth=currentChallengeMonth;
+  }
+})();

@@ -142,9 +142,23 @@ function useSpirit(pet, bag, skillIds) {
   return { ok: true, skillId: sid, level: pet.skillLevels[sid] };
 }
 
-/* 使用营养液（孵化进度） */
+/* 使用营养液：
+   · 孵化期 —— 提高孵化进度（+0.5%~2%）
+   · v2.2 WP-H6：**成熟期** —— 治疗受伤（doc/2.2 修改-补充.md 原话
+     「宠物现在可以用营养液恢复受伤状态」）。
+     消耗 **1 瓶**；恢复量 = `PET_CONFIG.injuryHeal.nutrition` 区间（+10%~15%，约 7~10 瓶痊愈），
+     由 `feedNutrition` → `healPetInjury(pet,'nutrition')` 结算 ——
+     **区间唯一来源仍是 pets.js 的 PET_CONFIG，本函数不另立数值**。
+     已阵亡 / 未受伤（成熟）/ 非孵化期一律拒绝，且**不消耗**营养液。 */
 function useNutrition(pet, bag) {
+  if (!pet) return { ok: false, reason: '宠物不存在' };
+  if (pet.isDead) return { ok: false, reason: '宠物已阵亡' };
   if (!bag || (bag.nutrition || 0) < 1) return { ok: false, reason: '营养液不足' };
+  if (pet.stage === 'mature') {
+    if (!pet.injured) return { ok: false, reason: '未受伤' };
+    bag.nutrition--;
+    return feedNutrition(pet);   // 成熟期分支 → healPetInjury('nutrition')
+  }
   if (pet.stage !== 'egg') return { ok: false, reason: '非孵化期' };
   bag.nutrition--;
   return feedNutrition(pet);

@@ -172,6 +172,37 @@ function getBattleReadyPets() {
 }
 
 /* ============================================================
+   v2.2 WP-H5：**一键修复受伤（自动消耗）**
+   doc/2.2 修改-补充.md 原话：「宠物现在支持一键修复受伤（自动消耗）」。
+   规则（与单只营养液治疗**同源**，不另立数值）：
+     · 只处理「**成熟 + 未阵亡 + injured**」的宠物 ——
+       已阵亡 / 未成熟 / 未受伤的一律**跳过且不消耗**（不允许把死宠也一起治）。
+     · 对每只受伤宠物逐瓶消耗营养液，直到痊愈或营养液耗尽；
+     · 单瓶恢复量 = `PET_CONFIG.injuryHeal.nutrition`（+10%~15%，由 healPetInjury 结算）。
+   @returns {{ok, healed:string[], partial:string[], consumed:number, reason?}} */
+function healAllInjuredPets() {
+  var d = getPetStore();
+  var bag = d.materials || {};
+  var healed = [], partial = [], consumed = 0;
+  (d.pets || []).forEach(function (pet) {
+    if (!pet || pet.isDead || pet.stage !== 'mature' || !pet.injured) return;   // 不可治疗的跳过
+    if (pet.injuryHeal == null) pet.injuryHeal = 0;
+    while (pet.injured && (bag.nutrition || 0) >= 1) {
+      bag.nutrition--;
+      consumed++;
+      var r = healPetInjury(pet, 'nutrition');
+      if (!r.ok) break;
+    }
+    var nm = (getPetCodex(pet.speciesId) || {}).name || pet.name || pet.speciesId;
+    if (pet.injured) partial.push(nm); else healed.push(nm);
+  });
+  if (consumed) savePetStore(d);
+  var touched = healed.length + partial.length;
+  return { ok: touched > 0, healed: healed, partial: partial, consumed: consumed,
+           reason: touched ? undefined : '没有需要治疗的宠物' };
+}
+
+/* ============================================================
    v2.2 WP-H1：参战宠物选择的持久化
    存在 `dh-pets-v1` 的 `battlePicks` 字段（沿用本模块既有的 getPetStore / savePetStore 约定，
    不另开 store 键）。旧存档没有该字段 → getPetStore() 补齐为 []（优雅退化）。
@@ -275,6 +306,58 @@ function applyBattlePetBaseBonuses(units) {
 }
 
 /* ============================================================
+   v2.2 WP-H5：宠物属性拆解（**纯展示 / 只读**）
+   doc/2.2 修改-补充.md 原话：「宠物面板现在需要显示加成值、最终属性」。
+   ⚠️ 只改展示、**不改任何数值口径、不写存档**：本函数**不重写任何公式**，
+      三个阶段的数都直接取自既有唯一来源 ——
+        ① 基础 = `createPetUnit(pet).base`（图鉴基础 + 炼化 + 天赋静态修正，pet-codex.js）
+        ② 加成 = 团队凝聚（`benchBonusSum(bench, TEAM_COHESION_RATE)`）
+               + 共鸣（`benchBonusSum(bench, resonanceBonus(持有总数))`）
+               —— 与 `applyBattlePetBaseBonuses()` 同源（同一对函数），只是这里把两项分开留痕
+        ③ 最终 = `boostPetForGroup(同一 unit)`（百分比池 = 稀有度倍率 + Σ宝珠%，group-levels.js）
+      百分比池的「稀有度百分点 / 宝珠百分点」只**读取**（`PET_GROUP_SCALE[rarity]` / `unit._orbPct`）。
+      速度不参与百分比池（与 boostPetForGroup 一致）。
+   ============================================================ */
+var PET_STAT_KEYS = ['hp', 'atk', 'def', 'spd', 'soulAtk', 'soulDef'];
+function petStatBreakdown(pet) {
+  var zero = function () { var o = {}; PET_STAT_KEYS.forEach(function (k) { o[k] = 0; }); return o; };
+  var out = { ok: false, base: zero(), cohesion: zero(), resonance: zero(), bench: zero(),
+              rarityPct: 0, orbPct: {}, poolPct: {}, final: zero(),
+              benchCount: 0, resonanceRate: 0, boosted: false };
+  if (!pet || typeof createPetUnit !== 'function') return out;
+  var u = createPetUnit(pet);
+  if (!u || !u.base) return out;
+  out.ok = true;
+  PET_STAT_KEYS.forEach(function (k) { out.base[k] = u.base[k] || 0; });
+
+  /* 未上场（成熟 + 未受伤 + 非本宠）的宠物基础属性 × 比例 */
+  var d = getPetStore();
+  var fielded = {}; fielded[pet.speciesId] = true;
+  var bench = (d.pets || []).filter(function (p) { return canPetBattle(p) && !fielded[p.speciesId]; });
+  var coh = benchBonusSum(bench, TEAM_COHESION_RATE);
+  var resRate = (typeof resonanceBonus === 'function') ? resonanceBonus((d.pets || []).length) : 0;
+  var res = benchBonusSum(bench, resRate);
+  out.benchCount = bench.length;
+  out.resonanceRate = resRate;
+  PET_BONUS_ATTRS.forEach(function (k) { u.base[k] = (u.base[k] || 0) + (coh[k] || 0) + (res[k] || 0); });
+  u.hp = u.base.hp;
+  PET_STAT_KEYS.forEach(function (k) {
+    out.cohesion[k] = coh[k] || 0;
+    out.resonance[k] = res[k] || 0;
+    out.bench[k] = u.base[k] || 0;
+  });
+
+  out.rarityPct = ((typeof PET_GROUP_SCALE !== 'undefined') && PET_GROUP_SCALE[pet.rarity]) || 0;
+  out.orbPct = u._orbPct || {};
+  if (typeof boostPetForGroup === 'function') { boostPetForGroup(u); out.boosted = true; }
+  PET_STAT_KEYS.forEach(function (k) {
+    out.final[k] = u.base[k] || 0;
+    out.poolPct[k] = (k === 'spd') ? 0 : (out.rarityPct + (out.orbPct[k] || 0));
+  });
+  return out;
+}
+
+/* ============================================================
    v2.2 WP-A3/A4：敌群参战宠物的**唯一入口**
    = 建单位 → 基础值加成（团队凝聚 / 共鸣）→ 稀有度放大（百分比池）。
    ⚠️ 顺序不能反：基础值必须在百分比池之前进入，否则两类加成的性质就变了。
@@ -303,6 +386,8 @@ if (typeof window !== 'undefined') {
   window.monthlyResetPets = monthlyResetPets;
   window.hatchAllEggs = hatchAllEggs;
   window.getBattleReadyPets = getBattleReadyPets;
+  window.healAllInjuredPets = healAllInjuredPets;
+  window.petStatBreakdown = petStatBreakdown;
   window.getPetBattlePicks = getPetBattlePicks;
   window.savePetBattlePicks = savePetBattlePicks;
   window.createPetUnitsForBattle = createPetUnitsForBattle;
@@ -323,6 +408,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.monthlyResetPets = monthlyResetPets;
   globalThis.hatchAllEggs = hatchAllEggs;
   globalThis.getBattleReadyPets = getBattleReadyPets;
+  globalThis.healAllInjuredPets = healAllInjuredPets;
+  globalThis.petStatBreakdown = petStatBreakdown;
   globalThis.getPetBattlePicks = getPetBattlePicks;
   globalThis.savePetBattlePicks = savePetBattlePicks;
   globalThis.createPetUnitsForBattle = createPetUnitsForBattle;
