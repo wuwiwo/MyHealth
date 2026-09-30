@@ -26,11 +26,15 @@ const vm = require('vm');
 const load = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
 const FILES = ['utils.js', 'levels.js', 'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'affix.js',
   'skill.js', 'enemy.js', 'ai.js', 'terrain.js', 'battle.js', 'orbs.js', 'pets.js', 'pet-materials.js',
-  'pet-codex.js', 'pet-store.js', 'group-levels.js', 'battle-group.js'];
+  'pet-codex.js', 'pet-store.js', 'group-levels.js', 'battle-group.js',
+  /* v2.2.7：补载玩家技能链 —— 此前**完全没挂技能**，所有平衡数字都是「无技能」口径，
+     WP-B（暴击/格挡/气力恢复/启风/宠物共享档）的效果**从未进入测量**。 */
+  'skills.js', 'player-skill-hooks.js'];
 const src = {};
 FILES.forEach(f => { src[f] = load(f); });
 
 function arg(k, d) { const i = process.argv.indexOf('--' + k); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; }
+const SKILL_SPEC = arg('skills', '');   // v2.2.7：如 crit:20,block:10（空 = 旧口径，不含技能）
 const ACCOUNT = arg('account', 'old');
 const TRIALS = parseInt(arg('trials', '12'), 10);
 const ACCOUNTS = {
@@ -87,6 +91,24 @@ function runOne(sb, acc, groupKey, mode, seed) {
     pets = sb.buildGroupBattlePets(PETS);
   }
   const allies = [player].concat(pets);
+
+  /* v2.2.7 技能口径开关：--skills crit:20,block:10,…
+     不传 = 旧口径（不含玩家技能），表头会标注，方便与历史数字对比。 */
+  if (SKILL_SPEC) {
+    if (typeof sb.attachPlayerSkills !== 'function' || typeof sb.defaultSkillState !== 'function') {
+      console.log('⚠️ 沙箱缺 skills.js / player-skill-hooks.js → 本次仍未含玩家技能');
+    } else {
+      const sst = sb.defaultSkillState();
+      sst.loadout = []; sst.levels = {};
+      SKILL_SPEC.split(',').forEach(function (kv) {
+        const p = kv.split(':'), id = p[0].trim();
+        if (!id) return;
+        sst.loadout.push(id);
+        sst.levels[id] = parseInt(p[1], 10) || 1;
+      });
+      sb.attachPlayerSkills(player, sst);
+    }
+  }
 
   const st = sb.GROUP_LEVELS[groupKey].stages[9];
   const lg = parseInt(String(groupKey).replace(/[^0-9]/g, ''), 10) || 1;

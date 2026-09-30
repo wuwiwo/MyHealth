@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.2.6
+> Personal Health Manager — 个人健身健康管理应用 v2.2.7
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -310,4 +310,6 @@ Vercel 项目设置：
 
 | **v2.2.6** | **2026-09-29** | **🐾⚔️ WP-B 第四批：宠物共享桥（推翻 OQ-11）** —— 玩家装配的**暴击 / 格挡 / 气力恢复**从此**同时**作用：玩家按**玩家档**、上场宠物按**宠物档**。三张宠物档写进 `skills.js` 的 **`petEffect()`**：暴击 **15% / 160%**；格挡 **常驻减伤 10% + 20% 格挡减伤 50%（无完美格挡）**；气力恢复 **每 5 回合一次、(防御+魂防)×120%**。桥接 = 新函数 `attachPetSharedSkills(pets)`（只共享**已装配**的三个技能，写进 `pet._petShared`），由 **`buildGroupBattlePets()`**（v2.2.0 收敛后的唯一参战宠物入口）在建场末尾调用 → game-render / pet-ui / debug 三处调用方**自动全覆盖**；`playerCritHook` / `playerBlockHook` 改为**按单位类型取档**（`_playerSkills` → 玩家档，否则 `_petShared` → 宠物档）—— 这两个钩子在 `battle-group` 里是**无守卫调用**，所以宠物天然走进钩子，**战斗链路一行未改**；宠物气力恢复在**宠物自己回合开始**结算（`turn % 5 === 0`）；**单向**（玩家 → 宠物），不反向污染玩家档。`test-player-skills` 37→**45**（含「玩家自己仍走玩家档 100→300 而非 160」「共享桥已接线」源码级断言），全量 **1073 断言**；缓存版本对齐（v103）。⚠️ **WP-B 只剩 1 项**：**金身护盾破盾反伤**（`absorbShield` 有 5 个调用点、签名里没有攻击者） | `doc/changelog-v2.2.md` |
 
-> 当前版本：**v2.2.6**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
+| **v2.2.7** | **2026-09-29** | **🔬 测量口径修复：平衡脚本此前完全没挂玩家技能** —— `scripts/balance-pets-ab.js` 的沙箱 `FILES` 缺 `skills.js` / `player-skill-hooks.js`，`runOne()` 也从不 `attachPlayerSkills` → **v2.2.0~v2.2.6 所有平衡数字都是「无技能」口径**，WP-B 的改动从未进入测量；**v2.2.2 施工记录里「g17 是墙、瓶颈在玩家魂防 177」的结论是错的**。修复：补载两个文件 + 新增 `--skills crit:20,block:10,…` 开关（不传 = 旧口径便于对照）。复测（dundun 当前属性，12 trials/大关，Boss 关）：**g15 83%→100%、g17 0%→83%/92%、g18 0%→92%、g19 0%（真正的新墙）、g20 8%/0%、g21+ 0%**；g6~g14 保持 100%。⚠️ 仍不含**宠物共享档**（沙箱没载 `skill-store.js`）与**斗者本能合并**（WP-D）→ 真实强度更高。**教训**：平衡脚本必须与真实开局路径同源（`startGroupTrial` → `attachPlayerSkills(player, getSkillState())`），否则测出的「墙」是假的。本版**仅改 scripts/（开发工具），无线上运行代码变更** | `doc/changelog-v2.2.md` |
+
+> 当前版本：**v2.2.7**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
