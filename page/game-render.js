@@ -626,14 +626,17 @@ function groupVictoryReward(gb) {
   ]
   if (enemyCount >= 3) drops.push({ type: 'refineNormal', n: 1 })
   if (enemyCount >= 4) drops.push({ type: 'spirit', n: 1 + Math.floor(Math.random() * 2) })
-  // 幸运口袋（小负鼠天赋）：队伍中带此天赋者，胜利结算 35% 几率追加一份材料
+  /* 幸运口袋（小负鼠天赋 §3.1）：三类材料**各自独立判定**
+     （营养液 10%~20%→0~2 / 宠物饲料 20%~30%→0~4 / 宠物灵能 5%~10%→0~5），
+     概率与数量都在区间内均匀随机。规则本体在 pet-codex.js 的 luckyPocketDrops()（纯函数）。
+     · 多个携带者**不叠加**：只要 ≥1 名携带者，就只判一轮（filter 只判「有没有」）。
+     · 随机源 = 本场战斗 rng（gb.rng，可播种 / 可回放），不用 Math.random()。 */
   var lucky = (gb && gb.allies ? gb.allies : []).filter(function (u) {
     return u._talents && u._talents.indexOf('lucky_pocket') > -1
   })
-  if (lucky.length && Math.random() < 0.35) {
-    var bonusPool = [{ type: 'nutrition', n: 1 }, { type: 'feed', n: 1 }, { type: 'spirit', n: 1 }]
-    var bp = bonusPool[Math.floor(Math.random() * bonusPool.length)]
-    drops.push({ type: bp.type, n: bp.n + 1, lucky: true })
+  if (lucky.length && typeof luckyPocketDrops === 'function') {
+    var luckyRng = (gb && typeof gb.rng === 'function') ? gb.rng : battleRnd
+    luckyPocketDrops(luckyRng).forEach(function (d) { drops.push(d) })
   }
   drops.forEach(function (d) {
     grantMaterial(d.type, d.n)

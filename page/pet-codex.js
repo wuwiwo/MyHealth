@@ -209,17 +209,41 @@ if (typeof registerTalent === 'function') {
      · immovable    —— §3.9：触发阈值由「满血(100%)」改为「血量 > 95%」
      · pressure_field —— §3.10：改为「无条件 -10%，自身血量 > 70% 时翻倍为 -20%」
    本轮**判定无改动**（评审为「不变 / 保持 / 回合开始触发」）：
-     lucky_pocket（另有欠账，见该条注释）/ dark_eye / winter_core / inspiration / mind_eye
+     lucky_pocket（§3.1 三类独立判定 **已于本版收口**，见该条注释）/ dark_eye / winter_core / inspiration / mind_eye
    v2.2.10 已收口（本版跳过）：fighter_instinct（§3.8 30% 触发 + §3.11A/§3.12-1 暴击取最高）
    §3.11B 裁决「天赋不需要升级」→ 本文件所有天赋**一律不接成长区间**，保持固定值。
    ============================================================ */
 
-/* 小负鼠：幸运口袋 —— 结算期生效，见 game-render.js 的 groupVictoryReward()
-   ⚠️ 欠账（§3.1 + §3.11C 裁决）：设计/裁决要求**三类材料各自独立判定**
-     （营养液 10%~20% → 0~2 个；宠物饲料 20%~30% → 0~4 个；宠物灵能 5%~10% → 0~5 个），
-     现状仍是「单一 35% 命中后 3 选 1 ×2 个」。
-   该逻辑的消费端在 **`page/game-render.js` 的 `groupVictoryReward()`**（不在本文件），
-   而本文件没有派发点可挂，故本版**未改** —— 需在 game-render.js 里改（见 v2.2.10 施工记录 §4-6）。 */
+/* 小负鼠：幸运口袋 —— 战斗胜利结算期生效，消费端见 game-render.js 的 groupVictoryReward()
+   ✅ §3.1 欠账已收口（对齐 §3.11C 裁决「三类材料各自独立判定」）：
+     · **三类奖励各自独立判定** —— 三条互不影响，不是「命中一类就结束」
+     · 概率与数量都在 §3.1 区间内**均匀随机**取值（不是取定值、也不是取区间中点）：
+         营养液 nutrition  概率 10%~20% → 0~2 个   （0.10 + rnd×0.10）
+         宠物饲料 feed     概率 20%~30% → 0~4 个   （0.20 + rnd×0.10）
+         宠物灵能 spirit   概率  5%~10% → 0~5 个   （0.05 + rnd×0.05）
+     · 数量区间含 0（§3.1 写「0~N 个」）：掷到 0 表示本次不产出（不发材料、不写日志）
+     · **多个携带者不叠加**：只要队伍里有 ≥1 名携带者就**只判一轮**
+       （消费端 filter 后只判「有没有」，不按携带者人数重复调用）
+   随机数由消费端注入**本场战斗的 rng**（`gb.rng`，即 createGroupBattle 的种子 RNG），
+   兜底才用全局 `battleRnd()` —— **不用 Math.random()**，保证确定性回放 / 可测。 */
+var LUCKY_POCKET_TABLE = [
+  { type:'nutrition', pMin:0.10, pMax:0.20, nMax:2 },
+  { type:'feed',      pMin:0.20, pMax:0.30, nMax:4 },
+  { type:'spirit',    pMin:0.05, pMax:0.10, nMax:5 }
+];
+/* 幸运口袋掉落判定（纯函数，rnd 注入以便回放/测试）→ [{type,n,lucky:true}]
+   每类固定消耗：① 掷概率 ② 掷是否命中 ③（命中后）掷数量，顺序恒为 营养液→饲料→灵能 */
+function luckyPocketDrops(rnd) {
+  var r = (typeof rnd === 'function') ? rnd : battleRnd;
+  var out = [];
+  LUCKY_POCKET_TABLE.forEach(function (k) {
+    var p = k.pMin + r() * (k.pMax - k.pMin);   // 概率：区间内均匀随机
+    if (r() >= p) return;                       // 各自独立判定（不提前结束）
+    var n = Math.floor(r() * (k.nMax + 1));     // 数量：0 ~ nMax 均匀
+    if (n > 0) out.push({ type:k.type, n:n, lucky:true });
+  });
+  return out;
+}
 registerTalent({ id:'lucky_pocket', name:'幸运口袋', desc:'战斗胜利结算几率获得随机额外材料', petOnly:true });
 
 /* 黑暗鸦：漆黑之眼 —— 必定命中 */
