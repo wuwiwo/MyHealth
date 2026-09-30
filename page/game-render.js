@@ -436,9 +436,22 @@ function startGroupTrial(groupId){
     toast('该关卡已通关 ✅','e'); return
   }
   var stats=getGameStats()
+  /* WP-G：角色等级系统 —— 开战前先结算季度/周（幂等），再取等级效果 */
+  if (typeof syncLevel === 'function') syncLevel()
   // v2.1.10：敌群是独立属性空间 —— 玩家只继承一定比例，避免裸属性把敌人压成 1 点
   var gs=(typeof inheritGroupStats==='function')?inheritGroupStats(stats):stats
-  var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:gs.hp,atk:gs.atk,def:gs.def,spd:10,soulAtk:gs.soulAtk||0,soulDef:gs.soulDef||0}})
+  /* WP-G 落点：等级效果属**基础属性**加成，加在敌群继承（GROUP_INHERIT）**之后** →
+     等级效果不打折；lv2000 玩家档按文档「敌群战斗效果为2倍」走 playerLevelBonus 的 groupMult。
+     lv1 时全部为 0 → 对既有战斗零影响。 */
+  var _lb=(typeof playerLevelBonus==='function'&&typeof levelState==='function')
+    ?playerLevelBonus(levelState().level,{inGroup:true})
+    :{hp:0,atk:0,def:0,soulAtk:0,soulDef:0,spd:0,dmgDealtPct:0,dmgTakenPct:0}
+  gs.atk+=_lb.atk; gs.def+=_lb.def; gs.hp+=_lb.hp
+  var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:gs.hp,atk:gs.atk,def:gs.def,spd:10+_lb.spd,soulAtk:(gs.soulAtk||0)+_lb.soulAtk,soulDef:(gs.soulDef||0)+_lb.soulDef}})
+  /* WP-G：lv1000/1100 的「造成伤害 +5% / 受到伤害 −5%」是百分比修正（非基础属性），
+     挂成单位级字段，由 battle-group 的 levelDamageAdjust() 在伤害结算处消费。 */
+  player._levelDmgDealtPct=_lb.dmgDealtPct||0
+  player._levelDmgTakenPct=_lb.dmgTakenPct||0
   // 挂载玩家技能（装备的技能生效）
   if (typeof attachPlayerSkills === 'function' && typeof getSkillState === 'function') {
     attachPlayerSkills(player, getSkillState())

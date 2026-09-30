@@ -431,6 +431,9 @@ function normalAttack(gb, actor, target, dmgMult) {
   var atkVal = effectiveStat(actor, 'atk');
   var defVal = effectiveStat(target, 'def');
   var dmg = Math.max(1, atkVal - Math.floor(defVal / 2) + Math.floor(gb.rng() * 4) + 1);
+  /* WP-G 角色等级：lv1000/1100（玩家）· lv1200/1300（宠物）的「造成伤害 +5% / 受到伤害 −5%」，
+     是**百分比战斗修正**（非基础属性），与普攻/技能同一入口结算。无字段 = 原值。 */
+  if (typeof levelDamageAdjust === 'function') dmg = levelDamageAdjust(actor, target, dmg);
   /* v2.2.5 启风：额外普通攻击按系数缩放（**只作用在 base 上**，其后利刃/暴击/格挡等
      常规修正照旧生效 —— 语义就是「一次 80% 伤害的普通攻击」）。不传 = 1，行为与旧版完全一致。 */
   if (dmgMult && dmgMult !== 1) dmg = Math.max(1, Math.floor(dmg * dmgMult));
@@ -613,6 +616,8 @@ function castSkill(gb, actor, skillId, opts) {
           // 天赋修正（利刃等）
           var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: h.amount, isPhysical: h.dmgType === 'physical', attacker: actor, target: t });
           var dmg = h.amount;
+          /* WP-G 角色等级：与普攻同源的百分比修正（见 normalAttack 处注释） */
+          if (typeof levelDamageAdjust === 'function') dmg = levelDamageAdjust(actor, t, dmg);
           // v2.1.14 威吓：被威吓者的技能伤害同样削减（此前只标记不生效）
           // v2.2.22：与普攻同一口径 —— 读单位级 `_intimidateDown`
           if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown(actor))));

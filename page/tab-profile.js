@@ -24,6 +24,12 @@ function renderProf(){
   renderWtNoteTags()
   renderPRs()
   renderStats()
+  /* WP-G：等级 / 经验 / 重置周期展示 —— 挂在「训练数据」子页顶部，
+     复用既有容器 #statsSection（不动 index.html 骨架、不引入新容器）。 */
+  if (typeof levelCardHtml === 'function') {
+    var _lvSec=document.getElementById('statsSection')
+    if(_lvSec)_lvSec.innerHTML=levelCardHtml()+_lvSec.innerHTML
+  }
   renderHeatmap()
 }
 

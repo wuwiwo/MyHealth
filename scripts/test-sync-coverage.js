@@ -96,7 +96,13 @@ const SAMPLES = {
     orbs: [{ id: 'o1', type: 'atk', level: 3 }],
     lastSettleDate: '2026-09-15', monthlyKey: '2026-09'
   },
-  skills: { points: 88, levels: { crit: 7, meteor: 3 }, loadout: ['crit', 'meteor', 'goldshield'] }
+  skills: { points: 88, levels: { crit: 7, meteor: 3 }, loadout: ['crit', 'meteor', 'goldshield'] },
+  /* v2.2 WP-G：角色等级系统（`page/level-system.js`）的新 store 键 */
+  level: {
+    version: 1, quarterKey: '2026-Q3', since: '2026-09-01',
+    weekKey: '2026-09-28', settledWeekKey: '2026-09-21', adjust: -1000,
+    lastLevel: 3, history: [{ type: 'level', level: 3, from: 2, date: '2026-09-20' }]
+  }
 };
 
 /* 每个键都要有样本 —— 新增严格校验的键时会在这里报出来，逼你补样本（而不是静默跳过） */

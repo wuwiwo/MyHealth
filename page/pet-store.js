@@ -367,6 +367,10 @@ function petStatBreakdown(pet) {
 function buildGroupBattlePets(petIds, maxRoster) {
   var units = createPetUnitsForBattle(petIds, maxRoster);
   applyBattlePetBaseBonuses(units);
+  /* WP-G：角色等级系统的**宠物档**效果 —— 同为基础属性部分，必须与凝聚/共鸣一样
+     加在 `boostPetForGroup()`（百分比池）**之前**（否则 +10~+40 会被 ×12~16 二次放大）。
+     未加载 level-system.js 时静默跳过。 */
+  if (typeof applyPetLevelBaseBonuses === 'function') applyPetLevelBaseBonuses(units);
   units.forEach(function (u) { if (typeof boostPetForGroup === 'function') boostPetForGroup(u); });
   /* v2.2.5（WP-B 共享桥，推翻 OQ-11）：玩家**已装配**的暴击/格挡/气力恢复 → 按**宠物档**挂到参战宠物。
      单向（玩家 → 宠物），不反向污染玩家档；本模块未加载时静默跳过。 */

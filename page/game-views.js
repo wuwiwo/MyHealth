@@ -50,6 +50,14 @@ function renderTrainView() {
   var v = document.getElementById('gameTrainView')
   if (!v) return
   var stats = getGameStats()
+  /* WP-G：角色等级系统 —— 结算季度/周（幂等）并把等级加成并进展示属性
+     （与单敌战斗同一口径：applyPlayerLevelBonus 无 inGroup → lv2000 不加倍） */
+  if (typeof syncLevel === 'function') syncLevel()
+  if (typeof applyPlayerLevelBonus === 'function') applyPlayerLevelBonus(stats, {})
+  var _lv = (typeof levelState === 'function') ? levelState() : null
+  var _lvInline = _lv
+    ? ('Lv ' + _lv.level + ' · ' + _lv.title + ' · 经验 ' + _lv.inLevel + '/' + _lv.need)
+    : 'Lv 1 · 健身勇士'
   var st = getSkillState()
   var d = getPetStore()
 
@@ -58,7 +66,7 @@ function renderTrainView() {
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-2xl);width:56px;height:56px;background:var(--bg2);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--orange)">🧑</div>'
     +'<div style="flex:1"><div style="font-size:var(--fs-lg);font-weight:700">我的角色</div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Lv 1 · 健身勇士</div></div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">'+_lvInline+'</div></div>'
     +'<div style="text-align:center;background:var(--bg2);border-radius:12px;padding:8px 16px"><div style="font-size:var(--fs-2xl);font-weight:700;color:var(--orange)">⚔️ '+stats.atk+'</div><div style="font-size:var(--fs-xs);color:var(--text3)">攻击</div></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
