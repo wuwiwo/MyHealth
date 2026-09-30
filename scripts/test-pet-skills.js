@@ -96,5 +96,287 @@ assert('§2.5 坚强岩技能仍为敌群 fortify（无专属技能）', sandbox
 assert('§2.5 fortify 仍注册（自身 · CD2）', !!skill('fortify') && skill('fortify').target === 'self' && skill('fortify').cooldown === 2);
 assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
 
+/* ============================================================
+   WP-C 后半：宠物主动技能 §2.8~§2.14 + §2.1/§2.7 的引擎项
+   （对照 doc/2.2-修改提案.md §2.8~§2.14 的「设计原文 / 源码现状 / 评审批注」）
+   ============================================================ */
+
+/* ===== §2.1 闪耀：通用蓄力载荷（蓄力 1 回合、下回合释放） ===== */
+{
+  const caster = petUnit('p-shine-c', '闪闪星', R_BASE, ['pet', 'R'], ['p_shine'], 50);   // R cap=50 → t=1（降命 40%）
+  /* 单看 castSkill：只进入蓄力（charging，承伤 +25%），不立即削减命中 */
+  const probe = petUnit('p-shine-p', '闪闪星', R_BASE, ['pet', 'R'], ['p_shine'], 50);
+  const eProbe = foe('e-ch0');
+  const gbP = sandbox.createGroupBattle({ allies: [probe], enemies: [eProbe], seed: 1 });
+  const evP = sandbox.castSkill(gbP, probe, 'p_shine');
+  assert('§2.1 蓄力：首次施放不立即削减命中（改为下回合释放）', !eProbe._accMod, String(eProbe._accMod));
+  assert('§2.1 蓄力：进入 charging 且承伤 +25%（引擎既有蓄力语义）',
+    sandbox.hasStatus(probe, 'charging') &&
+    sandbox.dispatch(probe, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenBoost'),
+    JSON.stringify((probe.statuses || []).map(s => s.id)));
+  assert('§2.1 蓄力：冷却在蓄力当回合起算', sandbox.skillCooldownLeft(probe, 'p_shine') === 4,
+    String(sandbox.skillCooldownLeft(probe, 'p_shine')));
+  assert('§2.1 蓄力：日志写明「蓄力…下回合释放」', evP.some(e => /蓄力/.test(e.msg || '')), JSON.stringify(evP.map(e => e.msg)));
+
+  /* 端到端：蓄力当回合 → 到期置载荷 → 下回合释放（走真实回合流转） */
+  const e1 = foe('e-ch1');
+  const gb = sandbox.createGroupBattle({ allies: [caster], enemies: [e1], seed: 3 });
+  gb.turn = 1;
+  sandbox.groupUnitTurn(gb, caster);
+  assert('§2.1 蓄力当回合：敌方未被削减', !e1._accMod, String(e1._accMod));
+  assert('§2.1 蓄力到期：置 _chargeReady 且载荷记名 p_shine',
+    caster._chargeReady === true && caster._chargePayload === 'p_shine',
+    String(caster._chargeReady) + '/' + caster._chargePayload);
+  sandbox.groupUnitTurn(gb, caster);                   // 下回合：释放
+  assert('§2.1 下回合释放：命中削减落到敌全体（-40%、2 回合）',
+    Math.abs(e1._accMod + 0.4) < 1e-9 && e1._hitModTurns === 2,
+    String(e1._accMod) + '/' + e1._hitModTurns);
+  assert('§2.1 释放后载荷清空、_chargeReady 归零', !caster._chargePayload && caster._chargeReady === false);
+  /* 敌群「蓄力重击」不带 charge 标记 → 仍走旧的 400% 重击路径（防回归） */
+  assert('§2.1 敌群 chargeup 未被改成通用蓄力（无 charge 字段）', skill('chargeup').charge !== true);
+}
+
+/* ===== §2.7 雷霆冲撞：蓄力 + 目标潮湿/冰冻时 +25% ===== */
+{
+  const sk = skill('p_thundercharge');
+  assert('§2.7 声明通用蓄力', sk.charge === true);
+  assert('§2.7 声明目标状态加成（潮湿/冰冻 +25%）',
+    JSON.stringify(sk.condBonus) === '{"statuses":["wet","freeze"],"value":0.25}', JSON.stringify(sk.condBonus));
+  const caster = petUnit('p-th-c', '雷霆犬', SR_BASE, ['pet', 'SR'], ['p_thundercharge'], 60);   // SR cap=60 → t=1
+  const dry = foe('e-th-dry'), wetF = foe('e-th-wet'), frz = foe('e-th-frz');
+  sandbox.applyStatus(wetF, { id: 'wet', duration: 2 });
+  sandbox.applyStatus(frz, { id: 'freeze', duration: 2 });
+  const dDry = sandbox.calcSkillDamage(sk, caster, [dry], {}).hits[0].amount;
+  const dWet = sandbox.calcSkillDamage(sk, caster, [wetF], {}).hits[0].amount;
+  const dFrz = sandbox.calcSkillDamage(sk, caster, [frz], {}).hits[0].amount;
+  assert('§2.7 潮湿目标伤害 +25%', dWet === Math.floor(dDry * 1.25), dDry + ' → ' + dWet);
+  assert('§2.7 冰冻目标伤害 +25%', dFrz === Math.floor(dDry * 1.25), dDry + ' → ' + dFrz);
+  assert('§2.7 未处于潮湿/冰冻则不加成（= 魂攻×440%，t=1）',
+    dDry === Math.floor(sandbox.effectiveStat(caster, 'soulAtk') * 440 / 100), String(dDry));
+  assert('§2.7 「自身 35% 反冲」按纪律未实装（基数口径未给，已上报）',
+    sk.recoil === undefined, JSON.stringify(sk.recoil));
+}
+
+/* ===== §2.8 双撞：最多 2 敌各 1 次 / 180~270% / 降攻防 / 窃取转移 ===== */
+{
+  const sk = skill('p_doublehit');
+  assert('§2.8 目标 → 最多 2 名敌人（enemy2）', sk.target === 'enemy2');
+  assert('§2.8 伤害区间 150~240% → [180,270]', JSON.stringify(sk.range.power) === '[180,270]');
+  assert('§2.8 降攻 / 降防区间 [0,10] / [0,20]',
+    JSON.stringify(sk.range.atkDown) === '[0,10]' && JSON.stringify(sk.range.defDown) === '[0,20]');
+  const caster = petUnit('p-dh', '小负鼠', { hp: 200, atk: 200, def: 15, soulAtk: 15, soulDef: 10, spd: 8 },
+    ['pet', 'SSR'], ['p_doublehit'], 80);   // SSR cap=80 → t=1
+  const mate = sandbox.createUnit({ id: 'dh-m', side: 'ally', name: '友', base: { hp: 500, atk: 10, def: 10, spd: 5 } });
+  const gb = sandbox.createGroupBattle({ allies: [caster, mate], enemies: [foe('e-dh1'), foe('e-dh2'), foe('e-dh3')], seed: 11 });
+  const tg = sandbox.selectTargets(gb, caster, sk);
+  assert('§2.8 目标选择：恰好 2 名敌人', tg.length === 2, String(tg.length));
+  gb.turn = 1;
+  const ev = sandbox.castSkill(gb, caster, 'p_doublehit');
+  assert('§2.8 实战：2 个目标各吃到 1 次伤害', ev.filter(e => /^⚡/.test(e.msg || '')).length === 2,
+    ev.map(e => e.msg).join(' | ').slice(0, 200));
+  const fx = sandbox.applySkillEffects(sk, caster, gb.enemies.slice(0, 2), { units: gb.units });
+  assert('§2.8 降低攻击 10% / 防御 20%（pulled 实例，t=1）',
+    fx.statusApps.length === 2 && fx.statusApps.every(s => s.id === 'pulled') &&
+    Math.abs(fx.statusApps[0].modsPct.atk + 0.10) < 1e-9 && Math.abs(fx.statusApps[0].modsPct.def + 0.20) < 1e-9,
+    JSON.stringify(fx.statusApps));
+  assert('§2.8 窃取转移给我方 1 名（stolen，2 回合，攻/防同幅度）',
+    fx.buffs.length === 1 && fx.buffs[0].key === 'stolen' && fx.buffs[0].duration === 2 &&
+    Math.abs(fx.buffs[0].modsPct.atk - 0.10) < 1e-9 && Math.abs(fx.buffs[0].modsPct.def - 0.20) < 1e-9,
+    JSON.stringify(fx.buffs));
+}
+
+/* ===== §2.9 幻影之瞳：评审「不改变」 ===== */
+{
+  const sk = skill('p_phantom');
+  const eqRange = function (a, b) {
+    return Array.isArray(a) && a.length === b.length && a.every(function (v, i) { return Math.abs(v - b[i]) < 1e-9; });
+  };
+  assert('§2.9 判定不改（random1 · CD4 · 三个区间未动）',
+    sk.target === 'random1' && sk.cooldown === 4 &&
+    eqRange(sk.range.confuseDown, [0.15, 0.75]) &&
+    eqRange(sk.range.confuseHit, [0.50, 0.95]) &&
+    eqRange(sk.range.confuseSelf, [0.01, 0.10]), JSON.stringify(sk.range));
+}
+
+/* ===== §2.10 冰晶爆：随机 1~2 敌 / 160~250% / 冰冻 10%~55% ===== */
+{
+  const sk = skill('p_iceburst');
+  assert('§2.10 目标 → 随机 1~2 敌（enemy12）', sk.target === 'enemy12');
+  assert('§2.10 伤害区间 150~240% → [160,250]', JSON.stringify(sk.range.power) === '[160,250]');
+  assert('§2.10 冰冻几率区间 [10,55]（原固定 30%）', JSON.stringify(sk.range.freezeChance) === '[10,55]');
+  const cLow = petUnit('p-ib0', '小冰晶', { hp: 200, atk: 20, def: 15, soulAtk: 20, soulDef: 10, spd: 8 }, ['pet', 'SSR'], ['p_iceburst'], 0);
+  const cHigh = petUnit('p-ib1', '小冰晶', { hp: 200, atk: 20, def: 15, soulAtk: 20, soulDef: 10, spd: 8 }, ['pet', 'SSR'], ['p_iceburst'], 80);
+  /* battleRnd 在沙箱里回退到 Math.random = 0.2 */
+  assert('§2.10 t=0 冰冻几率 10% → 0.2 不触发', runFx('p_iceburst', cLow, [foe('e-ib1')]).statusApps.length === 0);
+  const rHigh = runFx('p_iceburst', cHigh, [foe('e-ib2')]);
+  assert('§2.10 t=1 冰冻几率 55% → 0.2 触发', rHigh.statusApps.length === 1 && rHigh.statusApps[0].id === 'freeze',
+    JSON.stringify(rHigh.statusApps));
+  const gb2 = sandbox.createGroupBattle({ allies: [cHigh], enemies: [foe('e-ib-a'), foe('e-ib-b')], rng: function () { return 0.2; } });
+  assert('§2.10 随机 1~2 敌：rng=0.2 → 2 名', sandbox.selectTargets(gb2, cHigh, sk).length === 2);
+  const gb1 = sandbox.createGroupBattle({ allies: [cHigh], enemies: [foe('e-ib-c'), foe('e-ib-d')], rng: function () { return 0.7; } });
+  assert('§2.10 随机 1~2 敌：rng=0.7 → 1 名', sandbox.selectTargets(gb1, cHigh, sk).length === 1);
+}
+
+/* ===== §2.11 圣光治愈：只挑未满血友方 ===== */
+{
+  const sk = skill('p_holylight');
+  assert('§2.11 声明 wounded（只挑未满血友方）', sk.wounded === true);
+  const caster = petUnit('p-hl', '光之精灵', { hp: 200, atk: 20, def: 15, soulAtk: 20, soulDef: 10, spd: 8 },
+    ['pet', 'SSR'], ['p_holylight'], 0);
+  const full = sandbox.createUnit({ id: 'hl-full', side: 'ally', name: '满血', base: { hp: 500, atk: 10, def: 10, spd: 5 } });
+  const hurt = sandbox.createUnit({ id: 'hl-hurt', side: 'ally', name: '受伤', base: { hp: 500, atk: 10, def: 10, spd: 5 } });
+  hurt.hp = 100;
+  let onlyHurt = true;
+  for (let i = 0; i < 12; i++) {
+    const gb = sandbox.createGroupBattle({ allies: [caster, full, hurt], enemies: [foe('e-hl')], seed: i });
+    const tg = sandbox.selectTargets(gb, caster, sk);
+    if (!tg.length || tg[0].id !== 'hl-hurt') onlyHurt = false;
+  }
+  assert('§2.11 12 个种子下全部只命中受伤者（不再治疗满血队友）', onlyHurt);
+  const gbAllFull = sandbox.createGroupBattle({ allies: [caster, full], enemies: [foe('e-hl2')], seed: 1 });
+  assert('§2.11 全队满血时不空放（退回全体友方）', sandbox.selectTargets(gbAllFull, caster, sk).length === 1);
+  /* 治疗区间：评审「魂攻×150%-240%」（原 110%~200%） */
+  const eqPow = Array.isArray(sk.range.power) && sk.range.power.length === 2 &&
+    Math.abs(sk.range.power[0] - 150) < 1e-9 && Math.abs(sk.range.power[1] - 240) < 1e-9;
+  assert('§2.11 治疗区间 110~200% → [150,240]', eqPow, JSON.stringify(sk.range.power));
+  const casterFull = petUnit('p-hl-max', '光之精灵', { hp: 200, atk: 20, def: 15, soulAtk: 20, soulDef: 10, spd: 8 },
+    ['pet', 'SSR'], ['p_holylight'], 80);
+  const t0 = runFx('p_holylight', caster, [sandbox.createUnit({ id: 'hl-h0', side: 'ally', name: '友', base: { hp: 500, atk: 1, def: 1, spd: 1 } })]);
+  const t1 = runFx('p_holylight', casterFull, [sandbox.createUnit({ id: 'hl-h1', side: 'ally', name: '友', base: { hp: 500, atk: 1, def: 1, spd: 1 } })]);
+  assert('§2.11 治疗量随成长：t=0 → 魂攻×150%（20→30）、t=1 → ×240%（20→48）',
+    t0.heals.length === 1 && t0.heals[0].amount === 30 && t1.heals[0].amount === 48,
+    JSON.stringify([t0.heals, t1.heals]));
+}
+
+/* ===== §2.12 梦幻光球：弹射 3 次 / 每单位 1 次 / 累计 +10% / 未发动回血 ===== */
+{
+  const sk = skill('p_dreamball');
+  assert('§2.12 单次伤害 200~290% → [220,310]', JSON.stringify(sk.range.power) === '[220,310]');
+  assert('§2.12 声明蓄力 1 回合', sk.charge === true);
+  assert('§2.12 弹射参数（3 次 / 每次 +10% / 敌方 55%→82%，我方互补 45%→18%）',
+    JSON.stringify(sk.bounce) === '{"times":3,"dmgUp":0.1,"foeChance":[0.55,0.82]}', JSON.stringify(sk.bounce));
+  const caster = petUnit('p-db', '梦幻', { hp: 300, atk: 30, def: 20, soulAtk: 300, soulDef: 15, spd: 9 },
+    ['pet', 'UR'], ['p_dreamball'], 0);
+  const enemies = [1, 2, 3].map(function (i) { return foe('e-db' + i); });
+  const mate = sandbox.createUnit({ id: 'db-m1', side: 'ally', name: '友', base: { hp: 500, atk: 5, def: 5, spd: 5 } });
+  const gb = sandbox.createGroupBattle({ allies: [caster, mate], enemies: enemies, seed: 21 });
+  const gr = sandbox.calcSkillDamage(sk, caster, [enemies[0]], { rng: gb.rng, pool: enemies, allPool: gb.units });
+  assert('§2.12 弹射 3 次', gr.hits.length === 3, String(gr.hits.length));
+  assert('§2.12 每单位最多受到 1 次弹射',
+    new Set(gr.hits.map(function (h) { return h.targetId; })).size === 3,
+    JSON.stringify(gr.hits.map(function (h) { return h.targetId; })));
+  assert('§2.12 每次弹射伤害累计 +10%（本次施放内累加）',
+    gr.hits[1].amount > gr.hits[0].amount && gr.hits[2].amount > gr.hits[1].amount,
+    JSON.stringify(gr.hits.map(function (h) { return h.amount; })));
+  /* 候选枯竭 → 未发动次数按单次伤害为自身回血 */
+  const gbSolo = sandbox.createGroupBattle({ allies: [caster], enemies: [foe('e-db-solo')], seed: 5 });
+  const grSolo = sandbox.calcSkillDamage(sk, caster, [gbSolo.enemies[0]], { rng: gbSolo.rng, pool: gbSolo.enemies, allPool: gbSolo.units });
+  assert('§2.12 全场只有 2 单位 → 弹 2 次、1 次未发动折算回血',
+    grSolo.hits.length === 2 && grSolo.selfHealAmount > 0, JSON.stringify({ n: grSolo.hits.length, heal: grSolo.selfHealAmount }));
+}
+
+/* ===== §2.13 无影拳：4 段 / 单次 55~100% / 视为普攻 ===== */
+{
+  const sk = skill('p_shadowfist');
+  assert('§2.13 4 段攻击（原 5 段）', sk.multiHit === 4);
+  assert('§2.13 单次伤害 50~95% → [55,100]', JSON.stringify(sk.range.power) === '[55,100]');
+  assert('§2.13 视为普通攻击（触发普攻相关钩子）', sk.asNormalAttack === true);
+}
+
+/* ===== §2.14 战意灌注：2 名友方 / 较高一项 / 吸血 + 技能吸血 ===== */
+{
+  const sk = skill('p_warmight');
+  assert('§2.14 目标 → 随机 2 名友方（ally2）', sk.target === 'ally2');
+  assert('§2.14 区间：升幅[3,30] / 吸血[5,50] / 技能吸血[7.5,32.5]',
+    JSON.stringify(sk.range) === '{"atkBoost":[3,30],"lifesteal":[5,50],"skillLifesteal":[7.5,32.5]}', JSON.stringify(sk.range));
+
+  const UR_BASE = { hp: 300, atk: 30, def: 20, soulAtk: 20, soulDef: 15, spd: 9 };
+  const caster = petUnit('p-wm', '圣光麒麟', UR_BASE, ['pet', 'UR'], ['p_warmight'], 0);
+  const casterFull = petUnit('p-wm-full', '圣光麒麟', UR_BASE, ['pet', 'UR'], ['p_warmight'], 100);
+  const mkMate = function (id, atk, soul, skills) {
+    return sandbox.createUnit({ id: id, side: 'ally', name: id, base: { hp: 500, atk: atk, def: 10, soulAtk: soul, spd: 5 }, skills: skills || [] });
+  };
+  const atkHi = mkMate('wm-atk', 100, 10);
+  const soulHi = mkMate('wm-soul', 10, 100, ['p_flamepeck']);
+
+  const fx = sandbox.applySkillEffects(sk, caster, [atkHi, soulHi], {});
+  assert('§2.14 2 名友方各得 1 条战意 buff', fx.buffs.length === 2, String(fx.buffs.length));
+  assert('§2.14 「较高一项」：攻击高 → 只加攻击（不加魂攻）',
+    fx.buffs[0].modsPct.atk != null && fx.buffs[0].modsPct.soulAtk == null, JSON.stringify(fx.buffs[0].modsPct));
+  assert('§2.14 「较高一项」：魂攻高 → 只加魂攻（不加攻击）',
+    fx.buffs[1].modsPct.soulAtk != null && fx.buffs[1].modsPct.atk == null, JSON.stringify(fx.buffs[1].modsPct));
+  assert('§2.14 t=0：升幅 3% / 吸血 5% / 技能吸血 7.5%',
+    Math.abs(fx.buffs[0].value - 0.03) < 1e-9 && Math.abs(fx.buffs[0].lifesteal - 0.05) < 1e-9 &&
+    Math.abs(fx.buffs[0].skillLifesteal - 0.075) < 1e-9, JSON.stringify(fx.buffs[0]));
+  const fxFull = sandbox.applySkillEffects(sk, casterFull, [atkHi], {});
+  assert('§2.14 t=1：升幅 30% / 吸血 50% / 技能吸血 32.5%',
+    Math.abs(fxFull.buffs[0].value - 0.30) < 1e-9 && Math.abs(fxFull.buffs[0].lifesteal - 0.50) < 1e-9 &&
+    Math.abs(fxFull.buffs[0].skillLifesteal - 0.325) < 1e-9, JSON.stringify(fxFull.buffs[0]));
+
+  /* ---- 落地：castSkill 把 buff 变成状态（atkup 键由「较高一项」决定 + warmight 吸血） ---- */
+  const gb = sandbox.createGroupBattle({ allies: [caster, atkHi, soulHi], enemies: [foe('e-wm')], seed: 31 });
+  gb.turn = 1;
+  sandbox.castSkill(gb, caster, 'p_warmight');
+  assert('§2.14 实战：2 名友方获得「战意」状态',
+    gb.allies.filter(function (u) { return sandbox.hasStatus(u, 'warmight'); }).length === 2,
+    JSON.stringify(gb.allies.map(function (u) { return u.id + ':' + (u.statuses || []).map(function (s) { return s.id; }).join('+'); })));
+  const wmAtk = gb.allies.filter(function (u) { return sandbox.hasStatus(u, 'warmight'); })[0];
+  assert('§2.14 战意状态实例携带吸血 / 技能吸血数值',
+    wmAtk.statuses.filter(function (s) { return s.id === 'warmight'; })[0].data.ls > 0,
+    JSON.stringify(wmAtk.statuses.filter(function (s) { return s.id === 'warmight'; })[0].data));
+  /* 「较高一项」真的落到属性上：攻击流持有者 → atk 提升、soulAtk 不动（t=0 → +3%，向下取整不丢 100 的 3%） */
+  const wmSoul = gb.allies.filter(function (u) { return u.id === 'wm-soul'; })[0];
+  assert('§2.14 「较高一项」落到属性：攻击流持有者 effectiveStat(atk) 提升、魂攻不动',
+    sandbox.effectiveStat(atkHi, 'atk') === Math.floor(atkHi.base.atk * 1.03) &&
+    sandbox.effectiveStat(atkHi, 'soulAtk') === atkHi.base.soulAtk &&
+    sandbox.effectiveStat(wmSoul, 'soulAtk') === Math.floor(wmSoul.base.soulAtk * 1.03) &&
+    sandbox.effectiveStat(wmSoul, 'atk') === wmSoul.base.atk,
+    JSON.stringify({ aAtk: sandbox.effectiveStat(atkHi, 'atk'), sSoul: sandbox.effectiveStat(wmSoul, 'soulAtk') }));
+
+  /* ---- 吸血（普攻通道）：与天赋「嗜血」叠加 ---- */
+  const gb2 = sandbox.createGroupBattle({ allies: [caster, atkHi], enemies: [foe('e-wm2')], seed: 41 });
+  gb2.turn = 1;
+  sandbox.castSkill(gb2, caster, 'p_warmight');
+  const holder = atkHi;
+  holder._talents = ['bloodthirst'];
+  holder.hp = 50;
+  const ls = holder.statuses.filter(function (s) { return s.id === 'warmight'; })[0].data.ls;
+  gb2.rng = function () { return 0.1; };                     // 保证命中且伤害无随机
+  const evNA = sandbox.normalAttack(gb2, holder, gb2.enemies[0]);
+  const dealt = +(/→ (\d+) 伤害/.exec(evNA.filter(function (e) { return /^⚔️/.test(e.msg || ''); })[0].msg)[1]);
+  const healW = evNA.filter(function (e) { return /战意吸血/.test(e.msg || ''); })[0];
+  const healB = evNA.filter(function (e) { return /嗜血/.test(e.msg || ''); })[0];
+  assert('§2.14 吸血生效：回血 = 普攻伤害 × 吸血率',
+    !!healW && +(/\+(\d+)/.exec(healW.msg)[1]) === Math.max(1, Math.floor(dealt * ls)),
+    healW && healW.msg);
+  assert('§2.14 与「嗜血」叠加：两条独立回血各自结算（不取最高）',
+    !!healB && +(/恢复 (\d+)/.exec(healB.msg)[1]) === Math.floor(dealt * 0.2), healB && healB.msg);
+
+  /* ---- 技能吸血（技能通道） ---- */
+  const gb3 = sandbox.createGroupBattle({ allies: [caster, soulHi], enemies: [foe('e-wm3')], seed: 51 });
+  gb3.turn = 1;
+  sandbox.castSkill(gb3, caster, 'p_warmight');
+  soulHi.hp = 20;
+  const sls = soulHi.statuses.filter(function (s) { return s.id === 'warmight'; })[0].data.sls;
+  gb3.rng = function () { return 0.1; };
+  const evSk = sandbox.castSkill(gb3, soulHi, 'p_flamepeck');
+  const dmgEv = evSk.filter(function (e) { return /^⚡/.test(e.msg || ''); })[0];
+  const dealtS = +(/→ \S+ (\d+) 伤害/.exec(dmgEv.msg)[1]);
+  const healS = evSk.filter(function (e) { return /技能吸血/.test(e.msg || ''); })[0];
+  assert('§2.14 技能吸血生效：回血 = 技能伤害 × 技能吸血率',
+    !!healS && +(/\+(\d+)/.exec(healS.msg)[1]) === Math.max(1, Math.floor(dealtS * sls)) && sls > 0,
+    healS && healS.msg);
+
+  /* ---- 镜像结界 ±25% 可缩放吸血（§6.3 裁决：属可缩放的辅助效果） ---- */
+  const mirrorHolder = mkMate('wm-mirror', 100, 10);
+  mirrorHolder._talents = ['mirror_field'];
+  const gb4 = sandbox.createGroupBattle({ allies: [caster, mirrorHolder], enemies: [foe('e-wm4')], seed: 61 });
+  gb4.turn = 1;
+  sandbox.castSkill(gb4, caster, 'p_warmight');
+  const mData = mirrorHolder.statuses.filter(function (s) { return s.id === 'warmight'; })[0].data;
+  assert('§2.14 镜像结界放大吸血（我方来源 ×1.25：5% → 6.25%）',
+    Math.abs(mData.ls - 0.0625) < 1e-9, JSON.stringify(mData));
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

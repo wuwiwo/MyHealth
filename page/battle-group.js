@@ -283,6 +283,16 @@ function groupRestore(gb, snap) {
       var u = null;
       (gb.units || []).forEach(function (x) { if (x.id === su.id) u = x; });
       if (!u) return;
+      /* WP-C（引擎遗留收口）：回滚必须**完全**回到快照形状。
+         原实现只把快照里有的键覆盖回去，快照**之后**才新产生的字段留在单位上、带着「未来」
+         继续跑 —— 典型受害者是 charging 到期置的 `_chargeReady`（快照时该键还不存在，
+         于是回滚后单位提前一回合释放蓄力重击），使「回滚后重跑 == 首次结果」不再成立。
+         这里删掉快照里没有的自有**数据**键（函数不入快照，保留不删）。 */
+      Object.keys(u).forEach(function (k) {
+        if (typeof u[k] === 'function') return;
+        if (Object.prototype.hasOwnProperty.call(su, k)) return;
+        delete u[k];
+      });
       Object.keys(su).forEach(function (k) { u[k] = su[k]; });
     });
     gb._stepQueue = null; gb._stepIdx = 0;
@@ -341,7 +351,12 @@ function buildActionQueue(gb) {
   return queue;
 }
 
-/* 目标选择：random1 / all / self / ally1 / enemy1（嘲讽优先） */
+/* 目标选择：random1 / all / self / ally1 / ally2 / enemy1 / enemy2 / enemy12（嘲讽优先）
+   WP-C 新增：
+     · ally2   —— 随机 2 名友方（§2.14 战意灌注）
+     · enemy2  —— 随机最多 2 名敌人各 1 次（§2.8 双撞）
+     · enemy12 —— 随机 1~2 名敌人（§2.10 冰晶爆；1 或 2 均匀取）
+     · skillDef.wounded —— ally1 只挑**未满血**的友方（§2.11 圣光治愈） */
 function selectTargets(gb, actor, skillDef) {
   var target = (skillDef && skillDef.target) || 'random1';
   var enemies = gb.enemies.filter(function (u) { return u.hp > 0; });
@@ -356,10 +371,35 @@ function selectTargets(gb, actor, skillDef) {
     }
     return actor.side === 'ally' ? enemies : allies;
   }
+  /* 从候选里无放回地随机抽 n 个（顺序即抽取顺序，走本场种子 gb.rng） */
+  function drawRandom(list, n) {
+    var bag = list.slice(), picks = [];
+    while (picks.length < n && bag.length) {
+      picks.push(bag.splice(Math.floor(gb.rng() * bag.length), 1)[0]);
+    }
+    return picks;
+  }
   if (target === 'ally1') {
     var healTargets = allies.filter(function (u) { return u.id !== actor.id; });
     if (!healTargets.length) healTargets = allies;
+    /* WP-C（§2.11 圣光治愈「随机 1 名受伤队友」）：只挑未满血者；
+       全队满血时退回全体（否则技能无目标 = 空放）。 */
+    if (skillDef && skillDef.wounded) {
+      var wounded = healTargets.filter(function (u) { return u.hp < u.base.hp; });
+      if (wounded.length) healTargets = wounded;
+    }
     return [healTargets[Math.floor(gb.rng() * healTargets.length)]];
+  }
+  if (target === 'ally2') {
+    /* WP-C（§2.14 战意灌注「随机 2 名友方」）：沿用 ally1 的口径（优先排除自身），
+       不足 2 名旁观者时退回含自身的全体友方。 */
+    var pool2 = allies.filter(function (u) { return u.id !== actor.id; });
+    if (pool2.length < 2) pool2 = allies;
+    return drawRandom(pool2, 2);
+  }
+  if (target === 'enemy2' || target === 'enemy12') {
+    var n = (target === 'enemy2') ? 2 : (1 + (gb.rng() < 0.5 ? 1 : 0));
+    return drawRandom(enemies, n);
   }
   if (target === 'enemy1') {
     return [enemies[Math.floor(gb.rng() * enemies.length)]];
@@ -412,7 +452,10 @@ function normalAttack(gb, actor, target, dmgMult) {
        而下方结算又会扣一遍 —— 等于「粗糙皮肤」让受击方吃双倍伤害（v2.1.15 修）。 */
     if (m.key === 'reflectFlat') { actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 ' + target.name + ' 粗糙皮肤 → ' + (actor.name || '攻击者') + ' 反伤 ' + m.value, targetId: actor.id, type: 'damage' }); }
     if (m.key === 'dmgTakenBoost') dmg = Math.floor(dmg * (1 + m.value));
-    if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * 0.7);
+    /* WP-C（单源化）：魔法盾 magicshield 的 soulDmgReduce 此前**只读生产端以外的硬编码 ×0.7**
+       （生产端 talent.js 给 0.3，恰好等价，但改生产端不生效、且镜像/裁决调整会静默漂移）。
+       现改为读 `m.value`（= 减伤比例，消费端语义「×(1 − v)」），与 dmgTakenReduce 同一口径。 */
+    if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * (1 - m.value));
     if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));   // 不动如山 / 广域防御
   });
   /* v2.3.0（WP-D §3.12-1）：暴击统一走 groupCritMult —— 天赋暴击（斗者本能 30%/150%）与
@@ -450,6 +493,16 @@ function normalAttack(gb, actor, target, dmgMult) {
   if (sAtk > 0 && target.hp > 0) {
     var sDef = effectiveStat(target, 'soulDef');
     var sDmg = sDef > 0 ? Math.max(1, sAtk - Math.floor(sDef / 2) + Math.floor(gb.rng() * 4) + 1) : sAtk;
+    /* WP-C（单源化，第 2 半）：**魔法盾**（`soulDmgReduce`）的正道。
+       天赋 magicshield 的判据是 `ctx.isSoul`，旧实现却只在**物理**分支读它（既不传 isSoul、
+       还把值硬编码成 ×0.7）→ 该天赋实际上一次都没生效（死字段）。
+       现在在魂攻伤害结算前按 `isSoul` 派发一次受击方天赋，**只取 soulDmgReduce**（避免与
+       物理分支那次派发重复触发反伤/减伤等同名 mutation），并统一按 `m.value`（= 减伤比例）缩放。 */
+    var soulTd = talentDispatch(target, 'onDamage', {
+      attacker: actor, amount: sDmg, isSoul: true, isPhysical: false,
+      isPlayerAttack: false, isSkill: false, isAoe: false, fromPlayer: actor.side === 'ally'
+    });
+    soulTd.mutations.forEach(function (m) { if (m.key === 'soulDmgReduce') sDmg = Math.floor(sDmg * (1 - m.value)); });
     var sh2 = absorbShield(target, sDmg);
     if (sh2.absorbed > 0) {
       sDmg = sh2.dmg;
@@ -461,14 +514,45 @@ function normalAttack(gb, actor, target, dmgMult) {
   // 嗜血：造成伤害恢复
   var bt = talentDispatch(actor, 'onAfterDamage', { dealt: dmg, target: target });
   bt.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  /* WP-C（§2.14）：**状态**侧的同名钩子 —— 「战意」提供的吸血（普攻通道）在这里结算。
+     与上面的天赋「嗜血」**叠加**（裁决 §6.3：各自结算、相加，不取最高）。
+     此前 onAfterDamage 只派发天赋，状态侧的吸血增益无处落地。 */
+  var sbt = dispatch(actor, 'onAfterDamage', { dealt: dmg, target: target });
+  sbt.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: actor.id, type: e.type }); });
   return events;
 }
 
-/* 施放技能 */
-function castSkill(gb, actor, skillId) {
+/* WP-C（§2.14）：战意灌注的**技能吸血** —— 读持有者身上「战意」状态实例的 data.sls（多实例相加）。
+   与「吸血」（普攻通道，见状态 warmight.onAfterDamage）分属两条通道。 */
+function warmightSkillLifesteal(unit) {
+  var sum = 0;
+  if (!unit || !unit.statuses) return 0;
+  unit.statuses.forEach(function (s) {
+    if (s.id === 'warmight' && s.data && typeof s.data.sls === 'number') sum += s.data.sls;
+  });
+  return sum;
+}
+
+/* 施放技能
+   WP-C：新增第 4 参数 opts。`opts.releasing = true` 表示这是**蓄力载荷的释放**（见 groupUnitTurn）——
+   此时不再进入蓄力、也不再重设冷却（冷却在蓄力当回合已起算）。 */
+function castSkill(gb, actor, skillId, opts) {
+  opts = opts || {};
   var events = [];
   var def = SKILLS[skillId];
   if (!def) return events;
+  /* WP-C（§2.1 / §2.7 / §2.12）：通用「蓄力 1 回合、下回合释放」。
+     带 `charge: true` 的技能**首次施放只进入蓄力**（charging 状态，承伤 +25%），
+     并把自身 skillId 写进蓄力实例；到期后由 groupUnitTurn 释放**技能自身**。
+     敌群「蓄力重击」（chargeup）不带该标记 → 仍走 resolveChargeStrike 的 400% 单体物理，旧行为不变。 */
+  if (def.charge && !opts.releasing) {
+    events.push({ type: 'bubble', unit: actor.name, text: '⚡ ' + (actor.name || '') + '：' + def.name + '！', skillId: skillId });
+    applyStatus(actor, { id: 'charging', duration: 1, data: { skillId: skillId } });
+    syncStatusDerived(actor);
+    events.push({ msg: '⏳ ' + (actor.name || '单位') + ' 蓄力（' + def.name + '，下回合释放）', targetId: actor.id, type: 'status' });
+    setSkillCooldown(actor, skillId, def.cooldown || 1);
+    return events;
+  }
   var targets = selectTargets(gb, actor, def);
   // 技能气泡（对话效果：角色施放技能时喊话）
   events.push({ type: 'bubble', unit: actor.name, text: '⚡ ' + (actor.name || '') + '：' + def.name + '！', skillId: skillId });
@@ -481,7 +565,9 @@ function castSkill(gb, actor, skillId) {
        无影拳的 5 连击要求「目标随机可重复」，而 selectTargets('random1') 只给 1 个目标。 */
     var dmgResult = calcSkillDamage(def, actor, targets, {
       rng: gb.rng,
-      pool: (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; })
+      pool: (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; }),
+      /* WP-C（§2.12 梦幻光球「全场随机弹射」）：需要**全场**候选（含同阵营），故另给一份 allPool。 */
+      allPool: gb.units.filter(function (u) { return u.hp > 0; })
     });
     if (dmgResult) {
       if (dmgResult.proc) events.push({ msg: '💢 ' + (actor.name || '单位') + ' 的 ' + def.name + ' 触发强化（本次伤害 +' + Math.round((dmgResult.procMult - 1) * 100) + '%）', targetId: targets.length ? targets[0].id : null, type: 'talent' });
@@ -529,6 +615,25 @@ function castSkill(gb, actor, skillId) {
           }
           t.hp = Math.max(0, t.hp - dmg);
           events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
+          /* WP-C（§2.14 技能吸血）：持有「战意」者用**技能**造成伤害时按 data.sls 回血
+             （与普攻通道的「吸血」/天赋「嗜血」分开；三者可叠加，各自结算）。 */
+          if (dmg > 0) {
+            var sls = warmightSkillLifesteal(actor);
+            if (sls > 0) {
+              var slHeal = Math.max(1, Math.floor(dmg * sls));
+              actor.hp = Math.min(actor.base.hp, actor.hp + slHeal);
+              events.push({ msg: '🩸 ' + (actor.name || '') + ' 技能吸血 +' + slHeal, targetId: actor.id, type: 'heal' });
+            }
+          }
+          /* WP-C（§2.13 无影拳「每次视为普通攻击，会触发普通攻击相关效果与判定」）：
+             `asNormalAttack` 的技能额外派发**攻击后**钩子（天赋「嗜血」/ 状态「战意」吸血）——
+             与普攻路径同一时点。此前技能伤害完全不派发 onAfterDamage。 */
+          if (def.asNormalAttack) {
+            var nat = talentDispatch(actor, 'onAfterDamage', { dealt: dmg, target: t });
+            nat.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: actor.id, type: e.type }); });
+            var nas = dispatch(actor, 'onAfterDamage', { dealt: dmg, target: t });
+            nas.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: actor.id, type: e.type }); });
+          }
           // 蓄力重击：蓄力状态
           /* v2.1.21：蓄力重击的结算已移出 castSkill ——
              本技能现在只负责「进入蓄力」（由 skill.js 的 effects 施加 charging 状态），
@@ -536,6 +641,13 @@ function castSkill(gb, actor, skillId) {
              时点与设计文档 doc/design-v2.0.md:101-105 的「下回合结算」一致。 */
         }
       });
+      /* WP-C（§2.12）：梦幻光球「如果弹射次数剩余，按未发动次数为自身恢复血量」——
+         自愈量由 calcSkillDamage 按「未发动次数 × 单次伤害」算出（selfHealAmount）。 */
+      if (dmgResult.selfHealAmount > 0) {
+        var bh = Math.max(1, Math.floor(dmgResult.selfHealAmount));
+        actor.hp = Math.min(actor.base.hp, actor.hp + bh);
+        events.push({ msg: '💚 ' + (actor.name || '单位') + ' ' + def.name + '：剩余弹射未发动 → 自愈 +' + bh, targetId: actor.id, type: 'heal' });
+      }
     }
   }
 
@@ -690,6 +802,24 @@ function castSkill(gb, actor, skillId) {
       if (mul !== 1) mirrorNote = '（镜像结界 ×' + mul + '）';
       if (b.key === 'dmgReduce') applyStatus(t, { id: 'wideguard', duration: dur, data: (b.value != null) ? { reduce: b.value * mul } : undefined });
       else if (b.key === 'atkBoost') applyStatus(t, { id: 'atkup', duration: dur, modsPct: { atk: b.value * mul } });
+      /* WP-C（§2.14 战意灌注）：一条 buff 同时携带
+           · 攻击/魂攻中**较高一项**的 +val（`modsPct`，键由技能效果按目标属性选定）
+           · 吸血（`lifesteal`）+ 技能吸血（`skillLifesteal`）
+         三项都按镜像结界的阵营倍率缩放（mul）—— 裁决 §6.3 明确「吸血增益」属可缩放的辅助效果。
+         属性落 `atkup`（沿用既有载体），两个吸血落 `warmight` 状态实例的 data。 */
+      else if (b.key === 'warmight') {
+        var srcPct = b.modsPct || { atk: b.value };
+        var scaled = {};
+        for (var pk in srcPct) scaled[pk] = srcPct[pk] * mul;
+        applyStatus(t, { id: 'atkup', duration: dur, modsPct: scaled });
+        applyStatus(t, { id: 'warmight', duration: dur, data: { ls: (b.lifesteal || 0) * mul, sls: (b.skillLifesteal || 0) * mul } });
+      }
+      /* WP-C（§2.8 双撞）：把窃得的攻击/防御转给我方随机 1 名角色（正面，幅度同样可被镜像缩放）。 */
+      else if (b.key === 'stolen') {
+        var stp = {};
+        for (var sk2 in (b.modsPct || {})) stp[sk2] = b.modsPct[sk2] * mul;
+        applyStatus(t, { id: 'stolen', duration: dur, modsPct: stp });
+      }
       else return;
       syncStatusDerived(t);
       applied.push(t.name);
@@ -697,7 +827,9 @@ function castSkill(gb, actor, skillId) {
     if (!applied.length) return;
     var label = (b.key === 'dmgReduce') ? ('受到伤害 -' + Math.round(b.value * 100) + '%')
       : (b.key === 'atkBoost') ? ('攻击 +' + Math.round(b.value * 100) + '%')
-        : ('增益 +' + Math.round(b.value * 100) + '%');
+        : (b.key === 'warmight') ? ('战意：攻击/魂攻 +' + Math.round(b.value * 100) + '%，吸血 ' + Math.round((b.lifesteal || 0) * 100) + '% / 技能吸血 ' + Math.round((b.skillLifesteal || 0) * 100) + '%')
+          : (b.key === 'stolen') ? ('窃取之力 攻击 +' + Math.round((b.modsPct && b.modsPct.atk || 0) * 100) + '%、防御 +' + Math.round((b.modsPct && b.modsPct.def || 0) * 100) + '%')
+            : ('增益 +' + Math.round(b.value * 100) + '%');
     events.push({ msg: '🛡️ ' + actor.name + ' ' + def.name + ' → ' + applied.join('、') + ' ' + label + mirrorNote + '（' + dur + ' 回合）', type: 'buff' });
   });
 
@@ -707,8 +839,8 @@ function castSkill(gb, actor, skillId) {
     events.push({ msg: '💀 ' + actor.name + ' 遗言：自我牺牲阵亡', targetId: actor.id, type: 'status' });
   }
 
-  // 设置冷却
-  setSkillCooldown(actor, skillId, def.cooldown || 1);
+  // 设置冷却（WP-C：蓄力载荷的释放当回合**不再重设** —— 冷却已在蓄力当回合起算）
+  if (!opts.releasing) setSkillCooldown(actor, skillId, def.cooldown || 1);
   return events;
 }
 
@@ -781,10 +913,18 @@ function groupUnitTurn(gb, actor) {
      等到下面「冷却递减」那一步再判就永远是 false（所以「冷却暂停」此前怎么测都没效果）。 */
   var possessedThisTurn = isPossessed(actor);
 
-  /* 蓄力重击结算：时点对齐设计文档（本回合蓄力 → 下回合结算 400%） */
+  /* 蓄力重击结算：时点对齐设计文档（本回合蓄力 → 下回合结算）
+     WP-C：带**载荷**的通用蓄力（p_shine / p_thundercharge / p_dreamball）释放技能自身；
+     无载荷（敌群「蓄力重击」chargeup）仍走 resolveChargeStrike 的 400% 单体物理，旧行为不变。 */
   if (actor._chargeReady) {
     actor._chargeReady = false;
-    events = events.concat(resolveChargeStrike(gb, actor));
+    if (actor._chargePayload) {
+      var chargePayload = actor._chargePayload;
+      actor._chargePayload = null;
+      events = events.concat(castSkill(gb, actor, chargePayload, { releasing: true }));
+    } else {
+      events = events.concat(resolveChargeStrike(gb, actor));
+    }
     acted = true;
   }
 
@@ -844,6 +984,18 @@ function groupUnitTurn(gb, actor) {
       var ta = talentDispatch(actor, 'onBeforeAction', {});
       var multi = ta.mutations.find(function (m) { return m.key === 'multiTarget'; });
       var nTargets = multi ? multi.value : 1;
+      /* WP-C（多目标天赋「可额外攻击 x 个敌人」此前**不可达**）：
+         `selectTargets(gb, actor, null)` 恒返回 1 个目标，原来的 `targets.slice(0, nTargets)`
+         永远只打得到那 1 个 → 额外目标形同不存在。
+         现在按需要的总数从对侧补充（无放回、走本场种子），再把前 nTargets 个依次普攻。 */
+      if (nTargets > targets.length) {
+        var extraPool = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) {
+          return u.hp > 0 && targets.indexOf(u) < 0;
+        });
+        while (targets.length < nTargets && extraPool.length) {
+          targets.push(extraPool.splice(Math.floor(gb.rng() * extraPool.length), 1)[0]);
+        }
+      }
       targets.slice(0, nTargets).forEach(function (t) {
         events = events.concat(normalAttack(gb, actor, t));
       });

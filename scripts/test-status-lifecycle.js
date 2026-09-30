@@ -393,10 +393,10 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   }
   const mate = sb.createUnit({ id: 'mate', side: 'ally', name: '友', base: { hp: 500, atk: 10, def: 10, spd: 5 } });
 
-  // 圣光治愈：治疗量 110%~200% × 魂攻
+  // 圣光治愈：治疗量 150%~240% × 魂攻（WP-C §2.11 评审：110~200% → 150~240%）
   const lo = sb.applySkillEffects(sb.getSkill('p_holylight'), petAt(0), [mate], {}).heals[0].amount;
   const hi = sb.applySkillEffects(sb.getSkill('p_holylight'), petAt(60), [mate], {}).heals[0].amount;
-  assert('治疗量随基础属性（圣光治愈 炼化0=110% × 100魂攻 = 110 → 满炼化 200）', lo === 110 && hi === 200, lo + '/' + hi);
+  assert('治疗量随基础属性（圣光治愈 炼化0=150% × 100魂攻 = 150 → 满炼化 240）', lo === 150 && hi === 240, lo + '/' + hi);
 
   // 战意灌注：增益幅度 3%~30%
   const bLo = sb.applySkillEffects(sb.getSkill('p_warmight'), petAt(0), [mate], {}).buffs[0].value;
@@ -436,21 +436,21 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
 
 /* ============ 14. 多段攻击与睡眠时长（v2.1.24） ============ */
 {
-  // 无影拳：设计「总计 5 次攻击，目标随机可重复」（design-v2.0.md:249）
+  // 无影拳：WP-C（§2.13 评审「总计 4 次攻击，每次 55%-100%，视为普通攻击」）
   const fist = sb.getSkill('p_shadowfist');
-  assert('无影拳声明为 5 段攻击', !!(fist && fist.multiHit === 5), fist && fist.multiHit);
+  assert('无影拳声明为 4 段攻击（§2.13：5 → 4）', !!(fist && fist.multiHit === 4), fist && fist.multiHit);
   const caster = sb.createUnit({ id: 'sf', side: 'ally', name: '熊', base: { hp: 300, atk: 100, def: 5, spd: 5 }, tags: ['pet', 'UR'] });
   caster._refineLevel = 0;
   const pool = [1, 2, 3].map(i => sb.createUnit({ id: 'fe' + i, side: 'enemy', name: '敌' + i, base: { hp: 99999, atk: 1, def: 0, spd: 1 } }));
   let seed = 7;
   const vrand = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const res = sb.calcSkillDamage(fist, caster, [pool[0]], { rng: vrand, pool: pool });
-  assert('无影拳真的打 5 次（此前只有 1 次）', res.hits.length === 5, res.hits.length);
-  assert('5 次命中都落在随机池内（目标随机可重复）',
+  assert('无影拳真的打 4 次（§2.13）', res.hits.length === 4, res.hits.length);
+  assert('4 次命中都落在随机池内（目标随机可重复）',
     res.hits.every(h => pool.some(f => f.id === h.targetId)),
     JSON.stringify(res.hits.map(h => h.targetId)));
-  assert('没有 pool 时退回目标列表（不报错，仍 5 段）',
-    sb.calcSkillDamage(fist, caster, [pool[0]], {}).hits.length === 5);
+  assert('没有 pool 时退回目标列表（不报错，仍 4 段）',
+    sb.calcSkillDamage(fist, caster, [pool[0]], {}).hits.length === 4);
   assert('单段技能不受影响（冲撞单目标仍 1 段）',
     sb.calcSkillDamage(sb.getSkill('charge'), caster, [pool[0]], {}).hits.length === 1);
 

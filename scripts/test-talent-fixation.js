@@ -290,28 +290,72 @@ assert('慢启动端到端：rounds=2 → 实战 1 次「无法行动」', skip2
 assert('慢启动端到端：rounds=4 → 实战 3 次「无法行动」（改配置真的改变实战行为）', skip4 === 3, String(skip4));
 sb.TALENTS.slowstart.config.rounds = 2;
 
-/* 5d. 魔法盾：**本批未完成的第 3 项** —— 消费端在禁改文件里硬编码 ×0.7 */
+/* 5d. 魔法盾：WP-C 已把消费端**单源化**（读 m.value）并补上真正的消费通道，这里改为**行为断言**。
+      改前：battle-group.js 消费端硬编码 `dmg * 0.7`，且只在**物理**分支读 —— 而生产端 hook 的判据是
+            `ctx.isSoul` → 该天赋一次都没生效；当时只能断言「生产端值 + 硬编码 = 1」防漂移。
+      改后：魂攻伤害结算前按 isSoul 派发受击方天赋、统一按 `m.value` 缩放
+            → 直接断言「改生产端值，实战魂攻伤害跟着变」。 */
 (function () {
-  const u = sb.createEnemyUnit({ id: 'g', tier: 'minion', talents: ['magicshield'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
-  const m = sb.talentDispatch(u, 'onDamage', { isSoul: true }).mutations.find(x => x.key === 'soulDmgReduce');
-  const src = load('battle-group.js');
-  const hard = /m\.key === 'soulDmgReduce'\)\s*dmg = Math\.floor\(dmg \* ([\d.]+)\)/.exec(src);
+  function soulDmg(v) {
+    const orig = sb.MAGICSHIELD_SOUL_REDUCE;
+    sb.MAGICSHIELD_SOUL_REDUCE = v;
+    const att = sb.createUnit({ id: 'gatt', side: 'ally', name: '打手', base: { hp: 9999, atk: 100, def: 5, soulAtk: 200, spd: 5 } });
+    /* soulDef=0 → 魂攻伤害 = soulAtk（无随机项），便于逐值比对 */
+    const foe = sb.createEnemyUnit({ id: 'gsh', tier: 'minion', name: '盾兵', talents: ['magicshield'], base: { hp: 99999, atk: 1, def: 0, soulDef: 0, spd: 1 } });
+    const gb = sb.createGroupBattle({ allies: [att], enemies: [foe], seed: 4242 });
+    const ev = sb.normalAttack(gb, gb.allies[0], gb.enemies[0], 1);
+    sb.MAGICSHIELD_SOUL_REDUCE = orig;
+    const hit = ev.find(e => /魂攻击/.test(e.msg || ''));
+    return hit ? +(/→ (\d+) 魂伤害/.exec(hit.msg)[1]) : null;
+  }
+  const m = sb.talentDispatch(
+    sb.createEnemyUnit({ id: 'gsh0', tier: 'minion', talents: ['magicshield'], base: { hp: 100, atk: 1, def: 0, spd: 1 } }),
+    'onDamage', { isSoul: true }).mutations.find(x => x.key === 'soulDmgReduce');
   assert('魔法盾：生产端仍产出 soulDmgReduce=0.3', m && Math.abs(m.value - 0.3) < 1e-9, JSON.stringify(m));
-  assert('魔法盾（防漂移）：生产端数值 + 消费端硬编码 = 1（消费端 battle-group.js:415 未读 m.value）',
-    !!hard && Math.abs(parseFloat(hard[1]) + m.value - 1) < 1e-9,
-    hard ? '硬编码 ' + hard[1] + ' vs 生产端 ' + m.value : '未匹配到消费端写法（可能已被清理 → 请同步本断言）');
-  assert('⚠️ 已知缺口：magicshield 的 soulDmgReduce 消费端硬编码（改生产端不生效，需改 battle-group.js:415）', !!hard);
+
+  const d0 = soulDmg(0);
+  const d30 = soulDmg(0.3);
+  const d50 = soulDmg(0.5);
+  assert('魔法盾：魂攻伤害真的被削减（未削 200 → ×0.7 = 140）', d0 === 200 && d30 === 140, d0 + ' → ' + d30);
+  assert('魔法盾：改生产端立即生效（0.5 → 100，证明消费端读 m.value、不再硬编码）', d50 === 100, d0 + ' → ' + d50);
+  const src = load('battle-group.js');
+  assert('魔法盾：消费端已无硬编码 `dmg * 0.7`（1 行级遗留收口）',
+    !/soulDmgReduce'\)\s*dmg = Math\.floor\(dmg \* 0?\.7\)/.test(src));
+  assert('魔法盾：消费端改为读 m.value（两处：物理分支 + 魂攻分支）',
+    (src.match(/soulDmgReduce'\)\s*dmg = Math\.floor\(dmg \* \(1 - m\.value\)\)/g) || []).length >= 1);
 })();
 
-/* 5e. 多目标：额外攻击的**可达性**缺口登记
-      battle-group.js 的普攻分支用 `targets.slice(0, nTargets)`，而 targets 在
-      `selectTargets(gb, actor, null)`（skillDef=null → 'random1'）下恒为 1 个 → 额外目标拿不到。 */
+/* 5e. 多目标：额外攻击的**可达性**（WP-C 已修）
+       battle-group.js 的普攻分支原先用 `targets.slice(0, nTargets)`，而 targets 在
+       `selectTargets(gb, actor, null)`（skillDef=null → 'random1'）下恒为 1 个 → 额外目标拿不到。
+       现在会从对侧补足到 nTargets 个再逐个普攻 —— 这里断言「真的多打到了一个目标」。 */
 (function () {
-  const foe = sb.createUnit({ id: 'e', side: 'enemy', name: '敌', base: { hp: 100, atk: 5, def: 3, spd: 5 } });
-  const me = sb.createUnit({ id: 'p', side: 'ally', name: '你', base: { hp: 100, atk: 5, def: 3, spd: 5 } });
-  const gb = sb.createGroupBattle({ allies: [me], enemies: [foe], seed: 1 });
-  const n = sb.selectTargets(gb, foe, null).length;
-  assert('⚠️ 已知缺口：普攻目标选择恒返回 1 个 → multitarget 的额外目标不可达（需改 battle-group.js:842-847）', n === 1, String(n));
+  const me = sb.createUnit({ id: 'mt-a', side: 'ally', name: '你', base: { hp: 500, atk: 5, def: 3, spd: 5 } });
+  const f1 = sb.createUnit({ id: 'mt-e1', side: 'enemy', name: '敌1', base: { hp: 500, atk: 5, def: 3, spd: 5 } });
+  const f2 = sb.createUnit({ id: 'mt-e2', side: 'enemy', name: '敌2', base: { hp: 500, atk: 5, def: 3, spd: 4 } });
+  const gb = sb.createGroupBattle({ allies: [me], enemies: [f1, f2], seed: 99 });
+  const targets = sb.selectTargets(gb, me, null);
+  assert('普攻首目标仍只有 1 个（selectTargets 口径不变）', targets.length === 1, String(targets.length));
+
+  /* 带 multitarget 的我方单位走完整回合：普攻应打到 **2 个不同**目标 */
+  const mt = sb.createUnit({ id: 'mt-p', side: 'ally', name: '多目标者', base: { hp: 500, atk: 5, def: 3, spd: 9 } });
+  mt._talents = ['multitarget'];
+  const e1 = sb.createUnit({ id: 'mt-t1', side: 'enemy', name: '靶1', base: { hp: 9999, atk: 1, def: 0, spd: 1 } });
+  const e2 = sb.createUnit({ id: 'mt-t2', side: 'enemy', name: '靶2', base: { hp: 9999, atk: 1, def: 0, spd: 1 } });
+  const gb2 = sb.createGroupBattle({ allies: [mt], enemies: [e1, e2], seed: 7 });
+  gb2.turn = 1;
+  const hitNames = {};
+  for (let i = 0; i < 20; i++) {
+    const ev = sb.groupUnitTurn(gb2, mt);
+    ev.forEach(function (e) {
+      const mm = e.msg && /^⚔️ .* 攻击 (\S+) →/.exec(e.msg);
+      if (mm) hitNames[mm[1]] = true;
+    });
+    e1.hp = 9999; e2.hp = 9999;   // 保证两个目标都活着、可再被打
+    if (Object.keys(hitNames).length >= 2) break;
+  }
+  assert('多目标：普攻真的多打到了一个目标（额外目标可达）',
+    Object.keys(hitNames).length === 2, JSON.stringify(Object.keys(hitNames)));
 })();
 
 /* ============================================================

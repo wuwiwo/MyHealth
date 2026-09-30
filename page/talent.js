@@ -304,12 +304,12 @@ registerTalent({
 });
 
 /* 魔法盾：受到魂攻击伤害降低
-   ⚠️ v2.2.16（§5.4F 死配置清理的**第 3 项：本批未完成**）：数值的唯一来源在这里（0.3），
-   但**消费端不读它** —— `battle-group.js:415` 硬编码 `dmg = Math.floor(dmg * 0.7)`（= 1 − 0.3，当前恰好一致）
-   → 改这里的值**不会生效**（典型的「同一数值两处写死」）。
-   正确修法是消费端改为 `dmg = Math.floor(dmg * (1 - m.value))`，只改这一行；
-   但 `page/battle-group.js` **不在本批可写白名单内** → 按纪律停下上报主控，不在此硬塞。
-   防漂移守卫：scripts/test-talent-fixation.js 断言「生产端数值 + 消费端硬编码 = 1」，两处一旦漂移即失败。 */
+   WP-C（§5.4F 死配置清理的最后一项，本批收口）：数值的唯一来源仍在这里（0.3），
+   消费端已改读 `m.value`（`dmg = Math.floor(dmg * (1 - m.value))`，不再硬编码 ×0.7）；
+   同时补上**真正的消费通道** —— 本 hook 的判据是 `ctx.isSoul`，而旧实现只在普攻的
+   **物理**分支读该 mutation（既不传 isSoul、值是硬编码）→ 该天赋此前一次都没生效。
+   现在 battle-group 的**魂攻伤害**结算前按 `isSoul` 派发受击方天赋并只取 soulDmgReduce。
+   行为守卫：scripts/test-talent-fixation.js 断言「改这里的值 → 实战魂攻伤害跟着变」。 */
 var MAGICSHIELD_SOUL_REDUCE = 0.3;
 registerTalent({
   id: 'magicshield',

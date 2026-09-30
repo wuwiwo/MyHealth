@@ -9,9 +9,16 @@ var SKILLS = {};   // id → skill def
 
 /* registerSkill(def)
    def: { id, name, type:'attack'|'support',
-          target:'random1'|'all'|'self'|'ally1'|'enemy1',
+          target:'random1'|'all'|'self'|'ally1'|'enemy1'|'ally2'|'enemy2'|'enemy12',
           power?, dmgType?('physical'|'soul'), cooldown, priority(先制度),
-          status?{id,duration,chance,grade}, effects?[function(caster,targets,ctx)] } */
+          status?{id,duration,chance,grade}, effects?[function(caster,targets,ctx)] }
+   WP-C 新增可选字段：
+     · charge:true      —— 「蓄力 1 回合、下回合释放」：首次施放只挂 charging（承伤 +25%），
+                            下回合由 battle-group 的 groupUnitTurn 释放技能自身
+     · condBonus:{statuses,value} —— 目标处于指定状态时本次伤害 ×(1+value)
+     · bounce:{times,dmgUp,foeChance} —— 全场随机弹射（梦幻光球）
+     · wounded:true     —— target:'ally1' 时只挑未满血的友方（圣光治愈）
+     · multiHit:N       —— 多段攻击，目标随机可重复 */
 function registerSkill(def) {
   if (!def || !def.id) throw new Error('registerSkill: id required');
   SKILLS[def.id] = def;
@@ -172,7 +179,18 @@ function calcSkillDamage(skill, caster, targets, ctx) {
   }
   var base = Math.floor(atk * power / 100 * mult);
   var out = [];
-  function hitOne(t) {
+  /* WP-C（§2.7 雷霆冲撞「目标处于潮湿/冰冻时伤害 +25%」）：按**目标状态**加成的钩子。
+     skill.condBonus = { statuses:['wet','freeze'], value:0.25 } —— 逐目标判定，
+     命中其中任一状态即对该目标乘 (1 + value)。此前 calcSkillDamage 没有任何「按目标状态加成」的入口。 */
+  function condMul(t) {
+    var cb = skill.condBonus;
+    if (!cb || !cb.statuses || typeof hasStatus !== 'function') return 1;
+    for (var ci = 0; ci < cb.statuses.length; ci++) {
+      if (hasStatus(t, cb.statuses[ci])) return 1 + (cb.value || 0);
+    }
+    return 1;
+  }
+  function hitOne(t, extraMult) {
     var def = effectiveStat(t, 'def');
     var sdef = effectiveStat(t, 'soulDef');
     var dmg;
@@ -182,24 +200,66 @@ function calcSkillDamage(skill, caster, targets, ctx) {
       dmg = Math.max(1, base - Math.floor(def / 2));
     }
     if (skill.ignoreDef) dmg = base;
+    var m = (extraMult || 1) * condMul(t);
+    if (m !== 1) dmg = Math.max(1, Math.floor(dmg * m));
     out.push({ targetId: t.id, amount: dmg, dmgType: skill.dmgType || 'physical' });
   }
   /* v2.1.24：多段攻击。
      skill.multiHit = N（无影拳：总计 5 次）→ 打 N 次、**目标随机且可重复**
      （设计 design-v2.0.md:249「总计 5 次攻击，每次视为普通攻击，目标随机可重复」）。
+     WP-C（§2.13 评审「总计 4 次攻击，每次 55%-100%」）：无影拳的 N 由 5 改为 **4**，
+     并加 `asNormalAttack:true` —— 本注释里的「N 次」口径不变，只是取值换了。
      随机池由 castSkill 经 ctx.pool 传进来 —— selectTargets('random1') 只返回 1 个目标，
      拿不到「随机可重复」需要的整套候选。
      此前无影拳只有 1 次命中（power 单发），日志却写「×5」。 */
-  if (skill.multiHit) {
+  var selfHealAmount = 0;
+  if (skill.bounce) {
+    /* WP-C（§2.12 梦幻光球「全场随机弹射 3 次、每单位最多 1 次」）：
+       skill.bounce = { times:3, dmgUp:0.10, foeChance:[0.55,0.82] }
+       每次弹射**先掷阵营**（敌方概率 foeChance，随成长升高；我方 = 1 − foeChance，随成长降低
+       —— 即评审的「我方 45%→18% / 敌方 55%→82%」，两者互补），再在该阵营的未命中池里随机取 1 名；
+       伤害每次累计 +dmgUp（下一次发动重置 = 每次施放都从 ×1.0 起）。
+       该阵营没有可打单位时退到另一阵营；两边都空则该次「未发动」→ 结算为自身回血（selfHealAmount）。 */
+    out = [];
+    var b = skill.bounce;
+    var all = (ctx.allPool && ctx.allPool.length) ? ctx.allPool : targets;
+    var bt = skillRangeT(caster);
+    var lerp = function (arr) {
+      if (!arr || arr.length !== 2) return arr ? arr[0] : 0;
+      return arr[0] + (arr[1] - arr[0]) * bt;
+    };
+    var foeCh = lerp(b.foeChance);
+    var rngB = (typeof ctx.rng === 'function') ? ctx.rng : battleRnd;
+    var hitIds = {};
+    var landed = 0, missed = 0;
+    var times = b.times || 3;
+    for (var bi = 0; bi < times; bi++) {
+      var wantFoe = rngB() < foeCh;
+      var foeSide = caster.side === 'ally' ? 'enemy' : 'ally';
+      var allySide = caster.side;
+      function candOf(side) {
+        return all.filter(function (u) { return u.hp > 0 && u.side === side && !hitIds[u.id]; });
+      }
+      var cand = candOf(wantFoe ? foeSide : allySide);
+      if (!cand.length) cand = candOf(wantFoe ? allySide : foeSide);
+      if (!cand.length) { missed++; continue; }
+      var pick = cand[Math.floor(rngB() * cand.length)];
+      hitIds[pick.id] = true;
+      hitOne(pick, 1 + (b.dmgUp || 0) * landed);
+      landed++;
+    }
+    selfHealAmount = missed * base;
+  } else if (skill.multiHit) {
     var pool = (ctx.pool && ctx.pool.length) ? ctx.pool : targets;
     for (var hi = 0; hi < skill.multiHit && pool.length; hi++) {
       var pk = (typeof ctx.rng === 'function') ? ctx.rng() : battleRnd();
       hitOne(pool[Math.floor(pk * pool.length)]);
     }
   } else {
-    targets.forEach(hitOne);
+    targets.forEach(function (t) { hitOne(t); });
   }
   var res = { type: 'damage', hits: out };
+  if (selfHealAmount > 0) res.selfHealAmount = selfHealAmount;
   if (proc) { res.proc = true; res.procMult = 1 + skill.procBoost.value; }
   return res;
 }

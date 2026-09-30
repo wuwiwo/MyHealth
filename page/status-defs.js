@@ -103,8 +103,13 @@ defineStatus({
     onDamage: function (unit) {
       return { mutations: [{ key: 'dmgTakenBoost', value: 0.25 }] };   // 承伤 +25%
     },
-    onExpire: function (unit) {
-      unit._chargeReady = true;   // 蓄力完成，下回合技能层结算 400%
+    onExpire: function (unit, st) {
+      unit._chargeReady = true;   // 蓄力完成，下回合技能层结算
+      /* WP-C：通用蓄力的**载荷**（p_shine / p_thundercharge / p_dreamball）。
+         带 `charge: true` 的技能在施放时把自身 skillId 写进蓄力实例，
+         到期后交给 battle-group 的 groupUnitTurn 释放**技能本身**（而不是写死的 400% 重击）。
+         敌群「蓄力重击」（chargeup）不带载荷 → 保持旧的 resolveChargeStrike 路径不变。 */
+      if (st && st.data && st.data.skillId) unit._chargePayload = st.data.skillId;
       return { events: [{ type: 'expire', statusId: 'charging', unitId: unit.id, msg: '蓄力完成!' }] };
     }
   }
@@ -341,6 +346,59 @@ defineStatus({
   id: 'confused_down',
   name: '丧失防备',
   grade: 2,
+  maxStacks: 1,
+  stacking: 'refresh',
+  hooks: {}
+});
+
+/* ============ WP-C 新增：§2.14 战意灌注（吸血 / 技能吸血）与 §2.8 双撞（窃取）============ */
+
+/* 战意（战意灌注 p_warmight）：持续期间获得**吸血**与**技能吸血**。
+   裁决依据 doc/plans/v2.2-施工计划.md §6.3：
+     · 做成「**挂在持有者身上的增益**」—— 落在状态实例上，而不是攻击方天赋；
+     · 与宠物天赋「嗜血」**叠加**（各自结算、相加）：嗜血走 talent 的 onAfterDamage，
+       本状态走**状态** onAfterDamage（battle-group 的普攻路径两条都派发）；
+     · 镜像结界 ±25% 可缩放它 —— 幅度在 castSkill 落 buff 时按阵营缩放后写入实例 data。
+   两条吸血通道分开：
+     · 吸血（data.ls）—— 普攻造成的伤害（与「嗜血」同一时点）；
+     · 技能吸血（data.sls）—— 技能造成的伤害（battle-group 的 castSkill 伤害结算后读取）。 */
+defineStatus({
+  id: 'warmight',
+  name: '战意',
+  grade: 1,
+  positive: true,
+  maxStacks: 1,
+  stacking: 'refresh',
+  hooks: {
+    onAfterDamage: function (unit, st, ctx) {
+      if (!ctx || !(ctx.dealt > 0)) return;
+      var rate = (st && st.data && typeof st.data.ls === 'number') ? st.data.ls : 0;
+      if (rate <= 0) return;
+      var heal = Math.max(1, Math.floor(ctx.dealt * rate));
+      unit.hp = Math.min(unit.base.hp, unit.hp + heal);
+      return { events: [{ type: 'heal', statusId: 'warmight', unitId: unit.id, msg: '🩸 战意吸血: +' + heal }] };
+    }
+  }
+});
+
+/* 能力被窃（双撞 p_doublehit 的命中者）：攻击 / 防御降低。
+   幅度由**实例 modsPct** 携带（0~10% 攻击 / 0~20% 防御，随基础属性成长），定义里不写死固定值
+   —— 与「打湿 / 疾风」同一种「动态数值」写法（同键实例值覆盖定义值，不会叠成两份）。 */
+defineStatus({
+  id: 'pulled',
+  name: '能力被窃',
+  grade: 1,
+  maxStacks: 1,
+  stacking: 'refresh',
+  hooks: {}
+});
+
+/* 窃取之力（双撞：把窃得的攻击 / 防御转给我方随机 1 名角色 2 回合）：正面，幅度同样由实例 modsPct 携带。 */
+defineStatus({
+  id: 'stolen',
+  name: '窃取之力',
+  grade: 1,
+  positive: true,
   maxStacks: 1,
   stacking: 'refresh',
   hooks: {}
