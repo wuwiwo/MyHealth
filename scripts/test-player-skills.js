@@ -229,5 +229,37 @@ assert('启风②：伤害按 n×8% 缩放（不传系数 = 旧行为）', (func
   return e1.length >= 1 && e2.length >= 1 && (9999 - g2.enemies[0].hp) <= (9999 - g1.enemies[0].hp);
 })(), 'hp=' + qfHp);
 
+/* ---- 10. 宠物共享桥（v2.2.5，推翻 OQ-11：玩家被动共享给宠物）---- */
+assert('暴击/格挡/气力恢复都声明了宠物档', ['crit','block','vitality'].every(id => typeof sb.getPlayerSkill(id).petEffect === 'function'));
+const petShared = sb.createUnit({ id:'ps', side:'ally', name:'宠', base:{hp:400,atk:50,def:40,spd:20,soulDef:30} });
+petShared._petShared = {
+  crit: sb.getPlayerSkill('crit').petEffect(20),
+  block: sb.getPlayerSkill('block').petEffect(10),
+  vitality: sb.getPlayerSkill('vitality').petEffect(20)
+};
+assert('宠物档数值 = 暴击 15%/160%、格挡 50%、气力 120%/每5回合', (function () {
+  const c = petShared._petShared;
+  return Math.abs(c.crit.chance - 0.15) < 1e-9 && Math.abs(c.crit.critMult - 1.60) < 1e-9 &&
+    Math.abs(c.block.reduce - 0.50) < 1e-9 && Math.abs(c.block.passiveReduce - 0.10) < 1e-9 &&
+    Math.abs(c.vitality.healPct - 1.20) < 1e-9 && c.vitality.everyTurns === 5;
+})(), JSON.stringify(petShared._petShared));
+assert('宠物暴击走宠物档（100 → 160）', (function () {
+  for (let i = 0; i < 300; i++) if (sb.playerCritHook(petShared, 100) === 160) return true;
+  return false;
+})());
+assert('宠物格挡常驻减伤 10%（100 → ≤90）', sb.playerBlockHook(petShared, 100) <= 90);
+assert('宠物气力恢复：第 5 回合回 (防+魂防)×120% = 84', (function () {
+  petShared.hp = 100;
+  const ev = sb.playerSkillTurnStart(sb.createGroupBattle({ allies:[petShared], enemies:[] }), petShared, 5);
+  return petShared.hp === 184 && ev.length === 1;
+})(), 'hp=' + petShared.hp);
+assert('无 _petShared 的单位不受影响', sb.playerCritHook(sb.createUnit({ id:'n1', side:'ally', name:'N', base:{hp:100,atk:10,def:5,spd:1} }), 100) === 100);
+assert('玩家自己仍走玩家档（100 → 300，不是 160）', (function () {
+  for (let i = 0; i < 300; i++) { const d = sb.playerCritHook(player, 100); if (d === 300) return true; if (d === 160) return false; }
+  return false;
+})());
+assert('共享桥已接线到 buildGroupBattlePets', /attachPetSharedSkills\(units\)/.test(
+  fs.readFileSync(path.join(__dirname, '..', 'page', 'pet-store.js'), 'utf8')));
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

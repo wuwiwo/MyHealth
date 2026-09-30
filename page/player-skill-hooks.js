@@ -38,12 +38,15 @@ function playerSkillBattleStart(gb, player) {
   return events;
 }
 
-/* 普攻钩子：暴击（取高） */
-function playerCritHook(player, dmg) {
-  if (!player || !player._playerSkills) return dmg;
-  var lv = player._playerSkills['crit'] || 0;
-  if (lv < 1) return dmg;
-  var eff = getPlayerSkill('crit').effect(lv);
+/* 普攻钩子：暴击（取高）
+   v2.2.5（WP-B 共享桥，推翻 OQ-11）：玩家按**玩家档**、上场宠物按**宠物档**（15%/160%）同时受益。
+   斗者本能（talent.js）的 25%/150% 在战斗里另行取高判定，见 §3.12-1「分别判定、取最高」。 */
+function playerCritHook(unit, dmg) {
+  if (!unit) return dmg;
+  var eff = null;
+  if (unit._playerSkills && (unit._playerSkills['crit'] || 0) >= 1) eff = getPlayerSkill('crit').effect(unit._playerSkills['crit']);
+  else if (unit._petShared && unit._petShared.crit) eff = unit._petShared.crit;
+  if (!eff) return dmg;
   if (battleRnd() < eff.chance) {
     return Math.floor(dmg * eff.critMult);
   }
@@ -53,29 +56,66 @@ function playerCritHook(player, dmg) {
 /* 受击钩子：格挡（**v2.2 WP-B 口径改造**）
    常驻减伤 10%（必定生效）→ 5% 完美格挡（减伤 90%~99%，**随机值**）→ 20% 普通格挡（减伤随等级，满级 75%）
    ⚠️ 几率**固定不随等级**；pity 仍作用在「普通格挡」那一档（失败几率 ×1.2） */
-function playerBlockHook(player, dmg) {
-  if (!player || !player._playerSkills) return dmg;
-  var lv = player._playerSkills['block'] || 0;
-  if (lv < 1) return dmg;
-  var eff = getPlayerSkill('block').effect(lv);
+function playerBlockHook(unit, dmg) {
+  if (!unit) return dmg;
+  var eff = null, isPet = false;
+  if (unit._playerSkills && (unit._playerSkills['block'] || 0) >= 1) eff = getPlayerSkill('block').effect(unit._playerSkills['block']);
+  else if (unit._petShared && unit._petShared.block) { eff = unit._petShared.block; isPet = true; }
+  if (!eff) return dmg;
   var out = Math.floor(dmg * (1 - (eff.passiveReduce || 0)));
+  if (isPet) {   // 宠物档：常驻减伤 10% + 20% 格挡减伤 50%，无完美格挡
+    if (battleRnd() < eff.chance) return Math.floor(out * (1 - eff.reduce));
+    return out;
+  }
   if (battleRnd() < eff.perfectChance) {
     var pr = eff.perfectMin + battleRnd() * (eff.perfectMax - eff.perfectMin);
-    player._blockPity = 1;
+    unit._blockPity = 1;
     return Math.floor(out * (1 - pr));
   }
-  if (battleRnd() < eff.chance * (player._blockPity || 1)) {
-    player._blockPity = 1;
+  if (battleRnd() < eff.chance * (unit._blockPity || 1)) {
+    unit._blockPity = 1;
     return Math.floor(out * (1 - eff.reduce));
   }
-  player._blockPity = (player._blockPity || 1) * 1.2;
+  unit._blockPity = (unit._blockPity || 1) * 1.2;
   return out;
 }
 
-/* 回合开始钩子：气势如虹（全队攻击+，触发锁3回合）/ 气力恢复（每4回合后2回合回血） */
+/* v2.2.5（WP-B 共享桥，推翻 OQ-11）：把玩家**已装配**的暴击/格挡/气力恢复按**宠物档**换算后，
+   挂到参战宠物身上（`pet._petShared[id]`）。由 pet-store 的 `buildGroupBattlePets()` 建场后调用；
+   本模块未加载时静默跳过（测试只载必要文件时不会炸）。 */
+function attachPetSharedSkills(pets) {
+  if (!pets || !pets.length) return;
+  var st = (typeof getSkillState === 'function') ? getSkillState() : null;
+  if (!st || !st.levels) return;
+  ['crit', 'block', 'vitality'].forEach(function (id) {
+    var lv = st.levels[id] || 0;
+    if (lv < 1) return;
+    if ((st.loadout || []).indexOf(id) < 0) return;   // 只共享「已装配」的
+    var def = getPlayerSkill(id);
+    if (!def || typeof def.petEffect !== 'function') return;
+    pets.forEach(function (p) {
+      if (!p._petShared) p._petShared = {};
+      p._petShared[id] = def.petEffect(lv);
+    });
+  });
+}
+
+/* 回合开始钩子：气势如虹（全队攻击+，触发锁3回合）/ 气力恢复（每4回合后2回合回血）/ 启风
+   v2.2.5：**宠物档**只共享气力恢复（每 5 回合回 (防+魂防)×120%），在**宠物自己回合开始**结算。 */
 function playerSkillTurnStart(gb, player, turn) {
   var events = [];
-  if (!player || !player._playerSkills) return events;
+  if (!player) return events;
+  if (!player._playerSkills) {
+    if (player._petShared && player._petShared.vitality && (turn % (player._petShared.vitality.everyTurns || 5)) === 0) {
+      var pv = player._petShared.vitality;
+      var ph = Math.floor(((player.base.def || 0) + (player.base.soulDef || 0)) * pv.healPct);
+      if (ph > 0 && player.hp > 0) {
+        player.hp = Math.min(player.base.hp, player.hp + ph);
+        events.push({ msg: '💚 ' + player.name + ' 气力恢复（共享）+' + ph });
+      }
+    }
+    return events;
+  }
 
   // 气势如虹
   var momLv = player._playerSkills['momentum'] || 0;

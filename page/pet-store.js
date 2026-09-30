@@ -265,6 +265,9 @@ function buildGroupBattlePets(petIds, maxRoster) {
   var units = createPetUnitsForBattle(petIds, maxRoster);
   applyBattlePetBaseBonuses(units);
   units.forEach(function (u) { if (typeof boostPetForGroup === 'function') boostPetForGroup(u); });
+  /* v2.2.5（WP-B 共享桥，推翻 OQ-11）：玩家**已装配**的暴击/格挡/气力恢复 → 按**宠物档**挂到参战宠物。
+     单向（玩家 → 宠物），不反向污染玩家档；本模块未加载时静默跳过。 */
+  if (typeof attachPetSharedSkills === 'function') attachPetSharedSkills(units);
   return units;
 }
 

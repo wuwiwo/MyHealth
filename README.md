@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.2.5
+> Personal Health Manager — 个人健身健康管理应用 v2.2.6
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -308,4 +308,6 @@ Vercel 项目设置：
 
 | **v2.2.5** | **2026-09-29** | **🌬️ WP-B 第三批：新技能「启风」（§1.3）** —— 技能 **9 → 10**、状态 **17 → 18**（新增 `haste` 疾风）。① 每回合开始，我方**随机 2 名**角色速度 +(n×1)%（满级 **10%**）—— 挂**状态 `haste` 疾风**（`modsPct: { spd: pct }` 实例传值，`duration: 999` 持续至战斗结束，**不直接改 base**，可被驱散）；② 我方持**全场速度最快者**（敌我双方合并排序）时，该角色**每回合额外进行一次普通攻击**、伤害 ×(n×8)%（满级 **80%**）—— 新函数 `qifengExtraAttack(gb, actor)` 由 `battle-group` 群战 tick 在**每次行动之后**调用（与疾影 `extraAction` 同位置），每回合只一次（`gb._qifengTurn` 守卫），目标复用引擎既有 `aiPickTarget(gb, actor, null)`。`normalAttack` 新增**可选**第 4 参 `dmgMult`（只乘 base，其后威吓/利刃/暴击/格挡照旧生效；**不传 = 1，旧行为完全不变**）。启风与气势如虹/气力恢复/瞩目**同类互斥**（辅助槽「同类型限 1」自动生效）。`test-skills` 29→**30**（满级总投入 15235 → **16060**）、`test-player-skills` 31→**37**，全量 **1065 断言**；缓存版本对齐（v102）。⚠️ **WP-B 只剩 2 项**（需跨单位/破盾链路）：**宠物共享桥**（推翻 OQ-11）、**金身护盾破盾反伤** | `doc/changelog-v2.2.md` |
 
-> 当前版本：**v2.2.5**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
+| **v2.2.6** | **2026-09-29** | **🐾⚔️ WP-B 第四批：宠物共享桥（推翻 OQ-11）** —— 玩家装配的**暴击 / 格挡 / 气力恢复**从此**同时**作用：玩家按**玩家档**、上场宠物按**宠物档**。三张宠物档写进 `skills.js` 的 **`petEffect()`**：暴击 **15% / 160%**；格挡 **常驻减伤 10% + 20% 格挡减伤 50%（无完美格挡）**；气力恢复 **每 5 回合一次、(防御+魂防)×120%**。桥接 = 新函数 `attachPetSharedSkills(pets)`（只共享**已装配**的三个技能，写进 `pet._petShared`），由 **`buildGroupBattlePets()`**（v2.2.0 收敛后的唯一参战宠物入口）在建场末尾调用 → game-render / pet-ui / debug 三处调用方**自动全覆盖**；`playerCritHook` / `playerBlockHook` 改为**按单位类型取档**（`_playerSkills` → 玩家档，否则 `_petShared` → 宠物档）—— 这两个钩子在 `battle-group` 里是**无守卫调用**，所以宠物天然走进钩子，**战斗链路一行未改**；宠物气力恢复在**宠物自己回合开始**结算（`turn % 5 === 0`）；**单向**（玩家 → 宠物），不反向污染玩家档。`test-player-skills` 37→**45**（含「玩家自己仍走玩家档 100→300 而非 160」「共享桥已接线」源码级断言），全量 **1073 断言**；缓存版本对齐（v103）。⚠️ **WP-B 只剩 1 项**：**金身护盾破盾反伤**（`absorbShield` 有 5 个调用点、签名里没有攻击者） | `doc/changelog-v2.2.md` |
+
+> 当前版本：**v2.2.6**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）

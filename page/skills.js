@@ -40,7 +40,9 @@ function skillTotalCost(skill) {
 registerPlayerSkill({
   id: 'crit', name: '暴击', type: 'passive', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*10; },
   desc: '攻击有 n×1.5% 几率暴击，造成 150%+n×7.5% 暴击伤害（满级 30% / 300%）',
-  effect: function(lv){ return { chance: lv*0.015, critMult: 1.50 + lv*0.075 }; }
+  effect: function(lv){ return { chance: lv*0.015, critMult: 1.50 + lv*0.075 }; },
+  /* v2.2.5 宠物档（推翻 OQ-11：玩家装配后，上场宠物按**宠物档**同时受益）= 15% / 160% */
+  petEffect: function(lv){ return { chance: lv*0.0075, critMult: 1.20 + lv*0.02 }; }
 });
 
 /* 2. 气力恢复（辅助 lv20）：每4回合后2回合，每回合回 (防御+魂防)×n×10%
@@ -48,7 +50,9 @@ registerPlayerSkill({
 registerPlayerSkill({
   id: 'vitality', name: '气力恢复', type: 'support', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*15; },
   desc: '每4回合后的2回合，每回合回复 (防御+魂防)×n×10% 血量（满级 200%）',
-  effect: function(lv){ return { healPct: lv*0.1 }; }
+  effect: function(lv){ return { healPct: lv*0.1 }; },
+  /* v2.2.5 宠物档 = 每 5 回合回 (防御+魂防)×n×6%（满级 120%） */
+  petEffect: function(lv){ return { healPct: lv*0.06, everyTurns: 5 }; }
 });
 
 /* 3. 陨石轰炸（攻击 lv20）：v2.2 WP-B：魂攻×400% → **×500%** */
@@ -66,7 +70,9 @@ registerPlayerSkill({
   id: 'block', name: '格挡', type: 'passive', maxLevel: 10, costPerLevel: function(lv){ return (lv+1)*15; },
   desc: '常驻减伤 10%；20% 几率格挡，减伤 45%+n×3%（满级 75%）；5% 几率完美格挡，减伤 90%~99%（随机）',
   effect: function(lv){ return { chance: 0.20, reduce: 0.45 + lv*0.03, passiveReduce: 0.10,
-    perfectChance: 0.05, perfectMin: 0.90, perfectMax: 0.99 }; }
+    perfectChance: 0.05, perfectMin: 0.90, perfectMax: 0.99 }; },
+  /* v2.2.5 宠物档 = 常驻减伤 10% + 20% 几率格挡减伤 50%（**无完美格挡**，且不随等级变化） */
+  petEffect: function(lv){ return { chance: 0.20, reduce: 0.50, passiveReduce: 0.10 }; }
 });
 
 /* 5. 气势如虹（辅助 lv20）：几率 10%+n×2%，全队攻击+n×3% ×2回合，触发锁3回合 */
