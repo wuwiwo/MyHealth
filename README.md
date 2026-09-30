@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.2.7
+> Personal Health Manager — 个人健身健康管理应用 v2.2.8
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -312,4 +312,6 @@ Vercel 项目设置：
 
 | **v2.2.7** | **2026-09-29** | **🔬 测量口径修复：平衡脚本此前完全没挂玩家技能** —— `scripts/balance-pets-ab.js` 的沙箱 `FILES` 缺 `skills.js` / `player-skill-hooks.js`，`runOne()` 也从不 `attachPlayerSkills` → **v2.2.0~v2.2.6 所有平衡数字都是「无技能」口径**，WP-B 的改动从未进入测量；**v2.2.2 施工记录里「g17 是墙、瓶颈在玩家魂防 177」的结论是错的**。修复：补载两个文件 + 新增 `--skills crit:20,block:10,…` 开关（不传 = 旧口径便于对照）。复测（dundun 当前属性，12 trials/大关，Boss 关）：**g15 83%→100%、g17 0%→83%/92%、g18 0%→92%、g19 0%（真正的新墙）、g20 8%/0%、g21+ 0%**；g6~g14 保持 100%。⚠️ 仍不含**宠物共享档**（沙箱没载 `skill-store.js`）与**斗者本能合并**（WP-D）→ 真实强度更高。**教训**：平衡脚本必须与真实开局路径同源（`startGroupTrial` → `attachPlayerSkills(player, getSkillState())`），否则测出的「墙」是假的。本版**仅改 scripts/（开发工具），无线上运行代码变更** | `doc/changelog-v2.2.md` |
 
-> 当前版本：**v2.2.7**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
+| **v2.2.8** | **2026-09-29** | **🔬 测量口径补完：把「宠物共享档」也真正挂上**（接 v2.2.7）。`attachPetSharedSkills(pets, stateOverride)` 新增**可选**第二参 —— 离线工具/沙箱**显式传入**技能装配，绕开 `getSkillState()`（沙箱没载 `skill-store.js`）；**线上调用方不传 → 行为一字不变**。`scripts/balance-pets-ab.js` 的 `--skills` 现在同时挂玩家技能与宠物档（**两列同一份装配，公平对照**）。复测：**数字与「仅玩家技能」那次完全一致** —— g17 83%/92%、g18 92%、**g19 0%（真正的墙）**、g20 8%/0% → **在 g17~g19 这几档宠物档不构成决定因素**（15%/160% 相对玩家 30%/300% 是小项，且高关卡宠物存活短），v2.2.7 的结论成立且**不再有口径缺口**。全量 **1073 断言**；缓存版本对齐（v105） | `doc/changelog-v2.2.md` |
+
+> 当前版本：**v2.2.8**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）

@@ -83,9 +83,11 @@ function playerBlockHook(unit, dmg) {
 /* v2.2.5（WP-B 共享桥，推翻 OQ-11）：把玩家**已装配**的暴击/格挡/气力恢复按**宠物档**换算后，
    挂到参战宠物身上（`pet._petShared[id]`）。由 pet-store 的 `buildGroupBattlePets()` 建场后调用；
    本模块未加载时静默跳过（测试只载必要文件时不会炸）。 */
-function attachPetSharedSkills(pets) {
+function attachPetSharedSkills(pets, stateOverride) {
   if (!pets || !pets.length) return;
-  var st = (typeof getSkillState === 'function') ? getSkillState() : null;
+  /* v2.2.8：stateOverride 仅供**离线工具/测试**显式传入（沙箱没挂 skill-store.js 时用）；
+     线上调用方（buildGroupBattlePets）不传 → 行为与以前完全一致。 */
+  var st = stateOverride || ((typeof getSkillState === 'function') ? getSkillState() : null);
   if (!st || !st.levels) return;
   ['crit', 'block', 'vitality'].forEach(function (id) {
     var lv = st.levels[id] || 0;

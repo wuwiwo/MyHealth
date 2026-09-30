@@ -255,6 +255,7 @@ node scripts/test-a11y-tokens.js      # 设计体系护栏，改任何 UI 都要
 - **v2.2.6** — 🐾⚔️ **WP-B 第四批：宠物共享桥（推翻 OQ-11）**：玩家装配的暴击/格挡/气力恢复**同时**作用（玩家按玩家档、上场宠物按**宠物档**）。宠物档写进 `skills.js` 的 `petEffect()`：暴击 15%/160%、格挡 常驻 10% + 20% 格挡减伤 50%（无完美格挡）、气力恢复 每 5 回合 (防+魂防)×120%。桥 = `attachPetSharedSkills(pets)`（只共享已装配的），由 `buildGroupBattlePets()` 建场末尾调用；两个 hooks 按单位类型取档（battle-group 无守卫调用 → **战斗链路未改**）。⚠️ 斗者本能「取最高、分别判定」（§3.12-1）留 WP-D。**WP-B 只剩破盾反伤**
 - **v2.2.7** — 🔬 **测量口径修复：平衡脚本从来没挂玩家技能**。`scripts/balance-pets-ab.js` 的沙箱 FILES 缺 `skills.js`/`player-skill-hooks.js`，`runOne()` 也不调 `attachPlayerSkills` → **v2.2.0~v2.2.6 的平衡数字全是「无技能」口径**，**「g17 是墙」的结论错误**。修复：补载 + 新增 `--skills crit:20,block:10,…` 开关。复测：**g15 83→100%、g17 0→83/92%、g18 0→92%、g19 0%（新墙）、g20 8/0%**。⚠️ 仍不含宠物共享档（缺 skill-store.js）与斗者本能（WP-D）
   > ⚠️ **教训（PITFALL）**：平衡脚本必须与真实开局路径**同源**——真实是 `startGroupTrial → attachPlayerSkills(player, getSkillState())`。任何平衡结论前先确认**技能/宠物/词条都真的挂上了**，否则测出的「墙」是假的（本项目已在 v2.2.0~2.2.6 上栽过一次）。
+- **v2.2.8** — 🔬 **测量口径补完**：`attachPetSharedSkills(pets, stateOverride)` 加可选第二参（离线工具显式传装配，绕开 `getSkillState()`；线上不传 → 行为不变）；脚本 `--skills` 同时挂玩家技能 + 宠物档。复测：**与仅玩家技能那次完全一致**（g17 83/92%、g18 92%、g19 0%、g20 8/0%）→ **g17~g19 上宠物档不是决定因素**；v2.2.7 结论成立、口径缺口已补。**当前真实进度：可稳过到 g18，g19 是墙**
 
 > ⚠️ **v2.0.10/2.0.11 与 v2.1.0 曾分叉**（两条线都改 `index.html`/`utils.js`/`README`/`changelog`），已于 `dd46332` 合并解决。若再见到两条线并行，合并前先看 §8 的冲突回避经验。
 

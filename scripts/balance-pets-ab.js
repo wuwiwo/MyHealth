@@ -107,6 +107,9 @@ function runOne(sb, acc, groupKey, mode, seed) {
         sst.levels[id] = parseInt(p[1], 10) || 1;
       });
       sb.attachPlayerSkills(player, sst);
+      /* v2.2.8：宠物共享档也要真的挂上（否则宠物档仍是「未接线」状态，
+         因为沙箱没载 skill-store.js → getSkillState() 拿不到装配）。两列用同一份装配，公平对照。 */
+      if (typeof sb.attachPetSharedSkills === 'function') sb.attachPetSharedSkills(pets, sst);
     }
   }
 
