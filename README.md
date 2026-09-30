@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.2.11
+> Personal Health Manager — 个人健身健康管理应用 v2.2.12
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -320,4 +320,6 @@ Vercel 项目设置：
 
 | **v2.2.11** | **2026-09-29** | **🎯 §3 petOnly 天赋对齐（4 改 / 5 不变 / 1 受阻）+ v2.2.10 冻结快照平衡复测**。天赋：**圣光守护**新增**全程无条件自身受伤 −10%**（半血仍生效，走 `dmgTakenReduce`）；**镜像结界**的 治疗 / 增益幅度 / **状态实例幅度** 三通道按阵营 ×1.25、×0.75（新 `supportEffectMul()`），⚠️ 护盾量 / 状态解除 / 吸血 / **定义驱动**的状态幅度四条通道**无数值载体**（需动 `state-core.js`/`status-defs.js`）→ 留 WP-E；**不动如山** 触发线 满血 → **>95% 血**（96% 触发、恰好 95% 不触发）；**威压领域** **无条件 −10%**、自身 >70% 血**翻倍 −20%**；**漆黑之眼 / 凛冬之核 / 灵感涌动 / 心眼** 判定无改动；**幸运口袋受阻**（唯一消费端在 `game-render.js` 的 `groupVictoryReward()`，且该条只给区间未给取值规则）。复测（**在 v2.2.10 冻结快照 + worktree 隔离**完成，含技能口径，40 trials）：**g15 88%→100%、g16 98%→100%、g17 0%→85%、g18 0%→93%、g19 恒 0%（墙）、g20 8%**；⚠️ v2.2.10 暴击合并改变了 `gb.rng()` 调用顺序，**与 v2.2.9 及更早数字不可逐格对比**；⚠️ 口径为 5 技能全满级（超出游戏内 3 槽限制，属理论配装上界）。报告：`doc/plans/v2.2.10-平衡复测.md`。`test-pet-talents` 73→**91**，全量 **1127 断言**；缓存版本对齐（v108） | `doc/changelog-v2.2.md` |
 
-> 当前版本：**v2.2.11**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
+| **v2.2.12** | **2026-09-29** | **🔧 遗留收口三件**：① **技能暴击统一** —— `castSkill` 原先直接走 `talentCrit(actor)`，**没接入** `groupCritMult()` 的「取最高、分别判定」，后果是宠物带**技能**出手时宠物暴击档（15%/160%）**不生效**、只出天赋 ×1.5；现与普攻**逐字同构**（各自掷骰 → 都触发取较高 → 只结算一次 + 一条日志）。② **镜像结界补「定义驱动」的状态幅度** —— 上一批只覆盖治疗/增益幅度/状态**实例**幅度，`armorbroken`/`souldown`/`weaken`/`lastworded` 写在 `status-defs.js` 的 `statModsPct` 缩放不了；做法是 `applyStatus` 新增**可选** `defScale`（三条路径都覆盖）、`statMods()` 对**定义值**乘系数（实例 `modsPct` 不再二次乘；**不传 = 不写字段 → 旧实例与存档形状一字不变**）。⚠️ **可达面只有一条**：`supportEffectMul` 只在 `type === 'support'` 时消费 → 实测可达「敌方 `lastword` → `lastworded` 落到持有者」（E2E：−25% → **−18%**）；`armorbroken`/`souldown` 是**攻击型**技能、`weaken` 来自玩家陨石 → **永不经过 support 通道**（要改属**改 §3.5 口径**，未自行扩大）。③ UI `_HOOK_LABELS` 补 `onBeforeSupportEffect`。`test-pet-talents` 91→**101**，全量 **1137 断言**；缓存版本对齐（v109）。⚠️ **平衡数字需重测**（技能路径新增掷骰 + 宠物技能现在会暴击 → v2.2.11 的 g17 85%/g18 93% 不可逐格对比；g19 是墙的结论不太可能翻转）。仍留 WP-E：护盾量 / 状态解除 / 吸血 | `doc/changelog-v2.2.md` |
+
+> 当前版本：**v2.2.12**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）

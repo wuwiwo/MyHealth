@@ -23,12 +23,17 @@ function listStatusDefs() { return Object.keys(STATUS_DEFS); }
 
 /* --- 实例操作 --- */
 
-/* applyStatus(unit, {id, duration, stacks?, source?, data?, modsPct?}) → {applied, refreshed, events[]}
+/* applyStatus(unit, {id, duration, stacks?, source?, data?, modsPct?, defScale?, noStatMods?})
+   → {applied, refreshed, events[]}
    叠加规则由 def.stacking 决定
    v2.1.15 新增 modsPct：本次实例专属的百分比属性修正（按 unit.base 乘算），
    与 def.statMods / def.statModsPct 一起在 statMods() 里汇总。
    用途：「强攻」+30% 攻击、「气势如虹」+n×3%、「摄取」按窃取量加成 —— 这类
-   幅度随等级/情境变化的效果没法写成状态定义里的固定值。 */
+   幅度随等级/情境变化的效果没法写成状态定义里的固定值。
+   v2.3.0 新增 defScale：**按实例缩放状态定义里的 statMods / statModsPct**（默认 1 = 不缩放）。
+   用途：镜像结界（§3.5 + §3.12-2「全通道」）—— 定义驱动的状态幅度在 status-defs.js 里是
+   全局共享的固定值，按实例 scale 不了；指定 defScale 后该实例只贡献「定义值 × defScale」。
+   ⚠️ 只在传了才写字段（默认不写），旧存档 / 快照形状不受影响。 */
 function applyStatus(unit, opts) {
   opts = opts || {};
   var def = STATUS_DEFS[opts.id];
@@ -46,12 +51,14 @@ function applyStatus(unit, opts) {
     if (def.stacking === 'refresh') {
       existing.duration = Math.max(existing.duration, opts.duration || 1);
       if (opts.modsPct) existing.modsPct = opts.modsPct;
+      if (opts.defScale != null) existing.defScale = opts.defScale;   // v2.3.0：镜像结界按实例缩放定义值
       if (opts.noStatMods) existing.noStatMods = true;   // v2.3.0：朴实「只挡能力部分」
       events.push({ type: 'refresh', statusId: opts.id, unitId: unit.id });
       return { applied: false, refreshed: true, events: events };
     } else if (def.stacking === 'stack') {
       existing.stacks = Math.min(def.maxStacks || 3, existing.stacks + stacks);
       existing.duration = Math.max(existing.duration, opts.duration || 1);
+      if (opts.defScale != null) existing.defScale = opts.defScale;
       if (opts.noStatMods) existing.noStatMods = true;
       events.push({ type: 'stack', statusId: opts.id, unitId: unit.id, stacks: existing.stacks });
       return { applied: false, refreshed: true, events: events };
@@ -67,6 +74,9 @@ function applyStatus(unit, opts) {
     data: opts.data || {},
     modsPct: opts.modsPct || null
   };
+  /* v2.3.0（镜像结界 §3.12-2）：defScale = 本实例对**定义值**（statMods / statModsPct）的缩放系数，
+     由 statMods() 乘算；不传 = 1（不缩放），故旧行为与形状一字不变。 */
+  if (opts.defScale != null) inst.defScale = opts.defScale;
   /* v2.3.0（朴实作用面）：noStatMods = 本次实例**不贡献任何属性修正**
      （定义里的 statMods / statModsPct 与实例 modsPct 都跳过），但状态的 hooks / 附加效果照常 ——
      对应 §5.6-1「同一效果既有增减益又有附加效果时，只生效附加效果」。
@@ -224,7 +234,9 @@ function dispatch(unit, hook, ctx) {
      ① 按 st.stacks 乘算（破甲 6 层要真的 -60%，而不是永远 -10）
      ② 支持 def.statModsPct —— 按 unit.base 比例修正（潮湿「魂防 -25%」这类随属性缩放的效果，
         写固定值在几千点属性面前毫无意义）
-     ③ 支持实例自带的 st.modsPct（「强攻」+30% 攻击、「气势如虹」+n×3% 这类按等级取值） */
+     ③ 支持实例自带的 st.modsPct（「强攻」+30% 攻击、「气势如虹」+n×3% 这类按等级取值）
+   v2.3.0 ④ 支持实例自带的 st.defScale —— 缩放**定义值**（statMods / statModsPct），
+     供镜像结界按阵营缩放「定义驱动」的状态幅度（§3.12-2「全通道」）。 */
 function statMods(unit) {
   var flat = {}, pct = {};
   var list = (unit && unit.statuses) || [];
@@ -236,14 +248,16 @@ function statMods(unit) {
        但状态的 hooks 照常派发 —— 用于「既有增减益又有附加效果」的效果只挡能力部分。 */
     if (st.noStatMods) continue;
     var n = Math.max(1, st.stacks || 1);
+    var ds = (st.defScale == null) ? 1 : st.defScale;   // v2.3.0：定义值缩放（默认 1）
     var k;
-    if (def.statMods) for (k in def.statMods) flat[k] = (flat[k] || 0) + def.statMods[k] * n;
-    if (def.statModsPct) for (k in def.statModsPct) pct[k] = (pct[k] || 0) + def.statModsPct[k] * n;
+    if (def.statMods) for (k in def.statMods) flat[k] = (flat[k] || 0) + def.statMods[k] * n * ds;
+    if (def.statModsPct) for (k in def.statModsPct) pct[k] = (pct[k] || 0) + def.statModsPct[k] * n * ds;
     if (st.modsPct) for (k in st.modsPct) {
       /* v2.1.22：同一键上**实例 modsPct 覆盖定义的 statModsPct**（而不是叠加）——
          否则「打湿」按基础属性成长传进来的幅度会与定义里的固定值叠成两份。
-         不同键之间照旧各自累加。 */
-      if (def.statModsPct && def.statModsPct[k] != null) pct[k] = (pct[k] || 0) - def.statModsPct[k] * n;
+         不同键之间照旧各自累加。（被覆盖的定义值同样按 ds 缩放后再抵消。）
+         ⚠️ 实例 modsPct 本身**不乘 ds**：调用方（castSkill）已按阵营对实例幅度缩放过了。 */
+      if (def.statModsPct && def.statModsPct[k] != null) pct[k] = (pct[k] || 0) - def.statModsPct[k] * n * ds;
       pct[k] = (pct[k] || 0) + st.modsPct[k] * n;
     }
   }

@@ -1131,7 +1131,10 @@ var _HOOK_LABELS={onBattleStart:'战斗开始时（仅一次）',onTurnStart:'�
   onBeforeAction:'自己行动前（可跳过行动）',onAfterAction:'自己行动后',onDamage:'伤害结算时（攻防双方都会问）',
   onAfterDamage:'自己造成伤害后',onBeforeStatus:'自己将被施加状态时',onAllyStatus:'友方将被施加状态时',
   onAllyDamage:'友方受到伤害时（可分担）',onBeforeHeal:'自己将被治疗时',onFoeHeal:'敌方被治疗时',
-  onBeforeHit:'命中判定时',onBeforeCrit:'暴击判定时'}
+  onBeforeHit:'命中判定时',onBeforeCrit:'暴击判定时',
+  /* v2.3.0：镜像结界的 onBeforeSupportEffect（受我方/敌方辅助效果时的 ±25% 缩放）。
+     此前漏登记 → 天赋详情弹层「触发时机」会把原始 hook id 打印两次（label 与 dim 都是 id）。 */
+  onBeforeSupportEffect:'自己将受到辅助效果时'}
 
 /* 比例类数值 → 百分数；倍率类 → 保留两位 */
 function fmtEffectVal(k,v){

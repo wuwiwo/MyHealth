@@ -270,6 +270,36 @@ const dmgE2E = dmgMatch ? +dmgMatch[1] : null;
 assert('普攻：基伤 101 × 1.6 = 161（旧实现会二次暴击成 241）', dmgE2E === 161, 'dmg=' + dmgE2E + ' | ' + evText.slice(0, 180));
 assert('普攻：只出一条暴击日志', (evE2E || []).filter(e => /暴击/.test(e.msg || '')).length === 1);
 
+/* v2.3.0 收口：**技能路径与普攻路径同一套暴击判据**（groupCritMult）。
+   改动前 castSkill 直接走 talentCrit(actor)，宠物带技能出手时**宠物暴击档 15%/160% 不生效**。
+   取位：用敌方技能「冲撞」（攻击·威力 200%）作为被测技能 —— 施放前 actor 无需持有该技能。 */
+let _critFoeN = 0;
+function castCharge(actor, rng) {
+  const foe = sandbox.createUnit({ id: 'cv' + (++_critFoeN), side: 'enemy', name: '靶', level: 1, base: { hp: 99999, atk: 1, def: 0, spd: 1 } });
+  const gb = sandbox.createGroupBattle({ allies: [actor], enemies: [foe], rng: rng });
+  const evs = sandbox.castSkill(gb, actor, 'charge');
+  const txt = evs.map(e => (e && e.msg) || '').join(' | ');
+  const m = /→\s+\S+\s+(\d+)\s+伤害/.exec(txt);
+  return { dmg: m ? +m[1] : null, crits: evs.filter(e => /暴击/.test(e.msg || '')).length, txt: txt };
+}
+const always0 = function () { return 0; };
+const petOnlyCrit = mkUnit('petOnlyCrit', null, { hp: 100, atk: 100, def: 0, spd: 5 });
+petOnlyCrit._petShared = { crit: { chance: 0.15, critMult: 1.6 } };   // 只有宠物暴击档，无斗者本能
+const petBothCrit = mkUnit('petBothCrit', ['fighter_instinct'], { hp: 100, atk: 100, def: 0, spd: 5 });
+petBothCrit._petShared = { crit: { chance: 0.15, critMult: 1.6 } };
+const skPetOnly = castCharge(petOnlyCrit, always0);
+assert('技能暴击 → 宠物暴击档单独生效（200×1.6=320；改前技能路径不吃宠物档 → 200）',
+  skPetOnly.dmg === 320 && skPetOnly.crits === 1, 'dmg=' + skPetOnly.dmg + ' crits=' + skPetOnly.crits + ' | ' + skPetOnly.txt.slice(0, 160));
+const skBoth = castCharge(petBothCrit, always0);
+assert('技能暴击 → 都触发取较高倍率 1.6、只结算一次（200×1.6=320，非 1.5×1.6）',
+  skBoth.dmg === 320 && skBoth.crits === 1, 'dmg=' + skBoth.dmg + ' crits=' + skBoth.crits + ' | ' + skBoth.txt.slice(0, 160));
+/* rng 序列：① 选目标 ② 命中判定 ③ 天赋暴击掷骰 ④ 宠物暴击档掷骰 */
+const skTalentOnly = castCharge(petBothCrit, seqRng([0, 0, 0.10, 0.50]));
+assert('技能暴击 → 只有斗者本能触发 → 150%（200×1.5=300）', skTalentOnly.dmg === 300, 'dmg=' + skTalentOnly.dmg);
+const skNone = castCharge(petBothCrit, seqRng([0, 0, 0.50, 0.50]));
+assert('技能暴击 → 都不触发 → 不暴击（200）、无暴击日志', skNone.dmg === 200 && skNone.crits === 0,
+  'dmg=' + skNone.dmg + ' crits=' + skNone.crits);
+
 sandbox.battleRnd = _origBattleRnd;
 
 /* ---- 7. WP-D（v2.3.0）：§3 其余 9 条 petOnly 天赋的对齐（端到端） ---- */
@@ -363,6 +393,45 @@ const drenchBase = drenchSoulDef(false);
 assert('§3.5 镜像结界 E2E → 敌方辅助状态幅度 ×0.75（打湿 魂防 −25% → −18.75%）',
   drenchBase !== null && drenchBase !== 0 && near(drenchSoulDef(true), drenchBase * 0.75),
   'base=' + drenchBase + ' mirror=' + drenchSoulDef(true));
+
+/* ④ 定义驱动幅度通道（§3.12-2 全通道）：定义里的 statModsPct 是全局共享值，按实例缩放走
+   applyStatus 的 `defScale`。可达用例 = 敌方**辅助型**技能「遗言」（lastword）→ 遗言诅咒
+   （定义 atk/soulAtk −25%，无实例 modsPct）。armorbroken / souldown / weaken 由**攻击型**
+   技能（armorbreak / stardust）或玩家技能施加，不经过镜像的 support 通道，故不在此列。 */
+function lastwordAtkMod(withMirror) {
+  const t = mkSide('ally', { hp: 5000, atk: 100, def: 5, spd: 5, soulDef: 0 }, withMirror ? ['mirror_field'] : null);
+  const foe = mkSide('enemy', { hp: 500, atk: 10, def: 5, spd: 1, soulAtk: 100 }, null, 10);
+  const gb = sandbox.createGroupBattle({ allies: [t], enemies: [foe], rng: function () { return 0; } });
+  sandbox.castSkill(gb, foe, 'lastword');
+  const inst = statusOf(t, 'lastworded');
+  return { atk: sandbox.statMods(t).atk, defScale: inst ? inst.defScale : undefined };
+}
+const lwBase = lastwordAtkMod(false);
+const lwMirror = lastwordAtkMod(true);
+assert('§3.5 镜像结界 E2E → 敌方辅助「遗言」的定义幅度 ×0.75（atk −25% → −18%）',
+  lwBase.atk === -25 && lwMirror.atk === -18,
+  'base=' + lwBase.atk + ' mirror=' + lwMirror.atk);
+assert('§3.5 镜像结界 E2E → 未持有镜像时不写 defScale（旧实例形状不变）',
+  lwBase.defScale === undefined && lwMirror.defScale === 0.75,
+  'base=' + lwBase.defScale + ' mirror=' + lwMirror.defScale);
+/* applyStatus.defScale 的单元级行为（正/反倒 + 不重复缩放实例 modsPct） */
+const uDsA = mkSide('ally', { hp: 100, atk: 100, def: 10, spd: 5 });
+sandbox.applyStatus(uDsA, { id: 'weaken', duration: 2, defScale: 0.75 });   // 定义 atk −15% → −11.25% → −11
+sandbox.syncStatusDerived(uDsA);
+assert('defScale → 缩放定义 statModsPct（弱化 atk −15% ×0.75 = −11）', uDsA._statMods.atk === -11, JSON.stringify(uDsA._statMods));
+const uDsB = mkSide('ally', { hp: 100, atk: 100, def: 10, spd: 5 });
+sandbox.applyStatus(uDsB, { id: 'atkup', duration: 2, modsPct: { atk: 0.30 }, defScale: 0.5 });
+sandbox.syncStatusDerived(uDsB);
+assert('defScale → **不**再乘实例 modsPct（调用方已缩放过，避免双重缩放）', uDsB._statMods.atk === 30, JSON.stringify(uDsB._statMods));
+const uDsC = mkSide('ally', { hp: 100, atk: 10, def: 100, spd: 5 });
+sandbox.applyStatus(uDsC, { id: 'armorbroken', duration: 3, defScale: 0.5 });
+sandbox.applyStatus(uDsC, { id: 'armorbroken', duration: 3, defScale: 0.5 });   // 叠到 2 层
+sandbox.syncStatusDerived(uDsC);
+assert('defScale → 与叠层共存（破甲 2 层 × 每层 −10% ×0.5 = 防御 −10）', uDsC._statMods.def === -10, JSON.stringify(uDsC._statMods));
+const uDsD = mkSide('ally', { hp: 100, atk: 100, def: 10, spd: 5 });
+sandbox.applyStatus(uDsD, { id: 'weaken', duration: 2 });
+assert('defScale → 不传时不写字段（默认行为/形状不变）', uDsD.statuses[0].defScale === undefined);
+
 assert('§3.5 镜像结界 E2E → 「漆黑之眼/心眼/灵感涌动」等其余天赋不受影响（无天赋单位倍率 1）',
   sandbox.supportEffectMul(mkSide('ally', TGT, ['dark_eye', 'mind_eye']), { side: 'enemy', id: 'e' }) === 1);
 

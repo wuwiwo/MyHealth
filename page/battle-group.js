@@ -507,9 +507,18 @@ function castSkill(gb, actor, skillId) {
           tdg.mutations = tdg.mutations.concat(sdg.mutations);
           sdg.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: t.id, type: e.type }); });
           tdg.mutations.forEach(function (m) { if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value)); });
-          // 天赋暴击（斗者本能）
-          var tc2 = talentCrit(actor);
-          if (tc2.chance > 0 && gb.rng() < tc2.chance) { dmg = Math.floor(dmg * tc2.mult); events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + tc2.mult }); }
+          /* v2.3.0（WP-D §3.12-1 收口）：技能暴击与普攻**同一套判据** —— 走 groupCritMult()
+             （天赋「斗者本能」30%/150% × 玩家/宠物暴击档 30%/300%、15%/160%），
+             两边各自掷骰、都触发取较高倍率、**只结算一次**。
+             此前技能路径直接走 talentCrit(actor)：宠物带技能出手时**宠物暴击档不生效**
+             （只出天赋的 ×1.5），与普攻路径分叉 —— 同一单位普攻/技能两套暴击口径。
+             ⚠️ 这一步与普攻路径一样会多掷一次 gb.rng()（见 groupCritMult 注释），
+                故技能链路的随机序列随之改变。 */
+          var critMult = groupCritMult(gb, actor);
+          if (critMult > 1) {
+            dmg = Math.floor(dmg * critMult);
+            events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + critMult });
+          }
           // 圣光守护：队友分担
           dmg = applyAllyDamageShare(gb, t, dmg, events);
           // v2.1.15：护盾吸收
@@ -567,14 +576,17 @@ function castSkill(gb, actor, skillId) {
     if (t && t.hp > 0) {
       var grade = sa.grade || 1;
       /* v2.3.0 WP-D（§3.12-2 全通道）：镜像结界 —— 敌方辅助技能加到持有者身上的状态，
-         其**实例幅度**（modsPct）按阵营缩放（我方 ×1.25 / 敌方 ×0.75）。
-         只缩放实例 modsPct：状态定义里的 statModsPct 是全局共享的，不能按实例改。 */
+         其幅度按阵营缩放（我方 ×1.25 / 敌方 ×0.75）。两条载体都要照顾：
+           · **实例 amplitude**（sa.modsPct，如打湿按成长传入的魂防削减）→ 就地乘到实例值上；
+           · **定义驱动幅度**（status-defs.js 的 statModsPct，如遗言诅咒 atk/soulAtk -25%）
+             —— 定义是全局共享的，改不得；改走 applyStatus 的 `defScale`（按实例缩放定义值）。 */
       var applyModsPct = sa.modsPct;
       var supMul = supportMulFor(t);
       if (supMul !== 1 && applyModsPct) {
         applyModsPct = {};
         for (var mk in sa.modsPct) applyModsPct[mk] = sa.modsPct[mk] * supMul;
       }
+      var defScale = (supMul !== 1) ? supMul : null;   // null = 不写字段（保持旧实例形状）
       /* v2.1.15：金身护盾的「护盾期免疫普通+高级负面」。
          此前 _shieldImmune 只置位、无消费方 → 开战护盾既不挡伤害也不免负面。 */
       if (t._shieldImmune && t._shield > 0 && grade <= 2) {
@@ -602,7 +614,7 @@ function castSkill(gb, actor, skillId) {
       var auraGuard = talentAura(mates, 'onAllyStatus', { statusId: sa.id, grade: grade, target: t });
       if (!selfGuard.skipAction && !auraGuard.skipAction) {
         // v2.1.14：区分「施加 / 刷新 / 叠层」，并去掉日志里外泄的英文状态 id（如 (poison)）
-        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor, modsPct: applyModsPct, data: sa.data, noStatMods: stripMods });
+        var ar = applyStatus(t, { id: sa.id, duration: sa.duration, source: actor, modsPct: applyModsPct, defScale: defScale, data: sa.data, noStatMods: stripMods });
         syncStatusDerived(t);   // v2.1.15：状态变了就重算 _statMods，否则减速/破甲不生效
         var verb = ar.refreshed ? '刷新' : '施加';
         var extra = '';
