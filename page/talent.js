@@ -41,11 +41,13 @@ function attachTalents(unit, talentIds) {
   return unit;
 }
 
-/* 读取天赋注册时声明的配置项（`config`）—— 天赋数值的**唯一来源**。
+/* 读取天赋注册时声明的配置项（`config`）—— 天赋**固定数值**的唯一来源。
    v2.2.16（§5.4F 死配置清理）：此前 `config: { rounds: 2 }`（慢启动）/ `{ extra: 1, penalty: 0.7 }`
    （多目标）**写了没人读**，hook 里另写一份等价字面量（`unit._slowRounds || 2`、`(_multiExtra||1)+1`、
    `dmgReduce: 0.3`）—— 同一个数值两处写死，改注册值不生效、改 hook 又绕过了配置。
-   现在 hook 一律从这里取值：**改 `config` 立即生效**（守卫见 scripts/test-talent-fixation.js）。 */
+   现在 hook 一律从这里取值：**改 `config` 立即生效**（守卫见 scripts/test-talent-fixation.js）。
+   WP-F 补充：**声明了 `range` 的键走成长（`talentValue` 优先区间）**，`config` 只服务无区间的固定值；
+   `talentValue` 的兜底分支就是调用本函数，所以配置只有一个读口。 */
 function talentConfig(id, key, dflt) {
   var t = TALENTS[id];
   if (t && t.config && t.config[key] != null) return t.config[key];
@@ -60,6 +62,53 @@ function talentConfig(id, key, dflt) {
 function isWeakTalent(id) {
   var t = TALENTS[id];
   return !!(t && t.weak);
+}
+
+/* ============================================================
+   WP-F（§5.4A 裁决「天赋接成长」）
+
+   §5.1 对 14 条天赋的评审里，凡写了「**根据关卡与敌人级别**，数值为 X~Y」的，
+   之前一律是固定值（只有利刃读 `unit.level`，且 50% 上限不可达）——
+   本段把它们改成**按进度 t 在设计原文给定的区间内取值**。
+
+   驱动源**不是另立一套**：与敌群技能（`page/skill.js` 的 `skillRangeT`）**同一套** ——
+     · 敌群单位：t = (unit.level − 1) / 9，`unit.level` = **大关号**
+       （`group-levels.js` 的 genEnemyCfg 给定：`level = clamp(lg, 1, 10)`）
+       → g1 = t 0、g10 及以上 = t 1（§5.6-4 方案①「先暂定如此」）。
+     · 宠物（若将来越界挂这些天赋）：仍走 skillRangeT 的**炼化**口径（稀有度上限 R50/SR60/SSR80/UR100），
+       这里不重复实现。
+   ⚠️ 加载顺序：本文件在 `page/index.html` 中**先于 `skill.js`**，且 `scripts/test-enemy.js` 的沙箱
+      干脆不加载 skill.js → `skillRangeT` 缺席时按**同一公式**兜底。两者一致由
+      `scripts/test-talent-growth.js` 断言守卫（同一 level 下两个函数必须给出同一个 t）。
+
+   取值口径（与 `skill.js` 的 `skillValue` 一致）：`range: { key: [低, 高] }`，t=0 取下端、t=1 取上端，
+   线性插值；百分比直接插值，**个数 / 回合数**这类整数按 `Math.round` 取整（同 skill.js 对 dur 的处理）。
+
+   没有区间的（§5.1 未给 X~Y）**不接成长**，保持固定值：
+     · `vigor` 强健（评审只写「加成无法被清除迷雾还原」= §5.6-2 的裁定，无 X~Y）
+     · `magicmirror` 魔法镜（评审只写「受到敌人的指向性辅助类型技能时触发」）
+     · `plain` 朴实（评审只写「包含双方」）
+     · `vengeance` 复仇（§5.6-6 裁定「每层维持现状」+10%）
+   ⚠️ `intimidate` 威吓的幅度（10%~50%）**本轮未接**：见该天赋定义处的受阻说明。
+   ============================================================ */
+var TALENT_LEVEL_MAX = 10;   // 与 skill.js 的 SKILL_LEVEL_MAX 同口径（两份一致有守卫断言）
+function talentRangeT(unit) {
+  if (typeof skillRangeT === 'function') return skillRangeT(unit);   // 唯一驱动源（敌群技能同款）
+  /* 兜底（未加载 skill.js 的最小沙箱 / 加载顺序变化）：**同一公式**，不引入第二套映射 */
+  var lv = Math.max(1, Math.min(TALENT_LEVEL_MAX, Math.floor((unit && unit.level) || 1)));
+  return (lv - 1) / (TALENT_LEVEL_MAX - 1);
+}
+/* 按区间进度取天赋数值：range 优先（成长），其次 config（固定值），最后 dflt。
+   ⚠️ 与 `talentConfig` 一样是「数值的唯一来源」出口 —— hook 里不许再写死字面量
+   （守卫见 scripts/test-talent-fixation.js / scripts/test-talent-growth.js）。 */
+function talentValue(id, key, unit, dflt) {
+  var t = TALENTS[id];
+  var r = (t && t.range) ? t.range[key] : null;
+  if (r && r.length === 2) {
+    var k = Math.max(0, Math.min(1, talentRangeT(unit)));
+    return r[0] + (r[1] - r[0]) * k;
+  }
+  return talentConfig(id, key, dflt);   // 未声明区间 → 走固定值（配置的唯一读口仍是 talentConfig）
 }
 
 /* battle 在时机点调用：聚合所有天赋的指定 hook */
@@ -127,62 +176,87 @@ function resetAbilityChanges(unit) {
    连同 §5.4F 的死配置清理一起留给 WP-F。
    WP-D（施工计划 §6.4）只做「数值直接给、不走 t 成长」的那几条 + 死壳修复：
 
-   本轮**判定无改动**（成长化＝WP-F）：blade / flutter / roughskin / vigor /
+   WP-D 当时判定无改动（成长化留 WP-F）：blade / flutter / roughskin / vigor /
    magicshield / slowstart / lazy / multitarget / bloodthirst / regen
-   本轮**实际改动**：magicmirror（补 `onBeforeSupport` 派发点）/ plain（作用面边界）/
+   WP-D 实际改动：magicmirror（补 `onBeforeSupport` 派发点）/ plain（作用面边界）/
    intimidate（持续回合 5~10 随机 + 先到者解除）/ vengeance（每层间隔 25%→20%）
+
+   ===== WP-F（§5.4A「天赋接成长」）落地状态（本段收口）=====
+   ✅ **已接成长**（区间见各定义上的 `range`，t 由 `talentRangeT` 给出）：
+     blade（10%~50%）· flutter（5%~20%）· roughskin（10%~50%）· magicshield（15%~45%）·
+     slowstart（2~4 回合）· lazy（减伤 20%~40%）· multitarget（降伤 20%~30% + 额外 1~2 个）·
+     bloodthirst（10%~35%）· regen（每 2~3 回合 + 回复 3%~8%）
+   ⏸ **判定不接成长**（§5.1 未给区间，不发明数值）：
+     vigor（评审只重申「加成无法被清除迷雾还原」）· magicmirror / plain（评审只说作用面）·
+     vengeance（§5.6-6：每层维持现状 +10%）
+   ⛔ **受阻**：intimidate 的幅度（10%~50%）—— 消费点在禁改文件 `battle-group.js`，
+     它读的是**全局常量** `INTIMIDATE_ATK_DOWN` 而非单位级字段（详见该定义处）。
    ============================================================ */
 
 /* --- 天赋注册（14 条） --- */
 
-/* 利刃：攻击造成伤害提升 10%-50%（按 level 取） */
+/* 利刃：攻击造成伤害提升 10%-50%
+   WP-F（§5.1.1 评审「根据关卡与敌人级别，数值为10%~50%」+ §5.4D「根据最新文档处理」）：
+   改前是 `0.10 + level×0.005`（lv1 = 10.5% … lv10 = 15%），§5.1.1 的 🔴「50% 上限不可达」。
+   现按 t 在 **[10%, 50%]** 内取值：g1 = 10% … g10 及以上 = 50%。 */
 registerTalent({
   id: 'blade',
   name: '利刃',
-  desc: '攻击造成伤害提升（10%-50%）',
+  desc: '攻击造成伤害提升（10%-50%，随关卡与敌人级别成长）',
+  range: { boost: [0.10, 0.50] },
   hooks: {
     onDamage: function (unit, ctx) {
       if (ctx.isPlayerAttack) {
-        var boost = 0.10 + (unit.level || 1) * 0.005;  // 10% 起，随等级微增
-        return { mutations: [{ key: 'dmgBoost', value: Math.min(0.5, boost) }] };
+        return { mutations: [{ key: 'dmgBoost', value: talentValue('blade', 'boost', unit, 0.10) }] };
       }
     }
   }
 });
 
-/* 振翅：每回合结束，按速度初始值增加一定比例速度 */
+/* 振翅：每回合结束，按速度初始值增加一定比例速度
+   WP-F（§5.1.2 评审「根据关卡与敌人级别，每回合速度提升5%~20%（至少+1）」）：
+   改前固定 5%（§5.1.2 标注「比例 5% 与不设上限均为源码自定，设计未给比例」）。
+   现按 t 在 [5%, 20%] 内取值；「至少 +1」与「无上限」两条既有口径不动（`_flutterBase` 快照供清除迷雾还原）。 */
 registerTalent({
   id: 'flutter',
   name: '振翅',
-  desc: '每回合结束，根据速度初始值增加一定比例的速度',
+  desc: '每回合结束，根据速度初始值增加一定比例的速度（5%-20%，随关卡与敌人级别成长）',
+  range: { pct: [0.05, 0.20] },
   hooks: {
     onTurnEnd: function (unit) {
       // v2.1.15：留下快照，供「清除迷雾」的能力变化归零还原
       if (unit._flutterBase == null) unit._flutterBase = unit.base.spd || 0;
       var baseSpd = unit._flutterBase;
-      var inc = Math.max(1, Math.floor(baseSpd * 0.05));
+      var inc = Math.max(1, Math.floor(baseSpd * talentValue('flutter', 'pct', unit, 0.05)));
       unit.base.spd += inc;
       return { events: [{ type: 'talent', talentId: 'flutter', unitId: unit.id, msg: '振翅: 速度 +' + inc }] };
     }
   }
 });
 
-/* 粗糙皮肤：受普通攻击时反伤（无视防御） */
+/* 粗糙皮肤：受普通攻击时反伤（无视防御）
+   WP-F（§5.1.3 评审「根据关卡与敌人级别，反伤比例为10%~50%」）：改前固定 15%（源码自定）。
+   现按 t 在 [10%, 50%] 内取值；「下限 1」「无视防御」两条既有口径不动
+   （v2.1.15 修过「受击方吃双倍伤害」的同源缺陷，行为正确，别改）。 */
 registerTalent({
   id: 'roughskin',
   name: '粗糙皮肤',
-  desc: '受到普通攻击时给予攻击者一定比例伤害（无视防御）',
+  desc: '受到普通攻击时给予攻击者一定比例伤害（无视防御；10%-50%，随关卡与敌人级别成长）',
+  range: { pct: [0.10, 0.50] },
   hooks: {
     onDamage: function (unit, ctx) {
       if (ctx.attacker && ctx.isPhysical) {
-        var dmg = Math.max(1, Math.floor(ctx.amount * 0.15));
+        var dmg = Math.max(1, Math.floor(ctx.amount * talentValue('roughskin', 'pct', unit, 0.15)));
         return { mutations: [{ key: 'reflectFlat', value: dmg }] };
       }
     }
   }
 });
 
-/* 强健：攻击·防御·魂攻击·魂防御提升一定比例 */
+/* 强健：攻击·防御·魂攻击·魂防御提升一定比例
+   ⏸ WP-F 判定**不接成长**：§5.1.4 的评审栏只写了「强健的加成无法被清除迷雾还原」
+   （那是 §5.6-2 的裁定，与成长无关），**设计原文未给 X~Y 区间** → 按任务口径**不发明数值**，
+   维持 +15%（「比例 15% 为源码自定，设计未给比例」仍成立，属未决项）。 */
 registerTalent({
   id: 'vigor',
   name: '强健',
@@ -204,7 +278,9 @@ registerTalent({
    （见那里的 `mirrorBlocked` 计算），且**只在「对手指向本单位」的辅助技能**上触发 ——
    队友给的增益/治疗不算（评审：受到**敌人**的指向性辅助类型技能时触发）。
    反弹语义（§5.6-3）：**只反弹负面/减益类辅助**；治疗/增益类**仅免疫、不反弹**
-   （否则等于反过来给敌方回血 / 加攻）。反射由 `castSkill` 消费 `reflectSupport` 时执行。 */
+      （否则等于反过来给敌方回血 / 加攻）。反射由 `castSkill` 消费 `reflectSupport` 时执行。
+   ⏸ WP-F 判定**不接成长**：§5.1.5 的评审只写作用面（「受到敌人的指向性辅助类型技能时触发」），
+     未给几率区间 → 30% 固定不发明。 */
 registerTalent({
   id: 'magicmirror',
   name: '魔法镜',
@@ -233,7 +309,9 @@ registerTalent({
        以及「造成伤害提升/降低」这类伤害修正，一律不受影响；
      · 同一效果**既有增减益又有附加效果**时，只挡能力部分、附加部分照常生效
        —— 由状态定义上的 `extraEffect` 标记识别（现仅 `lastworded`：降攻魂攻 + 每回合掉血），
-       命中时返回 `stripStatMods`，由 castSkill 以 `noStatMods` 落库（属性部分被剥掉、状态照挂）。 */
+       命中时返回 `stripStatMods`，由 castSkill 以 `noStatMods` 落库（属性部分被剥掉、状态照挂）。
+   ⏸ WP-F 判定**不接成长**：§5.1.6 的评审只写作用面（「包含双方」，后经 §5.5-1 / §5.6-1 收边界），
+      本条无论值可调 → 无区间可接。 */
 registerTalent({
   id: 'plain',
   name: '朴实',
@@ -264,7 +342,15 @@ registerTalent({
    v2.1.14：本天赋唯一可读的削减幅度常量，battle-group.js 直接读取，避免两处各写一个魔法数。
    v2.3.0（§5.1.7 评审 + §5.6-5）：解除条件由「仅施加者 <50% 血」扩为**先到者解除** ——
    ① 施加者血量 <50%，或 ② 持续回合数（**开场随机 5~10 回合**）走完。
-   ⚠️ 削减幅度仍是 40%（评审的「10%~50% 随关卡成长」属 WP-F，本轮不接成长）。 */
+   ⛔ **幅度仍未接成长（WP-F 受阻项，未硬塞）**：§5.1.7 评审要求「根据关卡与敌人级别，降低10%~50%」，
+      但该幅度的**唯一消费点在禁改文件 `page/battle-group.js`**：它读的是**全局常量**
+      `INTIMIDATE_ATK_DOWN`（经 `intimidateAtkDown()`，见 battle-group.js:13-17 / :435 / :612），
+      **不是单位级字段** → 本文件即使算出单位级的区间值也无处落。
+      · 且它同时被 3 处消费点（普攻/魂攻/技能伤害各一处）+ UI 文案（`game-render.js:937/1011`
+        的「攻-40%」硬编码）绑定，改口径必须同时动那两个禁改文件。
+      → 因此**保持 40% 固定**，把口径留给下一批：建议 battle-group 改为读
+        `actor._intimidateDown`（由本文件在 onBattleStart 写入区间取值），届时本条 3 行即可接通。
+      （同一批次里 `magicshield` 之所以能接成长，是因为它的消费端统一读 mutation 的 `m.value`。） */
 var INTIMIDATE_ATK_DOWN = 0.4;
 var INTIMIDATE_TURN_MIN = 5;    // §5.6-5：持续 5~10 回合**随机**
 var INTIMIDATE_TURN_MAX = 10;
@@ -304,30 +390,34 @@ registerTalent({
 });
 
 /* 魔法盾：受到魂攻击伤害降低
-   WP-C（§5.4F 死配置清理的最后一项，本批收口）：数值的唯一来源仍在这里（0.3），
+   WP-C（§5.4F 死配置清理的最后一项，本批收口）：数值的唯一来源仍在这里，
    消费端已改读 `m.value`（`dmg = Math.floor(dmg * (1 - m.value))`，不再硬编码 ×0.7）；
    同时补上**真正的消费通道** —— 本 hook 的判据是 `ctx.isSoul`，而旧实现只在普攻的
    **物理**分支读该 mutation（既不传 isSoul、值是硬编码）→ 该天赋此前一次都没生效。
    现在 battle-group 的**魂攻伤害**结算前按 `isSoul` 派发受击方天赋并只取 soulDmgReduce。
-   行为守卫：scripts/test-talent-fixation.js 断言「改这里的值 → 实战魂攻伤害跟着变」。 */
-var MAGICSHIELD_SOUL_REDUCE = 0.3;
+
+   WP-F（§5.1.8 评审「根据关卡与敌人级别，降低15%~45%」）：改前固定 30%（生产端常量）。
+   现按 t 在 **[15%, 45%]** 内取值 —— 因为消费端读的是 mutation 的 `m.value`（单一来源），
+   这里换区间即可生效，**无需动 battle-group.js**（对比威吓：那边读全局常量，故受阻）。
+   行为守卫：scripts/test-talent-growth.js 断言「同一场战斗里 level 1 与 level 10 的盾兵挨同一记魂攻，掉血不同」。 */
 registerTalent({
   id: 'magicshield',
   name: '魔法盾',
-  desc: '自身受到魂攻击伤害降低',
+  desc: '自身受到魂攻击伤害降低（15%-45%，随关卡与敌人级别成长）',
+  range: { reduce: [0.15, 0.45] },
   hooks: {
     onDamage: function (unit, ctx) {
       if (ctx.isSoul) {
-        return { mutations: [{ key: 'soulDmgReduce', value: MAGICSHIELD_SOUL_REDUCE }] };
+        return { mutations: [{ key: 'soulDmgReduce', value: talentValue('magicshield', 'reduce', unit, 0.3) }] };
       }
     }
   }
 });
 
 /* 慢启动：战斗开始前 x 回合无法行动
-   v2.2.16（§5.4F 死配置清理）：`x` 的**唯一来源** = 本天赋的 `config.rounds`。
+   v2.2.16（§5.4F 死配置清理）：`x` 的**唯一来源** = 本天赋的定义（当时是 `config.rounds`）。
    此前 hook 写死 `ctx.turn <= (unit._slowRounds || 2)`，而 `_slowRounds` **全项目无写入点**、
-   `config.rounds` 又没人读 —— 同一个 2 两处写死（写死的那处还是死字段）。现两处合一，改 config 即生效。
+   `config.rounds` 又没人读 —— 同一个 2 两处写死（写死的那处还是死字段）。现两处合一。
 
    v2.3.0 **作者裁决：以设计原文为准 —— 设定 x 回合就真的 x 回合**（修一处「差 1」）。
    根因：`battle-group.js` 的 `groupUnitTurn` 传的是 `ctx.turn = gb.turn + 1`（**实际回合号 + 1**，
@@ -337,16 +427,20 @@ registerTalent({
    直接派发（测试 / 工具 / 未来新入口）时按既有约定反推 `ctx.turn − 1`。
    ⚠️ 只改本天赋，**不动 `ctx.turn` 本身** —— 它同时被 regen / grow_atk / grow_def / doom_call /
       玩家技能回合钩子消费，改全局口径会一次改动多条无关数值。
+
+   WP-F（§5.1.9 评审「根据关卡与敌人级别，需要2~4回合启动时间，boss不会获得」）：
+   `x` 从固定 2 改为按 t 在 **[2, 4]** 内取整（`Math.round`）→ g1~g3 = 2、g4~g7 = 3、g8 起 = 4。
+   数值仍只来自本定义（`range.rounds`），hook 不写死 —— 单源性质由 test-talent-fixation.js 守住。
    行为守卫：scripts/test-talent-fixation.js（hook 层 + 端到端「真打一场数跳过回合」）。 */
 registerTalent({
   id: 'slowstart',
   name: '慢启动',
-  desc: '战斗开始的前 x 回合，自身无法行动',
-  config: { rounds: 2 },
+  desc: '战斗开始的前 x 回合（2~4，随关卡与敌人级别成长），自身无法行动',
+  range: { rounds: [2, 4] },
   weak: true,   // §5.4E：自我削弱天赋 —— **Boss** 不抽（group-levels.js 池子 + enemy.js 兜底抽取）；v2.3.0：精英/普通怪恢复可抽
   hooks: {
     onBeforeAction: function (unit, ctx) {
-      var rounds = talentConfig('slowstart', 'rounds', 2);
+      var rounds = Math.round(talentValue('slowstart', 'rounds', unit, 2));
       /* ctx.actualTurn = 实际回合号（群战链路显式传入）；
          没有时退回「ctx.turn − 1」（既有约定：ctx.turn = 实际回合号 + 1）。 */
       var actualTurn = (ctx.actualTurn != null) ? ctx.actualTurn : ((ctx.turn || 0) - 1);
@@ -357,11 +451,15 @@ registerTalent({
   }
 });
 
-/* 懒惰：每回合开始 25% 放弃行动，放弃回合受伤害降低 */
+/* 懒惰：每回合开始 25% 放弃行动，放弃回合受伤害降低
+   WP-F（§5.1.10 评审「根据关卡与敌人级别，每回合开始有 25% 几率放弃行动；
+   放弃行动回合自身受到伤害降低 20%~40%」）：**25% 是固定值**（设计原文写死 25%），
+   只有减伤幅度接成长 → 按 t 在 [20%, 40%] 内取值（改前固定 30%）。 */
 registerTalent({
   id: 'lazy',
   name: '懒惰',
-  desc: '每回合开始有25%几率放弃行动，放弃行动回合自身受到伤害降低',
+  desc: '每回合开始有25%几率放弃行动，放弃行动回合自身受到伤害降低（20%-40%，随关卡与敌人级别成长）',
+  range: { dmgReduce: [0.20, 0.40] },
   weak: true,   // §5.4E：自我削弱天赋 —— Boss / 精英不抽（同 slowstart）
   hooks: {
     onBeforeAction: function (unit) {
@@ -373,45 +471,54 @@ registerTalent({
     },
     onDamage: function (unit, ctx) {
       if (unit._lazySkip) {
-        return { mutations: [{ key: 'dmgReduce', value: 0.3 }] };
+        return { mutations: [{ key: 'dmgReduce', value: talentValue('lazy', 'dmgReduce', unit, 0.30) }] };
       }
     }
   }
 });
 
 /* 多目标：普通攻击伤害降低，可额外攻击 x 个敌人
-   v2.2.16（§5.4F 死配置清理）：伤害惩罚与额外目标数的**唯一来源** = 本天赋的 `config`。
+   v2.2.16（§5.4F 死配置清理）：伤害惩罚与额外目标数的**唯一来源** = 本天赋的定义。
    此前 `config: { extra: 1, penalty: 0.7 }` **两项都没人读**，hook 里另写死 `dmgReduce: 0.3`
-   与 `(_multiExtra || 1) + 1`（`_multiExtra` 全项目无写入点）—— 值恰好等价，但改配置不生效。 */
+   与 `(_multiExtra || 1) + 1`（`_multiExtra` 全项目无写入点）—— 值恰好等价，但改配置不生效。
+
+   WP-F（§5.1.11 评审「自身普通攻击造成伤害降低20%~30%，普通攻击可以额外攻击 1~2 个敌人」）：
+   两项都接成长 → 改前固定「降 30% + 额外 1 个」现在是区间：
+     · `penalty`（= 伤害**乘数**，消费端语义 `伤害 × penalty`）= 降幅 20%~30% 的补数 → **[0.8, 0.7]**
+     · `extra`（= **额外**目标数，消费端 `targets.slice(0, value)` 要的是**总目标数**，故 +1）
+       → **[1, 2]**，按 `Math.round` 取整（g6 起 = 额外 2 个）。 */
 registerTalent({
   id: 'multitarget',
   name: '多目标',
-  desc: '普通攻击造成伤害降低，可额外攻击 x 个敌人',
-  config: { extra: 1, penalty: 0.7 },
+  desc: '普通攻击造成伤害降低（20%~30%，随关卡与敌人级别成长），可额外攻击（1~2 个，同样成长）个敌人',
+  range: { extra: [1, 2], penalty: [0.8, 0.7] },
   hooks: {
     onDamage: function (unit, ctx) {
       if (ctx.isPlayerAttack) {
-        /* 普攻伤害 = 原值 × config.penalty；消费端（battle-group.js）读到的 dmgReduce 语义是「乘 (1 − v)」 */
-        return { mutations: [{ key: 'dmgReduce', value: 1 - talentConfig('multitarget', 'penalty', 0.7) }] };
+        /* 普攻伤害 = 原值 × range.penalty；消费端（battle-group.js）读到的 dmgReduce 语义是「乘 (1 − v)」 */
+        return { mutations: [{ key: 'dmgReduce', value: 1 - talentValue('multitarget', 'penalty', unit, 0.7) }] };
       }
     },
     onBeforeAction: function (unit, ctx) {
       /* ⚠️ 消费端 `battle-group.js` 取 `targets.slice(0, value)` → 值必须是**总目标数**：
-         = 额外目标数（config.extra）+ 1（原目标）。config.extra 即「额外攻击 x 个敌人」的 x。 */
-      return { mutations: [{ key: 'multiTarget', value: talentConfig('multitarget', 'extra', 1) + 1 }] };
+         = 额外目标数（range.extra）+ 1（原目标）。 */
+      return { mutations: [{ key: 'multiTarget', value: Math.round(talentValue('multitarget', 'extra', unit, 1)) + 1 }] };
     }
   }
 });
 
-/* 嗜血：造成伤害时恢复本次伤害一定比例生命 */
+/* 嗜血：造成伤害时恢复本次伤害一定比例生命
+   WP-F（§5.1.12 评审「根据关卡与敌人级别，自身造成伤害时，恢复本次伤害10%~35%的生命值」）：
+   改前固定 20%（源码自定）→ 现按 t 在 [10%, 35%] 内取值；上限仍为自身 maxHP（既有口径不动）。 */
 registerTalent({
   id: 'bloodthirst',
   name: '嗜血',
-  desc: '自身造成伤害时，恢复本次伤害一定比例的生命值',
+  desc: '自身造成伤害时，恢复本次伤害一定比例的生命值（10%-35%，随关卡与敌人级别成长）',
+  range: { heal: [0.10, 0.35] },
   hooks: {
     onAfterDamage: function (unit, ctx) {
       if (ctx.dealt > 0) {
-        var heal = Math.floor(ctx.dealt * 0.2);
+        var heal = Math.floor(ctx.dealt * talentValue('bloodthirst', 'heal', unit, 0.2));
         unit.hp = Math.min(unit.base.hp, unit.hp + heal);
         return { events: [{ type: 'talent', talentId: 'bloodthirst', unitId: unit.id, msg: '嗜血: 恢复 ' + heal }] };
       }
@@ -420,7 +527,9 @@ registerTalent({
 });
 
 /* 复仇：生命值每降低一定比例，攻击与魂攻击提升
-   v2.3.0（§5.1.13 评审 + §5.6-6）：**每层间隔由 25% 生命改为 20%**；每层 +10% 维持现状。 */
+   v2.3.0（§5.1.13 评审 + §5.6-6）：**每层间隔由 25% 生命改为 20%**；每层 +10% 维持现状。
+   ⏸ WP-F 判定**不接成长**：§5.6-6 已明确「每层维持现状」（+10%），且 §5.1.13 的评审只改了间隔
+   （「每损失 20% 生命」）—— **未给幅度区间** → 不发明数值。 */
 registerTalent({
   id: 'vengeance',
   name: '复仇',
@@ -449,16 +558,31 @@ registerTalent({
   }
 });
 
-/* 再生：每 2-3 回合恢复最大生命值一定比例 */
+/* 再生：每 2-3 回合恢复最大生命值一定比例
+   WP-F（§5.1.14 评审「根据关卡与敌人级别，每经过 2-3 回合，恢复自身最大生命值3%~8%的生命值」）：
+   两项都接成长（改前固定「每 3 回合回 8%」）：
+     · 回复比例 `heal` **[3%, 8%]**（百分比直接插值）
+     · **周期 `interval` [2, 3]** —— 设计只写「每经过2-3回合」（此前被列为「口径不明确」），
+       这里按**同一套成长口径**明确化（区间两端 = 低等级 → 满级，同 skill.js 对 dur 的取整方式）：
+       g1~g5 = 每 2 回合、g6 起 = 每 3 回合（`Math.round(2 + t)`）。
+       ⚠️ 方向说明：周期变长本身是「更弱」，但比例同时从 3% 升到 8% —— 折算成**每回合**回复量是
+          3%/2 = 1.5% → 8%/3 ≈ 2.67%，**净效果仍随成长变强**（故与「区间下限=低级」的读法自洽）。
+       ⚠️ **备选口径（未采用，留待裁决）**：周期「每次随机 2~3 回合」——与 §5.6-5 威吓 5~10 的
+          「随机」同型；若作者要这个，本处改 1 行（`2 + (battleRnd() < 0.5 ? 0 : 1)`）即可，
+          且周期就不再随成长。两条读法的差别只在**触发节奏**，回复比例都是 3%~8% 接成长。
+   回合口径沿用既有 `ctx.turn`（= 实际回合号 + 1，见 battle-group 的 groupUnitTurn 说明）——
+   slowstart 用 `ctx.actualTurn` 是为了修「差 1」的旧账，regen 历史上没有该问题，不跟着动。 */
 registerTalent({
   id: 'regen',
   name: '再生',
-  desc: '每经过2-3回合，恢复自身最大生命值一定比例',
+  desc: '每经过2-3回合（随关卡与敌人级别成长），恢复自身最大生命值3%-8%（同样成长）',
+  range: { heal: [0.03, 0.08], interval: [2, 3] },
   hooks: {
     onTurnEnd: function (unit, ctx) {
       var turn = ctx.turn || 0;
-      if (turn >= 2 && turn % 3 === 0) {
-        var heal = Math.floor(unit.base.hp * 0.08);
+      var interval = Math.round(talentValue('regen', 'interval', unit, 3));
+      if (turn >= interval && turn % interval === 0) {
+        var heal = Math.floor(unit.base.hp * talentValue('regen', 'heal', unit, 0.08));
         unit.hp = Math.min(unit.base.hp, unit.hp + heal);
         return { events: [{ type: 'talent', talentId: 'regen', unitId: unit.id, msg: '再生: 恢复 ' + heal }] };
       }

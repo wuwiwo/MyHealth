@@ -17,6 +17,7 @@ if (typeof store !== 'undefined' && store.registerSchema) {
           refineNormal: 0, refineHigh: 0, orbShard: 0
         },
         orbs: [],            // v2.1.17 未装配的宝珠库存 [{id,type,rarity,level,exp}]
+        battlePicks: [],     // v2.2 WP-H1：参战宠物选择（speciesId 数组，刷新/重开后保留）
         lastSettleDate: null,  // 宠物系统上次结算日
         monthlyKey: null       // 月度重置键
       };
@@ -29,11 +30,14 @@ if (typeof store !== 'undefined' && store.registerSchema) {
 /* 读取宠物数据（默认值兜底） */
 function getPetStore() {
   if (typeof store === 'undefined') {
-    return { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], lastSettleDate: null, monthlyKey: null };
+    return { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], battlePicks: [], lastSettleDate: null, monthlyKey: null };
   }
   var d = store.get('pets');
-  if (!d) { d = { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], lastSettleDate: null, monthlyKey: null }; store.set('pets', d); }
+  if (!d) { d = { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], battlePicks: [], lastSettleDate: null, monthlyKey: null }; store.set('pets', d); }
   if (!Array.isArray(d.orbs)) d.orbs = [];   // v2.1.17 老存档补齐宝珠库存
+  /* v2.2 WP-H1：参战宠物选择持久化 —— 旧存档没有该字段时**优雅退化**为 []（＝未选择，
+     行为与改动前一致：开战时自动带成熟宠物）。不迁移、不补偿，缺失即空。 */
+  if (!Array.isArray(d.battlePicks)) d.battlePicks = [];
   /* v2.2 WP-A2：**宝珠口径迁移**（幂等）—— 旧 N 档折算碎片、R/SR/SSR 品质映射 + 等级保号、
      超过新品质等级上限则截断（口径见 doc/changelog-v2.2.md「旧宝珠迁移口径定案」）。
      迁移后 N 档已不存在，再次调用不会命中任何分支，所以放在读取路径上是安全的。 */
@@ -167,6 +171,22 @@ function getBattleReadyPets() {
   return d.pets.filter(function (p) { return canPetBattle(p); });
 }
 
+/* ============================================================
+   v2.2 WP-H1：参战宠物选择的持久化
+   存在 `dh-pets-v1` 的 `battlePicks` 字段（沿用本模块既有的 getPetStore / savePetStore 约定，
+   不另开 store 键）。旧存档没有该字段 → getPetStore() 补齐为 []（优雅退化）。
+   ============================================================ */
+function getPetBattlePicks() {
+  var d = getPetStore();
+  return Array.isArray(d.battlePicks) ? d.battlePicks.slice() : [];
+}
+function savePetBattlePicks(ids) {
+  var d = getPetStore();
+  d.battlePicks = (Array.isArray(ids) ? ids : []).slice(0, PET_BATTLE_MAX);
+  savePetStore(d);
+  return d.battlePicks.slice();
+}
+
 /* v2.2 WP-A3：参战宠物上限 2 → 4（dundun 2026-09-29 裁决）——
    全项目唯一来源，别在调用点再写死数字。 */
 var PET_BATTLE_MAX = 4;
@@ -283,6 +303,8 @@ if (typeof window !== 'undefined') {
   window.monthlyResetPets = monthlyResetPets;
   window.hatchAllEggs = hatchAllEggs;
   window.getBattleReadyPets = getBattleReadyPets;
+  window.getPetBattlePicks = getPetBattlePicks;
+  window.savePetBattlePicks = savePetBattlePicks;
   window.createPetUnitsForBattle = createPetUnitsForBattle;
   window.teamCohesionBonus = teamCohesionBonus;
   window.benchBonusSum = benchBonusSum;
@@ -301,6 +323,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.monthlyResetPets = monthlyResetPets;
   globalThis.hatchAllEggs = hatchAllEggs;
   globalThis.getBattleReadyPets = getBattleReadyPets;
+  globalThis.getPetBattlePicks = getPetBattlePicks;
+  globalThis.savePetBattlePicks = savePetBattlePicks;
   globalThis.createPetUnitsForBattle = createPetUnitsForBattle;
   globalThis.teamCohesionBonus = teamCohesionBonus;
   globalThis.benchBonusSum = benchBonusSum;

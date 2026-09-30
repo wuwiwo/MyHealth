@@ -10,10 +10,12 @@
         · group-levels.js 的池子（固化路径 + `WEAK_TALENT_CHANCE` 注入）
         · enemy.js 的 pickRandomTalents()（兜底路径，按 tier 剔除 `weak`）
    4) 词条 / 技能的编成**没有**被天赋相关改动扰动（种子流哨兵）
-   5) 死配置清理：慢启动 `config.rounds`、多目标 `config.extra` / `config.penalty` 的数值真正被消费
+   5) 数值单源化 + WP-F 接成长：慢启动 `range.rounds`、多目标 `range.extra` / `range.penalty`
+      仍是**唯一来源**（hook 里不许写死），但现在**按 t（大关号）取区间值** ——
+      判据 = ① 改定义立即生效 ② 等级 1/10 的数值确实不同 ③ 端点等于 §5.1 的 X~Y
    6) v2.3.0（作者裁决，线 1）：两个 Boss 天赋集调整（改前→改后 + 其余 Boss 逐条钉死）
         + 带负面特性的单位**属性数值更高**（补偿常量可调、速度不参与）
-   7) 尚未清理（禁改文件 / 已知缺口）登记：magicshield 消费端硬编码、多目标额外攻击不可达
+   7) WP-F：敌群侧天赋接成长的**全量**判据在 scripts/test-talent-growth.js（本文件只守单源性质）
 */
 'use strict';
 const fs = require('fs');
@@ -243,61 +245,84 @@ Object.keys(SENTINEL).forEach(function (sid) {
 });
 
 /* ============================================================
-   5. 死配置清理：数值真的被消费（§5.4F）
+   5. 数值单源化（§5.4F）+ WP-F 接成长（§5.4A）
    ============================================================ */
-/* 5a. 慢启动：config.rounds 是唯一来源（本小节 = **hook 层**直接派发）
+/* 5a. 慢启动：`range.rounds` 是唯一来源（本小节 = **hook 层**直接派发）
        v2.3.0（作者裁决「设定 x 回合就真的 x 回合」）：判据改为**实际回合号** ——
-       群战链路另传 `ctx.actualTurn`；只给 ctx.turn 时按既有约定反推（ctx.turn − 1）。 */
-function slowSkip(actualTurn) {
-  const u = sb.createEnemyUnit({ id: 's', tier: 'minion', talents: ['slowstart'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
-  return !!sb.talentDispatch(u, 'onBeforeAction', { turn: actualTurn + 1, actualTurn: actualTurn }).skipAction;
+       群战链路另传 `ctx.actualTurn`；只给 ctx.turn 时按既有约定反推（ctx.turn − 1）。
+       WP-F（§5.1.9）：`x` 不再是固定 2，而是按 t（**大关号**，与敌群技能同一套 `skillRangeT`）
+       在 **[2, 4]** 内取整 → Lv1~3 = 2、Lv4~7 = 3、Lv8+ = 4。 */
+function slowUnit(level) {
+  return sb.createEnemyUnit({ id: 's' + level, tier: 'minion', talents: ['slowstart'], level: level,
+    base: { hp: 100, atk: 5, def: 3, spd: 5 } });
 }
-assert('慢启动（hook 层）：config.rounds=2 → **实际第 1、2 回合**不能行动、第 3 回合可以',
-  slowSkip(1) && slowSkip(2) && !slowSkip(3), JSON.stringify([slowSkip(1), slowSkip(2), slowSkip(3)]));
+function slowSkip(actualTurn, level) {
+  return !!sb.talentDispatch(slowUnit(level || 1), 'onBeforeAction', { turn: actualTurn + 1, actualTurn: actualTurn }).skipAction;
+}
+function slowRounds(level) { return Math.round(sb.talentValue('slowstart', 'rounds', slowUnit(level), 2)); }
+assert('慢启动：x 随等级成长（Lv1/5/10 → 2/3/4，即 §5.1.9 的 2~4 回合）',
+  [slowRounds(1), slowRounds(5), slowRounds(10)].join(',') === '2,3,4',
+  [slowRounds(1), slowRounds(5), slowRounds(10)].join(','));
+assert('慢启动（hook 层）：Lv1 → **实际第 1、2 回合**不能行动、第 3 回合可以',
+  slowSkip(1, 1) && slowSkip(2, 1) && !slowSkip(3, 1), JSON.stringify([slowSkip(1, 1), slowSkip(2, 1), slowSkip(3, 1)]));
+assert('慢启动（hook 层）：Lv5 → 第 3 回合也不能行动、第 4 回合可以',
+  slowSkip(3, 5) && !slowSkip(4, 5), JSON.stringify([slowSkip(3, 5), slowSkip(4, 5)]));
+assert('慢启动（hook 层）：Lv10 → 第 4 回合也不能行动、第 5 回合可以',
+  slowSkip(4, 10) && !slowSkip(5, 10), JSON.stringify([slowSkip(4, 10), slowSkip(5, 10)]));
 assert('慢启动：只给 `ctx.turn` 时按既有约定反推实际回合号（ctx.turn − 1，= 群战 ctx.turn = gb.turn + 1）',
   (function () {
-    const u = sb.createEnemyUnit({ id: 's0', tier: 'minion', talents: ['slowstart'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
+    const u = slowUnit(1);
     return !!sb.talentDispatch(u, 'onBeforeAction', { turn: 3 }).skipAction &&           // → 实际第 2 回合，跳过
       !sb.talentDispatch(u, 'onBeforeAction', { turn: 4 }).skipAction;                    // → 实际第 3 回合，可动
   })());
-sb.TALENTS.slowstart.config.rounds = 4;
-assert('慢启动（hook 层）：改 config.rounds=4 **立即生效**（实际第 1~4 回合不能行动、5 可以）',
-  slowSkip(1) && slowSkip(4) && !slowSkip(5));
-sb.TALENTS.slowstart.config.rounds = 1;
-assert('慢启动（hook 层）：改 config.rounds=1 → 只有实际第 1 回合不能行动',
-  slowSkip(1) && !slowSkip(2));
-sb.TALENTS.slowstart.config.rounds = 2;
-assert('慢启动（hook 层）：恢复 config.rounds=2 后回到原行为', slowSkip(2) && !slowSkip(3));
-assert('慢启动：`_slowRounds` 已不再是读取来源（唯一来源 = config）', (function () {
-  const u = sb.createEnemyUnit({ id: 's2', tier: 'minion', talents: ['slowstart'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
+sb.TALENTS.slowstart.range.rounds = [4, 4];
+assert('慢启动（hook 层）：改 `range.rounds` 为 [4,4] **立即生效**（Lv1 也变 4 回合）',
+  slowSkip(4, 1) && !slowSkip(5, 1), JSON.stringify([slowSkip(4, 1), slowSkip(5, 1)]));
+sb.TALENTS.slowstart.range.rounds = [1, 1];
+assert('慢启动（hook 层）：range.rounds = [1,1] → 只有实际第 1 回合不能行动',
+  slowSkip(1, 1) && !slowSkip(2, 1));
+sb.TALENTS.slowstart.range.rounds = [2, 4];
+assert('慢启动（hook 层）：恢复 range.rounds = [2,4] 后回到成长行为（Lv1 = 2 回合）', slowSkip(2, 1) && !slowSkip(3, 1));
+assert('慢启动：`_slowRounds` 已不再是读取来源（唯一来源 = 定义里的 range.rounds）', (function () {
+  const u = slowUnit(1);
   u._slowRounds = 99;
   return !sb.talentDispatch(u, 'onBeforeAction', { turn: 4 }).skipAction;   // 实际第 3 回合
 })());
 
-/* 5b. 多目标：config.extra / config.penalty 是唯一来源 */
-function multiTargets() {
-  const u = sb.createEnemyUnit({ id: 'm', tier: 'minion', talents: ['multitarget'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
-  const r = sb.talentDispatch(u, 'onBeforeAction', {});
+/* 5b. 多目标：`range.extra` / `range.penalty` 是唯一来源，且两项都接成长（WP-F） */
+function multiUnit(level) {
+  return sb.createEnemyUnit({ id: 'm' + level, tier: 'minion', talents: ['multitarget'], level: level,
+    base: { hp: 100, atk: 5, def: 3, spd: 5 } });
+}
+function multiTargets(level) {
+  const r = sb.talentDispatch(multiUnit(level || 1), 'onBeforeAction', {});
   const m = r.mutations.find(x => x.key === 'multiTarget');
   return m ? m.value : null;
 }
-function multiPenalty() {
-  const u = sb.createEnemyUnit({ id: 'm', tier: 'minion', talents: ['multitarget'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
-  const r = sb.talentDispatch(u, 'onDamage', { isPlayerAttack: true, amount: 100 });
+function multiPenalty(level) {
+  const r = sb.talentDispatch(multiUnit(level || 1), 'onDamage', { isPlayerAttack: true, amount: 100 });
   const m = r.mutations.find(x => x.key === 'dmgReduce');
   return m ? m.value : null;
 }
-assert('多目标：config.extra=1 → multiTarget=2（总目标数 = 额外 1 + 原目标 1）', multiTargets() === 2, String(multiTargets()));
-assert('多目标：config.penalty=0.7 → dmgReduce=0.3（= 1 − 0.7）', Math.abs(multiPenalty() - 0.3) < 1e-9, String(multiPenalty()));
-sb.TALENTS.multitarget.config.extra = 2;
-assert('多目标：改 config.extra=2 **立即生效**（multiTarget=3）', multiTargets() === 3, String(multiTargets()));
-sb.TALENTS.multitarget.config.penalty = 0.8;
-assert('多目标：改 config.penalty=0.8 **立即生效**（dmgReduce=0.2）', Math.abs(multiPenalty() - 0.2) < 1e-9, String(multiPenalty()));
-sb.TALENTS.multitarget.config.extra = 1;
-sb.TALENTS.multitarget.config.penalty = 0.7;
-assert('多目标：恢复原配置后回到原值（2 / 0.3）', multiTargets() === 2 && Math.abs(multiPenalty() - 0.3) < 1e-9);
-assert('多目标：`_multiExtra` 已不再是读取来源（唯一来源 = config）', (function () {
-  const u = sb.createEnemyUnit({ id: 'm2', tier: 'minion', talents: ['multitarget'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
+assert('多目标：Lv1 → 额外 1 个（总目标 2）+ 降伤 20%（= 1 − 乘数 0.8，§5.1.11 下限）',
+  multiTargets(1) === 2 && Math.abs(multiPenalty(1) - 0.2) < 1e-9,
+  multiTargets(1) + ' / ' + multiPenalty(1));
+assert('多目标：Lv10 → 额外 2 个（总目标 3）+ 降伤 30%（= 1 − 乘数 0.7，§5.1.11 上限）',
+  multiTargets(10) === 3 && Math.abs(multiPenalty(10) - 0.3) < 1e-9,
+  multiTargets(10) + ' / ' + multiPenalty(10));
+assert('多目标：额外目标数随等级成长（Lv1 = 1 个 → Lv6 起 = 2 个）', multiTargets(1) === 2 && multiTargets(6) === 3);
+assert('多目标：降伤幅度随等级**连续**成长（Lv1 < Lv5 < Lv10）',
+  multiPenalty(1) < multiPenalty(5) && multiPenalty(5) < multiPenalty(10),
+  [multiPenalty(1), multiPenalty(5), multiPenalty(10)].join(','));
+sb.TALENTS.multitarget.range.extra = [2, 2];
+assert('多目标：改 `range.extra` 为 [2,2] **立即生效**（multiTarget=3）', multiTargets(1) === 3, String(multiTargets(1)));
+sb.TALENTS.multitarget.range.penalty = [0.8, 0.8];
+assert('多目标：改 `range.penalty` 为 [0.8,0.8] **立即生效**（dmgReduce=0.2）', Math.abs(multiPenalty(1) - 0.2) < 1e-9, String(multiPenalty(1)));
+sb.TALENTS.multitarget.range.extra = [1, 2];
+sb.TALENTS.multitarget.range.penalty = [0.8, 0.7];
+assert('多目标：恢复原区间后回到成长值（Lv1 = 2 / 0.2）', multiTargets(1) === 2 && Math.abs(multiPenalty(1) - 0.2) < 1e-9);
+assert('多目标：`_multiExtra` 已不再是读取来源（唯一来源 = range.extra）', (function () {
+  const u = multiUnit(1);
   u._multiExtra = 9;
   const r = sb.talentDispatch(u, 'onBeforeAction', {});
   return r.mutations.find(x => x.key === 'multiTarget').value === 2;
@@ -305,12 +330,11 @@ assert('多目标：`_multiExtra` 已不再是读取来源（唯一来源 = conf
 
 /* 5c. 慢启动端到端：真打一场，统计「无法行动（慢启动）」回合数
    v2.3.0（作者裁决「以设计原文为准 —— 设定 x 回合就真的 x 回合」）：
-   改前 `ctx.turn = gb.turn + 1` 被直接拿来比 rounds → `rounds: N` 实际只跳 **N−1** 次
-   （改前实测 0/1/2/3）。现在 `rounds: N` = 真正跳过前 N 个回合。
-   ⚠️ 这会**改变慢启动持有者的难度**（每个持有者多空过 1 回合），故同时锁住次数。 */
-function slowSkipRounds(rounds) {
-  sb.TALENTS.slowstart.config.rounds = rounds;
-  const foe = sb.createEnemyUnit({ id: 'e', tier: 'minion', name: '慢兵', talents: ['slowstart'], base: { hp: 999999, atk: 1, def: 0, spd: 20 } });
+   改前 `ctx.turn = gb.turn + 1` 被直接拿来比 rounds → `rounds: N` 实际只跳 **N−1** 次。
+   现在 `rounds: N` = 真正跳过前 N 个回合；WP-F 之后 N 本身还随**大关号**成长（2/3/4），
+   所以端到端断言按**等级**给期望值（Lv1 → 2 次、Lv5 → 3 次、Lv10 → 4 次）。 */
+function slowSkipRounds(level) {
+  const foe = sb.createEnemyUnit({ id: 'e', tier: 'minion', name: '慢兵', talents: ['slowstart'], level: level, base: { hp: 999999, atk: 1, def: 0, spd: 20 } });
   const me = sb.createUnit({ id: 'p', side: 'ally', name: '你', base: { hp: 999999, atk: 1, def: 9999, spd: 1 } });
   const gb = sb.createGroupBattle({ allies: [me], enemies: [foe], seed: 4242 });
   let n = 0;
@@ -320,42 +344,58 @@ function slowSkipRounds(rounds) {
   }
   return n;
 }
-const skip1 = slowSkipRounds(1);
-const skip2 = slowSkipRounds(2);
-const skip4 = slowSkipRounds(4);
-assert('慢启动端到端：rounds=1 → 实战 1 次「无法行动」（改前为 0）', skip1 === 1, String(skip1));
-assert('慢启动端到端：rounds=2 → 实战 2 次「无法行动」（改前为 1）', skip2 === 2, String(skip2));
-assert('慢启动端到端：rounds=4 → 实战 4 次「无法行动」（改前为 3，改配置真的改变实战行为）', skip4 === 4, String(skip4));
-sb.TALENTS.slowstart.config.rounds = 2;
+const skipLv1 = slowSkipRounds(1);
+const skipLv5 = slowSkipRounds(5);
+const skipLv10 = slowSkipRounds(10);
+assert('慢启动端到端：Lv1 → 实战 2 次「无法行动」（= 区间下限 2 回合）', skipLv1 === 2, String(skipLv1));
+assert('慢启动端到端：Lv5 → 实战 3 次「无法行动」', skipLv5 === 3, String(skipLv5));
+assert('慢启动端到端：Lv10 → 实战 4 次「无法行动」（= 区间上限，改等级真的改变实战行为）', skipLv10 === 4, String(skipLv10));
 
 /* 5d. 魔法盾：WP-C 已把消费端**单源化**（读 m.value）并补上真正的消费通道，这里改为**行为断言**。
       改前：battle-group.js 消费端硬编码 `dmg * 0.7`，且只在**物理**分支读 —— 而生产端 hook 的判据是
             `ctx.isSoul` → 该天赋一次都没生效；当时只能断言「生产端值 + 硬编码 = 1」防漂移。
       改后：魂攻伤害结算前按 isSoul 派发受击方天赋、统一按 `m.value` 缩放
-            → 直接断言「改生产端值，实战魂攻伤害跟着变」。 */
+            → 直接断言「改定义里的值，实战魂攻伤害跟着变」。
+      WP-F（§5.1.8）：减伤幅度不再是常量 0.3，而是按 t 在 **[15%, 45%]** 内取值
+            → 断言「Lv1 与 Lv10 的盾兵挨同一记魂攻，掉血不同」+「改 range 立即生效」。 */
 (function () {
-  function soulDmg(v) {
-    const orig = sb.MAGICSHIELD_SOUL_REDUCE;
-    sb.MAGICSHIELD_SOUL_REDUCE = v;
+  /* 造一个指定等级的盾兵：soulDef=0 → 魂攻伤害 = soulAtk（无随机项），便于逐值比对 */
+  function shieldUnit(level) {
+    return sb.createEnemyUnit({ id: 'gsh' + level, tier: 'minion', name: '盾兵', talents: ['magicshield'], level: level,
+      base: { hp: 99999, atk: 1, def: 0, soulDef: 0, spd: 1 } });
+  }
+  function soulDmg(level, rangeOverride) {
     const att = sb.createUnit({ id: 'gatt', side: 'ally', name: '打手', base: { hp: 9999, atk: 100, def: 5, soulAtk: 200, spd: 5 } });
-    /* soulDef=0 → 魂攻伤害 = soulAtk（无随机项），便于逐值比对 */
-    const foe = sb.createEnemyUnit({ id: 'gsh', tier: 'minion', name: '盾兵', talents: ['magicshield'], base: { hp: 99999, atk: 1, def: 0, soulDef: 0, spd: 1 } });
+    const orig = sb.TALENTS.magicshield.range.reduce;
+    if (rangeOverride) sb.TALENTS.magicshield.range.reduce = rangeOverride;
+    const foe = shieldUnit(level);
     const gb = sb.createGroupBattle({ allies: [att], enemies: [foe], seed: 4242 });
     const ev = sb.normalAttack(gb, gb.allies[0], gb.enemies[0], 1);
-    sb.MAGICSHIELD_SOUL_REDUCE = orig;
+    sb.TALENTS.magicshield.range.reduce = orig;
     const hit = ev.find(e => /魂攻击/.test(e.msg || ''));
     return hit ? +(/→ (\d+) 魂伤害/.exec(hit.msg)[1]) : null;
   }
-  const m = sb.talentDispatch(
-    sb.createEnemyUnit({ id: 'gsh0', tier: 'minion', talents: ['magicshield'], base: { hp: 100, atk: 1, def: 0, spd: 1 } }),
-    'onDamage', { isSoul: true }).mutations.find(x => x.key === 'soulDmgReduce');
-  assert('魔法盾：生产端仍产出 soulDmgReduce=0.3', m && Math.abs(m.value - 0.3) < 1e-9, JSON.stringify(m));
+  function soulReduce(level) {
+    return sb.talentDispatch(shieldUnit(level), 'onDamage', { isSoul: true })
+      .mutations.find(x => x.key === 'soulDmgReduce').value;
+  }
+  assert('魔法盾：减伤幅度随等级成长（Lv1 = 15% → Lv10 = 45%，§5.1.8 的 15%~45%）',
+    Math.abs(soulReduce(1) - 0.15) < 1e-9 && Math.abs(soulReduce(10) - 0.45) < 1e-9,
+    soulReduce(1) + ' / ' + soulReduce(10));
+  assert('魔法盾：中段是连续值（Lv5 = 15% + 30%×4/9 ≈ 28.3%，不是两档跳变）',
+    Math.abs(soulReduce(5) - 0.15 - 0.30 * (4 / 9)) < 1e-9, String(soulReduce(5)));
 
-  const d0 = soulDmg(0);
-  const d30 = soulDmg(0.3);
-  const d50 = soulDmg(0.5);
-  assert('魔法盾：魂攻伤害真的被削减（未削 200 → ×0.7 = 140）', d0 === 200 && d30 === 140, d0 + ' → ' + d30);
-  assert('魔法盾：改生产端立即生效（0.5 → 100，证明消费端读 m.value、不再硬编码）', d50 === 100, d0 + ' → ' + d50);
+  const dLv1 = soulDmg(1);
+  const dLv10 = soulDmg(10);
+  /* 期望值按**实际减伤值**算（浮点：0.15 + 0.30×1 = 0.45000000000000007 → 200×0.55 会少 1 位） */
+  assert('魔法盾：实战魂攻伤害真的随等级变化（Lv1 约 200×0.85 = 170，Lv10 约 200×0.55 = 110）',
+    dLv1 === Math.floor(200 * (1 - soulReduce(1))) && dLv10 === Math.floor(200 * (1 - soulReduce(10))) && dLv1 > dLv10,
+    dLv1 + ' / ' + dLv10);
+  const dFixed = soulDmg(1, [0.5, 0.5]);
+  assert('魔法盾：改定义里的 `range.reduce` 立即生效（[0.5,0.5] → 100，证明消费端读 m.value、不硬编码）',
+    dFixed === 100, String(dFixed));
+  const dZero = soulDmg(1, [0, 0]);
+  assert('魔法盾：区间归 0 时回到未削状态（200）', dZero === 200, String(dZero));
   const src = load('battle-group.js');
   assert('魔法盾：消费端已无硬编码 `dmg * 0.7`（1 行级遗留收口）',
     !/soulDmgReduce'\)\s*dmg = Math\.floor\(dmg \* 0?\.7\)/.test(src));

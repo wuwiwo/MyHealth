@@ -251,7 +251,11 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   const gb = sb.createGroupBattle({ allies: [atk], enemies: [rough] });
   sb.normalAttack(gb, atk, rough);
   assert('粗糙皮肤不再让受击方吃双倍伤害（只扣 103）', rough.hp === 897, 'hp=' + rough.hp);
-  assert('粗糙皮肤反伤打在攻击者身上（103×15% = 15）', atk.hp === 985, 'hp=' + atk.hp);
+  /* WP-F（§5.1.3）：天赋「粗糙皮肤」已**接成长**（反伤区间 10%~50%，按大关号取值）——
+     期望值不再写死 15%，取该天赋声明的**区间下限**（本处 rough 是 level 1 的测试单位 = t=0）。 */
+  const roughPct0 = sb.TALENTS.roughskin.range.pct[0];
+  assert('粗糙皮肤反伤打在攻击者身上（本次伤害 × 区间下限 = 10）',
+    atk.hp === 1000 - Math.max(1, Math.floor(103 * roughPct0)), 'hp=' + atk.hp);
 }
 {
   const frozen = sb.createUnit({ id: 'fz2', side: 'ally', name: '冻', base: { hp: 300, atk: 20, def: 5, spd: 5 } });

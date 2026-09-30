@@ -184,7 +184,9 @@ function renderBattleView() {
     +'<div style="font-size:var(--fs-lg);font-weight:700;margin-bottom:10px">🗓️ 本旬目标 · '+p.name+'</div>'
     +'<div style="display:flex;gap:10px">'
     +'<div style="flex:1;background:var(--bg2);border:1px solid var(--orange-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--orange)">'+stats.periodDays+'<span style="font-size:var(--fs-xs)">/6天</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">训练天数</div></div>'
-    +'<div style="flex:1;background:var(--bg2);border:1px solid var(--blue-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--blue)">'+stats.periodVol+'<span style="font-size:var(--fs-xs)">kg</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">旬容量</div></div>'
+    /* v2.2 WP-H3：`sumVolume()` 返回浮点，直接内插会渲染出 2862.1000000000004kg 这类尾数。
+       展示层取整（与 tab-strength.js:39 / game-render.js:36 的同名「旬容量」显示一致），不动数值本身。 */
+    +'<div style="flex:1;background:var(--bg2);border:1px solid var(--blue-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--blue)">'+Math.round(stats.periodVol)+'<span style="font-size:var(--fs-xs)">kg</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">旬容量</div></div>'
     +'<div style="flex:1;background:var(--bg2);border:1px solid var(--green-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--green)">'+wkStatus+'</div><div style="font-size:var(--fs-xs);color:var(--text3)">状态</div></div>'
     +'</div></div>'
 

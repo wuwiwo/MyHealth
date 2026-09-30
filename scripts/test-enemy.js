@@ -59,17 +59,31 @@ for (let i = 0; i < 40; i++) {
 }
 assert('懒惰: 有跳过回合', lazySkipped);
 
-// 嗜血：造成伤害恢复
-const bt = sandbox.createEnemyUnit({ talents: ['bloodthirst'], base: { hp: 100, atk: 10, def: 5 } });
+// 嗜血：造成伤害恢复（WP-F 接成长：区间 10%~35%，等级 1 = 下限 10%）
+const bt = sandbox.createEnemyUnit({ talents: ['bloodthirst'], level: 1, base: { hp: 100, atk: 10, def: 5 } });
 bt.hp = 50;
 sandbox.talentDispatch(bt, 'onAfterDamage', { dealt: 20 });
-assert('嗜血: 恢复20%伤害', bt.hp > 50, 'hp=' + bt.hp);
+assert('嗜血: 恢复伤害的 10%（等级 1 = 区间下限；>0 表示真的回了血）', bt.hp === 52, 'hp=' + bt.hp);
+const bt10 = sandbox.createEnemyUnit({ talents: ['bloodthirst'], level: 10, base: { hp: 100, atk: 10, def: 5 } });
+bt10.hp = 50;
+sandbox.talentDispatch(bt10, 'onAfterDamage', { dealt: 20 });
+assert('嗜血: 等级 10 → 恢复 35%（= 区间上限）', bt10.hp === 57, 'hp=' + bt10.hp);
 
-// 再生：3 回合恢复
-const reg = sandbox.createEnemyUnit({ talents: ['regen'], base: { hp: 100, atk: 5, def: 3 } });
+/* 再生：WP-F 接成长（周期 2~3 回合、回复 3%~8%）
+   改前是固定「每 3 回合回 8%」；现在两项都按大关号在区间内取值：
+   Lv1 = 每 2 回合 / 3%、Lv10 = 每 3 回合 / 8%。 */
+const reg = sandbox.createEnemyUnit({ talents: ['regen'], level: 1, base: { hp: 100, atk: 5, def: 3 } });
 reg.hp = 60;
+sandbox.talentDispatch(reg, 'onTurnEnd', { turn: 2 });
+assert('再生(等级1): 周期 2 回合 → 第 2 回合回 3%（60→63）', reg.hp === 63, 'hp=' + reg.hp);
 sandbox.talentDispatch(reg, 'onTurnEnd', { turn: 3 });
-assert('再生: 3回合恢复8%', reg.hp > 60, 'hp=' + reg.hp);
+assert('再生(等级1): 第 3 回合不触发（周期 2，奇数回合不恢复）', reg.hp === 63, 'hp=' + reg.hp);
+const reg10 = sandbox.createEnemyUnit({ talents: ['regen'], level: 10, base: { hp: 100, atk: 5, def: 3 } });
+reg10.hp = 60;
+sandbox.talentDispatch(reg10, 'onTurnEnd', { turn: 2 });
+assert('再生(等级10): 周期 3 回合 → 第 2 回合不触发', reg10.hp === 60, 'hp=' + reg10.hp);
+sandbox.talentDispatch(reg10, 'onTurnEnd', { turn: 3 });
+assert('再生(等级10): 第 3 回合回 8%（60→68，= 区间上限）', reg10.hp === 68, 'hp=' + reg10.hp);
 
 // ---- 4. 敌人编成阶梯 ----
 const minion = sandbox.createEnemyUnit({ tier: 'minion', base: { hp: 50, atk: 5, def: 2 } });

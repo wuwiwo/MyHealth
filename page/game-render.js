@@ -366,7 +366,8 @@ function updateGameBar(){
 var _groupBattle=null,_groupTimer=null
 var _groupStageId=null   // 当前敌群小关 id（通关记录用）
 var _groupActing=null    // 当前行动中的单位 id（高亮）
-var _petBattlePicks=[]   // 宠物参战选择（M4-6）
+var _petBattlePicks=[]   // 宠物参战选择（M4-6）；v2.2 WP-H1 起以存档 `dh-pets-v1.battlePicks` 为准
+var _petBattlePicksLoaded=false   // v2.2 WP-H1：是否已从存档恢复过参战选择
 var _groupMode='auto'   // 'auto' | 'manual'（manual=点一下推进一回合）
 var _groupSpeed=1        // 1/2/4
 var _groupAnimEl=null    // 动画中的单位
@@ -385,6 +386,38 @@ function resumeGroupBattle(){
   if(!_groupPaused)return
   _groupPaused=false
   if(_groupBattle&&!_groupBattle.done&&_groupMode==='auto'&&!_groupDetail)_groupStep()
+}
+
+/* v2.2 WP-H1：首次使用时从存档恢复「参战宠物选择」（刷新/重开后保留）。
+   ⚠️ game-render.js 在 index.html 里**比 pet-store.js 先加载**，故不能在顶层读取，
+   延迟到运行时（首次渲染宠物面板 / 首次开战时调用一次）。
+   顺带剔除已不存在的 speciesId（存档演进后的陈旧选择），避免永远带不上宠。 */
+function ensurePetBattlePicksLoaded(){
+  if(_petBattlePicksLoaded)return _petBattlePicks
+  _petBattlePicksLoaded=true
+  try{
+    if(typeof getPetBattlePicks==='function'){
+      var ids=getPetBattlePicks()
+      var exist={}
+      if(typeof getPetStore==='function'){
+        (getPetStore().pets||[]).forEach(function(p){exist[p.speciesId]=true})
+        ids=ids.filter(function(sid){return exist[sid]})
+      }
+      _petBattlePicks=ids
+    }
+  }catch(e){console.warn('[pet] 参战宠物选择恢复失败',e)}
+  return _petBattlePicks
+}
+
+/* v2.2 WP-H2：玩家当前应打的小关 = allStageIds 里**第一个未通关**的关（线性解锁，故必为已解锁）。
+   「带宠物开战」用它作目标关 —— 旧实现写死关卡（'g5'）且从不设置 `_groupStageId`，
+   会把玩家直接扔进固定小关，并在胜利时把**上一次战斗的 `_groupStageId`** 记为通关 → 覆盖进度。 */
+function currentGroupStageId(){
+  var all=(typeof allStageIds==='function')?allStageIds():[]
+  for(var i=0;i<all.length;i++){
+    if(typeof isGroupStageCleared!=='function'||!isGroupStageCleared(all[i]))return all[i]
+  }
+  return all.length?all[all.length-1]:null
 }
 
 /* 启动敌群试炼：生成玩家 Unit + 敌人，开群战 */
@@ -410,9 +443,10 @@ function startGroupTrial(groupId){
   if (typeof attachPlayerSkills === 'function' && typeof getSkillState === 'function') {
     attachPlayerSkills(player, getSkillState())
   }
-  // 默认带宠物：优先 _petBattlePicks，否则自动带成熟宠物
+  /* 默认带宠物：优先存档里的参战选择（v2.2 WP-H1），否则自动带成熟宠物 */
   /* v2.2 WP-A3/A4：上限 2 → 4，并统一走 pet-store.js 的**唯一入口**
      buildGroupBattlePets（建单位 → 稀有度放大 → 团队凝聚 / 共鸣）。 */
+  ensurePetBattlePicksLoaded()
   var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
   var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(_petMax)
   var petUnits = (typeof buildGroupBattlePets === 'function')

@@ -69,6 +69,14 @@ if(typeof window!=='undefined'&&window.addEventListener){
   window.addEventListener('orientationchange',lcRedrawAll);
 }
 
+/* v2.2 WP-H3：图表数值的**展示层**格式化 —— 去掉浮点尾数（如 2862.1000000000004 → 2862.1）。
+   只作用于「最新值标签 / 点击浮层」的文本，坐标与曲线仍用原值计算（不改数值本身）。 */
+function lcFmt(v){
+  if(typeof v!=='number'||!isFinite(v))return v;
+  var r=Math.round(v*100)/100;
+  return Math.abs(r-Math.round(r))<1e-9?String(Math.round(r)):String(parseFloat(r.toFixed(2)));
+}
+
 function drawLineChart(canvas,opts){
   if(!canvas)return;
   canvas._lcOpts=opts;
@@ -151,7 +159,7 @@ function drawLineChart(canvas,opts){
   // Latest value label
   var last=values[n-1];
   ctx.fillStyle=color;ctx.font='bold 12px sans-serif';ctx.textAlign='center';
-  ctx.fillText(last+suffix,xs[n-1],yv(last)-12);
+  ctx.fillText(lcFmt(last)+suffix,xs[n-1],yv(last)-12);
 
   /* ========== TOOLTIP (tap/touch/click) ========== */
   // 复用同一个 tip 节点、监听器只绑一次（原来每次绘制都新建 + 重复绑定，会堆积孤儿节点）
@@ -170,7 +178,7 @@ function drawLineChart(canvas,opts){
 
   function showTip(idx){
     if(idx<0||idx>=n)return;
-    tip.textContent=labels[idx]+' · '+values[idx]+suffix;
+    tip.textContent=labels[idx]+' · '+lcFmt(values[idx])+suffix;
     tip.style.left=xs[idx]+'px';tip.style.top=yv(values[idx])+'px';
     tip.style.display='block';
     drawDot(idx);

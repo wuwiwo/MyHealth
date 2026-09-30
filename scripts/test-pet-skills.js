@@ -539,8 +539,11 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
   assert('§2.14 吸血生效：回血 = 普攻伤害 × 吸血率',
     !!healW && +(/\+(\d+)/.exec(healW.msg)[1]) === Math.max(1, Math.floor(dealt * ls)),
     healW && healW.msg);
+  /* WP-F（§5.1.12）：天赋「嗜血」已**接成长**（区间 10%~35%，按大关号取值）——
+     期望值不再写死 0.2，直接取该天赋声明的**区间下限**（本处 holder 是 level 1 的测试单位 = t=0）。 */
+  const btHeal0 = sandbox.TALENTS.bloodthirst.range.heal[0];
   assert('§2.14 与「嗜血」叠加：两条独立回血各自结算（不取最高）',
-    !!healB && +(/恢复 (\d+)/.exec(healB.msg)[1]) === Math.floor(dealt * 0.2), healB && healB.msg);
+    !!healB && +(/恢复 (\d+)/.exec(healB.msg)[1]) === Math.floor(dealt * btHeal0), healB && healB.msg);
 
   /* ---- 技能吸血（技能通道） ---- */
   const gb3 = sandbox.createGroupBattle({ allies: [caster, soulHi], enemies: [foe('e-wm3')], seed: 51 });

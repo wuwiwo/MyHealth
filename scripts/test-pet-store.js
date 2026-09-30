@@ -160,13 +160,20 @@ const manyIds = dd2.pets.map(function (p) { return p.speciesId; }).concat([field
 const capped = sb.createPetUnitsForBattle(manyIds, sb.PET_BATTLE_MAX);
 assert('createPetUnitsForBattle 最多 4 只', capped.length === 4, 'len=' + capped.length);
 
-// 唯一入口存在 + 三个调用点都已接线（防「三处各自判断」的口径分叉）
+// 唯一入口存在 + 参战阵容构建点（防「多处各自判断」的口径分叉）
 assert('唯一入口 buildGroupBattlePets 存在', typeof sb.buildGroupBattlePets === 'function');
 (function () {
+  const src = f => fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
+  ['game-render.js', 'debug.js'].forEach(function (f) {
+    assert(f + ' 已接线 buildGroupBattlePets', src(f).indexOf('buildGroupBattlePets') >= 0);
+  });
+  /* v2.2 WP-H2：宠物面板的「带宠物开战」**不再自建阵容**（旧实现写死关卡、且不设 `_groupStageId`
+     → 胜利时把上一次战斗的关记成通关 = 覆盖进度），改为把选择交给唯一开战入口 `startGroupTrial`。 */
+  const petUi = src('pet-ui.js');
+  assert('pet-ui.js 开战走唯一入口 startGroupTrial', /startGroupTrial\s*\(\s*groupId\s*\)/.test(petUi));
+  assert('pet-ui.js 不再自建敌群战斗', petUi.indexOf('createGroupBattle(') < 0);
   ['game-render.js', 'pet-ui.js', 'debug.js'].forEach(function (f) {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'page', f), 'utf8');
-    assert(f + ' 已接线 buildGroupBattlePets', src.indexOf('buildGroupBattlePets') >= 0);
-    assert(f + ' 不再写死参战上限 2', src.indexOf('createPetUnitsForBattle(petIds, 2)') < 0);
+    assert(f + ' 不再写死参战上限 2', src(f).indexOf('createPetUnitsForBattle(petIds, 2)') < 0);
   });
 })();
 

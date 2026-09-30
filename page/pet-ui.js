@@ -75,6 +75,8 @@ function renderPetPanel() {
   var ov = document.getElementById('panelOverlay')
   if (!ov) return
   var d = getPetStore()
+  /* v2.2 WP-H1：从存档恢复参战宠物选择（刷新/重开后保留） */
+  if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
     +'<button class="speed-btn" id="petClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
     +'<span style="font-size:var(--fs-lg);font-weight:700">🐾 宠物面板</span>'
@@ -211,19 +213,26 @@ function renderPetPanel() {
   ov.querySelectorAll('[data-pet-pick]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var sid = btn.getAttribute('data-pet-pick')
+      /* v2.2 WP-H1：先确保已从存档恢复，再改选择 */
+      if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
       _petBattlePicks = _petBattlePicks || []
       var i = _petBattlePicks.indexOf(sid)
       var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
       if (i > -1) _petBattlePicks.splice(i, 1)
       else if (_petBattlePicks.length < _petMax) _petBattlePicks.push(sid)
       else { toast('最多携带 ' + _petMax + ' 只宠物 ⚔️', 'e'); return }
+      /* v2.2 WP-H1：选择落盘（刷新 / 重开后保留） */
+      if (typeof savePetBattlePicks === 'function') savePetBattlePicks(_petBattlePicks)
       renderPetPanel()
     })
   })
   var startBtn = document.getElementById('petStartBattle')
   if (startBtn) startBtn.addEventListener('click', function(){
+    /* v2.2 WP-H2：从**当前进度关**开战（不再写死 'g5'）；无目标关时不关面板 */
+    var stage = (typeof currentGroupStageId === 'function') ? currentGroupStageId() : null
+    if (!stage) { toast('暂无可挑战的敌群关卡', 'e'); return }
     ov.classList.remove('open')
-    startGroupTrialWithPets('g5', _petBattlePicks || [])
+    startGroupTrialWithPets(stage, _petBattlePicks || [])
   })
 }
 
@@ -360,30 +369,20 @@ function renderPetDetail(pet, idx) {
   })
 }
 
-/* 带宠物的敌群试炼 */
+/* 带宠物的敌群试炼 —— **回归唯一开战入口** `startGroupTrial()`
+   v2.2 WP-H2（修「从固定小关开始 + 胜利覆盖进度」）：
+   旧实现自己拼了一份开战逻辑（`GROUP_LEVELS['g5']` 写死大关 + 只取 `stages[0]`），
+   并且**从不设置模块级的 `_groupStageId`** —— 于是：
+     ① 战斗永远从写死的大关第 1 小关开始，而不是玩家当前进度；
+     ② 胜利时 `_groupDone()` 读到的是**上一次 `startGroupTrial()` 留下的** `_groupStageId`，
+        调 `markGroupStageCleared(旧关)` + 发奖励 → 把玩家真实进度覆盖成别人的通关记录。
+   另外它还漏了 `_groupRewarded` 重置 / 随机种子 / `attachPlayerSkills` / 场地提示 / 已通关守卫。
+   现在只把「参战选择」交给 `startGroupTrial`（它本就会读 `_petBattlePicks`），逻辑只有一份。 */
 function startGroupTrialWithPets(groupId, petIds) {
-  var glv = (GROUP_LEVELS||{})[groupId]
-  if (!glv) { toast('敌群关卡不存在','e'); return }
-  var stats = getGameStats()
-  // v2.1.10：敌群是独立属性空间，玩家只继承一定比例
-  var gs = (typeof inheritGroupStats === 'function') ? inheritGroupStats(stats) : stats
-  var player = createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:gs.hp,atk:gs.atk,def:gs.def,spd:10,soulAtk:gs.soulAtk||0,soulDef:gs.soulDef||0}})
-  /* v2.2 WP-A3/A4：统一走 pet-store.js 的唯一入口（建单位 → 稀有度放大 → 凝聚/共鸣） */
-  var _petMax2 = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
-  var petUnits = (typeof buildGroupBattlePets === 'function')
-    ? buildGroupBattlePets(petIds, _petMax2)
-    : createPetUnitsForBattle(petIds, _petMax2)
-  var allies = [player].concat(petUnits)
-  var gStage = (glv.stages || [])[0]
-  var cfgList = (typeof groupStageEnemies === 'function' && gStage) ? groupStageEnemies(groupId, gStage, allies) : glv.enemies
-  var enemies = cfgList.map(function(ec,i){
-    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base,level:ec.level})
-  })
-  var lgNum2 = parseInt(String(groupId).replace(/[^0-9]/g, ''), 10) || 1
-  var terrain2 = (typeof groupTerrainFor === 'function') ? groupTerrainFor(lgNum2) : null
-  _groupBattle = createGroupBattle({ allies:allies, enemies:enemies, terrain:terrain2 })
-  _groupMode='auto';_groupSpeed=1;_groupDetail=null
-  renderGroupOverlay(true)
-  toast('👥 '+glv.name+' 开始！'+(petUnits.length?'（带 '+petUnits.length+' 宠物）':''),'s')
-  _groupStep()
+  if (Array.isArray(petIds)) {
+    _petBattlePicks = petIds.slice()
+    if (typeof savePetBattlePicks === 'function') savePetBattlePicks(_petBattlePicks)
+  }
+  if (typeof startGroupTrial !== 'function') { toast('敌群模块未加载', 'e'); return }
+  startGroupTrial(groupId)
 }
