@@ -571,10 +571,31 @@ function castSkill(gb, actor, skillId, opts) {
     });
     if (dmgResult) {
       /* v2.2.18（§2.7 雷霆冲撞「自身承受 35% 反冲」）：本次施放**实际打在目标身上**的伤害合计。
-         只在「真正扣了目标血」的分支里累加（下面 `t.hp = Math.max(0, t.hp - dmg)` 的同一个 dmg），
-         所以它与 ⚡ 伤害日志、与技能吸血读的是**同一个数**：已过命中判定 / 目标减伤 / 暴击 / 护盾吸收；
-         闪避落空、护盾吃掉的份额都不计入（那些都不是「对目标造成的伤害」）。 */
+         只在「真正扣了目标血」的分支里累加（下面 `t.hp = Math.max(0, t.hp - dmg)` 的同一个 dmg）；
+         闪避落空、护盾吃掉的份额都不计入（那些都不是「对目标造成的伤害」）。
+         v2.3.0（**overkill 口径裁决：按实际掉血**）：目标残血 10 而本次打 100 时，计入的是 **10**
+         （反冲 = 10 × 35%，不是 100 × 35%）—— 即按 `Math.min(dmg, 扣除前血量)` 累加。
+         ⚠️ 因此它与 ⚡ 伤害日志、技能吸血**不再是同一个数**：后两者仍是本次伤害值 `dmg`
+            （吸血口径本次未裁，保持原样，避免顺手改未裁事项）。 */
       var dealtTotal = 0;
+      /* v2.3.0（§2.13 作者裁决「就按照普通攻击会如何触发就如何实现」）：
+         `asNormalAttack` 的技能**真正走普攻通道** —— calcSkillDamage 只为它做**目标抽取**
+         （`normalSlots`，多段随机可重复），每一次命中交给 `normalAttack()` 结算：
+         命中判定 / 威吓 / 利刃·多目标等攻击方天赋 / 暴击 / 格挡 / 圣光守护分担 / 护盾吸收 /
+         受击方天赋与状态钩子 / 魂攻附伤 / onAfterDamage（嗜血·战意吸血）—— 与真普攻**逐条一致**。
+         此前只补了一个 onAfterDamage 派发（其余判定仍是技能通道），与裁决不符。
+         伤害系数 = 该技能区间取值（无影拳 55%~100%），语义与「启风额外普攻」的 `dmgMult` 相同
+         （只乘在 base 上，其后常规修正照旧生效）。
+         ⚠️ 因此这类技能**不经过**下面的技能伤害通道 —— 技能吸血（§2.14）也不作用于它，
+            见 §2.13/§2.14 的**互斥裁决**（视为普攻 → 只触发普攻吸血）。 */
+      if (dmgResult.normalSlots) {
+        var naMul = (dmgResult.normalPower || 100) / 100;
+        dmgResult.normalSlots.forEach(function (tid) {
+          var nt = gb.units.find(function (u) { return u.id === tid; });
+          if (!nt || nt.hp <= 0) return;
+          events = events.concat(normalAttack(gb, actor, nt, naMul));
+        });
+      }
       if (dmgResult.proc) events.push({ msg: '💢 ' + (actor.name || '单位') + ' 的 ' + def.name + ' 触发强化（本次伤害 +' + Math.round((dmgResult.procMult - 1) * 100) + '%）', targetId: targets.length ? targets[0].id : null, type: 'talent' });
       dmgResult.hits.forEach(function (h) {
         var t = gb.units.find(function (u) { return u.id === h.targetId; });
@@ -618,12 +639,20 @@ function castSkill(gb, actor, skillId, opts) {
             dmg = shk.dmg;
             events.push({ msg: '🛡️ ' + t.name + ' 护盾吸收 ' + shk.absorbed + (shk.broke ? '（护盾破碎）' : '（剩余 ' + t._shield + '）'), targetId: t.id, type: 'status' });
           }
+          var applied = Math.min(dmg, t.hp);   // v2.3.0：**实际扣除的血量**（目标残血时截断 overkill）
           t.hp = Math.max(0, t.hp - dmg);
-          dealtTotal += dmg;   // v2.2.18：反冲基数（见 dealtTotal 声明处的注释）
+          dealtTotal += applied;   // v2.2.18 反冲基数 / v2.3.0 overkill 口径（见 dealtTotal 声明处）
           events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
           /* WP-C（§2.14 技能吸血）：持有「战意」者用**技能**造成伤害时按 data.sls 回血
-             （与普攻通道的「吸血」/天赋「嗜血」分开；三者可叠加，各自结算）。 */
-          if (dmg > 0) {
+             （与普攻通道的「吸血」/天赋「嗜血」分开；三者可叠加，各自结算）。
+             v2.3.0（§2.13 + §2.14 互斥裁决，作者原话：「查看文档该技能是否视为普通攻击，
+             如果视为普通攻击则不会触发技能吸血，反之不会触发攻击吸血」）：
+               · §2.13 文档写明无影拳「**每次视为普通攻击**」→ 它只触发**普攻吸血**（data.ls，
+                 走普攻通道的 onAfterDamage），**不**触发技能吸血；
+               · 反之，非 asNormalAttack 的技能只触发技能吸血，不触发攻击吸血。
+             两条通道按「该技能是否视为普通攻击」**互斥** —— 这里的守卫是显式落点
+             （结构上 asNormalAttack 已改走 normalAttack，命中不会流到此处；守卫防未来加回技能通道时静默破例）。 */
+          if (dmg > 0 && !def.asNormalAttack) {
             var sls = warmightSkillLifesteal(actor);
             if (sls > 0) {
               var slHeal = Math.max(1, Math.floor(dmg * sls));
@@ -631,15 +660,10 @@ function castSkill(gb, actor, skillId, opts) {
               events.push({ msg: '🩸 ' + (actor.name || '') + ' 技能吸血 +' + slHeal, targetId: actor.id, type: 'heal' });
             }
           }
-          /* WP-C（§2.13 无影拳「每次视为普通攻击，会触发普通攻击相关效果与判定」）：
-             `asNormalAttack` 的技能额外派发**攻击后**钩子（天赋「嗜血」/ 状态「战意」吸血）——
-             与普攻路径同一时点。此前技能伤害完全不派发 onAfterDamage。 */
-          if (def.asNormalAttack) {
-            var nat = talentDispatch(actor, 'onAfterDamage', { dealt: dmg, target: t });
-            nat.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: actor.id, type: e.type }); });
-            var nas = dispatch(actor, 'onAfterDamage', { dealt: dmg, target: t });
-            nas.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: actor.id, type: e.type }); });
-          }
+          /* WP-C（§2.13 无影拳）旧落点说明：此前这里只为 `asNormalAttack` 的技能补一个
+             **攻击后钩子**（天赋「嗜血」/ 状态「战意」吸血）。v2.3.0 起该技能**整条**改走
+             `normalAttack()`（见上方 normalSlots 分支）—— 这些钩子由普攻通道自己派发，
+             不再需要在这里重建。 */
           // 蓄力重击：蓄力状态
           /* v2.1.21：蓄力重击的结算已移出 castSkill ——
              本技能现在只负责「进入蓄力」（由 skill.js 的 effects 施加 charging 状态），
@@ -652,12 +676,18 @@ function castSkill(gb, actor, skillId, opts) {
          · 单/多目标：本技能 `target:'random1'` → 本次施放只有 **1 次命中**，`dealtTotal` 就是那一次；
            带 recoil 的技能若为**多目标**，本行的口径是「**按每个目标的实际伤害分别计算后相加**」
            （即 Σ 实际伤害 × recoil，向下取整一次），不做静默改写。
-         · 是否过自身防御/减伤：**不过** —— 设计文档未给口径，取最保守的「直接扣血」：
-           不读 effectiveStat(def) / 不派发天赋·状态的 onDamage / 不走护盾吸收。
+         · **overkill 按实际掉血**（v2.3.0 作者裁决）：目标残血 10、本次打 100 → 计入 **10**
+           （反冲 = 10×35%），由 `dealtTotal += Math.min(dmg, 扣血前血量)` 实现。
+         · **落空 / 闪避不吃反冲**（v2.3.0 作者裁决「不吃」）：那次命中在命中判定处就 return，
+           不进 `dealtTotal`；护盾吃掉的那部分同样不计（也不是「对目标造成的伤害」）。
+         · 是否过自身防御/减伤：**不过**（v2.3.0 作者裁决「不过」）—— 设计文档未给口径，
+           取最保守的「直接扣血」：不读 effectiveStat(def) / 不派发天赋·状态的 onDamage / 不走护盾吸收。
            反冲是**施法代价**（与「迷惑·牺牲自我」同一性质），不是一次受击。
          · 向下取整：`dealtTotal` 很小时（1~2 点）反冲为 0；此时**仍写日志**，避免「为什么没掉血」不可见。
          · 可以把自己打死：`Math.max(0, ...)` 归零即可 —— 胜负判定由既有的 groupBattleStep
-           回合后检查（alliesAlive / enemiesAlive）收口，**不另造逻辑**（与「遗言」自我牺牲同一路径）。 */
+           回合后检查（alliesAlive / enemiesAlive）收口，**不另造逻辑**（与「遗言」自我牺牲同一路径）。
+         行为守卫：scripts/test-pet-skills.js §2.7 六条断言（基数 / overkill 截断 / 落空不吃 /
+         不过减伤 / 自死）。 */
       if (def.recoil > 0 && dealtTotal > 0) {
         var recoilDmg = Math.floor(dealtTotal * def.recoil);
         actor.hp = Math.max(0, actor.hp - recoilDmg);
@@ -913,8 +943,12 @@ function groupUnitTurn(gb, actor) {
   ss.events.forEach(function (e) { events.push({ msg: e.msg, reason: e.reason, targetId: e.unitId, type: e.type }); });
 
   // 慢启动/懒惰/冰冻/畏缩 → skipAction
-  var before = dispatch(actor, 'onBeforeAction', { turn: turn });
-  var tBefore = talentDispatch(actor, 'onBeforeAction', { turn: turn });
+  /* v2.3.0（作者裁决）：另传 `actualTurn` = **实际回合号**（= gb.turn）。
+     `turn` 这个局部值仍是 `gb.turn + 1`（既有约定，regen / 词条 / 玩家技能回合钩子都在用它，
+     不动）；慢启动需要「设定 x 回合就真的 x 回合」，故单独给出真实回合号，见 talent.js 的 slowstart。 */
+  var turnCtx = { turn: turn, actualTurn: gb.turn };
+  var before = dispatch(actor, 'onBeforeAction', turnCtx);
+  var tBefore = talentDispatch(actor, 'onBeforeAction', turnCtx);
   if (before.skipAction || tBefore.skipAction) {
     // v2.1.14：原日志只有「XX 无法行动」，玩家看不出到底是冰冻、畏缩还是慢启动。
     // 现在把触发源的文案（冰冻/畏缩/睡眠/慢启动/懒惰…）拼进括号。
@@ -1004,7 +1038,7 @@ function groupUnitTurn(gb, actor) {
     if (actTarget) targets = [actTarget];
     else targets = selectTargets(gb, actor, null);
     if (targets.length) {
-      var ta = talentDispatch(actor, 'onBeforeAction', {});
+      var ta = talentDispatch(actor, 'onBeforeAction', { turn: turn, actualTurn: gb.turn });
       var multi = ta.mutations.find(function (m) { return m.key === 'multiTarget'; });
       var nTargets = multi ? multi.value : 1;
       /* WP-C（多目标天赋「可额外攻击 x 个敌人」此前**不可达**）：

@@ -445,12 +445,20 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   let seed = 7;
   const vrand = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const res = sb.calcSkillDamage(fist, caster, [pool[0]], { rng: vrand, pool: pool });
-  assert('无影拳真的打 4 次（§2.13）', res.hits.length === 4, res.hits.length);
-  assert('4 次命中都落在随机池内（目标随机可重复）',
-    res.hits.every(h => pool.some(f => f.id === h.targetId)),
-    JSON.stringify(res.hits.map(h => h.targetId)));
+  /* v2.3.0（§2.13 作者裁决「就按照普通攻击会如何触发就如何实现」）：
+     `asNormalAttack` 的技能在 calcSkillDamage 里**只做目标抽取**（`normalSlots`，随机可重复），
+     伤害与全部判定由 battle-group 的普攻通道 `normalAttack()` 逐次结算
+     （见 scripts/test-pet-skills.js §2.13 的行为断言）→ 这里 `hits` 必为空。 */
+  assert('无影拳真的抽取 4 段目标（§2.13；伤害交给普攻通道，hits 为空）',
+    res.normalSlots.length === 4 && res.hits.length === 0,
+    JSON.stringify({ slots: res.normalSlots, hits: res.hits.length }));
+  assert('4 段目标都落在随机池内（目标随机可重复）',
+    res.normalSlots.every(id => pool.some(f => f.id === id)),
+    JSON.stringify(res.normalSlots));
+  assert('无影拳的伤害系数走区间取值（t=0 → 55%，交给普攻通道的 dmgMult）',
+    res.normalPower === 55, String(res.normalPower));
   assert('没有 pool 时退回目标列表（不报错，仍 4 段）',
-    sb.calcSkillDamage(fist, caster, [pool[0]], {}).hits.length === 4);
+    sb.calcSkillDamage(fist, caster, [pool[0]], {}).normalSlots.length === 4);
   assert('单段技能不受影响（冲撞单目标仍 1 段）',
     sb.calcSkillDamage(sb.getSkill('charge'), caster, [pool[0]], {}).hits.length === 1);
 

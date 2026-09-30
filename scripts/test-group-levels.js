@@ -93,11 +93,13 @@ groupKeys.forEach(function (k) {
 // 🔴 此前 `cfg.talents` **从未被赋值**：genEnemyCfg 里 `var talents = []` 之后没有任何 push，
 //    `if (talents.length)` 永不成立 → 实战落到 enemy.js 的兜底随机抽取（不在战斗种子体系内）
 //    → 同一关每场重摇（实测 g12-10 的 Boss 抽到过 magicshield + slowstart + lazy）。
-// 现在天赋与属性/词条/技能一样由 (大关,小关,槽位) 播种，且 Boss / 精英只用 TALENTS_HIGH。
+// 现在天赋与属性/词条/技能一样由 (大关,小关,槽位) 播种。
+// v2.3.0（作者裁决「保留，给精英怪/普通怪」）：**Boss 仍只用 TALENTS_HIGH**，
+//   精英 / 普通怪另有 `WEAK_TALENT_CHANCE` 的负面天赋注入（lazy / slowstart，替换掉最后一个天赋）。
 const highT = sandbox.TALENTS_HIGH || [];
 const lowT = sandbox.TALENTS_LOW || ['lazy', 'slowstart'];
 const tCountRange = sandbox.GROUP_TALENT_COUNT || {};
-let noTalent = [], badPool = [], weakOn = [], badCount = [];
+let noTalent = [], badPoolBoss = [], badPoolLow = [], weakOn = [], weakOnBoss = [], badCount = [];
 groupKeys.forEach(function (k) {
   (gl[k].stages || []).forEach(function (s) {
     (s.enemies || []).forEach(function (e, i) {
@@ -107,16 +109,22 @@ groupKeys.forEach(function (k) {
       const r = tCountRange[e.tier];
       if (r && (list.length < r[0] || list.length > r[1])) badCount.push(s.id + '#' + i + '=' + list.length);
       list.forEach(function (t) {
-        if (highT.indexOf(t) < 0) badPool.push(s.id + ':' + t);
-        if (lowT.indexOf(t) >= 0) weakOn.push(s.id + ':' + t);
+        if (e.tier === 'boss' && highT.indexOf(t) < 0) badPoolBoss.push(s.id + ':' + t);
+        if (e.tier !== 'boss' && highT.concat(lowT).indexOf(t) < 0) badPoolLow.push(s.id + ':' + t);
+        if (lowT.indexOf(t) >= 0) {
+          weakOn.push(s.id + ':' + t);
+          if (e.tier === 'boss') weakOnBoss.push(s.id + ':' + t);
+        }
       });
     });
   });
 });
 assert('天赋已固化进关卡配置（非杂兵槽位都带 talents）', noTalent.length === 0, noTalent.slice(0, 5).join(','));
 assert('天赋个数落在 GROUP_TALENT_COUNT[tier] 区间内', badCount.length === 0, badCount.slice(0, 5).join(','));
-assert('Boss / 精英天赋全部来自 TALENTS_HIGH', badPool.length === 0, badPool.slice(0, 5).join(','));
-assert('Boss / 精英不抽 lazy / slowstart（全 ' + groupKeys.length * 10 + ' 关无例外）', weakOn.length === 0, weakOn.slice(0, 5).join(','));
+assert('Boss 天赋全部来自 TALENTS_HIGH', badPoolBoss.length === 0, badPoolBoss.slice(0, 5).join(','));
+assert('非 Boss 天赋来自 TALENTS_HIGH ∪ TALENTS_LOW', badPoolLow.length === 0, badPoolLow.slice(0, 5).join(','));
+assert('Boss 不抽 lazy / slowstart（全 ' + groupKeys.length + ' 个 Boss 关无例外）', weakOnBoss.length === 0, weakOnBoss.slice(0, 5).join(','));
+assert('精英 / 普通怪的负面天赋恢复出场（' + weakOn.length + ' 处）', weakOn.length > 0, weakOn.slice(0, 5).join(','));
 assert('天赋抽取是确定性的：同一关两次生成结果一致', (function () {
   for (let lg = 1; lg <= nameCount; lg++) {
     for (let st = 1; st <= 10; st++) {

@@ -3,7 +3,8 @@
    敌人编成：createEnemyUnit 组合 天赋+技能+属性。
    难度阶梯：杂兵0/0 → 精英1/1 → 2/1 → 2/2 → Boss(1-4天赋+词条)。
    v2.2.16（§5.4E）：敌群关卡的天赋已由 group-levels.js **固化进关卡配置**并显式传入；
-   本文件的兜底抽取（`talents` 缺省时）仍保留，但同样遵守「Boss / 精英不抽 lazy / slowstart」。
+   本文件的兜底抽取（`talents` 缺省时）仍保留，但同样遵守「**Boss** 不抽 lazy / slowstart」
+   （v2.3.0 作者裁决：精英 / 普通怪恢复可抽这两条负面特性，排除面只留 Boss）。
    依赖 unit.js / talent.js / skill.js（skill 后续）。
    ============================================ */
 
@@ -58,6 +59,20 @@ function createEnemyUnit(opts) {
   }
 
   // 挂天赋（含静态属性修正）
+  /* v2.3.0（作者裁决）：「带负面特性的单位，属性数值更高」——**兜底路径**的补偿。
+     ⚠️ 只在「未显式传 talents」时补：走固化配置的敌群槽位已在 `group-levels.js` 的 genEnemyCfg 里
+        补过，这里再补一次会变成双倍。常量与口径来源同 group-levels.js
+        （`weakTalentStatMul` / `WEAK_TALENT_STAT_BONUS`，报告里标为**待作者确认的首版取值**）。 */
+  if (!opts.talents && typeof weakTalentStatMul === 'function') {
+    var wmul = weakTalentStatMul(talentIds);
+    if (wmul !== 1) {
+      ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].forEach(function (k) {
+        if (unit.base[k] == null) return;
+        unit.base[k] = Math.max(1, Math.floor(unit.base[k] * wmul));
+      });
+      unit.hp = unit.base.hp;
+    }
+  }
   attachTalents(unit, talentIds);
   /* v2.1.25：词条与天赋分开装配 —— 词条是 Boss/精英的额外维度（见 affix.js） */
   var affixIds = opts.affixes || [];
@@ -79,18 +94,21 @@ function createEnemyUnit(opts) {
      · 敌群关卡（`group-levels.js`）现在**固化**了天赋，走的是 `createEnemyUnit({talents})` 的显式分支，
        **不会**进这里 —— 线上的三个建场入口（`game-render.js` / `pet-ui.js` / `debug.js`）全都传
        `cfg.talents`，所以本函数目前只被测试/工具与「未来的新入口」用到。
-     · 兜底抽取同样要遵守「Boss / 精英不抽自我削弱天赋」：靠 `tier` 剔除 talent.js 里标了 `weak: true`
+     · 兜底抽取同样要遵守「**Boss** 不抽自我削弱天赋」：靠 `tier` 剔除 talent.js 里标了 `weak: true`
        的天赋（现为 lazy / slowstart）。此前无条件全池抽，是 §5.0 实测「g12-10 的 Boss 抽到
        magicshield+slowstart+lazy」的直接原因。
+   v2.3.0（作者裁决「保留，给精英怪/普通怪」）：**排除面收到 Boss 一档** ——
+     精英 / 普通怪恢复可抽 lazy / slowstart（此前 `eliteLike` 连精英一起挡掉了，
+     与作者裁决相反；同时 group-levels.js 侧另有 `WEAK_TALENT_CHANCE` 的注入，两处口径一致）。
    @param n    抽取个数
-   @param tier 可选。省略时 = 旧行为（全池，仅排除宠物专属）；'boss' / 'elite1'~'elite3' 会额外排除 weak */
+   @param tier 可选。省略时 = 旧行为（全池，仅排除宠物专属）；'boss' 会额外排除 weak */
 function pickRandomTalents(n, tier) {
-  var eliteLike = !!tier && tier !== 'minion';
+  var bossLike = (tier === 'boss');
   // 排除宠物专属天赋（petOnly）——否则敌人会抽到「漆黑之眼」「圣光守护」这类宠物天赋
   var ids = Object.keys(TALENTS).filter(function (id) {
     var t = TALENTS[id];
     if (!t || t.petOnly) return false;
-    if (eliteLike && t.weak) return false;   // 自我削弱天赋不给 Boss / 精英
+    if (bossLike && t.weak) return false;   // 自我削弱天赋不给 Boss
     return true;
   });
   var picked = [];

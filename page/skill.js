@@ -18,13 +18,22 @@ var SKILLS = {};   // id → skill def
      · condBonus:{statuses,value} —— 目标处于指定状态时本次伤害 ×(1+value)
      · bounce:{times,dmgUp,foeChance} —— 全场随机弹射（梦幻光球）
      · wounded:true     —— target:'ally1' 时只挑未满血的友方（圣光治愈）
-     · multiHit:N       —— 多段攻击，目标随机可重复 */
+     · multiHit:N       —— 多段攻击，目标随机可重复
+     · asNormalAttack:true —— **视为普通攻击**（§2.13 无影拳）。
+                              v2.3.0（作者裁决「就按照普通攻击会如何触发就如何实现」）：
+                             该技能**不在技能通道算伤害**，`calcSkillDamage` 只为它做目标抽取
+                             （返回 `normalSlots`），逐次交给 battle-group 的 `normalAttack()` ——
+                              命中判定 / 减伤 / 格挡 / 威吓 / 暴击 / 圣光守护 / 护盾 / 粗糙皮肤 /
+                              状态钩子 / 魂攻附伤 / onAfterDamage 全部与真普攻一致。
+                             由此**只触发普攻吸血**，不触发技能吸血（§2.14 互斥裁决）。 */
    /* v2.2.18 新增可选字段：
      · recoil:0.35      —— **自身反冲**（§2.7 雷霆冲撞「自身承受 35% 反冲」）。
                             作者裁决：**基数 = 本次对目标实际造成的伤害** → 反冲 = 该伤害 × recoil。
                             消费端 = battle-group.js 的 castSkill 伤害通道（逐目标实际伤害求和后乘比率、
                             向下取整）；**不过自身防御/减伤**（文档未给口径，取最保守的「直接扣血」），
-                            且**可以把自己打死**（走既有胜负判定，不另造逻辑）。 */
+                            且**可以把自己打死**（走既有胜负判定，不另造逻辑）。
+                            v2.3.0 追加裁决：**overkill 按实际掉血**（残血 10 打 100 → 计 10）、
+                            **落空 / 闪避不吃反冲**。 */
 function registerSkill(def) {
   if (!def || !def.id) throw new Error('registerSkill: id required');
   SKILLS[def.id] = def;
@@ -167,6 +176,31 @@ function skillValue(skill, key, t) {
 function calcSkillDamage(skill, caster, targets, ctx) {
   if (!skill || skill.type !== 'attack') return null;
   ctx = ctx || {};
+  /* ============ v2.3.0（§2.13 作者裁决「就按照普通攻击会如何触发就如何实现」）============
+     标记了 `asNormalAttack` 的技能（无影拳）**不在技能通道算伤害** —— 这里只做
+     **目标抽取**（多段：目标随机可重复；单次：即 targets），把 targetId 交给
+     `battle-group.js` 的**普攻通道** `normalAttack()` 逐次结算。
+     于是命中判定 / 威吓 / 攻击方天赋（利刃·多目标）/ 暴击 / 格挡 / 圣光守护分担 / 护盾吸收 /
+     受击方天赋与状态钩子 / 魂攻附伤 / onAfterDamage（嗜血 · 战意吸血）**全部与真普攻逐条一致**。
+     此前只补了一个 onAfterDamage 派发，其余判定仍走技能通道 —— 与裁决不符。
+     返回 {type:'damage', hits:[], normalSlots:[id...], normalPower: 区间取值(%)}。
+     ⚠️ 由此它也**不**触发技能吸血（§2.14 互斥裁决：视为普攻 → 只触发普攻吸血）。 */
+  if (skill.asNormalAttack) {
+    var slots = [];
+    if (skill.multiHit) {
+      var npool = (ctx.pool && ctx.pool.length) ? ctx.pool : targets;
+      for (var ns = 0; ns < skill.multiHit && npool.length; ns++) {
+        var nr = (typeof ctx.rng === 'function') ? ctx.rng() : battleRnd();
+        slots.push(npool[Math.floor(nr * npool.length)].id);
+      }
+    } else {
+      targets.forEach(function (t) { slots.push(t.id); });
+    }
+    return {
+      type: 'damage', hits: [], normalSlots: slots,
+      normalPower: skillValue(skill, 'power', skillRangeT(caster))
+    };
+  }
   var atk = skill.dmgType === 'soul' ? effectiveStat(caster, 'soulAtk') : effectiveStat(caster, 'atk');
   /* v2.1.22：威力按「基础属性成长进度」取区间值（驱动源见 skillRangeT 的注释） */
   var power = skillValue(skill, 'power', skillRangeT(caster)) || 1;
@@ -211,13 +245,11 @@ function calcSkillDamage(skill, caster, targets, ctx) {
     out.push({ targetId: t.id, amount: dmg, dmgType: skill.dmgType || 'physical' });
   }
   /* v2.1.24：多段攻击。
-     skill.multiHit = N（无影拳：总计 5 次）→ 打 N 次、**目标随机且可重复**
-     （设计 design-v2.0.md:249「总计 5 次攻击，每次视为普通攻击，目标随机可重复」）。
-     WP-C（§2.13 评审「总计 4 次攻击，每次 55%-100%」）：无影拳的 N 由 5 改为 **4**，
-     并加 `asNormalAttack:true` —— 本注释里的「N 次」口径不变，只是取值换了。
-     随机池由 castSkill 经 ctx.pool 传进来 —— selectTargets('random1') 只返回 1 个目标，
-     拿不到「随机可重复」需要的整套候选。
-     此前无影拳只有 1 次命中（power 单发），日志却写「×5」。 */
+     skill.multiHit = N → 打 N 次、**目标随机且可重复**；随机池由 castSkill 经 ctx.pool 传进来
+     （selectTargets('random1') 只返回 1 个目标，拿不到「随机可重复」需要的整套候选）。
+     ⚠️ v2.3.0（§2.13 作者裁决）：**无影拳已不在这里** —— 它带 `asNormalAttack`，在函数开头就
+        早退为「只做目标抽取」（`normalSlots`），伤害由 battle-group 的普攻通道逐次结算。
+        本分支现在只服务**其余**多段技能（目前无实例），保留是防未来新增多段技能时又走回技能通道。 */
   var selfHealAmount = 0;
   if (skill.bounce) {
     /* WP-C（§2.12 梦幻光球「全场随机弹射 3 次、每单位最多 1 次」）：

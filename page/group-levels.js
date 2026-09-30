@@ -169,9 +169,79 @@ function groupTerrainFor(lg) {
   return getTerrain(ids[Math.floor(r * ids.length)]);
 }
 /* v2.2.16（§5.4E 天赋固化）：**自我削弱天赋**（talent.js 里标了 `weak: true` 的那两条）。
-   它们只进「非精英」池 —— Boss / 精英不抽（评审原文「boss不会获得」）。
-   ⚠️ 本数组与 talent.js 的 `weak` 标记必须一致，由 scripts/test-talent-fixation.js 断言守卫。 */
+    它们只进「非精英」池 —— Boss / 精英不抽（评审原文「boss不会获得」）。
+   ⚠️ 本数组与 talent.js 的 `weak` 标记必须一致，由 scripts/test-talent-fixation.js 断言守卫。
+   v2.3.0（作者裁决「保留，给精英怪/普通怪」）：**`TALENTS_LOW` 重新真正出场** ——
+     v2.2.16 把它只并进「杂兵池」，而杂兵个数是 0（设计表「杂兵：纯属性」）→ 这两条天赋
+     实际上从游戏里**彻底消失**了（连作者要的「给精英怪/普通怪」也没做到）。
+     现在：**Boss 仍排除**；精英 / 普通关里带天赋的敌人（elite1 / elite2 / elite3）逐个按
+     `WEAK_TALENT_CHANCE` 判定，命中则**用它替换掉抽到的最后一个天赋**（个数保持
+     `GROUP_TALENT_COUNT[tier]` 区间内，不超出设计表的 1~2 / 1~4）。
+   ⚠️ 杂兵（minion）按设计表仍是 **0 天赋**（`doc/2.0 敌群设计.md` 的敌人编成规则：
+     「杂兵（前期）0 天赋 · 纯属性，教学向」）→ 拿不到负面特性；作者说的「普通怪」在本项目里
+     落在**普通关※中带天赋的 elite1 档**敌人身上（※ 小关号能被 3 整除的普通关）。
+   ⚠️ 抽取顺序刻意放在原有「高级池抽取」**之后**：既有编成（含各 Boss 与未中签的精英槽位）
+     逐格不变，只有「抽中负面特性」的单位会换掉最后一个天赋 —— 改动面可控，
+     也不扰动词条 / 技能的种子流（它们排在天赋抽取之前）。
+   ⚠️⚠️ `WEAK_TALENT_CHANCE` 是**首版取值**：作者只说了「给精英怪/普通怪」，没给出场比例。 */
 var TALENTS_LOW = ['lazy', 'slowstart'];
+var WEAK_TALENT_CHANCE = 0.25;
+
+/* ============ v2.3.0 作者裁决：带负面特性的单位**属性数值更高**（补偿） ============
+   作者原话：「保留，给精英怪/普通怪，一般配这种负面特性的，它的属性数值会更高」。
+   —— 即「负面特性」与「更高的属性」是一对交易：能力上被削，数值上被补。
+
+   ⚠️⚠️ **`WEAK_TALENT_STAT_BONUS` 是首版取值，待作者确认**：
+   文档（`doc/2.0 敌群设计.md`）与本次裁决都**只给了方向、没有给幅度**。
+   首版取 **0.10**，依据是**实测的敏感度曲线**（`scripts/balance-pets-ab.js`，dundun 当前属性，
+   含技能 40 trials，只改本常量 → g17/g18 的通过率；口径与 `doc/plans/v2.2.18-平衡复测.md` 一致）：
+
+   | 本常量 | g17（4 宠列） | g18（4 宠列） | 备注 |
+   |---|---|---|---|
+   | 0.00（= 不补偿） | 75% | 98% | 负面天赋**纯削弱**（白送一个名额） |
+   | **0.10（首版）** | **63%** | **93%** | 落在 v2.2.18 基线（57% / 70%）的合理一侧 |
+   | 0.25 | 45% | 45% | 过度补偿，把 g18 从 98% 打到 45%（比基线还难） |
+
+   ⚠️ 该杠杆**非常敏感**（同一批实验里 g18 在 98%↔45% 之间摆动）——
+   作者给数后**只需改这一行**；`WEAK_TALENT_CHANCE`（出场比例）是第二个同类杠杆。
+   口径：逐属性乘在 `cfg.base` 上，覆盖 **攻 / 防 / 血 / 魂攻 / 魂防**（**速度不参与** ——
+   与 WP-A1「速度不参与倍率池」同口径）；多个负面特性按 `1 + BONUS × 个数` **线性叠加**（不连乘）。
+   ⚠️ 补偿发生在**天赋静态修正（强健等）之前**：`createEnemyUnit` 的 `talentStatMods` 以补偿后的
+     base 为基数计算，故 `vigor` 的 +15% 也会作用在补偿后的数值上（与宠物「基础属性 → 倍率池」
+     同序）。 */
+var WEAK_TALENT_STAT_BONUS = 0.10;
+
+/* 带负面特性的个数 / 属性补偿倍率（消费点：genEnemyCfg / enemy.js 的兜底路径） */
+function weakTalentStatMul(talentIds) {
+  var n = 0;
+  (talentIds || []).forEach(function (id) { if (TALENTS_LOW.indexOf(id) >= 0) n++; });
+  return n > 0 ? (1 + WEAK_TALENT_STAT_BONUS * n) : 1;
+}
+
+/* ============ v2.3.0 作者裁决：两个 Boss 的固定天赋集「调整」 ============
+   背景（doc/plans/v2.2.18-平衡复测.md §3.3 实测）：v2.2.16 把天赋固化进关卡配置后，
+   这两关明显变难 —— 含技能 40t：**g17 95%→57%、g18 90%→70%**（无技能口径两版恒 0%）。
+   已知证据：
+     · `g17-10` Boss·混沌魔 = `[roughskin, vengeance, blade, vigor]`（**4 个，纯进攻 + 反伤套装**：
+       利刃增伤 + 复仇残血增攻 + 粗糙皮肤反伤 + 强健全属性 +15%）；
+     · `g18-10` Boss·战争领主 = `[magicmirror, vigor, bloodthirst]`，其中 `magicmirror`
+       **免疫 / 反弹玩家自己的指向性辅助技能**（瞩目 / 气力恢复）—— 属**直接克制玩家打法的硬反制**。
+   裁决方向：把这两组调到**不再是「纯进攻 + 硬克制」**。改动（改前 → 改后）：
+     · `g17-10`：`[roughskin, vengeance, blade, vigor]` → `[roughskin, vigor, regen]`
+        —— 拆掉 2 个进攻天赋（`blade` 利刃 / `vengeance` 复仇），换 1 个**回复类** `regen`（再生）；
+           保留 `roughskin`（反伤，对普攻流派有对抗但非硬克制）+ `vigor`（自身属性）。
+     · `g18-10`：`[magicmirror, vigor, bloodthirst]` → `[magicshield, vigor, bloodthirst]`
+        —— 把硬克制玩家的 `magicmirror` 换成 `magicshield`（**只减魂攻伤害**的防御向天赋，
+           不压制玩家的辅助 / 支持流打法）。
+   约束（逐条满足）：① 仍在**合法池**内（`TALENTS_HIGH`）；② **不含 Boss 禁用项**
+     （`lazy` / `slowstart`，即 `weak`）；③ **只动这两个 Boss** —— 其余 Boss 的天赋集
+     由守卫断言逐条钉死（见 scripts/test-talent-fixation.js）。
+   ⚠️ 这两组是**首版选择**（按天赋池的强度分级挑的：去掉纯增伤 + 去掉硬反制、补防御/回复），
+     最终取值仍待作者确认；改这里即生效，不再随池子抽取漂移。 */
+var GROUP_BOSS_TALENT_OVERRIDE = {
+  'g17-10': ['roughskin', 'vigor', 'regen'],
+  'g18-10': ['magicshield', 'vigor', 'bloodthirst']
+};
 var SKILLS_HIGH = ['charge', 'spikes', 'blizzard', 'armorbreak', 'blackmist', 'possess', 'deepfreeze',
   // v2.1.16：这 7 个技能代码完整但此前不在任何池里 → 实战永远见不到
   'taunt', 'empower', 'bulwark', 'cleanse', 'drainbuff', 'stardust', 'clearfog',
@@ -250,8 +320,10 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
         → 同一关每场战斗重摇天赋（实测 g12-10 的 Boss 随种子抽到过 `magicshield+slowstart+lazy`）。
      现在与属性 / 词条 / 技能一致：**个数与取哪几条都由本关种子**（`lg, st, slot` + tier 偏移）推导，
      同一关、同一槽位永远同一套天赋（可确定性复现）。
-     · 池子：Boss / 精英只用 `TALENTS_HIGH`（排除 `lazy` / `slowstart` 自我削弱，§5.4E「boss不会获得」）；
-             非精英（杂兵）才可能拿到 `TALENTS_LOW` —— 但杂兵个数为 0，实际拿不到天赋。
+     · 池子：Boss 只用 `TALENTS_HIGH`（排除 `lazy` / `slowstart` 自我削弱，§5.4E「boss不会获得」）；
+            精英 / 普通怪在此基础上**另有 `WEAK_TALENT_CHANCE` 的负面特性注入**（v2.3.0 作者裁决，
+            见下方注入块 —— 这一层是 v2.2.16 漏掉的：当时 `TALENTS_LOW` 只并进「杂兵池」，
+            而杂兵个数为 0 → 两条天赋实际从未出场）。
      · 个数：按 `GROUP_TALENT_COUNT[tier]`（与 enemy.js 的 `ENEMY_TIERS` 同源，有守卫断言）。
      · 位置：抽取刻意放在**词条 / 技能之后**，以免扰动二者的种子流 ——
        否则「天赋固化」会把全部关卡的词条与技能也一起换掉，改动面失控。
@@ -265,7 +337,30 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
     var pi = Math.floor(rng() * talentPool.length);
     talents.push(talentPool[pi]); talentPool.splice(pi, 1);
   }
+  /* v2.3.0（作者裁决「保留，给精英怪/普通怪」）：负面天赋（lazy / slowstart）恢复出场。
+     · **Boss 仍排除**（评审原文「boss不会获得」）—— 上面的高级池抽取已是 HIGH-only，这里也不注入；
+     · 精英 / 普通关的带天赋敌人逐个按 `WEAK_TALENT_CHANCE` 判定，命中则**替换掉最后一个天赋**
+       （个数不变，仍落在 GROUP_TALENT_COUNT[tier] 区间内）。
+     ⚠️ 位置放在上面那次抽取**之后**：上面抽到的那几个天赋逐格不变，
+        只有中签的单位会换掉尾巴上一个 —— 改动面可控（见 WEAK_TALENT_CHANCE 处的说明）。 */
+  if (talents.length && tier !== 'boss' && rng() < WEAK_TALENT_CHANCE) {
+    talents[talents.length - 1] = TALENTS_LOW[Math.floor(rng() * TALENTS_LOW.length)];
+  }
+  /* v2.3.0（作者裁决「调整」）：两个 Boss 的固定天赋集**显式钉死**（见 GROUP_BOSS_TALENT_OVERRIDE）。
+     Boss 槽位 = 0（genStageEnemies 里 Boss 恒为第 0 槽）。只覆盖这两个关卡，其余 Boss 不受影响。 */
+  var ovr = (isBoss && slot === 0) ? GROUP_BOSS_TALENT_OVERRIDE['g' + lg + '-' + st] : null;
+  if (ovr) talents = ovr.slice();
   if (talents.length) cfg.talents = talents;
+  /* v2.3.0（作者裁决）：带负面特性的单位**属性数值更高**（补偿）。
+     幅度常量与口径见 weakTalentStatMul / WEAK_TALENT_STAT_BONUS（⚠️ 首版取值待确认）。
+     五个属性同乘、速度不参与；补偿在天赋静态修正（强健等）之前落进 cfg.base。 */
+  var wmul = weakTalentStatMul(talents);
+  if (wmul !== 1) {
+    ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].forEach(function (k) {
+      if (cfg.base[k] == null) return;
+      cfg.base[k] = Math.max(1, Math.floor(cfg.base[k] * wmul));
+    });
+  }
   return cfg;
 }
 
@@ -484,6 +579,10 @@ if (typeof window !== 'undefined') {
   window.PET_GROUP_SCALE = PET_GROUP_SCALE;
   window.TALENTS_HIGH = TALENTS_HIGH;
   window.TALENTS_LOW = TALENTS_LOW;
+  window.WEAK_TALENT_CHANCE = WEAK_TALENT_CHANCE;
+  window.WEAK_TALENT_STAT_BONUS = WEAK_TALENT_STAT_BONUS;
+  window.weakTalentStatMul = weakTalentStatMul;
+  window.GROUP_BOSS_TALENT_OVERRIDE = GROUP_BOSS_TALENT_OVERRIDE;
   window.GROUP_TALENT_COUNT = GROUP_TALENT_COUNT;
   window.genEnemyCfg = genEnemyCfg;
   window.pickExtraAffixes = pickExtraAffixes;
@@ -511,6 +610,10 @@ if (typeof globalThis !== 'undefined') {
   globalThis.PET_GROUP_SCALE = PET_GROUP_SCALE;
   globalThis.TALENTS_HIGH = TALENTS_HIGH;
   globalThis.TALENTS_LOW = TALENTS_LOW;
+  globalThis.WEAK_TALENT_CHANCE = WEAK_TALENT_CHANCE;
+  globalThis.WEAK_TALENT_STAT_BONUS = WEAK_TALENT_STAT_BONUS;
+  globalThis.weakTalentStatMul = weakTalentStatMul;
+  globalThis.GROUP_BOSS_TALENT_OVERRIDE = GROUP_BOSS_TALENT_OVERRIDE;
   globalThis.GROUP_TALENT_COUNT = GROUP_TALENT_COUNT;
   globalThis.genEnemyCfg = genEnemyCfg;
   globalThis.pickExtraAffixes = pickExtraAffixes;

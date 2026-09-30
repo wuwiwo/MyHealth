@@ -93,19 +93,22 @@ for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
 }
 assert(checked + ' 关配置与 Math 种子无关', same && checked === Object.keys(sb.GROUP_LEVELS).length * 10, '比对 ' + checked + ' 关');
 
-// ---- 4. Boss / 精英只用高级池 ----
-/* v2.1.25：天赋与词条分家 —— 天赋走 TALENTS_HIGH，词条走 affix.js 的 AFFIX_EXTRA + 固定减伤 */
+// ---- 4. Boss 只用高级池（v2.3.0：负面天赋的排除面收到 **Boss 一档**） ----
+/* v2.1.25：天赋与词条分家 —— 天赋走 TALENTS_HIGH，词条走 affix.js 的 AFFIX_EXTRA + 固定减伤
+   v2.3.0（作者裁决「保留，给精英/普通怪」）：**精英（含 Boss 关的护卫）恢复可抽 lazy / slowstart**，
+   故「高级池」的守卫只对 **Boss 槽位**成立；非 Boss 允许 TALENTS_HIGH ∪ TALENTS_LOW。 */
 const HIGH_T = sb.TALENTS_HIGH || [];
 const HIGH_A = (sb.GROUP_AFFIX_EXTRA || []).concat(['cut_boss', 'cut_elite']);
 const HIGH_S = sb.SKILLS_HIGH || [];
-const LOW_T = ['lazy', 'slowstart'];
-let bossBad = [], lowUsed = [];
+const LOW_T = sb.TALENTS_LOW || ['lazy', 'slowstart'];
+let bossBad = [], lowUsed = [], lowElite = [];
 for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
   const st = sb.GROUP_LEVELS['g' + lg].stages[9];   // 第 10 关 = Boss
   (st.enemies || []).forEach(function (e) {
+    const isBoss = (e.tier === 'boss');
     (e.talents || []).forEach(function (t) {
-      if (HIGH_T.indexOf(t) < 0) bossBad.push('g' + lg + ':' + t);
-      if (LOW_T.indexOf(t) >= 0) lowUsed.push('g' + lg + ':' + t);
+      if (HIGH_T.indexOf(t) < 0 && (isBoss || LOW_T.indexOf(t) < 0)) bossBad.push('g' + lg + ':' + t);
+      if (LOW_T.indexOf(t) >= 0) { (isBoss ? lowUsed : lowElite).push('g' + lg + ':' + t); }
     });
     (e.affixes || []).forEach(function (a) {
       if (HIGH_A.indexOf(a) < 0) bossBad.push('g' + lg + ':词条' + a);
@@ -115,8 +118,9 @@ for (let lg = 1; lg <= Object.keys(sb.GROUP_LEVELS).length; lg++) {
     });
   });
 }
-assert('Boss 天赋/词条/技能全部来自各自的高级池', bossBad.length === 0, bossBad.slice(0, 5).join(','));
+assert('Boss 天赋/词条/技能全部来自各自的高级池（非 Boss 允许 TALENTS_LOW）', bossBad.length === 0, bossBad.slice(0, 5).join(','));
 assert('Boss 不再抽到 lazy / slowstart 自我削弱', lowUsed.length === 0, lowUsed.join(','));
+assert('Boss 关的护卫（精英）恢复了负面天赋（' + lowElite.length + ' 处）', lowElite.length > 0, lowElite.slice(0, 5).join(','));
 const anyBoss = sb.GROUP_LEVELS.g12.stages[9].enemies[0];
 assert('Boss 至少 2 词条 + 2 技能',
   (anyBoss.affixes || []).length >= 2 && (anyBoss.skills || []).length >= 2,

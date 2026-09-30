@@ -5,12 +5,15 @@
    2) 同一关、同一槽位永远同一套天赋：
         · 与 Math 随机种子无关（两个沙箱对比）
         · 与**战斗随机种子**无关（此前每场重摇，实测 g12-10 的 Boss 抽到过 magicshield+slowstart+lazy）
-   3) Boss / 精英不抽 lazy / slowstart —— 两个入口都要挡住：
-        · group-levels.js 的池子（固化路径）
+   3) 负面天赋 lazy / slowstart 的出场面（v2.2.16：Boss/精英一律排除；v2.3.0 作者裁决：
+        **Boss 仍排除**，精英 / 普通怪恢复可抽）——两个入口都要一致：
+        · group-levels.js 的池子（固化路径 + `WEAK_TALENT_CHANCE` 注入）
         · enemy.js 的 pickRandomTalents()（兜底路径，按 tier 剔除 `weak`）
-   4) 词条 / 技能的编成**没有**被天赋固化扰动（种子流哨兵：天赋抽取刻意放在它们之后）
+   4) 词条 / 技能的编成**没有**被天赋相关改动扰动（种子流哨兵）
    5) 死配置清理：慢启动 `config.rounds`、多目标 `config.extra` / `config.penalty` 的数值真正被消费
-   6) 尚未清理（禁改文件 / 已知缺口）登记：magicshield 消费端硬编码、多目标额外攻击不可达
+   6) v2.3.0（作者裁决，线 1）：两个 Boss 天赋集调整（改前→改后 + 其余 Boss 逐条钉死）
+        + 带负面特性的单位**属性数值更高**（补偿常量可调、速度不参与）
+   7) 尚未清理（禁改文件 / 已知缺口）登记：magicshield 消费端硬编码、多目标额外攻击不可达
 */
 'use strict';
 const fs = require('fs');
@@ -144,7 +147,11 @@ assert('createEnemyUnit 装上的天赋 == 关卡配置的天赋（' + cfgTalent
 })();
 
 /* ============================================================
-   3. Boss / 精英不抽 lazy / slowstart
+   3. 负面天赋（lazy / slowstart）的出场面
+      · v2.2.16：Boss / 精英一律排除 → 两条天赋其实**从未出场**（`TALENTS_LOW` 只并进
+        个数为 0 的杂兵池）
+      · v2.3.0（作者裁决「保留，给精英怪/普通怪」）：**Boss 仍排除**，精英 / 普通怪恢复可抽，
+        且带负面特性的单位属性数值更高（见第 6/7 节）
    ============================================================ */
 const high = sb.TALENTS_HIGH || [];
 assert('TALENTS_HIGH 非空且不含 weak 天赋', high.length > 0 && high.every(id => !sb.isWeakTalent(id)),
@@ -153,30 +160,53 @@ assert('TALENTS_LOW == talent.js 标记 weak 的天赋（两份清单守卫）',
   eq((sb.TALENTS_LOW || []).slice().sort(), Object.keys(sb.TALENTS).filter(id => sb.isWeakTalent(id)).sort()),
   JSON.stringify(sb.TALENTS_LOW) + ' vs ' + JSON.stringify(Object.keys(sb.TALENTS).filter(id => sb.isWeakTalent(id))));
 
-const poolBad = nonMinion.filter(x => (x.e.talents || []).some(t => high.indexOf(t) < 0));
-assert('Boss / 精英的天赋全部来自 TALENTS_HIGH', poolBad.length === 0,
-  poolBad.slice(0, 5).map(x => x.id + ':' + (x.e.talents || []).join('+')).join(','));
-const weakUsed = [];
-enemies.forEach(x => (x.e.talents || []).forEach(t => { if (WEAK.indexOf(t) >= 0) weakUsed.push(x.id + '#' + x.slot + ':' + t); }));
-assert('全 ' + groups.length * 10 + ' 关的敌群天赋里没有 lazy / slowstart', weakUsed.length === 0, weakUsed.slice(0, 5).join(','));
+const bossSlots = enemies.filter(x => x.e.tier === 'boss');
+const lowSlots = enemies.filter(x => x.e.tier !== 'boss');
+const poolBadBoss = bossSlots.filter(x => (x.e.talents || []).some(t => high.indexOf(t) < 0));
+assert('Boss 的天赋全部来自 TALENTS_HIGH（' + bossSlots.length + ' 个 Boss 槽位）', poolBadBoss.length === 0,
+  poolBadBoss.slice(0, 5).map(x => x.id + ':' + (x.e.talents || []).join('+')).join(','));
+const poolBadLow = lowSlots.filter(x => (x.e.talents || []).some(t => high.concat(WEAK).indexOf(t) < 0));
+assert('非 Boss 的天赋来自 TALENTS_HIGH ∪ TALENTS_LOW', poolBadLow.length === 0,
+  poolBadLow.slice(0, 5).map(x => x.id + ':' + (x.e.talents || []).join('+')).join(','));
+const weakBoss = bossSlots.filter(x => (x.e.talents || []).some(t => WEAK.indexOf(t) >= 0));
+assert('Boss 不抽 lazy / slowstart（评审原文「boss不会获得」）', weakBoss.length === 0,
+  weakBoss.slice(0, 5).map(x => x.id + ':' + (x.e.talents || []).join('+')).join(','));
+const weakUsed = lowSlots.filter(x => (x.e.talents || []).some(t => WEAK.indexOf(t) >= 0));
+assert('精英 / 普通怪的负面天赋**恢复出场**（' + weakUsed.length + ' 个非 Boss 槽位带上它）',
+  weakUsed.length > 0 && weakUsed.every(x => x.e.tier !== 'minion'),
+  weakUsed.slice(0, 5).map(x => x.id + '#' + x.slot + ':' + (x.e.talents || []).join('+')).join(','));
+assert('杂兵仍按设计表 0 天赋（拿不到负面特性）',
+  enemies.filter(x => x.e.tier === 'minion').every(x => !(x.e.talents || []).length));
+assert('负面特性的出现是**确定性**的（同一关两次生成一致，不随战斗种子漂移）', (function () {
+  const st = sb.getGroupStage('g17-10');
+  const a = JSON.stringify(st.enemies.map(e => e.talents || []));
+  const b = JSON.stringify(sb.getGroupStage('g17-10').enemies.map(e => e.talents || []));
+  return a === b && a.indexOf('lazy') >= 0;   // 该关第二个护卫抽到了 lazy（见第 6 节）
+})(), JSON.stringify(sb.getGroupStage('g17-10').enemies.map(e => (e.talents || []).join('+'))));
 assert('天赋 id 全部存在（防拼写错误静默失效）',
   enemies.every(x => (x.e.talents || []).every(t => !!sb.getTalent(t))));
 assert('同一槽位天赋不重复',
   enemies.every(x => new Set(x.e.talents || []).size === (x.e.talents || []).length));
 
-/* 兜底抽取也必须挡住（tier-aware） */
+/* 兜底抽取也必须挡住（tier-aware）—— v2.3.0：排除面收到 **Boss 一档** */
 (function () {
   let leak = null;
   for (let i = 0; i < 400 && !leak; i++) {
     sb.pickRandomTalents(6, 'boss').forEach(id => { if (WEAK.indexOf(id) >= 0) leak = id; });
   }
   assert('兜底抽取 pickRandomTalents(n, "boss") 400 次不抽到 lazy / slowstart', leak === null, String(leak));
+  /* v2.3.0（作者裁决「保留，给精英怪/普通怪」）：精英 / 普通怪**恢复可抽** —— 断言方向翻转 */
   let leak2 = null;
   for (let i = 0; i < 400 && !leak2; i++) {
     sb.pickRandomTalents(6, 'elite2').forEach(id => { if (WEAK.indexOf(id) >= 0) leak2 = id; });
   }
-  assert('兜底抽取 pickRandomTalents(n, "elite2") 400 次不抽到 lazy / slowstart', leak2 === null, String(leak2));
-  /* 反向：非精英（或不传 tier）时 lazy / slowstart 仍在池子里 —— 证明是「按 tier 剔除」而不是「从注册表删掉」 */
+  assert('兜底抽取 pickRandomTalents(n, "elite2") **仍可能**抽到 lazy / slowstart（v2.3.0 恢复出场）',
+    leak2 !== null, String(leak2));
+  let leak3 = null;
+  for (let i = 0; i < 400 && !leak3; i++) {
+    sb.pickRandomTalents(6, 'elite1').forEach(id => { if (WEAK.indexOf(id) >= 0) leak3 = id; });
+  }
+  assert('兜底抽取 pickRandomTalents(n, "elite1") **仍可能**抽到 lazy / slowstart', leak3 !== null, String(leak3));
   let seenWeak = false;
   for (let i = 0; i < 400 && !seenWeak; i++) {
     if (sb.pickRandomTalents(6, 'minion').some(id => WEAK.indexOf(id) >= 0)) seenWeak = true;
@@ -215,26 +245,33 @@ Object.keys(SENTINEL).forEach(function (sid) {
 /* ============================================================
    5. 死配置清理：数值真的被消费（§5.4F）
    ============================================================ */
-/* 5a. 慢启动：config.rounds 是唯一来源（本小节 = **hook 层**直接派发，ctx.turn 由调用方给定；
-       实战口径见 5c） */
-function slowSkip(turn) {
+/* 5a. 慢启动：config.rounds 是唯一来源（本小节 = **hook 层**直接派发）
+       v2.3.0（作者裁决「设定 x 回合就真的 x 回合」）：判据改为**实际回合号** ——
+       群战链路另传 `ctx.actualTurn`；只给 ctx.turn 时按既有约定反推（ctx.turn − 1）。 */
+function slowSkip(actualTurn) {
   const u = sb.createEnemyUnit({ id: 's', tier: 'minion', talents: ['slowstart'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
-  return !!sb.talentDispatch(u, 'onBeforeAction', { turn: turn }).skipAction;
+  return !!sb.talentDispatch(u, 'onBeforeAction', { turn: actualTurn + 1, actualTurn: actualTurn }).skipAction;
 }
-assert('慢启动（hook 层）：默认 config.rounds=2 → 派发 ctx.turn=1、2 时不能行动',
-  slowSkip(1) && slowSkip(2) && !slowSkip(3));
+assert('慢启动（hook 层）：config.rounds=2 → **实际第 1、2 回合**不能行动、第 3 回合可以',
+  slowSkip(1) && slowSkip(2) && !slowSkip(3), JSON.stringify([slowSkip(1), slowSkip(2), slowSkip(3)]));
+assert('慢启动：只给 `ctx.turn` 时按既有约定反推实际回合号（ctx.turn − 1，= 群战 ctx.turn = gb.turn + 1）',
+  (function () {
+    const u = sb.createEnemyUnit({ id: 's0', tier: 'minion', talents: ['slowstart'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
+    return !!sb.talentDispatch(u, 'onBeforeAction', { turn: 3 }).skipAction &&           // → 实际第 2 回合，跳过
+      !sb.talentDispatch(u, 'onBeforeAction', { turn: 4 }).skipAction;                    // → 实际第 3 回合，可动
+  })());
 sb.TALENTS.slowstart.config.rounds = 4;
-assert('慢启动（hook 层）：改 config.rounds=4 **立即生效**（ctx.turn=1~4 不能行动、5 可以）',
+assert('慢启动（hook 层）：改 config.rounds=4 **立即生效**（实际第 1~4 回合不能行动、5 可以）',
   slowSkip(1) && slowSkip(4) && !slowSkip(5));
 sb.TALENTS.slowstart.config.rounds = 1;
-assert('慢启动（hook 层）：改 config.rounds=1 → 只有 ctx.turn=1 不能行动',
+assert('慢启动（hook 层）：改 config.rounds=1 → 只有实际第 1 回合不能行动',
   slowSkip(1) && !slowSkip(2));
 sb.TALENTS.slowstart.config.rounds = 2;
 assert('慢启动（hook 层）：恢复 config.rounds=2 后回到原行为', slowSkip(2) && !slowSkip(3));
 assert('慢启动：`_slowRounds` 已不再是读取来源（唯一来源 = config）', (function () {
   const u = sb.createEnemyUnit({ id: 's2', tier: 'minion', talents: ['slowstart'], base: { hp: 100, atk: 5, def: 3, spd: 5 } });
   u._slowRounds = 99;
-  return !sb.talentDispatch(u, 'onBeforeAction', { turn: 3 }).skipAction;
+  return !sb.talentDispatch(u, 'onBeforeAction', { turn: 4 }).skipAction;   // 实际第 3 回合
 })());
 
 /* 5b. 多目标：config.extra / config.penalty 是唯一来源 */
@@ -267,9 +304,10 @@ assert('多目标：`_multiExtra` 已不再是读取来源（唯一来源 = conf
 })());
 
 /* 5c. 慢启动端到端：真打一场，统计「无法行动（慢启动）」回合数
-   ⚠️ 口径如实记录：`ctx.turn` = 实际回合号 + 1（`battle-group.js` 的 `groupUnitTurn` 写 `gb.turn + 1`），
-      所以 `rounds: N` 实际跳过 **N−1** 个回合 —— 这是**改前就有**的口径（原实现同为 `ctx.turn <= 2`），
-      本批只做单源化、不改行为。若要改成「前 N 回合」，需另行裁决（会改变慢启动持有者的难度）。 */
+   v2.3.0（作者裁决「以设计原文为准 —— 设定 x 回合就真的 x 回合」）：
+   改前 `ctx.turn = gb.turn + 1` 被直接拿来比 rounds → `rounds: N` 实际只跳 **N−1** 次
+   （改前实测 0/1/2/3）。现在 `rounds: N` = 真正跳过前 N 个回合。
+   ⚠️ 这会**改变慢启动持有者的难度**（每个持有者多空过 1 回合），故同时锁住次数。 */
 function slowSkipRounds(rounds) {
   sb.TALENTS.slowstart.config.rounds = rounds;
   const foe = sb.createEnemyUnit({ id: 'e', tier: 'minion', name: '慢兵', talents: ['slowstart'], base: { hp: 999999, atk: 1, def: 0, spd: 20 } });
@@ -285,9 +323,9 @@ function slowSkipRounds(rounds) {
 const skip1 = slowSkipRounds(1);
 const skip2 = slowSkipRounds(2);
 const skip4 = slowSkipRounds(4);
-assert('慢启动端到端：rounds=1 → 0 次无法行动（阈值语义 = ctx.turn，起点 2，与改前一致）', skip1 === 0, String(skip1));
-assert('慢启动端到端：rounds=2 → 实战 1 次「无法行动」', skip2 === 1, String(skip2));
-assert('慢启动端到端：rounds=4 → 实战 3 次「无法行动」（改配置真的改变实战行为）', skip4 === 3, String(skip4));
+assert('慢启动端到端：rounds=1 → 实战 1 次「无法行动」（改前为 0）', skip1 === 1, String(skip1));
+assert('慢启动端到端：rounds=2 → 实战 2 次「无法行动」（改前为 1）', skip2 === 2, String(skip2));
+assert('慢启动端到端：rounds=4 → 实战 4 次「无法行动」（改前为 3，改配置真的改变实战行为）', skip4 === 4, String(skip4));
 sb.TALENTS.slowstart.config.rounds = 2;
 
 /* 5d. 魔法盾：WP-C 已把消费端**单源化**（读 m.value）并补上真正的消费通道，这里改为**行为断言**。
@@ -359,15 +397,102 @@ sb.TALENTS.slowstart.config.rounds = 2;
 })();
 
 /* ============================================================
-   6. 天赋固化后的难度侧写（给主控做平衡复测对照用，不断言强弱）
+   6. v2.3.0 作者裁决（线 1）：负面天赋恢复出场 + 属性补偿 + 两个 Boss 天赋集调整
+   ============================================================ */
+/* 6a. 两个 Boss 的固定天赋集「调整」（doc/plans/v2.2.18-平衡复测.md §3.3 的证据 + 作者裁决）
+       改前 → 改后：
+         · g17-10 Boss·混沌魔   [roughskin, vengeance, blade, vigor] → [roughskin, vigor, regen]
+           （拆掉 2 个进攻天赋 blade / vengeance，换 1 个回复类 regen）
+         · g18-10 Boss·战争领主 [magicmirror, vigor, bloodthirst]    → [magicshield, vigor, bloodthirst]
+           （magicmirror 会免疫/反弹玩家的辅助技能 = 硬克制玩家打法 → 换成只减魂伤的 magicshield）
+       约束：仍在合法池（TALENTS_HIGH）、不含 Boss 禁用项（weak）、**不改其它 Boss**。 */
+const OVR = sb.GROUP_BOSS_TALENT_OVERRIDE || {};
+assert('Boss 天赋覆盖表只含这两个关卡（不改其它 Boss）',
+  Object.keys(OVR).sort().join(',') === 'g17-10,g18-10', JSON.stringify(Object.keys(OVR)));
+assert('g17-10 Boss 天赋 = [roughskin, vigor, regen]（拆掉 blade / vengeance 两个进攻天赋）',
+  eq(OVR['g17-10'], ['roughskin', 'vigor', 'regen']), JSON.stringify(OVR['g17-10']));
+assert('g18-10 Boss 天赋 = [magicshield, vigor, bloodthirst]（换掉硬克制玩家的 magicmirror）',
+  eq(OVR['g18-10'], ['magicshield', 'vigor', 'bloodthirst']), JSON.stringify(OVR['g18-10']));
+Object.keys(OVR).forEach(function (sid) {
+  assert(sid + ' 覆盖集仍在合法池内且不含 Boss 禁用项',
+    OVR[sid].length >= 1 && OVR[sid].length <= 4 &&
+    OVR[sid].every(t => high.indexOf(t) >= 0) && OVR[sid].every(t => !sb.isWeakTalent(t)),
+    JSON.stringify(OVR[sid]));
+});
+assert('覆盖表已落到关卡配置（改前→改后生效）',
+  eq((sb.getGroupStage('g17-10').enemies[0].talents || []), ['roughskin', 'vigor', 'regen']) &&
+  eq((sb.getGroupStage('g18-10').enemies[0].talents || []), ['magicshield', 'vigor', 'bloodthirst']),
+  JSON.stringify([sb.getGroupStage('g17-10').enemies[0].talents, sb.getGroupStage('g18-10').enemies[0].talents]));
+assert('调整后不再带 `magicmirror`（g18）/ 不再带 `blade`+`vengeance`（g17）',
+  (sb.getGroupStage('g18-10').enemies[0].talents || []).indexOf('magicmirror') < 0 &&
+  (sb.getGroupStage('g17-10').enemies[0].talents || []).indexOf('blade') < 0 &&
+  (sb.getGroupStage('g17-10').enemies[0].talents || []).indexOf('vengeance') < 0);
+/* 其余 Boss 的天赋集**逐条钉死**（否则「只动这两个 Boss」无法证伪；值取自本批改动后的实测枚举，
+   与 v2.2.18 的 §3.3 编成表逐行一致 —— 除 g17-10 / g18-10 两行按裁决调整）。 */
+const BOSS_SETS = {
+  'g16-10': ['intimidate', 'vengeance', 'magicmirror'],
+  'g19-10': ['vigor', 'regen', 'vengeance'],
+  'g20-10': ['plain', 'magicshield', 'regen', 'roughskin'],
+  'g21-10': ['bloodthirst'],
+  'g22-10': ['intimidate', 'vengeance', 'regen'],
+  'g23-10': ['regen'],
+  'g24-10': ['intimidate']
+};
+Object.keys(BOSS_SETS).forEach(function (sid) {
+  const got = sb.getGroupStage(sid).enemies[0].talents || [];
+  assert('未受影响的 Boss ' + sid + ' 天赋集与改动前一致', eq(got, BOSS_SETS[sid]),
+    JSON.stringify(got) + ' vs ' + JSON.stringify(BOSS_SETS[sid]));
+});
+
+/* 6b. 负面特性补偿（作者：「一般配这种负面特性的，它的属性数值更高」）
+       幅度常量是**首版取值**（作者未给数），这里的判据是「机制成立 + 常量可调」——
+       把常量改成 0 复现「无补偿」，再改回 1.25 倍，逐属性比对 floor(base × mul)。 */
+(function () {
+  const w = weakUsed[0];
+  assert('存在带负面特性的槽位可供校验（' + (w && w.id) + '）', !!w);
+  if (!w) return;
+  const st = sb.getGroupStage(w.id);
+  const lg = parseInt(w.id.slice(1), 10);
+  const s = parseInt(w.id.split('-')[1], 10);
+  const isElite = (s === 5), isBoss = (s === 10);
+  const gen = () => sb.genEnemyCfg(lg, s, w.slot, isElite, isBoss);
+  const save = sb.WEAK_TALENT_STAT_BONUS;
+  const mul = () => (1 + save * (w.e.talents || []).filter(t => WEAK.indexOf(t) >= 0).length);
+  sb.WEAK_TALENT_STAT_BONUS = 0;
+  const raw = gen();
+  sb.WEAK_TALENT_STAT_BONUS = save;
+  const comp = gen();
+  const keys = ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].filter(k => raw.base[k] != null);
+  assert('补偿：常量=' + save + ' → 攻/防/血/魂攻/魂防 逐属性 ×(1+' + save + '×负面个数)',
+    keys.length >= 3 && keys.every(k => comp.base[k] === Math.max(1, Math.floor(raw.base[k] * mul()))),
+    JSON.stringify(keys.map(k => k + ':' + raw.base[k] + '→' + comp.base[k])));
+  assert('补偿：**速度不参与**（与 WP-A1「速度不参与倍率池」同口径）',
+    comp.base.spd === raw.base.spd, raw.base.spd + '→' + comp.base.spd);
+  assert('补偿：常量 = 0 时回到未补偿形状（常量可调、不是写死的魔法数）',
+    keys.every(k => raw.base[k] === Math.max(1, Math.floor(raw.base[k] * 1))) &&
+    sb.weakTalentStatMul(['slowstart']) === (1 + save) && sb.weakTalentStatMul(['vigor']) === 1,
+    String(sb.weakTalentStatMul(['slowstart'])) + '/' + String(sb.weakTalentStatMul(['vigor'])));
+  /* 没有负面特性的槽位：属性一字不变 */
+  const plainSlot = enemies.filter(x => x.e.tier !== 'minion' && !(x.e.talents || []).some(t => WEAK.indexOf(t) >= 0))[0];
+  const lg2 = parseInt(plainSlot.id.slice(1), 10), s2 = parseInt(plainSlot.id.split('-')[1], 10);
+  const p2 = sb.genEnemyCfg(lg2, s2, plainSlot.slot, s2 === 5, s2 === 10);
+  assert('无负面特性的槽位属性不受补偿影响（' + plainSlot.id + '#' + plainSlot.slot + '）',
+    JSON.stringify(p2.base) === JSON.stringify(plainSlot.e.base),
+    JSON.stringify(p2.base) + ' vs ' + JSON.stringify(plainSlot.e.base));
+})();
+
+/* ============================================================
+   7. 天赋固化后的难度侧写（给主控做平衡复测对照用，不断言强弱）
    ============================================================ */
 (function () {
   const rows = [];
-  ['g6-10', 'g12-10', 'g20-10'].forEach(function (sid) {
+  ['g6-10', 'g12-10', 'g17-10', 'g18-10', 'g20-10'].forEach(function (sid) {
     const st = sb.getGroupStage(sid);
     rows.push(sid + ' → ' + (st.enemies || []).map(e => (e.talents || []).join('+') || '—').join(' | '));
   });
-  console.log('\n  [固化后编成] ' + rows.join('\n                 '));
+  console.log('\n  [固化 + v2.3.0 调整后编成] ' + rows.join('\n                 '));
+  console.log('  [带负面特性的非 Boss 槽位] ' + weakUsed.length + ' / ' + lowSlots.length +
+    '（WEAK_TALENT_CHANCE=' + sb.WEAK_TALENT_CHANCE + '，补偿 +' + (sb.WEAK_TALENT_STAT_BONUS * 100) + '%）');
 })();
 
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');

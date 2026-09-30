@@ -328,20 +328,29 @@ registerTalent({
    v2.2.16（§5.4F 死配置清理）：`x` 的**唯一来源** = 本天赋的 `config.rounds`。
    此前 hook 写死 `ctx.turn <= (unit._slowRounds || 2)`，而 `_slowRounds` **全项目无写入点**、
    `config.rounds` 又没人读 —— 同一个 2 两处写死（写死的那处还是死字段）。现两处合一，改 config 即生效。
-   ⚠️ **口径如实记录（本批不改行为）**：判据用的是 `ctx.turn`，而 `battle-group.js` 的 `groupUnitTurn`
-     里 `ctx.turn = gb.turn + 1`（**实际回合号 + 1**，首回合 = 2）→ `rounds: 2` 实际是
-     「第 1 回合不能行动」（实测 rounds=1/2/3/4 → 跳过 0/1/2/3 次）。
-     即设计文案的「前 x 回合」与实现的「ctx.turn ≤ x」差 1。
-     本批只做**单源化**，不动这个既有口径（改它会直接改变慢启动持有者的难度，需另行裁决）。 */
+
+   v2.3.0 **作者裁决：以设计原文为准 —— 设定 x 回合就真的 x 回合**（修一处「差 1」）。
+   根因：`battle-group.js` 的 `groupUnitTurn` 传的是 `ctx.turn = gb.turn + 1`（**实际回合号 + 1**，
+   首回合 = 2），而旧实现拿这个值直接比 `rounds` → `rounds: N` 实际只跳过 **N−1** 个回合
+   （实测 rounds=1/2/3/4 → 跳过 0/1/2/3 次），与设计文案「前 x 回合无法行动」差 1。
+   修法：按**实际回合号**判定 —— 群战链路由 `groupUnitTurn` 另传 `ctx.actualTurn = gb.turn`；
+   直接派发（测试 / 工具 / 未来新入口）时按既有约定反推 `ctx.turn − 1`。
+   ⚠️ 只改本天赋，**不动 `ctx.turn` 本身** —— 它同时被 regen / grow_atk / grow_def / doom_call /
+      玩家技能回合钩子消费，改全局口径会一次改动多条无关数值。
+   行为守卫：scripts/test-talent-fixation.js（hook 层 + 端到端「真打一场数跳过回合」）。 */
 registerTalent({
   id: 'slowstart',
   name: '慢启动',
   desc: '战斗开始的前 x 回合，自身无法行动',
   config: { rounds: 2 },
-  weak: true,   // §5.4E：自我削弱天赋 —— Boss / 精英不抽（group-levels.js 池子 + enemy.js 兜底抽取）
+  weak: true,   // §5.4E：自我削弱天赋 —— **Boss** 不抽（group-levels.js 池子 + enemy.js 兜底抽取）；v2.3.0：精英/普通怪恢复可抽
   hooks: {
     onBeforeAction: function (unit, ctx) {
-      if (ctx.turn <= talentConfig('slowstart', 'rounds', 2)) {
+      var rounds = talentConfig('slowstart', 'rounds', 2);
+      /* ctx.actualTurn = 实际回合号（群战链路显式传入）；
+         没有时退回「ctx.turn − 1」（既有约定：ctx.turn = 实际回合号 + 1）。 */
+      var actualTurn = (ctx.actualTurn != null) ? ctx.actualTurn : ((ctx.turn || 0) - 1);
+      if (actualTurn <= rounds) {
         return { skipAction: true, events: [{ type: 'talent', talentId: 'slowstart', unitId: unit.id, msg: '慢启动: 无法行动' }] };
       }
     }

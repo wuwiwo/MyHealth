@@ -6,7 +6,8 @@
    4) 敌人编成阶梯（tier → 天赋/技能数量）
    5) Boss 1-4 天赋
    6) 单元 tags
-   7) v2.2.16（§5.4E）：兜底抽取按 tier 剔除 lazy / slowstart（Boss / 精英不抽）
+   7) v2.2.16（§5.4E）/ v2.3.0（作者裁决）：兜底抽取按 tier 剔除 lazy / slowstart ——
+      **只剔 Boss**（精英 / 普通怪恢复可抽），且带负面特性时属性按补偿常量抬高
 */
 'use strict';
 const fs = require('fs');
@@ -89,9 +90,11 @@ assert('Boss: 1-4 天赋', btCount >= 1 && btCount <= 4, 'talents=' + btCount);
 const boss4 = sandbox.createEnemyUnit({ tier: 'boss', talents: ['blade','vigor','bloodthirst','regen'], base: { hp: 500, atk: 30, def: 20 } });
 assert('Boss: 显式4天赋', sandbox.enemyTalentCount(boss4) === 4, 'talents=' + sandbox.enemyTalentCount(boss4));
 
-/* ---- 5b. v2.2.16（§5.4E 天赋固化）：兜底抽取按 tier 剔除「自我削弱天赋」----
+/* ---- 5b. 天赋兜底抽取的 tier 规则（v2.2.16 固化 / v2.3.0 作者裁决）----
    敌群关卡（group-levels.js）现在**固化**了天赋，走 `talents` 显式分支、不进兜底；
-   兜底路径（单敌战 / 工具 / 测试）同样要遵守「Boss / 精英不抽 lazy / slowstart」。
+   兜底路径（单敌战 / 工具 / 测试）同样遵守同一口径：
+     · **Boss** 不抽 lazy / slowstart（评审原文「boss不会获得」）；
+     · **精英 / 普通怪**（v2.3.0 作者裁决「保留，给精英怪/普通怪」）**恢复可抽**这两条。
    标记来源 = talent.js 天赋定义上的 `weak: true`（不是各文件再抄一份 id 清单）。 */
 const WEAK_T = ['lazy', 'slowstart'];
 assert('弱化天赋标记：lazy / slowstart = weak，其余天赋不标',
@@ -106,7 +109,7 @@ function weakHits(n, tier) {
   return hit;
 }
 assert('兜底抽取(tier=boss) 200 轮不抽到 lazy / slowstart', weakHits(6, 'boss') === null, String(weakHits(6, 'boss')));
-assert('兜底抽取(tier=elite1) 200 轮不抽到 lazy / slowstart', weakHits(6, 'elite1') === null, String(weakHits(6, 'elite1')));
+assert('兜底抽取(tier=elite1) **仍可能**抽到 lazy / slowstart（v2.3.0 恢复出场）', weakHits(6, 'elite1') !== null);
 assert('兜底抽取(tier=minion) 仍可能抽到 lazy / slowstart（未从注册表删除）', weakHits(6, 'minion') !== null);
 assert('createEnemyUnit 兜底（tier=boss，不传 talents）装配结果不含 lazy / slowstart', (function () {
   for (let i = 0; i < 200; i++) {
@@ -115,6 +118,34 @@ assert('createEnemyUnit 兜底（tier=boss，不传 talents）装配结果不含
   }
   return true;
 })());
+/* v2.3.0：负面特性补偿在**兜底路径**同样生效（口径与 group-levels 的 genEnemyCfg 一致）——
+   兜底抽取（不传 talents）里如果抽到 lazy / slowstart，属性必须按补偿常量抬高、速度不变。
+   用固定种子遍历，找到第一个抽到负面特性的单位来断言（避免 flaky）。 */
+(function () {
+  const bonus = sandbox.WEAK_TALENT_STAT_BONUS;
+  const raw = { hp: 100, atk: 20, def: 10, spd: 7 };
+  let checked = null;
+  for (let seed = 1; seed <= 200 && !checked; seed++) {
+    sandbox.setBattleRng(sandbox.makeSeededRng(seed));
+    const u = sandbox.createEnemyUnit({ id: 'wc' + seed, tier: 'elite1', base: { hp: raw.hp, atk: raw.atk, def: raw.def, spd: raw.spd } });
+    if (u._talents.some(id => WEAK_T.indexOf(id) > -1)) {
+      checked = {
+        seed: seed, talents: u._talents.slice(),
+        expect: sandbox.weakTalentStatMul(u._talents),
+        base: { hp: u.base.hp, atk: u.base.atk, def: u.base.def, spd: u.base.spd }, hp: u.hp
+      };
+    }
+  }
+  sandbox.setBattleRng(null);
+  assert('兜底路径的负面特性补偿：属性 ×(1+' + bonus + '×负面个数)、速度不变【' +
+    (checked ? 'seed=' + checked.seed + ' ' + checked.talents.join('+') : '未找到样本') + '】',
+    !!checked &&
+    checked.base.atk === Math.max(1, Math.floor(raw.atk * checked.expect)) &&
+    checked.base.def === Math.max(1, Math.floor(raw.def * checked.expect)) &&
+    checked.base.hp === Math.max(1, Math.floor(raw.hp * checked.expect)) &&
+    checked.base.spd === raw.spd && checked.hp === checked.base.hp,
+    JSON.stringify(checked));
+})();
 
 // ---- 6. 单元 tags ----
 assert('敌人 tags 含 tier', boss.tags.includes('boss'));

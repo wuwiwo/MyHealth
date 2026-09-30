@@ -126,7 +126,8 @@ if (typeof registerSkill === 'function') {
      · p_holylight（§2.11）—— 治疗区间 110%~200% → **150%~240%** + 只挑**未满血**友方（wounded）
      · p_dreamball（§2.12）—— 蓄力 + 全场随机弹射 3 次（每单位最多 1 次）、每次 +10% 累计、
                               敌方概率 55%→82%（我方 = 互补 45%→18%）、未发动次数为自身回血
-     · p_shadowfist（§2.13）—— 4 段（原 5）+ 单次 55%~100% + 视为普攻（触发普攻相关钩子）
+     · p_shadowfist（§2.13）—— 4 段（原 5）+ 单次 55%~100% + 视为普攻（**v2.3.0 起真正走普攻通道**，
+                                      不再只是补一个 onAfterDamage 派发）
      · p_warmight（§2.14） —— 随机 2 名友方（ally2）+ 攻击/魂攻**较高一项** +3%~30%
                               + 吸血 5%~50% / 技能吸血 7.5%~32.5%（挂持有者的 warmight 状态）
    本轮**判定无改动**：
@@ -286,8 +287,14 @@ registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'ra
 /* UR：无影拳
    WP-C（§2.13 评审「总计 4 次攻击，每次 55%-100%，视为普通攻击，会触发普通攻击相关效果与判定」）：
      · multiHit 5 → **4**；单次伤害区间 [50,95] → **[55,100]**；
-     · `asNormalAttack:true` —— 技能伤害结算后额外派发 onAfterDamage（天赋「嗜血」/ 状态「战意」吸血），
-       即「触发普通攻击相关效果与判定」（命中判定 / 利刃等原本已走 isPlayerAttack）。
+     · `asNormalAttack:true`（v2.3.0 作者裁决「**就按照普通攻击会如何触发就如何实现**」）：
+       **真正走普攻通道** —— calcSkillDamage 只做目标抽取（`normalSlots`，随机可重复），
+       每次命中交给 battle-group 的 `normalAttack(gb, actor, t, 伤害系数)` 结算：
+       命中判定 / 威吓 / 利刃·多目标 / 暴击 / 格挡 / 圣光守护分担 / 护盾吸收 / 受击方天赋与状态钩子 /
+       魂攻附伤 / onAfterDamage（嗜血 · 战意吸血）—— 与真普攻**逐条一致**。
+       （v2.2.17 的实现只是在技能通道上补一个 onAfterDamage 派发，其余判定仍是技能通道 → 不符裁决。）
+     · 吸血去重（§2.14 互斥裁决）：文档写明「每次视为普通攻击」→ 它**只触发普攻吸血**
+       （状态 warmight 的 data.ls），**不**触发技能吸血（data.sls）。
    设计原文（design-v2.0.md:249）写「随机可重复」，故仍由 ctx.pool 随机取目标。 */
 registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'random1', power:70, range:{power:[55,100]}, multiHit:4, dmgType:'physical', cooldown:4, asNormalAttack:true,
   effects:[function(c,ts,r){ r.events.push({msg:'👊 ' + (c.name||'宠物') + ' 无影拳：4 连击（目标随机可重复）'}); }] });

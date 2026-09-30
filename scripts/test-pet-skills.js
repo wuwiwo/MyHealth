@@ -213,6 +213,84 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     assert('§2.7 反冲自死由**既有**败北判定收口（我方全灭 → winner=enemy）',
       gbD.done === true && gbD.winner === 'enemy', gbD.done + '/' + gbD.winner + ' turn=' + gbD.turn);
   }
+
+  /* ---- v2.3.0 作者裁决：反冲的 **overkill 口径 = 按实际掉血** ----
+     目标残血 10 而本次打 44 时，反冲 = floor(10 × 35%) = 3（不是 floor(44 × 35%) = 15）。 ---- */
+  {
+    const rcO = petUnit('p-th-ok', '雷霆犬', SR_BASE, ['pet', 'SR'], ['p_thundercharge'], 60);
+    const eO = foe('e-th-ok');
+    eO.base.hp = eO.hp = 100000;
+    const gbO = sandbox.createGroupBattle({ allies: [rcO], enemies: [eO], seed: 71 });
+    gbO.rng = function () { return 0.1; };
+    gbO.turn = 1;
+    sandbox.groupUnitTurn(gbO, rcO);                     // 第 1 回合：蓄力
+    eO.hp = 10;                                          // 释放前把目标打到残血 10
+    const hpO = rcO.hp;
+    const evO = sandbox.groupUnitTurn(gbO, rcO);          // 第 2 回合：释放
+    const hitO = evO.filter(e => /^⚡/.test(e.msg || ''))[0];
+    const recO = evO.filter(e => /反冲/.test(e.msg || ''))[0];
+    const dealtO = hitO ? +(/→ \S+ (\d+) 伤害/.exec(hitO.msg)[1]) : -1;
+    assert('§2.7 overkill 口径：反冲基数 = **实际掉血**（残血 10 → 10×35%=3，不是本次 44×35%=15）',
+      dealtO > 10 && (hpO - rcO.hp) === Math.floor(10 * 0.35),
+      JSON.stringify({ dmg: dealtO, lost: hpO - rcO.hp, want: Math.floor(10 * 0.35), oldWouldBe: Math.floor(dealtO * 0.35), rec: recO && recO.msg }));
+    assert('§2.7 overkill：反冲日志里的基数写的是**实际掉血**（10），而 ⚡ 日志仍是本次伤害',
+      !!recO && recO.msg.indexOf('10 × 35%') >= 0 && !!hitO && hitO.msg.indexOf('' + dealtO) >= 0,
+      (recO && recO.msg) + ' || ' + (hitO && hitO.msg));
+  }
+
+  /* ---- v2.3.0 作者裁决：**落空 / 闪避不吃反冲** ---- */
+  {
+    const rcM = petUnit('p-th-miss', '雷霆犬', SR_BASE, ['pet', 'SR'], ['p_thundercharge'], 60);
+    const eM = foe('e-th-miss');
+    eM.base.hp = eM.hp = 100000;
+    const gbM = sandbox.createGroupBattle({ allies: [rcM], enemies: [eM], seed: 71 });
+    gbM.rng = function () { return 0.1; };
+    gbM.turn = 1;
+    sandbox.groupUnitTurn(gbM, rcM);                     // 蓄力
+    gbM.rng = function () { return 0.99; };              // 命中率 0.95 → 必落空
+    const hpM = rcM.hp;
+    const evM = sandbox.groupUnitTurn(gbM, rcM);         // 释放 → 落空
+    const missed = evM.some(e => /落空/.test(e.msg || ''));
+    const recM = evM.filter(e => /反冲/.test(e.msg || ''));
+    assert('§2.7 落空 / 闪避**不吃**反冲（未命中 → 施法者不掉血、也不写反冲日志）',
+      missed && rcM.hp === hpM && recM.length === 0,
+      JSON.stringify({ missed: missed, hp: rcM.hp, rec: recM.map(e => e.msg) }));
+  }
+
+  /* ---- v2.3.0 作者裁决：反冲**不过**自身防御/减伤（再补一条状态减伤通道）---- */
+  {
+    const rcW = petUnit('p-th-wg', '雷霆犬', SR_BASE, ['pet', 'SR'], ['p_thundercharge'], 60);
+    const eW = foe('e-th-wg');
+    eW.base.hp = eW.hp = 100000;
+    const gbW = sandbox.createGroupBattle({ allies: [rcW], enemies: [eW], seed: 71 });
+    gbW.rng = function () { return 0.1; };
+    gbW.turn = 1;
+    sandbox.groupUnitTurn(gbW, rcW);                     // 蓄力
+    /* 给施法者挂「广域防御」（状态减伤 -40%）：若反冲走受击通道，这里就会被削 —— 必须不被削 */
+    sandbox.applyStatus(rcW, { id: 'wideguard', duration: 3, data: { reduce: 0.4 } });
+    sandbox.syncStatusDerived(rcW);
+    const hpW = rcW.hp;
+    const evW = sandbox.groupUnitTurn(gbW, rcW);
+    const dealtW = +(/→ \S+ (\d+) 伤害/.exec(evW.filter(e => /^⚡/.test(e.msg || ''))[0].msg)[1]);
+    assert('§2.7 反冲不过自身防御/减伤：状态减伤（广域防御 -40%）也不作用于反冲',
+      (hpW - rcW.hp) === Math.floor(dealtW * 0.35),
+      JSON.stringify({ dealt: dealtW, lost: hpW - rcW.hp, want: Math.floor(dealtW * 0.35) }));
+    assert('§2.7 反冲不吃护盾（金身护盾只挡受击，不挡施法代价）',
+      (function () {
+        const rcS = petUnit('p-th-sh', '雷霆犬', SR_BASE, ['pet', 'SR'], ['p_thundercharge'], 60);
+        const eS = foe('e-th-sh');
+        eS.base.hp = eS.hp = 100000;
+        const gbS = sandbox.createGroupBattle({ allies: [rcS], enemies: [eS], seed: 71 });
+        gbS.rng = function () { return 0.1; };
+        gbS.turn = 1;
+        sandbox.groupUnitTurn(gbS, rcS);
+        rcS._shield = 99999;                             // 开盾（若反冲走受击通道，盾会吃掉它）
+        const hpS = rcS.hp;
+        const evS = sandbox.groupUnitTurn(gbS, rcS);
+        const dw = +(/→ \S+ (\d+) 伤害/.exec(evS.filter(e => /^⚡/.test(e.msg || ''))[0].msg)[1]);
+        return (hpS - rcS.hp) === Math.floor(dw * 0.35) && rcS._shield === 99999;
+      })());
+  }
 }
 
 /* ===== §2.8 双撞：最多 2 敌各 1 次 / 180~270% / 降攻防 / 窃取转移 ===== */
@@ -339,6 +417,60 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
   assert('§2.13 4 段攻击（原 5 段）', sk.multiHit === 4);
   assert('§2.13 单次伤害 50~95% → [55,100]', JSON.stringify(sk.range.power) === '[55,100]');
   assert('§2.13 视为普通攻击（触发普攻相关钩子）', sk.asNormalAttack === true);
+
+  /* ---- v2.3.0（作者裁决「就按照普通攻击会如何触发就如何实现」）：**真正走普攻通道** ----
+     可观测判据（两条都在技能通道里**不可能**出现）：
+       · 每段出的是**普攻日志**「⚔️ X 攻击 Y → N 伤害」，而不是技能日志「⚡ X 无影拳 → N 伤害」；
+       · 普攻通道特有的**魂攻附伤**「👻 … 魂攻击 …」会出现（技能通道从不产生它）。
+     再加一条源码级守卫，钉住「asNormalAttack 分支调用的就是 normalAttack()」。 */
+  const fistCaster = petUnit('sf-c', '无念熊', { hp: 300, atk: 100, def: 5, soulAtk: 50, soulDef: 5, spd: 9 },
+    ['pet', 'UR'], ['p_shadowfist'], 0);
+  const sfE = foe('sf-e1');
+  sfE.base.hp = sfE.hp = 999999;
+  const gbSf = sandbox.createGroupBattle({ allies: [fistCaster], enemies: [sfE], seed: 91 });
+  gbSf.rng = function () { return 0.1; };              // 必中 / 伤害掷骰固定
+  gbSf.turn = 1;
+  const evSf = sandbox.castSkill(gbSf, fistCaster, 'p_shadowfist');
+  const nAtk = evSf.filter(e => /^⚔️/.test(e.msg || '')).length;
+  const nSkillDmg = evSf.filter(e => /^⚡.*伤害/.test(e.msg || '')).length;
+  const nSoul = evSf.filter(e => /^👻/.test(e.msg || '')).length;
+  assert('§2.13 改走普攻通道：4 段都是**普攻日志**、没有任何一段走技能伤害通道',
+    nAtk === 4 && nSkillDmg === 0, JSON.stringify({ atk: nAtk, skillDmg: nSkillDmg, msgs: evSf.map(e => e.msg).slice(0, 10) }));
+  assert('§2.13 普攻通道的**魂攻附伤**逐段生效（技能通道从不产生 👻）',
+    nSoul === 4, JSON.stringify({ soul: nSoul }));
+  const sfSrc = load('battle-group.js');
+  assert('§2.13 源码级守卫：asNormalAttack 走 normalAttack()，且旧的「技能通道 + onAfterDamage 补丁」已删',
+    /if \(dmgResult\.normalSlots\)/.test(sfSrc) && /normalAttack\(gb, actor, nt, naMul\)/.test(sfSrc) &&
+    !/if \(def\.asNormalAttack\) \{/.test(sfSrc));
+}
+
+/* ===== §2.13 + §2.14 吸血**互斥**（v2.3.0 作者裁决）=====
+   作者原话：「查看文档该技能是否视为普通攻击，如果视为普通攻击则不会触发技能吸血，
+   反之不会触发攻击吸血」。文档 §2.13 写明无影拳「每次视为普通攻击」→ 只触发**普攻吸血**。 */
+{
+  function lifestealChannels(skillId) {
+    const u = petUnit('mx-' + skillId, '测试宠', { hp: 300, atk: 100, def: 5, soulAtk: 50, soulDef: 5, spd: 9 },
+      ['pet', 'UR'], [skillId], 0);
+    /* 用与 castSkill 落库同形状的「战意」状态实例（data.ls = 普攻吸血 / data.sls = 技能吸血） */
+    sandbox.applyStatus(u, { id: 'warmight', duration: 2, data: { ls: 0.5, sls: 0.325 } });
+    const f = foe('mx-foe-' + skillId);
+    f.base.hp = f.hp = 999999;
+    const gb = sandbox.createGroupBattle({ allies: [u], enemies: [f], seed: 5 });
+    gb.rng = function () { return 0.1; };
+    gb.turn = 1;
+    const ev = sandbox.castSkill(gb, u, skillId);
+    return {
+      hit: ev.filter(e => /^⚔️/.test(e.msg || '')).length,
+      ls: ev.filter(e => /战意吸血/.test(e.msg || '')).length,     // 普攻通道吸血
+      sls: ev.filter(e => /技能吸血/.test(e.msg || '')).length     // 技能通道吸血
+    };
+  }
+  const fistCh = lifestealChannels('p_shadowfist');
+  const peckCh = lifestealChannels('p_flamepeck');
+  assert('§2.13+§2.14 互斥：无影拳（视为普攻）→ 只触发**普攻吸血**，技能吸血 0 次',
+    fistCh.ls > 0 && fistCh.sls === 0, JSON.stringify(fistCh));
+  assert('§2.13+§2.14 互斥：火焰啄击（不视为普攻）→ 只触发**技能吸血**，普攻吸血 0 次',
+    peckCh.sls > 0 && peckCh.ls === 0 && peckCh.hit === 0, JSON.stringify(peckCh));
 }
 
 /* ===== §2.14 战意灌注：2 名友方 / 较高一项 / 吸血 + 技能吸血 ===== */
