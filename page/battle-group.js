@@ -570,6 +570,11 @@ function castSkill(gb, actor, skillId, opts) {
       allPool: gb.units.filter(function (u) { return u.hp > 0; })
     });
     if (dmgResult) {
+      /* v2.2.18（§2.7 雷霆冲撞「自身承受 35% 反冲」）：本次施放**实际打在目标身上**的伤害合计。
+         只在「真正扣了目标血」的分支里累加（下面 `t.hp = Math.max(0, t.hp - dmg)` 的同一个 dmg），
+         所以它与 ⚡ 伤害日志、与技能吸血读的是**同一个数**：已过命中判定 / 目标减伤 / 暴击 / 护盾吸收；
+         闪避落空、护盾吃掉的份额都不计入（那些都不是「对目标造成的伤害」）。 */
+      var dealtTotal = 0;
       if (dmgResult.proc) events.push({ msg: '💢 ' + (actor.name || '单位') + ' 的 ' + def.name + ' 触发强化（本次伤害 +' + Math.round((dmgResult.procMult - 1) * 100) + '%）', targetId: targets.length ? targets[0].id : null, type: 'talent' });
       dmgResult.hits.forEach(function (h) {
         var t = gb.units.find(function (u) { return u.id === h.targetId; });
@@ -614,6 +619,7 @@ function castSkill(gb, actor, skillId, opts) {
             events.push({ msg: '🛡️ ' + t.name + ' 护盾吸收 ' + shk.absorbed + (shk.broke ? '（护盾破碎）' : '（剩余 ' + t._shield + '）'), targetId: t.id, type: 'status' });
           }
           t.hp = Math.max(0, t.hp - dmg);
+          dealtTotal += dmg;   // v2.2.18：反冲基数（见 dealtTotal 声明处的注释）
           events.push({ msg: '⚡ ' + (actor.name || '') + ' ' + def.name + ' → ' + t.name + ' ' + dmg + ' 伤害', targetId: t.id, type: 'damage' });
           /* WP-C（§2.14 技能吸血）：持有「战意」者用**技能**造成伤害时按 data.sls 回血
              （与普攻通道的「吸血」/天赋「嗜血」分开；三者可叠加，各自结算）。 */
@@ -641,6 +647,23 @@ function castSkill(gb, actor, skillId, opts) {
              时点与设计文档 doc/design-v2.0.md:101-105 的「下回合结算」一致。 */
         }
       });
+      /* v2.2.18（§2.7 雷霆冲撞「自身承受 35% 反冲」，作者裁决）——
+         反冲伤害 = **本次对目标实际造成的伤害 × def.recoil**（裁决基数取 (a)「本次对目标造成的伤害」）。
+         · 单/多目标：本技能 `target:'random1'` → 本次施放只有 **1 次命中**，`dealtTotal` 就是那一次；
+           带 recoil 的技能若为**多目标**，本行的口径是「**按每个目标的实际伤害分别计算后相加**」
+           （即 Σ 实际伤害 × recoil，向下取整一次），不做静默改写。
+         · 是否过自身防御/减伤：**不过** —— 设计文档未给口径，取最保守的「直接扣血」：
+           不读 effectiveStat(def) / 不派发天赋·状态的 onDamage / 不走护盾吸收。
+           反冲是**施法代价**（与「迷惑·牺牲自我」同一性质），不是一次受击。
+         · 向下取整：`dealtTotal` 很小时（1~2 点）反冲为 0；此时**仍写日志**，避免「为什么没掉血」不可见。
+         · 可以把自己打死：`Math.max(0, ...)` 归零即可 —— 胜负判定由既有的 groupBattleStep
+           回合后检查（alliesAlive / enemiesAlive）收口，**不另造逻辑**（与「遗言」自我牺牲同一路径）。 */
+      if (def.recoil > 0 && dealtTotal > 0) {
+        var recoilDmg = Math.floor(dealtTotal * def.recoil);
+        actor.hp = Math.max(0, actor.hp - recoilDmg);
+        events.push({ msg: '💥 ' + (actor.name || '单位') + ' ' + def.name + ' 反冲 -' + recoilDmg
+          + '（对目标造成 ' + dealtTotal + ' × ' + Math.round(def.recoil * 100) + '%）', targetId: actor.id, type: 'damage' });
+      }
       /* WP-C（§2.12）：梦幻光球「如果弹射次数剩余，按未发动次数为自身恢复血量」——
          自愈量由 calcSkillDamage 按「未发动次数 × 单次伤害」算出（selfHealAmount）。 */
       if (dmgResult.selfHealAmount > 0) {

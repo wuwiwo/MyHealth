@@ -19,6 +19,12 @@ var SKILLS = {};   // id → skill def
      · bounce:{times,dmgUp,foeChance} —— 全场随机弹射（梦幻光球）
      · wounded:true     —— target:'ally1' 时只挑未满血的友方（圣光治愈）
      · multiHit:N       —— 多段攻击，目标随机可重复 */
+   /* v2.2.18 新增可选字段：
+     · recoil:0.35      —— **自身反冲**（§2.7 雷霆冲撞「自身承受 35% 反冲」）。
+                            作者裁决：**基数 = 本次对目标实际造成的伤害** → 反冲 = 该伤害 × recoil。
+                            消费端 = battle-group.js 的 castSkill 伤害通道（逐目标实际伤害求和后乘比率、
+                            向下取整）；**不过自身防御/减伤**（文档未给口径，取最保守的「直接扣血」），
+                            且**可以把自己打死**（走既有胜负判定，不另造逻辑）。 */
 function registerSkill(def) {
   if (!def || !def.id) throw new Error('registerSkill: id required');
   SKILLS[def.id] = def;

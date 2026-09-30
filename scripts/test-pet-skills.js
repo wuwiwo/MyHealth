@@ -8,9 +8,9 @@
      §2.5 坚壁   — 评审「不需要，二者统一」→ 仍复用敌群 fortify（防回归）
      §2.6 歌唱   — 睡眠几率 固定 20% → 随成长 0%~30%（新增）
      §2.7 雷霆冲撞 — 伤害区间 [220,400] → [260,440]（新增）
-   ⚠️ §2.1「蓄力 1 回合、下回合释放」与 §2.7「蓄力 / 自身 35% 反冲 / 目标潮湿·冰冻 +25%」
-      需要改 page/battle-group.js、page/status-defs.js、page/skill.js（本批禁止文件）→ 未实装，
-      详见任务回执，故此处不为其写断言。 */
+   v2.2.18：§2.7 的**「自身承受 35% 反冲」已实装**（作者裁决：基数 = 本次对目标造成的伤害 × 35%），
+   原先的「未实装哨兵」断言 `sk.recoil === undefined` 已替换为**行为断言**
+   （伤害 X → 施法者掉 floor(X*0.35)；蓄力当回合不结算；不过防御/减伤；打死自己走既有败北判定）。 */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -153,8 +153,66 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
   assert('§2.7 冰冻目标伤害 +25%', dFrz === Math.floor(dDry * 1.25), dDry + ' → ' + dFrz);
   assert('§2.7 未处于潮湿/冰冻则不加成（= 魂攻×440%，t=1）',
     dDry === Math.floor(sandbox.effectiveStat(caster, 'soulAtk') * 440 / 100), String(dDry));
-  assert('§2.7 「自身 35% 反冲」按纪律未实装（基数口径未给，已上报）',
-    sk.recoil === undefined, JSON.stringify(sk.recoil));
+
+  /* ---- v2.2.18：作者裁决「反冲基数 = (a) 本次对目标造成的伤害」→ recoil = 0.35
+     断言从「未实装哨兵」（sk.recoil === undefined）改为**行为断言**。 ---- */
+  assert('§2.7 反冲系数 = 0.35（基数 = 本次对目标造成的伤害 × 35%）', sk.recoil === 0.35, JSON.stringify(sk.recoil));
+
+  {
+    const rc = petUnit('p-th-rc', '雷霆犬', SR_BASE, ['pet', 'SR'], ['p_thundercharge'], 60);
+    const eRc = foe('e-th-recoil');
+    eRc.base.hp = eRc.hp = 100000;                       // 木桩够厚：伤害不会被「打死」截断
+    const gbRc = sandbox.createGroupBattle({ allies: [rc], enemies: [eRc], seed: 71 });
+    gbRc.rng = function () { return 0.1; };              // 确定性：必中、掷骰固定
+    gbRc.turn = 1;
+    const hpCharging = rc.hp;
+    const evCharge = sandbox.groupUnitTurn(gbRc, rc);    // 第 1 回合：只进入蓄力
+    assert('§2.7 反冲：蓄力当回合尚未结算伤害，故无反冲（不掉血、无日志）',
+      rc.hp === hpCharging && !evCharge.some(e => /反冲/.test(e.msg || '')),
+      JSON.stringify({ hp: rc.hp, ev: evCharge.map(e => e.msg) }));
+    const hpBefore = rc.hp;
+    const evRel = sandbox.groupUnitTurn(gbRc, rc);       // 第 2 回合：释放 → 伤害 + 反冲
+    const hitEv = evRel.filter(e => /^⚡/.test(e.msg || ''))[0];
+    const recEv = evRel.filter(e => /反冲/.test(e.msg || ''))[0];
+    const dealt = hitEv ? +(/→ \S+ (\d+) 伤害/.exec(hitEv.msg)[1]) : -1;
+    assert('§2.7 反冲行为：施法者掉血 = floor(本次对目标造成的伤害 × 35%)',
+      !!recEv && dealt > 0 && (hpBefore - rc.hp) === Math.floor(dealt * 0.35),
+      JSON.stringify({ dealt: dealt, lost: hpBefore - rc.hp, expect: Math.floor(dealt * 0.35), rec: recEv && recEv.msg }));
+    assert('§2.7 反冲日志写明基数值与比例',
+      !!recEv && recEv.msg.indexOf('' + dealt) >= 0 && recEv.msg.indexOf('35%') >= 0 && recEv.targetId === rc.id,
+      recEv && recEv.msg);
+    /* 反冲**不过自身防御/减伤**：同一场景下把施法者防御拉到极高，反冲数值不变 */
+    const rcTank = petUnit('p-th-tank', '雷霆犬', { hp: 150, atk: 15, def: 9999, soulAtk: 10, soulDef: 9999, spd: 6 },
+      ['pet', 'SR'], ['p_thundercharge'], 60);
+    const eTank = foe('e-th-tank');
+    eTank.base.hp = eTank.hp = 100000;
+    const gbT = sandbox.createGroupBattle({ allies: [rcTank], enemies: [eTank], seed: 71 });
+    gbT.rng = function () { return 0.1; };
+    gbT.turn = 1;
+    sandbox.groupUnitTurn(gbT, rcTank);
+    const hpT = rcTank.hp;
+    const evT = sandbox.groupUnitTurn(gbT, rcTank);
+    const dealtT = +(/→ \S+ (\d+) 伤害/.exec(evT.filter(e => /^⚡/.test(e.msg || ''))[0].msg)[1]);
+    assert('§2.7 反冲不过自身防御/减伤（直接扣血，与 def 无关）',
+      (hpT - rcTank.hp) === Math.floor(dealtT * 0.35) && dealtT === dealt,
+      JSON.stringify({ dealtT: dealtT, lostT: hpT - rcTank.hp }));
+  }
+
+  /* ---- 反冲可以打死自己 → 走既有的败北判定（不另造逻辑） ---- */
+  {
+    const rcD = petUnit('p-th-rc-die', '雷霆犬', SR_BASE, ['pet', 'SR'], ['p_thundercharge'], 60);
+    rcD.hp = 5;                                          // 远低于反冲伤害
+    const eD = foe('e-th-die');
+    eD.base.hp = eD.hp = 100000;
+    const gbD = sandbox.createGroupBattle({ allies: [rcD], enemies: [eD], seed: 73 });
+    gbD.rng = function () { return 0.1; };
+    let guard = 0;
+    while (!gbD.done && guard++ < 20) sandbox.groupBattleStep(gbD);
+    assert('§2.7 反冲打死自己：自身 hp 归零',
+      rcD.hp === 0, String(rcD.hp));
+    assert('§2.7 反冲自死由**既有**败北判定收口（我方全灭 → winner=enemy）',
+      gbD.done === true && gbD.winner === 'enemy', gbD.done + '/' + gbD.winner + ' turn=' + gbD.turn);
+  }
 }
 
 /* ===== §2.8 双撞：最多 2 敌各 1 次 / 180~270% / 降攻防 / 窃取转移 ===== */
