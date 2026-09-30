@@ -104,8 +104,9 @@ function rollBossAffixFor(level){
    供 startBattle 与关卡胜率模拟共用，消除两处构造漂移 */
 function buildBattleSides(stats,lv){
   /* WP-G：角色等级效果（**基础属性**加成）—— 单敌关卡与胜率模拟共用此唯一入口。
+     与敌群战斗**同一口径**（作者裁决：lv2000 的「敌群 ×2」已删除，等级效果无任何倍率）。
      lv1（未达任何档位）时加成为 0 → 行为与旧版完全一致。 */
-  if(typeof applyPlayerLevelBonus==='function')applyPlayerLevelBonus(stats,{})
+  if(typeof applyPlayerLevelBonus==='function')applyPlayerLevelBonus(stats)
   return{
     player:{atk:stats.atk,def:stats.def,hp:stats.hp,soulAtk:stats.soulAtk,soulDef:stats.soulDef},
     enemy:{atk:lv.atk,def:lv.def,hp:lv.hp,soulAtk:lv.soulAtk||0,soulDef:lv.soulDef||0}

@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-/* v2.2 WP-G 测试：角色等级系统（`page/level-system.js`）
+/* v2.2 WP-G 测试：角色等级系统（`page/level-system.js` + 称号表 `page/level-titles.js`）
    规格：doc/2.2 修改-补充.md「我的角色」段 + doc/plans/v2.2-施工计划.md §WP-G
    覆盖：
      1) 升级边界（初始 lv1 / 目标等级×10 / 累计阈值）
      2) 经验来源换算（10kg 有效容量 / 5min 有效时长 = 1 点，ratio 与强度加权）
      3) 26 档位（逐档数值 + 上限 + 叠加）
-     4) lv2000 玩家档「敌群战斗效果为 2 倍」
-     5) 季度重置幂等（季度键）
-     6) 周结算（达标 +500 / 未达标 −1000×天数）与幂等
-     7) 旧存档迁移（缺字段优雅退化、迁移不追溯）
-     8) 战斗接线守卫（源码级：落点/顺序/百分比通道）
+     4) ★ 敌群**无** ×2（作者裁决删除 lv2000「敌群战斗效果为2倍」；行为 + 源码 + 文档三重锁定）
+     5) ★ 称号表（26 档全覆盖 / 无空值 / 无重复 / lv1 = 健身勇士 / 键与 LEVEL_TIERS 对齐 / 兜底）
+     6) 季度重置幂等（季度键）
+     7) 周结算（达标 +500 / 未达标 −1000×天数）与幂等
+     8) 旧存档迁移（缺字段优雅退化、迁移不追溯）
+     9) 战斗接线守卫（源码级：落点/顺序/百分比通道/无 ×2）
    Run: node scripts/test-level-system.js */
 'use strict';
 const fs = require('fs');
@@ -29,7 +30,7 @@ function makeStore() {
   return s;
 }
 
-const files = ['utils.js', 'date-roll.js', 'stats.js', 'level-system.js'];
+const files = ['utils.js', 'date-roll.js', 'stats.js', 'level-titles.js', 'level-system.js'];
 const sb = { Math, JSON, console, Date, parseInt, parseFloat, isFinite, Object, Array, String, Number };
 sb.window = sb;
 sb.store = makeStore();
@@ -143,19 +144,125 @@ assert('lv1000/1100 百分比效果落在修正键上（各 5%）',
 assert('档位上限后不再增长（lv2100 与 lv9999 相同）',
   JSON.stringify(sb.playerLevelBonus(2100)) === JSON.stringify(sb.playerLevelBonus(9999)));
 
-/* ============ 4. lv2000 玩家档：敌群战斗效果为 2 倍 ============ */
+/* ============ 4. 敌群「无 ×2」（作者裁决：删除 lv2000「敌群战斗效果为2倍」） ============
+   裁决文案（doc/2.2 修改-补充.md:110）：`- lv 2000 攻击+120，魂攻+120，防御+90，魂防+90（玩家）`
+   → 敌群战斗与普通战斗**同一口径**；以下行为断言 + 源码断言 + 文档断言三重锁定，
+     将来有人把 ×2 加回来（数据/参数/接线任一处）都会红。 */
 const lv2000 = sb.playerLevelBonus(2000);
 const lv2000G = sb.playerLevelBonus(2000, { inGroup: true });
 assert('lv2000 玩家档普通口径（攻 +310，含累计）', lv2000.atk === 310, String(lv2000.atk));
-assert('★ 敌群口径：仅 lv2000 档 ×2（攻 310 → 430）', lv2000G.atk === 310 + 120, String(lv2000G.atk));
-assert('敌群口径：防御 218 → 308', lv2000.def === 218 && lv2000G.def === 308, lv2000.def + ' → ' + lv2000G.def);
-assert('敌群口径：魂攻 335 → 455', lv2000.soulAtk === 335 && lv2000G.soulAtk === 455, lv2000.soulAtk + ' → ' + lv2000G.soulAtk);
-assert('敌群口径：魂防 230 → 320', lv2000.soulDef === 230 && lv2000G.soulDef === 320, lv2000.soulDef + ' → ' + lv2000G.soulDef);
-assert('敌群 ×2 不外溢到其它档位（速度 15 不变）', lv2000.spd === 15 && lv2000G.spd === 15);
-assert('敌群 ×2 仅 lv2000 档拥有（宠物档无 groupMult）',
-  sb.LEVEL_TIERS.filter(t => t.groupMult).length === 1 && sb.LEVEL_TIERS.filter(t => t.groupMult)[0].lv === 2000);
+assert('★ 敌群口径 = 普通口径：传 {inGroup:true} 一分不加',
+  JSON.stringify(lv2000G) === JSON.stringify(lv2000), JSON.stringify(lv2000G));
+assert('★ 26 档位表里没有任何倍率字段（groupMult / mult）',
+  sb.LEVEL_TIERS.every(t => t.groupMult === undefined && t.mult === undefined),
+  JSON.stringify(sb.LEVEL_TIERS.filter(t => t.groupMult !== undefined || t.mult !== undefined)));
+assert('★ levelStatBonus 已无倍率参数（第三参数起一律忽略）',
+  JSON.stringify(sb.levelStatBonus(2000, 'player', { inGroup: true })) === JSON.stringify(lv2000));
+assert('levelStatBonus(2000,"player") ≡ playerLevelBonus(2000)',
+  JSON.stringify(sb.levelStatBonus(2000, 'player')) === JSON.stringify(lv2000));
+assert('宠物档同样没有 ×2（文档只给 lv2000 玩家档注过 2 倍，宠物没有）',
+  JSON.stringify(sb.petLevelBonus(2100, { inGroup: true })) === JSON.stringify(sb.petLevelBonus(2100))
+  && sb.LEVEL_TIERS.filter(t => t.target === 'pet').every(t => t.groupMult === undefined));
+/* 源码级锁定（注释先剥离，避免把说明文字当成代码误伤） */
+const stripC = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+assert('★ 全链路源码无 groupMult / inGroup 残留（加回来必红）',
+  ['level-system.js', 'game-render.js', 'game-views.js', 'battle.js']
+    .every(f => !/groupMult|inGroup/.test(stripC(src(f)))),
+  ['level-system.js', 'game-render.js', 'game-views.js', 'battle.js']
+    .filter(f => /groupMult|inGroup/.test(stripC(src(f)))).join(','));
+assert('★ 文档 lv2000 行已逐字改为裁决文案（含「玩家」、无「敌群」无「2倍」）',
+  (function () {
+    const doc = fs.readFileSync(path.join(__dirname, '..', 'doc', '2.2 修改-补充.md'), 'utf8');
+    const line = (doc.split('\n').find(l => /^- lv 2000 /.test(l)) || '（找不到该行）').replace(/\r$/, '');
+    return line === '- lv 2000 攻击+120，魂攻+120，防御+90，魂防+90（玩家）';
+  })());
 
-/* ============ 5. 季度重置（幂等） ============ */
+/* ============ 5. 称号表（唯一来源 page/level-titles.js） ============ */
+const titles = sb.LEVEL_TITLES || {};
+const titleVals = Object.keys(titles).map(k => titles[k]);
+const titleKeys = Object.keys(titles).map(Number).sort((a, b) => a - b);
+const tierLevels = sb.LEVEL_TIERS.map(t => t.lv);
+assert('称号表已挂载且为 JSON 形状（普通对象、键全为数字串）',
+  !!sb.LEVEL_TITLES && typeof sb.LEVEL_TITLES === 'object' && !Array.isArray(sb.LEVEL_TITLES)
+  && Object.keys(titles).length > 0 && Object.keys(titles).every(k => /^\d+$/.test(k)));
+assert('★ 档位键与 LEVEL_TIERS 完全对齐：lv1 基线档 + 26 档等级，逐一对应',
+  titleKeys.join(',') === [sb.LEVEL_START].concat(tierLevels).join(','),
+  'titleKeys=' + titleKeys.join(',') + ' 期望=' + [sb.LEVEL_START].concat(tierLevels).join(','));
+assert('★ 26 档全覆盖（每一档都取到该档自己的称号）',
+  tierLevels.every(lv => sb.levelTitle(lv) === titles[String(lv)]),
+  tierLevels.filter(lv => sb.levelTitle(lv) !== titles[String(lv)]).join(','));
+assert('★ 无空值（每条都是 2~6 字中文名）',
+  titleVals.every(t => typeof t === 'string' && /^[\u4e00-\u9fa5]{2,6}$/.test(t)),
+  titleVals.filter(t => !(typeof t === 'string' && /^[\u4e00-\u9fa5]{2,6}$/.test(t))).join(','));
+assert('★ 无重复（' + titleVals.length + ' 条互不相同）',
+  new Set(titleVals).size === titleVals.length,
+  titleVals.filter((t, i) => titleVals.indexOf(t) !== i).join(','));
+assert('★ lv1 = 健身勇士（既有文案，一字未改）',
+  titles[String(sb.LEVEL_START)] === '健身勇士' && sb.levelTitle(1) === '健身勇士',
+  String(titles[String(sb.LEVEL_START)]));
+assert('与其它系统无冲突：全表只有 lv1 一条沿用旧文案',
+  titleKeys.filter(k => titles[String(k)] === '健身勇士').join(',') === '1');
+/* 达到即切换（与 LEVEL_TIERS「达到即激活」同语义） */
+assert('档位即激活：lv1 / lv5 / lv9 = lv1 档称号',
+  [1, 5, 9].every(lv => sb.levelTitle(lv) === titles['1']));
+assert('档位即激活：lv10 / lv29 = lv10 档，lv30 切换',
+  sb.levelTitle(10) === titles['10'] && sb.levelTitle(29) === titles['10'] && sb.levelTitle(30) === titles['30'],
+  [10, 29, 30].map(lv => sb.levelTitle(lv)).join(','));
+assert('档位即激活：跨多档直接落到该档（lv1500 → lv1500 档）', sb.levelTitle(1500) === titles['1500']);
+assert('超过最大档（lv2100 / 2101 / 99999）沿用最大档称号，不返回 undefined',
+  [2100, 2101, 99999].every(lv => sb.levelTitle(lv) === titles['2100']));
+/* 兜底：永不 undefined / 空串 */
+assert('★ 兜底：非法等级（0 / 负数 / NaN / undefined / null / 字符串 / 对象）都返回非空称号',
+  [0, -1, -999, NaN, undefined, null, 'x', {}, []].every(v => {
+    const t = sb.levelTitle(v);
+    return typeof t === 'string' && t.length > 0;
+  }));
+assert('兜底：levelState().title ≡ levelTitle(level)（面板与卡片同源）',
+  (function () {
+    const st = sb.levelState(D(2026, 9, 15));
+    return st.title === sb.levelTitle(st.level);
+  })());
+assert('★ 兜底：称号表缺失（新模块未挂载）→ LEVEL_TITLE_BASE，不抛错',
+  (function () {
+    const saved = sb.LEVEL_TITLES;
+    sb.LEVEL_TITLES = undefined;
+    const ok = sb.levelTitle(50) === sb.LEVEL_TITLE_BASE && typeof sb.levelTitle(50) === 'string';
+    sb.LEVEL_TITLES = saved;
+    return ok;
+  })());
+assert('★ 兜底：表为空对象 / 命中到空值 / 键全非法 → LEVEL_TITLE_BASE',
+  (function () {
+    const saved = sb.LEVEL_TITLES;
+    sb.LEVEL_TITLES = {};
+    const a = sb.levelTitle(50) === '健身勇士';
+    sb.LEVEL_TITLES = { '10': '' };
+    const b = sb.levelTitle(10) === '健身勇士';
+    sb.LEVEL_TITLES = { abc: '陷阱' };
+    const c = sb.levelTitle(10) === '健身勇士';
+    sb.LEVEL_TITLES = saved;
+    return a && b && c;
+  })(),
+  'a/b/c 见源码');
+/* 展示接线 */
+assert('训练数据页等级卡展示真实称号（「称号 <当前档称号>」）',
+  sb.levelCardHtml(D(2026, 9, 15)).indexOf('称号 ' + sb.levelTitle(1)) >= 0);
+assert('挑战页「我的角色」一行文案含真实称号（levelInlineText）',
+  sb.levelInlineText(D(2026, 9, 15)).indexOf(sb.levelTitle(1)) >= 0);
+assert('展示层不写死称号文案（game-views / tab-profile 只经 levelTitle / levelState）',
+  !/健身勇士/.test(stripC(src('game-views.js'))) && !/健身勇士/.test(stripC(src('tab-profile.js'))));
+assert('称号文案单一来源：page/ 里只有 level-titles.js 持有「健身勇士」，level-system.js 仅兜底常量一处',
+  (src('level-titles.js').match(/健身勇士/g) || []).length === 1
+  && (stripC(src('level-system.js')).match(/健身勇士/g) || []).length === 1
+  && ['game-views.js', 'game-render.js', 'tab-profile.js', 'battle.js'].every(f => !/健身勇士/.test(stripC(src(f)))),
+  'titles=' + (src('level-titles.js').match(/健身勇士/g) || []).length
+  + ' system=' + (stripC(src('level-system.js')).match(/健身勇士/g) || []).length);
+/* 称号表落点：必须是 JSON 形状的模块（不是 data/*.json —— 运行时无 fetch 链路） */
+assert('★ 落点判断：page/level-titles.js 存在且为「JSON 对象 + 一行导出」（代码里无 fetch / XHR）',
+  fs.existsSync(path.join(__dirname, '..', 'page', 'level-titles.js'))
+  && /var LEVEL_TITLES = \{[\s\S]*\};/.test(src('level-titles.js'))
+  && !/fetch\(|XMLHttpRequest/.test(stripC(src('level-titles.js'))));
+
+/* ============ 6. 季度重置（幂等） ============ */
 assert('季度键 = 自然季度 YYYY-Qn',
   sb.levelQuarterKey(D(2026, 1, 15)) === '2026-Q1' && sb.levelQuarterKey(D(2026, 4, 1)) === '2026-Q2'
   && sb.levelQuarterKey(D(2026, 12, 31)) === '2026-Q4',
@@ -180,7 +287,7 @@ assert('★ 同季度再调用不重复结算（幂等键 = quarterKey）', rst2
 assert('季度重置写入历史记录',
   sb.getLevelStore().history.some(h => h.type === 'quarter-reset' && h.quarter === '2026-Q4'));
 
-/* ============ 6. 周结算（达标 +500 / 未达标 −1000×天数） ============ */
+/* ============ 7. 周结算（达标 +500 / 未达标 −1000×天数） ============ */
 assert('标准 4 天 / 达标 +500 / 未达标每天 −1000',
   sb.LEVEL_WEEK_STANDARD_DAYS === 4 && sb.LEVEL_WEEK_BONUS === 500 && sb.LEVEL_WEEK_MISS_PENALTY === 1000);
 assert('达标（4 天 / 5 天）→ +500',
@@ -220,7 +327,7 @@ assert('未达标结算同样写入 adjust 与历史',
   sb.getLevelStore().adjust === -3000 && sb.getLevelStore().history.some(h => h.type === 'week' && h.delta === -3000),
   String(sb.getLevelStore().adjust));
 
-/* ============ 7. 旧存档迁移（缺字段优雅退化 / 不追溯） ============ */
+/* ============ 8. 旧存档迁移（缺字段优雅退化 / 不追溯） ============ */
 sb.store._data = {};
 const fresh = sb.getLevelStore();
 assert('无 level 键 → 默认档（lv1 / 经验 0）',
@@ -253,10 +360,10 @@ assert('窗口起点 = max(季度首日, 启用日)', migrated.from === '2026-09
 assert('本级进度 = 累计 − 本级阈值（100 − 90 = 10）', migrated.inLevel === 10, String(migrated.inLevel));
 assert('本级需求 = 目标等级×10（lv4 → lv5 = 50）', migrated.need === 50, String(migrated.need));
 
-/* ============ 8. 战斗接线守卫（源码级） ============ */
+/* ============ 9. 战斗接线守卫（源码级） ============ */
 const gr = src('game-render.js');
-assert('敌群开战接线：playerLevelBonus(…,{inGroup:true}) 落点存在',
-  /playerLevelBonus\(levelState\(\)\.level,\{inGroup:true\}\)/.test(gr));
+assert('★ 敌群开战接线：按普通口径取等级加成（playerLevelBonus(levelState().level)，无 inGroup）',
+  /playerLevelBonus\(levelState\(\)\.level\)/.test(gr));
 assert('敌群开战前调用 syncLevel（季度/周结算）', /startGroupTrial[\s\S]{0,900}syncLevel\(\)/.test(gr));
 assert('玩家百分比通道挂到单位字段',
   gr.indexOf('player._levelDmgDealtPct=') >= 0 && gr.indexOf('player._levelDmgTakenPct=') >= 0);
@@ -277,7 +384,8 @@ assert('★ 顺序守卫：宠物等级加成排在稀有度放大（boostPetFor
   iBuild >= 0 && ps.indexOf('applyPetLevelBaseBonuses(units)', iBuild) > iBuild
   && ps.indexOf('applyPetLevelBaseBonuses(units)', iBuild) < ps.indexOf('boostPetForGroup(u)', iBuild),
   ps.indexOf('applyPetLevelBaseBonuses(units)', iBuild) + ' vs ' + ps.indexOf('boostPetForGroup(u)', iBuild));
-assert('单敌接线：buildBattleSides 走 applyPlayerLevelBonus', /applyPlayerLevelBonus\(stats,\{\}\)/.test(src('battle.js')));
+assert('单敌接线：buildBattleSides 走 applyPlayerLevelBonus（与敌群同一口径）',
+  /applyPlayerLevelBonus\(stats\)/.test(src('battle.js')));
 /* UI 接线 */
 assert('挑战页「我的角色」不再写死 Lv 1', src('game-views.js').indexOf('>Lv 1 · 健身勇士<') < 0);
 assert('挑战页读 levelState() 显示等级', /levelState\(\)/.test(src('game-views.js')));

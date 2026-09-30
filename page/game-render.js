@@ -441,10 +441,11 @@ function startGroupTrial(groupId){
   // v2.1.10：敌群是独立属性空间 —— 玩家只继承一定比例，避免裸属性把敌人压成 1 点
   var gs=(typeof inheritGroupStats==='function')?inheritGroupStats(stats):stats
   /* WP-G 落点：等级效果属**基础属性**加成，加在敌群继承（GROUP_INHERIT）**之后** →
-     等级效果不打折；lv2000 玩家档按文档「敌群战斗效果为2倍」走 playerLevelBonus 的 groupMult。
+     等级效果不参与继承折扣。⚠️ 敌群与普通战斗**同一口径**：作者裁决已删除
+     lv2000 的「敌群战斗效果为2倍」→ 这里取的就是 playerLevelBonus(level)，没有任何倍率。
      lv1 时全部为 0 → 对既有战斗零影响。 */
   var _lb=(typeof playerLevelBonus==='function'&&typeof levelState==='function')
-    ?playerLevelBonus(levelState().level,{inGroup:true})
+    ?playerLevelBonus(levelState().level)
     :{hp:0,atk:0,def:0,soulAtk:0,soulDef:0,spd:0,dmgDealtPct:0,dmgTakenPct:0}
   gs.atk+=_lb.atk; gs.def+=_lb.def; gs.hp+=_lb.hp
   var player=createUnit({id:'player',side:'ally',name:'🧑 你',level:1,base:{hp:gs.hp,atk:gs.atk,def:gs.def,spd:10+_lb.spd,soulAtk:(gs.soulAtk||0)+_lb.soulAtk,soulDef:(gs.soulDef||0)+_lb.soulDef}})

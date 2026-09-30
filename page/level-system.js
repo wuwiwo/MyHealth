@@ -8,13 +8,18 @@
      · 「等级每季度清零一次，本周训练次数未达标，则扣除1000×未达标天数的经验」
        「本周训练达标，额外获得500经验」
      · 「等级效果（叠加）」26 档（lv10 ~ lv2100）→ 见下方 LEVEL_TIERS
-     · 「lv 2000 …（玩家，敌群战斗效果为2倍）」
-   口径补充（`doc/2.2 修改-补充.md` 裁决回执 #5）：「经验按**有效时长 / 有效容量**计；
-     等级效果**均为基础属性**加成」。
+     · 「lv 2000 攻击+120，魂攻+120，防御+90，魂防+90（玩家）」
+       ⚠️ 作者裁决：**删除**原「（玩家，敌群战斗效果为2倍）」→ 敌群战斗与普通战斗
+          **同一口径**，全链路不再有任何 ×2（见 levelStatBonus / game-render 的说明与测试锁定）。
+   口径补充（`doc/2.2 修改-补充.md` 裁决回执 #5 + 作者澄清）：
+     · 「经验按**有效时长 / 有效容量**计」；
+     · 「等级效果**全部是基础属性**」的准确含义 = **「属性增加类效果都加在基础属性上」**
+       （即数值加成走基础属性），**并不排斥** lv1000/1100/1200/1300 的
+       「造成伤害 +5% / 受到伤害 −5%」这类**百分比战斗修正** → **两者都实装就是对的**。
    施工计划（`doc/plans/v2.2-施工计划.md` §WP-G）：「经验：每 10kg 容量 或 5min 有效时长
      （均按有效口径）= 1 点；等级：初始 lv1，升到下一级所需经验 = 目标等级 × 10；
-     称号体系；每季度清零；本周训练未达标扣 1000×未达标天数 经验，达标额外 +500；
-     等级效果（全部为基础属性，玩家/宠物分开，含 lv2000 玩家效果在敌群 ×2）」。
+     称号体系（文案表见 `page/level-titles.js`）；每季度清零；本周训练未达标扣 1000×未达标天数 经验，
+     达标额外 +500；等级效果（玩家/宠物分开；lv2000 玩家档**无**额外倍率）」。
 
    ⚠️ 本文件是等级系统的**唯一数值来源**：升级公式、经验换算、26 档位、季度/周结算，
      其它模块一律读这里的常量/函数，别在调用点写死数字（同 SKILL_POINTS_PER_STAGE 的教训）。
@@ -43,19 +48,32 @@ var LEVEL_WEEK_MISS_PENALTY = 1000;  // 未达标：每天扣除
 /* 历史记录条数上限（「记录至历史记录」） */
 var LEVEL_HISTORY_MAX = 50;
 
-/* 称号：文档只给了 lv1 的「健身勇士」（`page/game-views.js:61` 原有文案亦为此），
-   其余档位称号文档未列 → 不发明，统一用基线称号；见报告「需裁决」。 */
+/* 称号：**文案的唯一来源是 `page/level-titles.js` 的 LEVEL_TITLES**（lv1 基线档 + 26 档，
+   JSON 形状的模块，运行时随 index.html 挂载）。本文件只保留一个**最后兜底**常量：
+   当称号表未挂载（新模块还没加进 index.html）/ 表被污染 / 命中到空值时使用，
+   保证 `levelTitle()` **永不返回 undefined 或空串**（= lv1 既有文案「健身勇士」）。 */
 var LEVEL_TITLE_BASE = '健身勇士';
 
 /* 属性键（基础属性加成）与战斗修正键（百分比，非基础属性） */
 var LEVEL_STAT_KEYS = ['hp', 'atk', 'def', 'soulAtk', 'soulDef', 'spd'];
 var LEVEL_MOD_KEYS = ['dmgDealtPct', 'dmgTakenPct'];
 
+/* 📌 口径澄清（作者裁决 · 防止后人误删 lv1000/1100/1200/1300）：
+   「等级效果**全部是基础属性**」这句的正确读法是 **「属性增加类效果都加在基础属性上」**：
+     · 属性**数值**加成（atk/def/soulAtk/soulDef/spd/hp）走**基础属性** —— 见 LEVEL_STAT_KEYS，
+       由 applyLevelStatBonus() 并进基础属性（战斗里加在敌群继承之后、稀有度放大之前）。
+     · 它**并不排斥**「造成伤害 ±%／受到伤害 ±%」这类**百分比战斗修正**（见 LEVEL_MOD_KEYS），
+       即 lv1000（玩家输出 +5%）、lv1100（玩家承伤 −5%）、lv1200（宠物输出 +5%）、
+       lv1300（宠物承伤 −5%）这 4 档 —— 由单位级字段 `_levelDmgDealtPct/_levelDmgTakenPct`
+       在战斗结算处经 levelDamageAdjust() 消费。
+   → **现实现（两者都实装）就是对的**：这 4 档不是「多余的字段」，是设计意图，请勿删除。 */
+
 /* ============ 26 档位效果表（逐字取自 doc/2.2 修改-补充.md 第 86~111 行） ============
    lv 10 / 30 / 50 / 80 / 120 / 160 / 200 / 300 / 400 / 500 / 600 / 700 / 800 / 900 /
    1000 / 1100 / 1200 / 1300 / 1400 / 1500 / 1600 / 1700 / 1800 / 1900 / 2000 / 2100
    = 26 档。`target` 区分「（玩家）/（宠物）」，效果**叠加**。
-   `groupMult` = 敌群战斗里的额外倍率（文档对 lv2000 玩家档注明「敌群战斗效果为2倍」）。 */
+   ⚠️ lv2000 玩家档**没有**任何「敌群战斗效果为2倍」的特殊倍率（作者裁决删除）：
+      敌群战斗与普通战斗读的是同一份加成，敌群不开小灶 —— 见 levelStatBonus 与测试的锁定断言。 */
 var LEVEL_TIERS = [
   { lv: 10,   target: 'player', stats: { atk: 10 } },
   { lv: 30,   target: 'player', stats: { def: 8 } },
@@ -81,7 +99,7 @@ var LEVEL_TIERS = [
   { lv: 1700, target: 'player', stats: { def: 60, soulDef: 60 } },
   { lv: 1800, target: 'pet',    stats: { atk: 40, soulAtk: 40 } },
   { lv: 1900, target: 'pet',    stats: { def: 30, soulDef: 30 } },
-  { lv: 2000, target: 'player', stats: { atk: 120, soulAtk: 120, def: 90, soulDef: 90 }, groupMult: 2 },
+  { lv: 2000, target: 'player', stats: { atk: 120, soulAtk: 120, def: 90, soulDef: 90 } },
   { lv: 2100, target: 'pet',    stats: { atk: 40, soulAtk: 40, def: 30, soulDef: 30 } }
 ];
 var LEVEL_TIER_COUNT = LEVEL_TIERS.length;      // = 26
@@ -224,25 +242,25 @@ function levelHistoryPush(d, entry) {
 /* ============ 26 档位加成查询 ============ */
 
 /* 某一级、某一目标（player/pet）已激活的档位加成合计（效果叠加）。
-   opts.inGroup = true 时，带 groupMult 的档位按其倍率放大（lv2000 玩家档 = ×2）。 */
-function levelStatBonus(level, target, opts) {
-  opts = opts || {};
+   ⚠️ 敌群战斗与普通战斗是**同一口径**：作者裁决已删除 lv2000 玩家档的「敌群战斗效果为2倍」，
+      所以这里**没有**任何倍率参数 —— 多传的参数一律被忽略，绝不会放大
+      （见 test-level-system.js 的「无 ×2」锁定断言：传 {inGroup:true} 也不加倍）。 */
+function levelStatBonus(level, target) {
   var out = levelEmptyBonus();
   var lv = Math.max(LEVEL_START, Math.floor(level || LEVEL_START));
   for (var i = 0; i < LEVEL_TIERS.length; i++) {
     var t = LEVEL_TIERS[i];
     if (t.target !== target) continue;
     if (lv < t.lv) continue;
-    var mul = (opts.inGroup && t.groupMult) ? t.groupMult : 1;
     for (var k in t.stats) {
       if (out[k] == null) continue;
-      out[k] += t.stats[k] * mul;
+      out[k] += t.stats[k];
     }
   }
   return out;
 }
-function playerLevelBonus(level, opts) { return levelStatBonus(level, 'player', opts); }
-function petLevelBonus(level, opts) { return levelStatBonus(level, 'pet', opts); }
+function playerLevelBonus(level) { return levelStatBonus(level, 'player'); }
+function petLevelBonus(level) { return levelStatBonus(level, 'pet'); }
 
 /* 把基础属性加成合并进一份战斗属性对象（就地修改并返回）：hp/atk/def/soulAtk/soulDef/spd */
 function applyLevelStatBonus(stats, bonus) {
@@ -276,6 +294,41 @@ function levelTierText(tier) {
     parts.push((LEVEL_STAT_LABEL[k] || k) + txt);
   }
   return parts.join(' ');
+}
+
+/* ============ 称号（唯一来源 = page/level-titles.js 的 LEVEL_TITLES） ============ */
+
+/* 称号键（升序数字数组）。表缺失 / 被污染 / 没有合法数字键时返回 []。
+   ⚠️ 调用点一律走 levelTitle()，不要直接读 LEVEL_TITLES（否则会绕过兜底拿到 undefined）。 */
+function levelTitleKeys() {
+  if (typeof LEVEL_TITLES === 'undefined' || !LEVEL_TITLES || typeof LEVEL_TITLES !== 'object') return [];
+  var keys = [];
+  for (var k in LEVEL_TITLES) {
+    var n = parseInt(k, 10);
+    if (typeof n === 'number' && isFinite(n)) keys.push(n);
+  }
+  keys.sort(function (a, b) { return a - b; });
+  return keys;
+}
+
+/* 等级 → 称号。规则：取「不大于该等级的最大档位键」的称号
+   （与 LEVEL_TIERS「达到即激活 / 效果叠加」同语义 → 称号只升不降地跟着等级走）。
+   兜底链（**永不返回 undefined / 空串**）：
+     ① 表未挂载（level-titles.js 还没加进 index.html）或没有合法键 → LEVEL_TITLE_BASE
+     ② 等级低于最小键（lv1~lv9）→ 最小键那一档的称号（= lv1「健身勇士」）
+     ③ 命中档位的值不是非空字符串（表被污染）→ LEVEL_TITLE_BASE
+     ④ 等级高于最大键（lv2100 以上）→ 最大键那一档的称号 */
+function levelTitle(level) {
+  var lv = Math.floor(level);
+  if (!isFinite(lv) || lv < LEVEL_START) lv = LEVEL_START;
+  var keys = levelTitleKeys();
+  if (!keys.length) return LEVEL_TITLE_BASE;
+  var pick = keys[0];
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i] <= lv) pick = keys[i]; else break;
+  }
+  var t = LEVEL_TITLES[String(pick)];
+  return (typeof t === 'string' && t) ? t : LEVEL_TITLE_BASE;
 }
 
 /* ============ 等级状态（读路径，纯读） ============ */
@@ -317,7 +370,7 @@ function levelState(now) {
   var cumNext = levelCumExp(level + 1);
   return {
     level: level,
-    title: LEVEL_TITLE_BASE,
+    title: levelTitle(level),
     total: total,                     // 本季度累计经验（含周奖惩）
     raw: raw.exp,                     // 本季度训练经验
     adjust: d.adjust || 0,            // 周奖惩净额
@@ -438,13 +491,14 @@ function syncLevel(now) {
 
 /* ============ 战斗接线助手 ============ */
 
-/* 敌群/单敌战斗：把玩家等级加成写进战斗属性（含 spd）；
-   opts.inGroup = true → lv2000 玩家档 ×2（文档「敌群战斗效果为2倍」）。
-   ⚠️ 落点：加在敌群继承（GROUP_INHERIT）**之后**，等级效果不打折 —— 见报告「需裁决」。 */
-function applyPlayerLevelBonus(stats, opts) {
+/* 敌群/单敌战斗：把玩家等级加成写进战斗属性（含 spd）。
+   ⚠️ 落点：加在敌群继承（GROUP_INHERIT）**之后** —— 等级效果属基础属性加成，不参与继承折扣。
+   ⚠️ 敌群与普通战斗**同一口径**：作者裁决已删除 lv2000 的「敌群战斗效果为2倍」，
+      因此这里没有倍率参数（game-render 的敌群开战走同一调用，取值完全相同）。 */
+function applyPlayerLevelBonus(stats) {
   if (!stats) return stats;
   var st = levelState();
-  var b = playerLevelBonus(st.level, opts || {});
+  var b = playerLevelBonus(st.level);
   return applyLevelStatBonus(stats, b);
 }
 /* 等级带来的战斗百分比修正（非基础属性）：造成伤害 / 受到伤害 */
@@ -455,7 +509,7 @@ function petLevelMods(level) { return petLevelBonus(level); }
 function applyPetLevelBaseBonuses(units) {
   if (!units || !units.length) return units;
   var st = levelState();
-  var b = petLevelBonus(st.level, {});
+  var b = petLevelBonus(st.level);
   units.forEach(function (u) {
     if (!u || !u.base) return;
     applyLevelStatBonus(u.base, b);
@@ -480,13 +534,13 @@ function levelDamageAdjust(actor, target, dmg) {
 function levelCardHtml(now) {
   var st = levelState(now);
   var pct = st.need > 0 ? Math.min(100, Math.round(st.inLevel / st.need * 100)) : 0;
-  var pb = playerLevelBonus(st.level, {});
+  var pb = playerLevelBonus(st.level);
   var nb = levelNextTier(st.level, 'player');
   var h = ''
     + '<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:14px">'
     + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'
     + '<span id="lvCardTitle" style="font-size:var(--fs-lg);font-weight:700">我的等级 · Lv ' + st.level + '</span>'
-    + '<span style="font-size:var(--fs-xs);color:var(--text3)">' + st.title + '</span>'
+    + '<span style="font-size:var(--fs-xs);color:var(--text3)">称号 ' + levelTitle(st.level) + '</span>'
     + '<span style="flex:1"></span>'
     + '<span style="font-size:var(--fs-3xs);color:var(--text3)">本季度 ' + st.quarterKey + '</span>'
     + '</div>'
@@ -549,6 +603,9 @@ if (typeof window !== 'undefined') {
   window.levelStatBonus = levelStatBonus;
   window.playerLevelBonus = playerLevelBonus;
   window.petLevelBonus = petLevelBonus;
+  window.LEVEL_TITLE_BASE = LEVEL_TITLE_BASE;
+  window.levelTitle = levelTitle;
+  window.levelTitleKeys = levelTitleKeys;
   window.levelState = levelState;
   window.getLevelStore = getLevelStore;
   window.saveLevelStore = saveLevelStore;

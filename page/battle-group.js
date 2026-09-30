@@ -432,7 +432,9 @@ function normalAttack(gb, actor, target, dmgMult) {
   var defVal = effectiveStat(target, 'def');
   var dmg = Math.max(1, atkVal - Math.floor(defVal / 2) + Math.floor(gb.rng() * 4) + 1);
   /* WP-G 角色等级：lv1000/1100（玩家）· lv1200/1300（宠物）的「造成伤害 +5% / 受到伤害 −5%」，
-     是**百分比战斗修正**（非基础属性），与普攻/技能同一入口结算。无字段 = 原值。 */
+     是**百分比战斗修正**（非基础属性），与普攻/技能同一入口结算。无字段 = 原值。
+     ⚠️ 口径（作者裁决）：等级效果「全部是基础属性」=「属性增加类效果都加在基础属性上」，
+        **不排斥**这 4 档百分比效果 → 都实装是对的，勿删（详见 level-system.js 的口径澄清）。 */
   if (typeof levelDamageAdjust === 'function') dmg = levelDamageAdjust(actor, target, dmg);
   /* v2.2.5 启风：额外普通攻击按系数缩放（**只作用在 base 上**，其后利刃/暴击/格挡等
      常规修正照旧生效 —— 语义就是「一次 80% 伤害的普通攻击」）。不传 = 1，行为与旧版完全一致。 */

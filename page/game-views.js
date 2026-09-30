@@ -51,13 +51,16 @@ function renderTrainView() {
   if (!v) return
   var stats = getGameStats()
   /* WP-G：角色等级系统 —— 结算季度/周（幂等）并把等级加成并进展示属性
-     （与单敌战斗同一口径：applyPlayerLevelBonus 无 inGroup → lv2000 不加倍） */
+     （与单敌/敌群战斗同一口径：等级效果无任何倍率，敌群 ×2 已按作者裁决删除） */
   if (typeof syncLevel === 'function') syncLevel()
-  if (typeof applyPlayerLevelBonus === 'function') applyPlayerLevelBonus(stats, {})
+  if (typeof applyPlayerLevelBonus === 'function') applyPlayerLevelBonus(stats)
   var _lv = (typeof levelState === 'function') ? levelState() : null
+  /* 称号：文案唯一来源 = page/level-titles.js（经 level-system.js 的 levelTitle() 取），
+     展示层不写死任何称号文案；levelState 不可用时回落 lv1 档称号 */
+  var _lvTitle = (typeof levelTitle === 'function') ? levelTitle(_lv ? _lv.level : 1) : ''
   var _lvInline = _lv
-    ? ('Lv ' + _lv.level + ' · ' + _lv.title + ' · 经验 ' + _lv.inLevel + '/' + _lv.need)
-    : 'Lv 1 · 健身勇士'
+    ? ('Lv ' + _lv.level + ' · ' + _lvTitle + ' · 经验 ' + _lv.inLevel + '/' + _lv.need)
+    : ('Lv ' + ((typeof LEVEL_START === 'number') ? LEVEL_START : 1) + ' · ' + _lvTitle)
   var st = getSkillState()
   var d = getPetStore()
 
