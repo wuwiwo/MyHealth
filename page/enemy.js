@@ -2,6 +2,8 @@
    MyHealth — Enemy Formation (M2b-1)
    敌人编成：createEnemyUnit 组合 天赋+技能+属性。
    难度阶梯：杂兵0/0 → 精英1/1 → 2/1 → 2/2 → Boss(1-4天赋+词条)。
+   v2.2.16（§5.4E）：敌群关卡的天赋已由 group-levels.js **固化进关卡配置**并显式传入；
+   本文件的兜底抽取（`talents` 缺省时）仍保留，但同样遵守「Boss / 精英不抽 lazy / slowstart」。
    依赖 unit.js / talent.js / skill.js（skill 后续）。
    ============================================ */
 
@@ -27,7 +29,7 @@ function createEnemyUnit(opts) {
   if (opts.talents) talentIds = opts.talents.slice();
   else {
     var tCount = cfg.talent[0] + Math.floor(battleRnd() * (cfg.talent[1] - cfg.talent[0] + 1));
-    talentIds = pickRandomTalents(tCount);
+    talentIds = pickRandomTalents(tCount, tier);
   }
 
   // 技能选择（占位，M2b-2 skill.js 后接入）
@@ -72,12 +74,24 @@ function createEnemyUnit(opts) {
   return unit;
 }
 
-/* 从注册表随机抽 N 个不重复天赋 */
-function pickRandomTalents(n) {
+/* 从注册表随机抽 N 个不重复天赋（**兜底路径**）
+   v2.2.16（§5.4E 天赋固化）：
+     · 敌群关卡（`group-levels.js`）现在**固化**了天赋，走的是 `createEnemyUnit({talents})` 的显式分支，
+       **不会**进这里 —— 线上的三个建场入口（`game-render.js` / `pet-ui.js` / `debug.js`）全都传
+       `cfg.talents`，所以本函数目前只被测试/工具与「未来的新入口」用到。
+     · 兜底抽取同样要遵守「Boss / 精英不抽自我削弱天赋」：靠 `tier` 剔除 talent.js 里标了 `weak: true`
+       的天赋（现为 lazy / slowstart）。此前无条件全池抽，是 §5.0 实测「g12-10 的 Boss 抽到
+       magicshield+slowstart+lazy」的直接原因。
+   @param n    抽取个数
+   @param tier 可选。省略时 = 旧行为（全池，仅排除宠物专属）；'boss' / 'elite1'~'elite3' 会额外排除 weak */
+function pickRandomTalents(n, tier) {
+  var eliteLike = !!tier && tier !== 'minion';
   // 排除宠物专属天赋（petOnly）——否则敌人会抽到「漆黑之眼」「圣光守护」这类宠物天赋
   var ids = Object.keys(TALENTS).filter(function (id) {
     var t = TALENTS[id];
-    return t && !t.petOnly;
+    if (!t || t.petOnly) return false;
+    if (eliteLike && t.weak) return false;   // 自我削弱天赋不给 Boss / 精英
+    return true;
   });
   var picked = [];
   var pool = ids.slice();

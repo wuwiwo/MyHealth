@@ -157,6 +157,16 @@ for (let i = 0; i < 300; i++) {
 assert('pickRandomTalents 300 次不抽到宠物专属天赋', leaked === null, 'leaked=' + leaked);
 const enemTalents = sandbox.pickRandomTalents(3);
 assert('pickRandomTalents 仍能抽到敌方天赋', enemTalents.length > 0 && sandbox.getTalent(enemTalents[0]) !== null);
+/* v2.2.16（§5.4E 天赋固化）：兜底抽取现在按 tier 剔除**自我削弱天赋**（talent.js 的 weak 标记）——
+   Boss / 精英不抽 lazy / slowstart（评审原文「boss不会获得」）。 */
+const WEAK_T = ['lazy', 'slowstart'];
+let weakLeak = null;
+for (let i = 0; i < 300; i++) {
+  sandbox.pickRandomTalents(6, 'boss').forEach(id => { if (WEAK_T.indexOf(id) > -1) weakLeak = id; });
+}
+assert('pickRandomTalents(…, "boss") 300 次不抽到 lazy / slowstart', weakLeak === null, 'leaked=' + weakLeak);
+assert('不同 tier 的排除互不干扰（boss 池仍抽得到普通敌方天赋）',
+  sandbox.pickRandomTalents(3, 'boss').every(id => { const t = sandbox.getTalent(id); return t && !t.petOnly; }));
 
 /* ---- 4. 端到端：圣光守护在真实普攻中分担伤害 ---- */
 console.log('\n[4] 端到端战斗');

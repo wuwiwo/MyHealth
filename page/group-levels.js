@@ -123,7 +123,9 @@ function groupRng(seed) {
 
 /* ============ 天赋 / 技能分级池 ============
    Boss 与精英只从「高级」池抽取：lazy（懒惰）/ slowstart（慢启动）是自我削弱，
-   bite（咬击）是最基础的技能 —— 抽到这些会让 Boss 名不副实。 */
+   bite（咬击）是最基础的技能 —— 抽到这些会让 Boss 名不副实。
+   v2.2.16（§5.4E）：这条规则此前**作用在一个永远为空的数组上**（见 genEnemyCfg 的说明），
+   现在天赋真正固化进关卡配置，本池子才第一次生效。 */
 var TALENTS_HIGH = ['blade', 'vigor', 'bloodthirst', 'regen', 'roughskin', 'vengeance', 'magicmirror', 'magicshield', 'intimidate',
   // v2.1.16 入池、v2.1.25 归位（它们本来就是天赋，只是此前寄放在词条池里）
   'flutter',     // 振翅：每回合按初始速度提速
@@ -134,6 +136,12 @@ var TALENTS_HIGH = ['blade', 'vigor', 'bloodthirst', 'regen', 'roughskin', 'veng
 /* v2.1.25：原先这里混着一个「词条池」（extra_act/aoe_guard/skill_guard/grow_atk/grow_def/doom_call）与 3 个天赋（flutter/plain/multitarget）。
    词条与天赋是两个独立维度 —— 词条池已移到 page/affix.js 的 AFFIX_EXTRA；
    这 3 个天赋归回 TALENTS_HIGH（见上）。 */
+/* v2.2.16（§5.4E 天赋固化）：敌群各 tier 的**天赋个数区间**（min, max，含端点）。
+   语义与 enemy.js 的 `ENEMY_TIERS[tier].talent` 相同，但**刻意写成局部常量**而不是直接读 ENEMY_TIERS ——
+   `GROUP_LEVELS` 在本文件加载时一次性建好，而 scripts/test-enemy.js 的沙箱是先加载
+   group-levels.js、后加载 enemy.js（线上 index.html 顺序相反），直接读会 ReferenceError。
+   两份清单一致由 scripts/test-talent-fixation.js 断言守卫（同 GROUP_AFFIX_EXTRA 的处理方式）。 */
+var GROUP_TALENT_COUNT = { minion: [0, 0], elite1: [1, 1], elite2: [2, 2], elite3: [2, 2], boss: [1, 4] };
 var GROUP_EXTRA_COUNT = { boss: 2, elite: 1 };   // 其他词条个数上限（+ 固定减伤 = 3 / 2）
 /* v2.1.25：Boss / 精英的词条 id。
    写成本文件的局部常量而不是直接读 affix.js 的 AFFIX_EXTRA / AFFIX_BOSS_FIXED ——
@@ -160,6 +168,9 @@ function groupTerrainFor(lg) {
   var r = groupRng(groupHash(lg, 0, 7) + 909)();
   return getTerrain(ids[Math.floor(r * ids.length)]);
 }
+/* v2.2.16（§5.4E 天赋固化）：**自我削弱天赋**（talent.js 里标了 `weak: true` 的那两条）。
+   它们只进「非精英」池 —— Boss / 精英不抽（评审原文「boss不会获得」）。
+   ⚠️ 本数组与 talent.js 的 `weak` 标记必须一致，由 scripts/test-talent-fixation.js 断言守卫。 */
 var TALENTS_LOW = ['lazy', 'slowstart'];
 var SKILLS_HIGH = ['charge', 'spikes', 'blizzard', 'armorbreak', 'blackmist', 'possess', 'deepfreeze',
   // v2.1.16：这 7 个技能代码完整但此前不在任何池里 → 实战永远见不到
@@ -215,7 +226,6 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
     affixes.push(GROUP_AFFIX_FIXED.elite);
     pickExtraAffixes(affixes, GROUP_EXTRA_COUNT.elite, rng);
   }
-  if (talents.length) cfg.talents = talents;
   if (affixes.length) cfg.affixes = affixes;
   // 技能：Boss / 精英从「高级」池抽；杂兵才可能拿低级技能
   var skills = [];
@@ -231,6 +241,31 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
     if (isElite && rng() < 0.5) skills.push('spikes');
   }
   if (skills.length) cfg.skills = skills;
+
+  /* ============ 天赋固化（v2.2.16 / §5.4E 裁决「需要固化」）============
+     🔴 修的是一个**字段从未被赋值**的缺陷：本文件此前 `var talents = []` 之后没有任何 push，
+        `if (talents.length) cfg.talents = talents;` 因此永不成立 → `cfg.talents` 恒为 undefined。
+        实战于是落到 `enemy.js` 的兜底 `pickRandomTalents()`：按 tier 随机**个数**、从全部 14 条里随机
+        **取哪几条**，且用的是全局 `battleRnd()`（**不在 `createGroupBattle` 的种子体系内**）
+        → 同一关每场战斗重摇天赋（实测 g12-10 的 Boss 随种子抽到过 `magicshield+slowstart+lazy`）。
+     现在与属性 / 词条 / 技能一致：**个数与取哪几条都由本关种子**（`lg, st, slot` + tier 偏移）推导，
+     同一关、同一槽位永远同一套天赋（可确定性复现）。
+     · 池子：Boss / 精英只用 `TALENTS_HIGH`（排除 `lazy` / `slowstart` 自我削弱，§5.4E「boss不会获得」）；
+             非精英（杂兵）才可能拿到 `TALENTS_LOW` —— 但杂兵个数为 0，实际拿不到天赋。
+     · 个数：按 `GROUP_TALENT_COUNT[tier]`（与 enemy.js 的 `ENEMY_TIERS` 同源，有守卫断言）。
+     · 位置：抽取刻意放在**词条 / 技能之后**，以免扰动二者的种子流 ——
+       否则「天赋固化」会把全部关卡的词条与技能也一起换掉，改动面失控。
+     注意：杂兵个数为 0，仍留空 → 走 createEnemyUnit 的兜底（等价），故只在非空时赋值。 */
+  var eliteLike = (tier !== 'minion');
+  var talentPool = (eliteLike ? TALENTS_HIGH : TALENTS_HIGH.concat(TALENTS_LOW)).slice();
+  var tRange = GROUP_TALENT_COUNT[tier] || GROUP_TALENT_COUNT.minion;
+  var tCount = tRange[0];
+  if (tRange[1] > tRange[0]) tCount = tRange[0] + Math.floor(rng() * (tRange[1] - tRange[0] + 1));
+  for (var ti = 0; ti < tCount && talentPool.length; ti++) {
+    var pi = Math.floor(rng() * talentPool.length);
+    talents.push(talentPool[pi]); talentPool.splice(pi, 1);
+  }
+  if (talents.length) cfg.talents = talents;
   return cfg;
 }
 
@@ -448,6 +483,9 @@ if (typeof window !== 'undefined') {
   window.GROUP_INHERIT = GROUP_INHERIT;
   window.PET_GROUP_SCALE = PET_GROUP_SCALE;
   window.TALENTS_HIGH = TALENTS_HIGH;
+  window.TALENTS_LOW = TALENTS_LOW;
+  window.GROUP_TALENT_COUNT = GROUP_TALENT_COUNT;
+  window.genEnemyCfg = genEnemyCfg;
   window.pickExtraAffixes = pickExtraAffixes;
   window.GROUP_AFFIX_FIXED = GROUP_AFFIX_FIXED;
   window.GROUP_AFFIX_EXTRA = GROUP_AFFIX_EXTRA;
@@ -472,6 +510,9 @@ if (typeof globalThis !== 'undefined') {
   globalThis.GROUP_INHERIT = GROUP_INHERIT;
   globalThis.PET_GROUP_SCALE = PET_GROUP_SCALE;
   globalThis.TALENTS_HIGH = TALENTS_HIGH;
+  globalThis.TALENTS_LOW = TALENTS_LOW;
+  globalThis.GROUP_TALENT_COUNT = GROUP_TALENT_COUNT;
+  globalThis.genEnemyCfg = genEnemyCfg;
   globalThis.pickExtraAffixes = pickExtraAffixes;
   globalThis.GROUP_AFFIX_FIXED = GROUP_AFFIX_FIXED;
   globalThis.GROUP_AFFIX_EXTRA = GROUP_AFFIX_EXTRA;

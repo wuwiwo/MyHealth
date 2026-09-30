@@ -5,6 +5,8 @@
    3) 天赋 hook 触发（振翅/懒惰/嗜血/再生）
    4) 敌人编成阶梯（tier → 天赋/技能数量）
    5) Boss 1-4 天赋
+   6) 单元 tags
+   7) v2.2.16（§5.4E）：兜底抽取按 tier 剔除 lazy / slowstart（Boss / 精英不抽）
 */
 'use strict';
 const fs = require('fs');
@@ -86,6 +88,33 @@ assert('Boss: 1-4 天赋', btCount >= 1 && btCount <= 4, 'talents=' + btCount);
 // 显式指定 Boss 4 天赋
 const boss4 = sandbox.createEnemyUnit({ tier: 'boss', talents: ['blade','vigor','bloodthirst','regen'], base: { hp: 500, atk: 30, def: 20 } });
 assert('Boss: 显式4天赋', sandbox.enemyTalentCount(boss4) === 4, 'talents=' + sandbox.enemyTalentCount(boss4));
+
+/* ---- 5b. v2.2.16（§5.4E 天赋固化）：兜底抽取按 tier 剔除「自我削弱天赋」----
+   敌群关卡（group-levels.js）现在**固化**了天赋，走 `talents` 显式分支、不进兜底；
+   兜底路径（单敌战 / 工具 / 测试）同样要遵守「Boss / 精英不抽 lazy / slowstart」。
+   标记来源 = talent.js 天赋定义上的 `weak: true`（不是各文件再抄一份 id 清单）。 */
+const WEAK_T = ['lazy', 'slowstart'];
+assert('弱化天赋标记：lazy / slowstart = weak，其余天赋不标',
+  WEAK_T.every(id => sandbox.isWeakTalent(id)) &&
+  Object.keys(sandbox.TALENTS).filter(id => sandbox.isWeakTalent(id)).length === WEAK_T.length,
+  Object.keys(sandbox.TALENTS).filter(id => sandbox.isWeakTalent(id)).join(','));
+function weakHits(n, tier) {
+  let hit = null;
+  for (let i = 0; i < 200 && !hit; i++) {
+    sandbox.pickRandomTalents(n, tier).forEach(id => { if (WEAK_T.indexOf(id) > -1) hit = id; });
+  }
+  return hit;
+}
+assert('兜底抽取(tier=boss) 200 轮不抽到 lazy / slowstart', weakHits(6, 'boss') === null, String(weakHits(6, 'boss')));
+assert('兜底抽取(tier=elite1) 200 轮不抽到 lazy / slowstart', weakHits(6, 'elite1') === null, String(weakHits(6, 'elite1')));
+assert('兜底抽取(tier=minion) 仍可能抽到 lazy / slowstart（未从注册表删除）', weakHits(6, 'minion') !== null);
+assert('createEnemyUnit 兜底（tier=boss，不传 talents）装配结果不含 lazy / slowstart', (function () {
+  for (let i = 0; i < 200; i++) {
+    const u = sandbox.createEnemyUnit({ tier: 'boss', base: { hp: 500, atk: 30, def: 20 } });
+    if (u._talents.some(id => WEAK_T.indexOf(id) > -1)) return false;
+  }
+  return true;
+})());
 
 // ---- 6. 单元 tags ----
 assert('敌人 tags 含 tier', boss.tags.includes('boss'));

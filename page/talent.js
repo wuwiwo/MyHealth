@@ -41,6 +41,27 @@ function attachTalents(unit, talentIds) {
   return unit;
 }
 
+/* 读取天赋注册时声明的配置项（`config`）—— 天赋数值的**唯一来源**。
+   v2.2.16（§5.4F 死配置清理）：此前 `config: { rounds: 2 }`（慢启动）/ `{ extra: 1, penalty: 0.7 }`
+   （多目标）**写了没人读**，hook 里另写一份等价字面量（`unit._slowRounds || 2`、`(_multiExtra||1)+1`、
+   `dmgReduce: 0.3`）—— 同一个数值两处写死，改注册值不生效、改 hook 又绕过了配置。
+   现在 hook 一律从这里取值：**改 `config` 立即生效**（守卫见 scripts/test-talent-fixation.js）。 */
+function talentConfig(id, key, dflt) {
+  var t = TALENTS[id];
+  if (t && t.config && t.config[key] != null) return t.config[key];
+  return dflt;
+}
+
+/* 是否「自我削弱」天赋（标记写在天赋定义上的 `weak: true`）。
+   v2.2.16（§5.4E）：敌群装配的**两个入口**都要排除它们 ——
+     · group-levels.js 的 `TALENTS_LOW` 池（固化进关卡配置时的池子选择）；
+     · enemy.js 的 `pickRandomTalents()` 兜底抽取（没传 talents 的调用点）。
+   标记写在定义上，避免各处再抄一份 id 清单；`TALENTS_LOW` 与本标记的一致性有守卫断言。 */
+function isWeakTalent(id) {
+  var t = TALENTS[id];
+  return !!(t && t.weak);
+}
+
 /* battle 在时机点调用：聚合所有天赋的指定 hook */
 function talentDispatch(unit, hook, ctx) {
   var out = { skipAction: false, mutations: [], events: [] };
@@ -282,7 +303,14 @@ registerTalent({
   }
 });
 
-/* 魔法盾：受到魂攻击伤害降低 */
+/* 魔法盾：受到魂攻击伤害降低
+   ⚠️ v2.2.16（§5.4F 死配置清理的**第 3 项：本批未完成**）：数值的唯一来源在这里（0.3），
+   但**消费端不读它** —— `battle-group.js:415` 硬编码 `dmg = Math.floor(dmg * 0.7)`（= 1 − 0.3，当前恰好一致）
+   → 改这里的值**不会生效**（典型的「同一数值两处写死」）。
+   正确修法是消费端改为 `dmg = Math.floor(dmg * (1 - m.value))`，只改这一行；
+   但 `page/battle-group.js` **不在本批可写白名单内** → 按纪律停下上报主控，不在此硬塞。
+   防漂移守卫：scripts/test-talent-fixation.js 断言「生产端数值 + 消费端硬编码 = 1」，两处一旦漂移即失败。 */
+var MAGICSHIELD_SOUL_REDUCE = 0.3;
 registerTalent({
   id: 'magicshield',
   name: '魔法盾',
@@ -290,21 +318,30 @@ registerTalent({
   hooks: {
     onDamage: function (unit, ctx) {
       if (ctx.isSoul) {
-        return { mutations: [{ key: 'soulDmgReduce', value: 0.3 }] };
+        return { mutations: [{ key: 'soulDmgReduce', value: MAGICSHIELD_SOUL_REDUCE }] };
       }
     }
   }
 });
 
-/* 慢启动：战斗开始前 x 回合无法行动 */
+/* 慢启动：战斗开始前 x 回合无法行动
+   v2.2.16（§5.4F 死配置清理）：`x` 的**唯一来源** = 本天赋的 `config.rounds`。
+   此前 hook 写死 `ctx.turn <= (unit._slowRounds || 2)`，而 `_slowRounds` **全项目无写入点**、
+   `config.rounds` 又没人读 —— 同一个 2 两处写死（写死的那处还是死字段）。现两处合一，改 config 即生效。
+   ⚠️ **口径如实记录（本批不改行为）**：判据用的是 `ctx.turn`，而 `battle-group.js` 的 `groupUnitTurn`
+     里 `ctx.turn = gb.turn + 1`（**实际回合号 + 1**，首回合 = 2）→ `rounds: 2` 实际是
+     「第 1 回合不能行动」（实测 rounds=1/2/3/4 → 跳过 0/1/2/3 次）。
+     即设计文案的「前 x 回合」与实现的「ctx.turn ≤ x」差 1。
+     本批只做**单源化**，不动这个既有口径（改它会直接改变慢启动持有者的难度，需另行裁决）。 */
 registerTalent({
   id: 'slowstart',
   name: '慢启动',
   desc: '战斗开始的前 x 回合，自身无法行动',
   config: { rounds: 2 },
+  weak: true,   // §5.4E：自我削弱天赋 —— Boss / 精英不抽（group-levels.js 池子 + enemy.js 兜底抽取）
   hooks: {
     onBeforeAction: function (unit, ctx) {
-      if (ctx.turn <= (unit._slowRounds || 2)) {
+      if (ctx.turn <= talentConfig('slowstart', 'rounds', 2)) {
         return { skipAction: true, events: [{ type: 'talent', talentId: 'slowstart', unitId: unit.id, msg: '慢启动: 无法行动' }] };
       }
     }
@@ -316,6 +353,7 @@ registerTalent({
   id: 'lazy',
   name: '懒惰',
   desc: '每回合开始有25%几率放弃行动，放弃行动回合自身受到伤害降低',
+  weak: true,   // §5.4E：自我削弱天赋 —— Boss / 精英不抽（同 slowstart）
   hooks: {
     onBeforeAction: function (unit) {
       if (battleRnd() < 0.25) {
@@ -332,7 +370,10 @@ registerTalent({
   }
 });
 
-/* 多目标：普通攻击伤害降低，可额外攻击 x 个敌人 */
+/* 多目标：普通攻击伤害降低，可额外攻击 x 个敌人
+   v2.2.16（§5.4F 死配置清理）：伤害惩罚与额外目标数的**唯一来源** = 本天赋的 `config`。
+   此前 `config: { extra: 1, penalty: 0.7 }` **两项都没人读**，hook 里另写死 `dmgReduce: 0.3`
+   与 `(_multiExtra || 1) + 1`（`_multiExtra` 全项目无写入点）—— 值恰好等价，但改配置不生效。 */
 registerTalent({
   id: 'multitarget',
   name: '多目标',
@@ -341,11 +382,14 @@ registerTalent({
   hooks: {
     onDamage: function (unit, ctx) {
       if (ctx.isPlayerAttack) {
-        return { mutations: [{ key: 'dmgReduce', value: 0.3 }] };
+        /* 普攻伤害 = 原值 × config.penalty；消费端（battle-group.js）读到的 dmgReduce 语义是「乘 (1 − v)」 */
+        return { mutations: [{ key: 'dmgReduce', value: 1 - talentConfig('multitarget', 'penalty', 0.7) }] };
       }
     },
     onBeforeAction: function (unit, ctx) {
-      return { mutations: [{ key: 'multiTarget', value: (unit._multiExtra || 1) + 1 }] };
+      /* ⚠️ 消费端 `battle-group.js` 取 `targets.slice(0, value)` → 值必须是**总目标数**：
+         = 额外目标数（config.extra）+ 1（原目标）。config.extra 即「额外攻击 x 个敌人」的 x。 */
+      return { mutations: [{ key: 'multiTarget', value: talentConfig('multitarget', 'extra', 1) + 1 }] };
     }
   }
 });

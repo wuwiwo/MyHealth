@@ -89,6 +89,59 @@ groupKeys.forEach(function (k) {
     'desc 声称 ' + claimed + ' 敌，实际最多 ' + actual + ' 敌 — 「' + gl[k].desc + '」');
 });
 
+// ---- 3.7 v2.2.16（§5.4E 天赋固化）----
+// 🔴 此前 `cfg.talents` **从未被赋值**：genEnemyCfg 里 `var talents = []` 之后没有任何 push，
+//    `if (talents.length)` 永不成立 → 实战落到 enemy.js 的兜底随机抽取（不在战斗种子体系内）
+//    → 同一关每场重摇（实测 g12-10 的 Boss 抽到过 magicshield + slowstart + lazy）。
+// 现在天赋与属性/词条/技能一样由 (大关,小关,槽位) 播种，且 Boss / 精英只用 TALENTS_HIGH。
+const highT = sandbox.TALENTS_HIGH || [];
+const lowT = sandbox.TALENTS_LOW || ['lazy', 'slowstart'];
+const tCountRange = sandbox.GROUP_TALENT_COUNT || {};
+let noTalent = [], badPool = [], weakOn = [], badCount = [];
+groupKeys.forEach(function (k) {
+  (gl[k].stages || []).forEach(function (s) {
+    (s.enemies || []).forEach(function (e, i) {
+      const list = e.talents || [];
+      if (e.tier !== 'minion' && list.length === 0) noTalent.push(s.id + '#' + i);
+      if (e.tier === 'minion' && list.length) noTalent.push(s.id + '#' + i + '(杂兵不该有天赋)');
+      const r = tCountRange[e.tier];
+      if (r && (list.length < r[0] || list.length > r[1])) badCount.push(s.id + '#' + i + '=' + list.length);
+      list.forEach(function (t) {
+        if (highT.indexOf(t) < 0) badPool.push(s.id + ':' + t);
+        if (lowT.indexOf(t) >= 0) weakOn.push(s.id + ':' + t);
+      });
+    });
+  });
+});
+assert('天赋已固化进关卡配置（非杂兵槽位都带 talents）', noTalent.length === 0, noTalent.slice(0, 5).join(','));
+assert('天赋个数落在 GROUP_TALENT_COUNT[tier] 区间内', badCount.length === 0, badCount.slice(0, 5).join(','));
+assert('Boss / 精英天赋全部来自 TALENTS_HIGH', badPool.length === 0, badPool.slice(0, 5).join(','));
+assert('Boss / 精英不抽 lazy / slowstart（全 ' + groupKeys.length * 10 + ' 关无例外）', weakOn.length === 0, weakOn.slice(0, 5).join(','));
+assert('天赋抽取是确定性的：同一关两次生成结果一致', (function () {
+  for (let lg = 1; lg <= nameCount; lg++) {
+    for (let st = 1; st <= 10; st++) {
+      const a = JSON.stringify(sandbox.genEnemyCfg(lg, st, 0, false, true).talents || []);
+      const b = JSON.stringify(sandbox.genEnemyCfg(lg, st, 0, false, true).talents || []);
+      if (a !== b) return false;
+    }
+  }
+  return true;
+})());
+assert('天赋池与注册表一致（id 全部存在、无宠物专属天赋）', (function () {
+  let ok = true;
+  groupKeys.forEach(function (k) {
+    (gl[k].stages || []).forEach(function (s) {
+      (s.enemies || []).forEach(function (e) {
+        (e.talents || []).forEach(function (t) {
+          const def = sandbox.TALENTS[t];
+          if (!def || def.petOnly) ok = false;
+        });
+      });
+    });
+  });
+  return ok;
+})());
+
 // ---- 4. 难度递增 ----
 const g1Atk = gl.g1.stages[0].enemies[0].base.atk;
 const g6Atk = gl.g6.stages[9].enemies[0].base.atk;

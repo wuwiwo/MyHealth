@@ -101,7 +101,30 @@ function listPetCodex() { return Object.keys(PET_CODEX); }
 /* ============ 宠物专属技能注册（复用 SKILLS 机制） ============ */
 if (typeof registerSkill === 'function') {
 
-/* R：闪耀（敌方全体命中率 -0~40%）—— v2.1.22 接区间 */
+/* ============================================================
+   WP-C 前半：宠物主动技能 §2.1~§2.7 逐条对齐
+   （对照 doc/2.2-修改提案.md §2.1~§2.7 的「设计原文 / 源码现状 / 评审批注」）
+   本轮**实际改动**（4 处技能定义）：
+     · p_flamepeck    —— §2.4：CD 4 → 3
+     · p_sing         —— §2.6：睡眠几率 固定 20% → 随成长 0%~30%
+     · p_sleep        —— §2.3：施放时**先解除自身普通~高级负面**，再进入睡眠
+     · p_thundercharge —— §2.7：伤害区间 220~400% → **260%~440%**
+   本轮**判定无改动**（现实现已符合或评审未要求改）：
+     · p_drench（§2.2 评审「不变」）
+     · fortify（§2.5 评审「不需要，二者统一」—— 坚强岩复用敌群技能）
+   ⚠️ **未实装（需改禁止文件，已上报主控）**：
+     · p_shine（§2.1）「蓄力 1 回合、下回合释放」
+     · p_thundercharge（§2.7）「蓄力 1 回合 + 自身 35% 反冲 + 目标潮湿/冰冻时 +25%」
+       —— 三者都依赖 `battle-group.js` / `status-defs.js` / `skill.js` 的引擎改造，
+          本批白名单不允许改这些文件（详见各技能注释与任务回执）。
+   ============================================================ */
+
+/* R：闪耀（敌方全体命中率 -0~40%）—— v2.1.22 接区间；持续 2 回合（§2.16-2 裁决）。
+   ⚠️ WP-C（§2.1 评审「蓄力 1 回合，下回合释放，持续 2 回合」）：
+      「持续 2 回合」现实现已符合（`_hitModTurns = 2`，由 battle-group 按目标回合递减）；
+      **「蓄力 1 回合、下回合释放」未实装** —— 需引擎支持，已在任务回执上报：
+      现有 `charging` 状态只会置 `_chargeReady`，而 battle-group 的 `resolveChargeStrike`
+      把结算写死成「攻击 ×400% 单体物理」，承载不了本技能（辅助 / 全体 / 命中削减）。 */
 registerSkill({ id:'p_shine', name:'闪耀', type:'support', target:'all', cooldown:4,
   range:{ acc:[0, 40] },
   effects:[function(c,ts,r,ctx){ var acc=ctx.sv('acc')/100; ts.forEach(function(t){ t._accMod = (t._accMod || 0) - acc; t._hitModTurns = 2; }); r.events.push({msg:'✨ ' + (c.name||'宠物') + ' 闪耀：' + ts.map(function(t){return t.name;}).join('、') + ' 命中率 -' + Math.round(acc*100) + '%（2 回合）'}); }] });
@@ -134,22 +157,40 @@ registerSkill({ id:'p_sleep', name:'睡觉', type:'support', target:'self', cool
     var pct=ctx.sv('power')/100;
     var turns=Math.max(1, Math.round(ctx.sv('turns')));   // 1~3 回合，随成长
     ts.forEach(function(t){
+      /* WP-C（§2.3 评审「1-3 回合，解除自身（普通-高级负面效果），
+         先解除异常状态再进入睡眠状态」）：**先解除自身普通~高级负面**（grade ≤ 2），
+         随后才把「睡眠」推入 statusApps（引擎在 effects 之后统一施加）—— 顺序即语义。
+         特级（grade 3：末日 / 遗言诅咒）按设计不解除，与「净化」口径一致。
+         `cleanseNegatives` 直接改 statuses、立即生效，不会与随后的睡眠互相干扰。 */
+      var freed = (typeof cleanseNegatives === 'function') ? cleanseNegatives(t, 2) : [];
+      if (freed.length && typeof syncStatusDerived === 'function') syncStatusDerived(t);
       r.heals.push({ unitId: t.id, amount: Math.floor(((t.base.def||0)+(t.base.soulDef||0)) * pct) });
       r.statusApps.push({ unitId: t.id, id: 'sleep', duration: turns + 1, chance: 1, grade: 1,
         data: { healPct: pct } });
-      r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈 ' + Math.round(pct*100) + '%（防+魂防），睡 ' + turns + ' 回合'});
+      r.events.push({msg:'💤 ' + (c.name||'宠物') + ' 睡觉：自愈 ' + Math.round(pct*100) + '%（防+魂防），睡 ' + turns + ' 回合'
+        + (freed.length ? '，先解除【' + freed.map(function(d){return d.name||d.id;}).join('、') + '】' : '')});
     });
   }] });
 
-/* SR：火焰啄击 —— 设计 攻击×150%~330%（区间随技能等级，v2.1.22 接线） */
-registerSkill({ id:'p_flamepeck', name:'火焰啄击', type:'attack', target:'random1', power:240, range:{power:[150,330]}, dmgType:'physical', cooldown:4 });
+/* SR：火焰啄击 —— 设计 攻击×150%~330%（区间随基础属性成长，v2.1.22 接线）
+   WP-C（§2.4 评审「cd 变为 3」）：冷却 4 → 3。 */
+registerSkill({ id:'p_flamepeck', name:'火焰啄击', type:'attack', target:'random1', power:240, range:{power:[150,330]}, dmgType:'physical', cooldown:3 });
 
-/* SR：歌唱（全体魂攻+几率睡眠）—— 设计 魂攻×160%~250% */
-registerSkill({ id:'p_sing', name:'歌唱', type:'attack', target:'all', power:200, range:{power:[160,250]}, dmgType:'soul', cooldown:5,
-  effects:[function(c,ts,r){ ts.forEach(function(t){ if(battleRnd()<0.2) r.statusApps.push({unitId:t.id,id:'sleep',duration:1,chance:1,grade:1}); }); }] });
+/* SR：歌唱（全体魂攻+几率睡眠）—— 设计 魂攻×160%~250%
+   WP-C（§2.6 评审「0%-30%（随等级成长）」）：睡眠几率由**固定 20%** 改为
+   随基础属性成长（skillRangeT）在 **0%~30%** 之间取值 —— t=0（未炼化）时完全不会睡眠，
+   炼化满时 30%（与设计评审上限一致）。睡眠时长仍为 1 回合（设计原文）。 */
+registerSkill({ id:'p_sing', name:'歌唱', type:'attack', target:'all', power:200, range:{power:[160,250], sleepChance:[0,30]}, dmgType:'soul', cooldown:5,
+  effects:[function(c,ts,r,ctx){ var ch=ctx.sv('sleepChance')/100; ts.forEach(function(t){ if(battleRnd()<ch) r.statusApps.push({unitId:t.id,id:'sleep',duration:1,chance:1,grade:1}); }); }] });
 
-/* SR：雷霆冲撞（蓄力+反冲）—— 设计 魂攻×220%~400% */
-registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target:'random1', power:300, range:{power:[220,400]}, dmgType:'soul', cooldown:4 });
+/* SR：雷霆冲撞 —— 设计（§2.7 评审）「魂攻×260%-440%，蓄力 1 回合，蓄力反冲条件加成」
+   WP-C：伤害区间 [220,400] → **[260,440]**（`power:350` 仅区间中点兜底，range 存在时不被使用）。
+   ⚠️ 评审里的另外三项**本批未实装**（均需改禁止文件，已在任务回执上报）：
+     · 蓄力 1 回合、下回合释放 —— 同 p_shine：`charging` → `_chargeReady` 只能结算
+       battle-group 写死的「攻击 ×400% 单体物理」，承载不了本技能（魂攻 + 反冲 + 条件加成）。
+     · 自身承受 35% 反冲 —— 群战伤害通道没有通用「反冲」载体（且「35% 的基数」口径未给）。
+     · 目标处于潮湿/冰冻时伤害 +25% —— `calcSkillDamage` 无「按目标状态加成」的钩子。 */
+registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target:'random1', power:350, range:{power:[260,440]}, dmgType:'soul', cooldown:4 });
 
 /* SSR：双撞（2目标+降攻防）—— 设计 攻击×150%~240% */
 registerSkill({ id:'p_doublehit', name:'双撞', type:'attack', target:'random1', power:200, range:{power:[150,240]}, dmgType:'physical', cooldown:5,
