@@ -935,6 +935,8 @@ function groupBattleStep(gb) {
   }
   var actor = gb._stepQueue[gb._stepIdx];
   gb._stepIdx++;
+  /* v2.2.9 金身护盾破盾反伤：行动前记一次护盾现值（行动后对比即可判定「谁把谁的盾打碎了」） */
+  if (typeof shieldPreSnapshot === 'function') shieldPreSnapshot(gb);
   var evts = groupUnitTurn(gb, actor);
   if (gb.done) _BATTLE_RNG = null;   // v2.1.27：本场结束，别污染下一场的建场阶段
   // v2.1.13 天赋「疾影」：本回合额外行动 1 次
@@ -945,6 +947,12 @@ function groupBattleStep(gb) {
   if (wantExtra && !gb.done && actor.hp > 0
       && (actor.side === 'ally' ? gb.enemies : gb.allies).some(function (u) { return u.hp > 0; })) {
     evts = evts.concat(groupUnitTurn(gb, actor));
+  }
+  /* v2.2.9 金身护盾破盾反伤：本次行动是否打碎了带盾队友的护盾（此刻 actor = 破盾者）。
+     放在启风之前：反伤可能直接打死敌人，后续钩子自然跳过。 */
+  if (!gb.done && typeof shieldReflectAfter === 'function') {
+    var sr = shieldReflectAfter(gb, actor);
+    if (sr && sr.length) evts = evts.concat(sr);
   }
   /* v2.2.5 启风（§1.3 效果②）：我方持「全场最快者」时，该角色每回合额外一次普通攻击。
      挂在行动之后、与疾影的 extraAction 同一位置；每个**回合**只触发一次（gb._qifengTurn 守卫）。 */

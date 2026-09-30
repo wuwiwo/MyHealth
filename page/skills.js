@@ -95,8 +95,8 @@ registerPlayerSkill({
    ⚠️ 裁决另含「**破盾时对敌造成初始护盾×20% 伤害（受魂防减免）**」—— 需破盾钩子，见待办 */
 registerPlayerSkill({
   id: 'goldshield', name: '金身护盾', type: 'passive', maxLevel: 20, costPerLevel: function(lv){ return (lv+1)*15; },
-  desc: '开战全队护盾=(攻+魂攻)×n×25%（满级 500%），免疫普通+高级负面',
-  effect: function(lv){ return { shieldPct: lv*0.25 }; }
+  desc: '开战全队护盾=(攻+魂攻)×n×25%（满级 500%），免疫普通+高级负面；护盾被击破时对攻击者造成 初始护盾×20% 伤害（受魂防减免）',
+  effect: function(lv){ return { shieldPct: lv*0.25, reflectPct: 0.20 }; }
 });
 
 /* 8. 瞩目（辅助 lv10）：几率 n×4%（满级 40%）嘲讽1回合；回合末全体回复 (防+魂防)×受击次数

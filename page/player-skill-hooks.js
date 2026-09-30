@@ -185,6 +185,46 @@ function playerSkillTurnStart(gb, player, turn) {
   return events;
 }
 
+/* v2.2.9 金身护盾·**破盾反伤**（§1.1 裁决：护盾被击破时对攻击者造成 初始护盾×20% 伤害，受魂防减免）
+   取位说明：**不动 `absorbShield`**（它被普攻/魂伤/AoE 三条链复用 5 处、且签名里没有攻击者，
+   就地结算会重复触发）。改为在群战 tick 的**行动前后**夹一层：
+     ① 行动前 `shieldPreSnapshot(gb)` —— 记下护盾现值，并把「满盾值」记进 `_shieldReflect.initial`；
+     ② 行动后 `shieldReflectAfter(gb, actor)` —— 此刻的 `actor` 就是**刚刚出手的人**，
+        若某带盾队友的盾「行动前 >0、行动后 =0」，则破盾者 = actor → 结算反伤（一击一次）。 */
+function shieldPreSnapshot(gb) {
+  (gb.allies || []).concat(gb.enemies || []).forEach(function (u) {
+    if (!u._playerSkills || (u._playerSkills['goldshield'] || 0) < 1) return;
+    var cur = u._shield || 0;
+    u._shieldPre = cur;
+    if (!u._shieldReflect) u._shieldReflect = { initial: 0, used: false };
+    if (cur > u._shieldReflect.initial) u._shieldReflect.initial = cur;   // 记住开战满盾值
+  });
+}
+
+function shieldReflectAfter(gb, actor) {
+  var out = [];
+  if (!gb || !actor || actor.hp <= 0) return out;
+  (gb.allies || []).forEach(function (u) {
+    if (!u._playerSkills || (u._playerSkills['goldshield'] || 0) < 1) return;
+    if (u === actor || u.side === actor.side) return;        // 破盾者必须是对手
+    var ref = u._shieldReflect;
+    if (!ref || ref.used || !(u._shieldPre > 0)) return;      // 行动前就没盾 / 已反伤过
+    if ((u._shield || 0) > 0) return;                          // 盾还在 → 没破
+    var eff = getPlayerSkill('goldshield').effect(u._playerSkills['goldshield']);
+    var base = Math.max(0, ref.initial);
+    var dmg = Math.floor(base * (eff.reflectPct || 0.20));
+    /* 受魂防减免：沿用引擎既有口径「减免 = 防御/2」，即魂伤取魂防半数 */
+    var cut = Math.floor(effectiveStat(actor, 'soulDef') / 2);
+    dmg = Math.max(1, dmg - cut);
+    actor.hp = Math.max(0, actor.hp - dmg);
+    ref.used = true;
+    out.push({ msg: '🛡️ ' + u.name + ' 金身护盾被击破 → 反伤 ' + actor.name + ' ' + dmg +
+      '（初始盾 ' + base + ' × ' + Math.round((eff.reflectPct || 0.20) * 100) + '% − 魂防/2 ' + cut + '）',
+      targetId: actor.id, type: 'damage' });
+  });
+  return out;
+}
+
 /* v2.2.5 启风（§1.3 效果②）：我方持「全场速度最快者」时，该角色每回合额外进行一次普通攻击，
    伤害 ×n×8%（满级 80%）。由 battle-group 的群战 tick 在**每次行动之后**调用。
    判据：① 我方有人装配启风 ② actor 是「敌我双方合并」的速度最快者 ③ 本回合尚未触发过。

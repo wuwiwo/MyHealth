@@ -261,5 +261,40 @@ assert('玩家自己仍走玩家档（100 → 300，不是 160）', (function ()
 assert('共享桥已接线到 buildGroupBattlePets', /attachPetSharedSkills\(units\)/.test(
   fs.readFileSync(path.join(__dirname, '..', 'page', 'pet-store.js'), 'utf8')));
 
+/* ---- 11. 金身护盾破盾反伤（v2.2.9）---- */
+assert('金身护盾声明了反伤系数 20%', sb.getPlayerSkill('goldshield').effect(20).reflectPct === 0.20);
+const shP = sb.createUnit({ id:'shr', side:'ally', name:'盾', base:{hp:800,atk:50,def:30,spd:9,soulAtk:40} });
+const stS = sb.defaultSkillState(); stS.loadout = ['goldshield']; stS.levels = { goldshield: 20 };
+sb.attachPlayerSkills(shP, stS);
+const foeS = sb.createEnemyUnit({ tier:'minion', name:'敌', base:{hp:1000,atk:40,def:5,spd:5,soulDef:100} });
+const gbS = sb.createGroupBattle({ allies:[shP], enemies:[foeS] });
+sb.playerSkillBattleStart(gbS, shP);
+assert('开战护盾已生成（满级 500%）', (shP._shield || 0) === 450, 'shield=' + shP._shield);
+sb.shieldPreSnapshot(gbS);
+const shieldVal = shP._shield;
+assert('快照记住满盾值', shP._shieldReflect && shP._shieldReflect.initial === shieldVal, JSON.stringify(shP._shieldReflect));
+shP._shield = 0;                                    // 模拟被该敌人打碎
+const refEv = sb.shieldReflectAfter(gbS, foeS);
+assert('破盾 → 反伤攻击者', foeS.hp === 1000 - Math.max(1, Math.floor(shieldVal * 0.20) - 50) && refEv.length === 1,
+  'hp=' + foeS.hp + ' 盾=' + shieldVal + ' ' + JSON.stringify(refEv));
+assert('反伤只触发一次', sb.shieldReflectAfter(gbS, foeS).length === 0);
+assert('我方自己出手不会误判为破盾者', (function () {
+  const a = sb.createUnit({ id:'a9', side:'ally', name:'A', base:{hp:500,atk:10,def:5,spd:3} });
+  const s9 = sb.defaultSkillState(); s9.loadout = ['goldshield']; s9.levels = { goldshield: 10 };
+  sb.attachPlayerSkills(a, s9);
+  const g9 = sb.createGroupBattle({ allies:[a], enemies:[sb.createEnemyUnit({tier:'minion',name:'e9',base:{hp:100,atk:5,def:1,spd:1}})] });
+  sb.playerSkillBattleStart(g9, a);
+  sb.shieldPreSnapshot(g9); a._shield = 0;
+  return sb.shieldReflectAfter(g9, a).length === 0;
+})());
+assert('未装配金身护盾的单位不反伤', (function () {
+  const n = sb.createUnit({ id:'n9', side:'ally', name:'N', base:{hp:500,atk:10,def:5,spd:3} });
+  const g9 = sb.createGroupBattle({ allies:[n], enemies:[sb.createEnemyUnit({tier:'minion',name:'e10',base:{hp:100,atk:5,def:1,spd:1}})] });
+  sb.shieldPreSnapshot(g9); n._shield = 0;
+  return sb.shieldReflectAfter(g9, g9.enemies[0]).length === 0;
+})());
+assert('反伤已接线到群战 tick（源码级）', /shieldReflectAfter\(gb, actor\)/.test(
+  fs.readFileSync(path.join(__dirname, '..', 'page', 'battle-group.js'), 'utf8')));
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);
