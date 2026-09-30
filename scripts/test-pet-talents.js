@@ -439,11 +439,16 @@ assert('§3.5 镜像结界 E2E → 「漆黑之眼/心眼/灵感涌动」等其�
 /* ---- 8. WP-E：wideguard/bulwark 死字段清理 + 镜像结界剩余通道 ---- */
 console.log('\n[8] WP-E wideguard 死字段 / 镜像结界剩余通道');
 
-/* 8a. 减伤幅度的**唯一来源**：skill.js 的 bulwark 按成长推送 b.value（0.20~0.40），
+/* 8a. 减伤幅度的**唯一来源**：skill.js 的 bulwark 按成长推送 b.value（0.20~0.30），
    改前它在 battle-group 的 buff 落地处被丢弃，而 status-defs 把 0.20 硬编码。
-   现在：单源 = SKILLS.bulwark.range.dmgReduce，经实例 data.reduce 携带 → 由 wideguard.onDamage 消费。 */
+   现在：单源 = SKILLS.bulwark.range.dmgReduce，经实例 data.reduce 携带 → 由 wideguard.onDamage 消费。
+   ⚠️ v2.3.0（作者裁决）：区间上限由 0.40 收窄为 0.30（下限 0.20 不变）—— 下面两端都钉住，
+      以后谁把上限改回 0.40 会直接红。 */
 assert('WP-E wideguard → 技能区间低值 = 兜底值（单源不变式：bulwark 0.20 与旧硬编码一致）',
   sandbox.getSkill('bulwark').range.dmgReduce[0] === 0.20);
+assert('WP-E wideguard → 技能区间上限 = 0.30（v2.3.0 作者裁决：0.40 → 0.30）',
+  sandbox.getSkill('bulwark').range.dmgReduce[1] === 0.30,
+  String(sandbox.getSkill('bulwark').range.dmgReduce[1]));
 
 const wgPlain = mkSide('ally', { hp: 1000, atk: 10, def: 0, spd: 5 });
 sandbox.applyStatus(wgPlain, { id: 'wideguard', duration: 3 });
@@ -452,16 +457,16 @@ assert('WP-E wideguard → 无 data 的实例仍按 20% 兜底（旧行为/旧�
   wgPlainMut.length === 1 && wgPlainMut[0].value === 0.20, JSON.stringify(wgPlainMut));
 
 const wgInst = mkSide('ally', { hp: 1000, atk: 10, def: 0, spd: 5 });
-sandbox.applyStatus(wgInst, { id: 'wideguard', duration: 3, data: { reduce: 0.40 } });
+sandbox.applyStatus(wgInst, { id: 'wideguard', duration: 3, data: { reduce: 0.30 } });
 const wgInstMut = sandbox.dispatch(wgInst, 'onDamage', {}).mutations.filter(m => m.key === 'dmgTakenReduce');
-assert('WP-E wideguard → 实例 data.reduce 真正被消费（0.40，而非硬编码 0.20）',
-  wgInstMut.length === 1 && wgInstMut[0].value === 0.40, JSON.stringify(wgInstMut));
+assert('WP-E wideguard → 实例 data.reduce 真正被消费（0.30，而非硬编码 0.20）',
+  wgInstMut.length === 1 && wgInstMut[0].value === 0.30, JSON.stringify(wgInstMut));
 sandbox.applyStatus(wgInst, { id: 'wideguard', duration: 3, data: { reduce: 0.25 } });
-assert('WP-E wideguard → refresh 时 data 同步覆盖（0.40 → 0.25，不被首次施放锁死）',
+assert('WP-E wideguard → refresh 时 data 同步覆盖（0.30 → 0.25，不被首次施放锁死）',
   sandbox.dispatch(wgInst, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.25),
   JSON.stringify(sandbox.dispatch(wgInst, 'onDamage', {}).mutations));
 
-/* 8b. E2E：敌人施放「广域防御」（level 10 → 区间上端 0.40）→ b.value 真正进入减伤结算 */
+/* 8b. E2E：敌人施放「广域防御」（level 10 → 区间上端 0.30）→ b.value 真正进入减伤结算 */
 function bulwarkDamage(withBulwark) {
   const tank = mkSide('enemy', { hp: 5000, atk: 10, def: 0, spd: 1 });
   const caster = mkSide('enemy', { hp: 500, atk: 10, def: 0, spd: 9, soulAtk: 0 }, null, 10);
@@ -476,8 +481,8 @@ function bulwarkDamage(withBulwark) {
 }
 const bwOff = bulwarkDamage(false), bwOn = bulwarkDamage(true);
 assert('WP-E 广域防御 E2E → 无盾时满伤 101', bwOff.dealt === 101, 'dealt=' + bwOff.dealt);
-assert('WP-E 广域防御 E2E → 区间上端 0.40 写进实例并被消费（101 → 60）',
-  near(bwOn.reduce, 0.40) && bwOn.dealt === 60,
+assert('WP-E 广域防御 E2E → 区间上端 0.30 写进实例并被消费（101 → 70）',
+  near(bwOn.reduce, 0.30) && bwOn.dealt === 70,
   'reduce=' + bwOn.reduce + ' dealt=' + bwOn.dealt);
 
 /* 8c. 镜像结界 × 广域防御：增益幅度通道现在也覆盖 dmgReduce（此前无载体，只有 atkBoost）
@@ -497,10 +502,10 @@ function mirrorWideguardDamage(withMirror) {
   return { dealt: hp0 - holder.hp, reduce: inst && inst.data ? inst.data.reduce : null };
 }
 const mwOff = mirrorWideguardDamage(false), mwOn = mirrorWideguardDamage(true);
-assert('WP-E 镜像结界 × 广域防御 → 我方来源 data.reduce ×1.25（0.40 → 0.50）',
-  near(mwOff.reduce, 0.40) && near(mwOn.reduce, 0.50), 'off=' + mwOff.reduce + ' on=' + mwOn.reduce);
-assert('WP-E 镜像结界 × 广域防御 E2E → 受击减伤按缩放后幅度（101 → 50，而非 61）',
-  mwOff.dealt === 60 && mwOn.dealt === 50, 'off=' + mwOff.dealt + ' on=' + mwOn.dealt);
+assert('WP-E 镜像结界 × 广域防御 → 我方来源 data.reduce ×1.25（0.30 → 0.375）',
+  near(mwOff.reduce, 0.30) && near(mwOn.reduce, 0.375), 'off=' + mwOff.reduce + ' on=' + mwOn.reduce);
+assert('WP-E 镜像结界 × 广域防御 E2E → 受击减伤按缩放后幅度（101 → 63，而非未缩放的 70）',
+  mwOff.dealt === 70 && mwOn.dealt === 63, 'off=' + mwOff.dealt + ' on=' + mwOn.dealt);
 
 /* 8d. 镜像结界 × 护盾量（§3.12-2 第 2 条通道）：唯一的给盾载体 = 玩家技能「金身护盾」
    （被动，不走 castSkill）→ 派发点放在 player-skill-hooks.js 的唯一写入点。 */

@@ -681,7 +681,8 @@ function castSkill(gb, actor, skillId) {
       /* v2.3.0 WP-D（§3.12-2 全通道）：镜像结界 —— 增益**幅度**按来源阵营缩放
          （我方来源 ×1.25 / 敌方来源 ×0.75）。
          v2.3.0 WP-E：`dmgReduce`（广域防御）此前**没有可缩放的载体** —— 状态定义 wideguard 里
-           的减伤是硬编码 0.20，而这里又丢弃了 bulwark 按成长推送的 `b.value`（0.20~0.40），
+           的减伤是硬编码 0.20，而这里又丢弃了 bulwark 按成长推送的 `b.value`（0.20~0.40；
+           v2.3.0 作者裁决后上限收窄为 **0.30** —— 本行只是透传 `b.value`，无需改动），
            两个数字互相打架且推送值无人消费（死字段）。现在减伤幅度**单源**取 `b.value`
            （= SKILLS.bulwark.range.dmgReduce，随等级/炼化成长），经实例 `data.reduce` 携带、
            由 status-defs 的 wideguard.onDamage 消费；镜像缩放随 `mul` 一并写进去。 */

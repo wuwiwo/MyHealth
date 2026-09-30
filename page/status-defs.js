@@ -294,6 +294,8 @@ defineStatus({
    按成长推送 0.20~0.40 的 `b.value` —— 该值在 battle-group 的 buff 落地处被整个丢弃（死字段），
    结果减伤恒为 20%、且镜像结界没有可缩放的数值载体。现在：
      · 单源 = `SKILLS.bulwark.range.dmgReduce`（低值 0.20，与旧兜底一致），经实例 `data.reduce` 携带；
+       ⚠️ v2.3.0（作者裁决）：该区间上限已由 0.40 收窄为 **0.30**，故实例携带的减伤上限 = 0.30
+       （g10+ 精英/Boss 群体减伤 30%）。**本文件的兜底 0.20 不变** —— 无 `data` 的实例行为一字不动。
      · 无 `data` 的实例（直接 `applyStatus({id:'wideguard'})`、旧存档/快照）仍按 0.20 兜底 →
        旧行为与实例形状不变（test-status-lifecycle 的「103 → 82」不变）。 */
 defineStatus({
