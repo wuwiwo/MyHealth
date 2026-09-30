@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.2.13
+> Personal Health Manager — 个人健身健康管理应用 v2.2.14
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -324,4 +324,6 @@ Vercel 项目设置：
 
 | **v2.2.13** | **2026-09-29** | **🍀 幸运口袋（petOnly §3.1）按裁决实现：区间内均匀随机** —— 这是 v2.2.11 唯一「受阻未做」的天赋（消费端在 `game-render.js`、当时只给区间未给取值规则），裁决后收口。**新增纯函数 `luckyPocketDrops(rnd)` + 区间表 `LUCKY_POCKET_TABLE`**（数值唯一来源），rng **由消费端注入**、越界才兜底 `battleRnd`；**三类奖励各自独立判定、互不短路**：营养液 `0.10+rnd()*0.10`（10~20%）→ `floor(rnd()*3)`（0~2）、饲料 `0.20+rnd()*0.10`（20~30%）→ `floor(rnd()*5)`（0~4）、灵能 `0.05+rnd()*0.05`（5~10%）→ `floor(rnd()*6)`（0~5），概率与数量**都在区间内均匀随机**；**多携带者不叠加**（只判「有没有」、随即调用恰好一次 —— 1 名 vs 3 名同一 rng 下 🍀 行逐字一致，已断言）；**随机源走 `gb.rng`**（mulberry32 种子）→ **零 `Math.random()`**、同种子可复现（测试把 `Math.random` 替换为抛错版验证）；删掉旧实现「单一 35% 命中 → 3 选 1 ×2 个」；数量掷到 0 = 本次不产出。**新增套件 `test-lucky-pocket.js`（30 断言）** → 全量 **39 套件 / 1167 断言**；缓存版本对齐（v110）。⚠️ 残留（子代理上报）：`groupVictoryReward()` 的**基础掉落**仍用 `Math.random()`，不在种子重放覆盖内，若要奖励完全可复现需另开一项。**⚠️ 补记**：本版落地时主控改 `APP_VERSION` 的 inline 脚本引号写错、漏 bump（且因 `utils.js` 未变更而**跳过了钩子校验**），已由补提交修正 —— 详见 changelog「补记：版本戳漏 bump 事件」 | `doc/changelog-v2.2.md` |
 
-> 当前版本：**v2.2.13**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
+| **v2.2.14** | **2026-09-29** | **WP-E 第一批（死字段单源化 + 镜像护盾通道）+ v2.2.13 冻结快照平衡复测**。bulwark/wideguard 死字段清理：skill.js 按成长推的 b.value（0.20~0.40）此前被 battle-group 整个丢弃、status-defs 又硬编码 dmgTakenReduce 0.20（推送值无人消费、两处打架、镜像无从缩放）→ 改读实例 data.reduce（无 data 兜底 0.20，旧形状不变）、落地写 data:{reduce: b.value*mul}、applyStatus 的 refresh 分支同步覆盖 data。镜像「护盾量」通道接入：唯一载体是玩家金身护盾，按其阵营 x1.25，未新增技能/状态。仍缺两条并已登记：状态解除（cleanse 二元语义无幅度）、吸血（唯一载体是 talent.js bloodthirst = 攻击方自身天赋；计划载体 §2.14 p_warmight 属 WP-C）。复测（v2.2.13 快照 bff3767，含技能 40 trials）：g15 88→100%、g16 98→100%、g17 0→93%、g18 0→95%、g19 恒 0%（墙）、g20 10%，与 v2.2.11 定性一致（无档位迁移）；12 trials 会把边界带误判成稳过，边界档必须 40t。报告：doc/plans/v2.2.13-平衡复测.md。**本版 bulwark 改动使 21 个敌方单位减伤从恒 20% 变为随等级成长（g10+ = 40%）→ g17~g20 会变难，数字需在 v2.2.14 之后再测**；skill.js:540 的 bulwark 文案已过时（留 WP-F）。test-pet-talents 101→112，全量 1178 断言；缓存版本对齐（v111） | `doc/changelog-v2.2.md` |
+
+> 当前版本：**v2.2.14**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
