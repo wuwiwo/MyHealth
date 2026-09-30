@@ -105,5 +105,65 @@ sandbox.store.set('strength', { entries: [{ id: 'e1', date: sandbox.today(), exe
   ok(sandbox.lcFmt('x') === 'x', 'lcFmt 非数值原样返回（防回归）');
 })();
 
+/* ---------- ③ 训练页「本周统计」总容量卡（WP-H3 首轮漏网点，展示层取整） ---------- */
+(function () {
+  const wv = sandbox.sumVolume(sandbox.getWeekStr(), sandbox.getExerciseMap());
+  ok(String(wv) === '3.3000000000000003', '③ 前置：本周容量确实是浮点尾数（' + wv + '）');
+  sandbox.renderStrStats();
+  const h = els['strStats'] ? els['strStats'].innerHTML : '';
+  ok(h.length > 0, '③ 训练页本周统计已渲染');
+  ok(h.indexOf(String(wv)) < 0, '③ 本周统计不再出现原始浮点值 ' + wv);
+  /* 只看可见文本：进度环的 stroke-dasharray/dashoffset 属性本来就是长浮点，不会显示给用户 */
+  const txt = h.replace(/<[^>]*>/g, ' ');
+  ok(!/\d\.\d{3,}/.test(txt), '③ 本周统计可见文本无浮点尾数');
+  ok(h.indexOf('>3<span') >= 0, '③ 本周统计总容量按整数渲染（3 kg）');
+})();
+
+/* ---------- ④ 挑战页「记录」视图历史最佳（最大容量） ---------- */
+(function () {
+  const prVol = 1.1 * 3;
+  ok(String(prVol) === '3.3000000000000003', '④ 前置：PR 容量确实是浮点尾数（' + prVol + '）');
+  sandbox.store.set('prs', { EX1: { maxWeight: 1.1, weightDate: 'x', maxReps: 3, repsDate: 'x', maxVolume: prVol, volDate: 'x' } });
+  sandbox.renderRecordView();
+  const h = els['gameRecordView'] ? els['gameRecordView'].innerHTML : '';
+  ok(h.length > 0, '④ 挑战页记录视图已渲染');
+  ok(h.indexOf(String(prVol)) < 0, '④ 历史最佳不再出现原始浮点值 ' + prVol);
+  ok(!/\d\.\d{3,}/.test(h), '④ 记录视图无浮点尾数');
+  ok(h.indexOf('最大容量 3kg') >= 0, '④ 最大容量按整数 + kg 渲染');
+})();
+
+/* ---------- ⑤ 个人页「个人最佳」PR 容量（同一口径） ---------- */
+(function () {
+  sandbox.renderPRs();
+  const h = els['prSection'] ? els['prSection'].innerHTML : '';
+  ok(h.length > 0, '⑤ 个人最佳已渲染');
+  ok(h.indexOf(String(1.1 * 3)) < 0, '⑤ 个人最佳不再出现原始浮点值');
+  ok(!/\d\.\d{3,}/.test(h), '⑤ 个人最佳无浮点尾数');
+})();
+
+/* ---------- ⑥ 属性变更日志 reason 里的容量 ---------- */
+(function () {
+  sandbox.store.set('attrLog', []);
+  sandbox.trackStats({ atk: 2, def: 1, hp: 100, permBonusAtk: 0, permBonusDef: 0, permPenAtk: 0, permPenDef: 0 },
+    { strVol: 3.3000000000000003, carEff: 0 });
+  const log = sandbox.store.get('attrLog') || [];
+  const reason = log.length ? String(log[log.length - 1].reason) : '';
+  ok(reason.indexOf('容量') >= 0, '⑥ 属性日志写入容量原因（' + reason + '）');
+  ok(!/\d\.\d{3,}/.test(reason), '⑥ 属性日志 reason 无浮点尾数');
+})();
+
+/* ---------- ⑦ 破 PR 提示（toast）里的容量 ---------- */
+(function () {
+  sandbox.store.set('prs', {});
+  const made = [];
+  const origCreate = sandbox.document.createElement;
+  sandbox.document.createElement = function () { const e = mkEl(); made.push(e); return e; };
+  sandbox.checkPR({ exercise: 'EX1', weight: 1.1, actualReps: 3, date: sandbox.today() });
+  sandbox.document.createElement = origCreate;
+  const msg = made.map(function (e) { return String(e.textContent || ''); }).join(' | ');
+  ok(msg.indexOf('容量') >= 0, '⑦ 破 PR 提示已生成（' + msg + '）');
+  ok(!/\d\.\d{3,}/.test(msg), '⑦ 破 PR 提示无浮点尾数');
+})();
+
 console.log(fail ? '\nFAIL ' + fail : '\nALL PASS (' + pass + ')');
 process.exit(fail ? 1 : 0);

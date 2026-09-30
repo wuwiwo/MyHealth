@@ -31,7 +31,7 @@ function trackStats(stats,detail){
     var strVolDiff=last&&last.strVol?detail.strVol-last.strVol:detail.strVol
     var carEffDiff=last&&last.carEff?detail.carEff-last.carEff:detail.carEff
     var reason=[]
-    if(strVolDiff)reason.push('容量'+(strVolDiff>0?'+':'')+strVolDiff+'kg')
+    if(strVolDiff)reason.push('容量'+(strVolDiff>0?'+':'')+Math.round(strVolDiff)+'kg')
     if(carEffDiff)reason.push('有效有氧'+(carEffDiff>0?'+':'')+carEffDiff+'min')
     if(stats.permBonusAtk>0)reason.push('旬奖励攻+'+stats.permBonusAtk+'防+'+stats.permBonusDef)
     if((stats.challengeAtk||0)>0||(stats.challengeDef||0)>0)reason.push('隐藏挑战⚔️+'+stats.challengeAtk+'🛡️+'+stats.challengeDef+'❤️+'+stats.challengeHp)

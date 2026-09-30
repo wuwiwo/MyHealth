@@ -16,7 +16,7 @@ function checkPR(e){
   var vol=w*n
   if(!ex.maxWeight||w>ex.maxWeight){ex.maxWeight=w;ex.weightDate=e.date;broken.push('重量 '+w+'kg')}
   if(!ex.maxReps||n>ex.maxReps){ex.maxReps=n;ex.repsDate=e.date;broken.push('次数 '+n+'次')}
-  if(!ex.maxVolume||vol>ex.maxVolume){ex.maxVolume=vol;ex.volDate=e.date;broken.push('容量 '+vol+'kg')}
+  if(!ex.maxVolume||vol>ex.maxVolume){ex.maxVolume=vol;ex.volDate=e.date;broken.push('容量 '+Math.round(vol)+'kg')}
   if(broken.length){prs[e.exercise]=ex;store.set('prs',prs);toast('🏆 '+e.exercise+' 新PR: '+broken.join(', '),'s')}
 }
 

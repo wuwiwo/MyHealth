@@ -304,7 +304,7 @@ function renderPetDetail(pet, idx) {
       if (ch) src.push('凝聚 ' + ch)
       if (rr) src.push('共鸣 ' + rr)
       h += '<div>' + r[0] + ' ' + r[1] + ' <b style="color:var(--brand-fill)">' + (bd.final[k] || 0) + '</b>'
-        + '<span style="color:var(--text3)">＝ 基础 ' + bv
+        + '<span style="color:var(--text3)"> ＝ 基础 ' + bv
         + (add ? ' ＋加成 <span style="color:var(--green)">' + add + '</span>（' + src.join('＋') + '）' : '')
         + (k === 'spd' ? '（不参与百分比）' : ' ×' + (bd.poolPct[k] || 0) + '%')
         + '</span></div>'

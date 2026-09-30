@@ -133,9 +133,9 @@ function renderPRs(){
       var ratio=exMap[ex]&&exMap[ex].ratio!=null?exMap[ex].ratio:100
       if(ratio<100){
         var eff=Math.round(pr.maxVolume*ratio/100)
-        h+='📊 '+pr.maxVolume+'kg <span style="font-size:var(--fs-3xs);color:var(--text3)">→'+eff+'</span>'
+        h+='📊 '+Math.round(pr.maxVolume)+'kg <span style="font-size:var(--fs-3xs);color:var(--text3)">→'+eff+'</span>'
       }else{
-        h+='📊 '+pr.maxVolume+'kg'
+        h+='📊 '+Math.round(pr.maxVolume)+'kg'
       }
     }
     h+='</div></div>'

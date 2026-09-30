@@ -260,13 +260,15 @@ function renderRecordView() {
   if (!keys.length) {
     h += '<div style="background:var(--bg2);border-radius:12px;padding:20px;text-align:center;font-size:var(--fs-base);color:var(--text3)">暂无最佳记录<br><span style="font-size:var(--fs-xs)">去训练并完成挑战吧</span></div>'
   } else {
+    /* v2.2 WP-H3 同口径：`pr.maxVolume` 由 `w×reps` 得出，可能是浮点（1.1×3 = 3.3000000000000003），
+       展示层取整，不改存档里的 PR 值 */
     h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">'
     keys.slice(0, 8).forEach(function (k) {
       var pr = prs[k]
       h += '<div style="background:var(--bg2);border-radius:12px;padding:12px">'
         +'<div style="font-size:var(--fs-base);font-weight:600">'+k+'</div>'
         +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:4px">'
-        +(pr.maxWeight ? '最大重量 '+pr.maxWeight+'kg' : '')+(pr.maxReps ? ' · 最大次数 '+pr.maxReps : '')+(pr.maxVolume ? ' · 最大容量 '+pr.maxVolume : '')
+        +(pr.maxWeight ? '最大重量 '+pr.maxWeight+'kg' : '')+(pr.maxReps ? ' · 最大次数 '+pr.maxReps : '')+(pr.maxVolume ? ' · 最大容量 '+Math.round(pr.maxVolume)+'kg' : '')
         +'</div></div>'
     })
     h += '</div>'

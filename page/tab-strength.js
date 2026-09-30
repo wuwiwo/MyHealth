@@ -108,7 +108,10 @@ function renderStr(){
       var effVol=Math.round(effW*e.actualReps*(ratio/100))
       var ratioTxt=ratio!==100?('<span style="color:var(--text3)">×'+ratio/100+'</span>'):''
       var volTag=effVol>0?'<div class="ec-vol">⚡ 等效 '+effVol+'kg '+ratioTxt+(ratio!==100?'（倍率 '+ratio+'%）':'')+'</div>':''
-      return '<div class="ec '+(d?'done':'')+'">'+volTag+'<div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt"><span class="ec-tgt">目标 '+e.targetReps+' '+unitSuffix+'</span><span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+      /* v2.2.25：条目缺 targetReps（外部同步 / 老存档条目）时不再渲染「目标 undefined 次」；
+         与上方 r 的 `e.targetReps>0` 判定同一口径 —— 没有目标就只显示实际值 */
+      var tgtTag=e.targetReps>0?'<span class="ec-tgt">目标 '+e.targetReps+' '+unitSuffix+'</span>':''
+      return '<div class="ec '+(d?'done':'')+'">'+volTag+'<div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt">'+tgtTag+'<span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
     }).join('')
   }
   renderStrStats()
@@ -116,6 +119,8 @@ function renderStr(){
 }
 
 function renderStrStats(){
+  /* v2.2 WP-H3 同口径：`sumVolume()` 返回浮点（1.1×3 = 3.3000000000000003），
+     只管展示层取整，不动数值本身。与 tab-strength.js 旬容量 / game-views.js 旬容量卡一致。 */
   const g=document.getElementById('strStats')
   const we=getWeekStr()
   const t=we.length,r=we.reduce((s,e)=>s+e.actualReps,0),v=sumVolume(we,getExerciseMap()),days=new Set(we.map(function(e){return e.date})).size
@@ -124,7 +129,7 @@ function renderStrStats(){
   var exCount={}
   we.forEach(function(e){exCount[e.exercise]=(exCount[e.exercise]||0)+1})
   var fav=Object.keys(exCount).sort(function(a,b){return exCount[b]-exCount[a]})[0]||'—'
-  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span style="font-size:var(--fs-3xs)"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+v+'<span style="font-size:var(--fs-3xs)"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v" style="font-size:var(--fs-xs)">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
+  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span style="font-size:var(--fs-3xs)"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+Math.round(v)+'<span style="font-size:var(--fs-3xs)"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v" style="font-size:var(--fs-xs)">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
 }
 function getWeekStr(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(store.get('strength')||{entries:[]}).entries.filter(e=>e.date>=toDate(m))}
 
@@ -299,7 +304,8 @@ function showWoRest(sec){
 }
 
 function showWoSummary(){
-  const total=_woDone.reduce((s,d)=>s+d.actualReps,0),vol=sumVolume(_woDone,getExerciseMap())
+  /* v2.2 WP-H3 同口径：`sumVolume()` 浮点 → 展示层取整（不改数值本身） */
+  const total=_woDone.reduce((s,d)=>s+d.actualReps,0),vol=Math.round(sumVolume(_woDone,getExerciseMap()))
   const el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
   if(!el)return
   el.innerHTML='<div style="text-align:center"><div style="font-size:var(--fs-hero);margin-bottom:4px">🎉</div><div style="font-size:var(--fs-2xl);font-weight:800;margin-bottom:12px">训练完成！</div>'
