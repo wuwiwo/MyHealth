@@ -5,6 +5,59 @@
 /* ========== BATTLE ========== */
 let _battleRunning=false,_battleSpeed=1,_battleTimer=null,_battle=null,_battleAuto=false
 
+/* ========== 战斗速度（关卡挑战 / 单敌） ==========
+   与敌群侧**同口径**（game-render.js：`_groupSpeed` + localStorage `dh-group-speed`
+   + 「选了就落盘、开战时恢复」）：档位 [1,2,4,8] · 持久化 · 开战恢复上次选择。
+
+   ⚠️ 修复的 bug：`startBattle` 此前每次都无条件 `_battleSpeed=1`，而自动模式正是靠
+   「胜利 → 2 秒后 startBattle(下一关)」推进的（见 endBattle）—— 于是玩家选了 ×8，
+   第一关之后每一关都被重置回 ×1，而 8× 按钮仍高亮着（没人同步），表现为
+   「开了自动 + 选 ×8，战斗速度还是 ×1」。
+   现在「存」（点击档位落盘）与「读」（开战恢复，缺存档则沿用内存值）成对存在，
+   自动模式逐关继承玩家选择，界面高亮也与真实速度一致。 */
+var BATTLE_SPEEDS=[1,2,4,8]
+var BATTLE_SPEED_KEY='dh-battle-speed'
+var BATTLE_STEP_BASE_MS=600   // ×1 的回合间隔（沿用原值，不改战斗节奏基准）
+function normalizeBattleSpeed(v){
+  var n=parseInt(v,10)
+  return BATTLE_SPEEDS.indexOf(n)<0?1:n
+}
+/* 纯函数：基准间隔 ÷ 速度档位 → ×1=600 / ×2=300 / ×4=150 / ×8=75（非法档位按 ×1） */
+function battleStepDelay(baseMs,speed){
+  var base=(typeof baseMs==='number'&&baseMs>0)?baseMs:BATTLE_STEP_BASE_MS
+  return Math.round(base/normalizeBattleSpeed(speed))
+}
+/* 读：存档优先；没有存档则沿用 fallback（= 当前内存值），保证自动模式不退回 ×1 */
+function loadBattleSpeed(fallback){
+  var raw=null
+  try{raw=localStorage.getItem(BATTLE_SPEED_KEY)}catch(e){ raw=null /* 忽略：localStorage 不可用（隐私模式/配额）时按默认速度 */ }
+  return raw==null?normalizeBattleSpeed(fallback):normalizeBattleSpeed(raw)
+}
+/* 存：与敌群侧 `gbSpeed` 一样「玩家选了就落盘」 */
+function saveBattleSpeed(v){
+  try{localStorage.setItem(BATTLE_SPEED_KEY,String(normalizeBattleSpeed(v)))}catch(e){ /* 忽略：localStorage 不可用（隐私模式/配额）时，速度选择只在本次会话生效 */ }
+}
+/* 按钮高亮同步到真实速度：防「界面显示 8×、实际跑 ×1」 */
+function syncBattleSpeedButtons(){
+  if(typeof document==='undefined'||!document.querySelectorAll)return
+  var btns=document.querySelectorAll('.battle-speed .speed-btn[data-speed]')
+  if(!btns)return
+  for(var i=0;i<btns.length;i++){
+    var v=parseInt(btns[i].dataset&&btns[i].dataset.speed,10)
+    if(btns[i].classList)btns[i].classList.toggle('active',v===_battleSpeed)
+  }
+}
+/* 「存」的一环：document 级点击委托。app.js 的 `.speed-btn` 处理器只改内存里的
+   `_battleSpeed`（不落盘），且单敌表头并不每次开战都重建（restoreSingleBattleOverlay
+   在结构已存在时直接返回），故用一次性委托而不是按钮级绑定。
+   `[data-speed]` 限定 1/2/4/8 四个档位按钮，自动 / 关闭 / 敌群调速按钮不受影响。 */
+if(typeof document!=='undefined'&&document.addEventListener){
+  document.addEventListener('click',function(e){
+    var btn=(e.target&&e.target.closest)?e.target.closest('.battle-speed .speed-btn[data-speed]'):null
+    if(btn)saveBattleSpeed(btn.dataset.speed)
+  })
+}
+
 /* 🎁 通关炼化点奖励：基础 1~2 点，普通关 ×2，BOSS 关 ×10 */
 function rollLoot(levelInfo){
   var base=1+Math.floor(Math.random()*2)
@@ -54,7 +107,10 @@ function startBattle(id){
   var sides=buildBattleSides(stats,lv)
   var affix=lv.boss?rollBossAffixFor(lv):null
   _battle=createBattle(sides.player,sides.enemy,{npc:lv.npc,boss:lv.boss},affix)
-  _battleRunning=false;_battleSpeed=1;_battleTimer=null
+  _battleRunning=false;_battleTimer=null
+  /* 继承玩家选择的速度：不再重置回 ×1（自动模式逐关继承；与敌群侧口径一致） */
+  _battleSpeed=loadBattleSpeed(_battleSpeed)
+  syncBattleSpeedButtons()
   var autoBtn=document.getElementById('battleAuto');
   if(autoBtn){autoBtn.classList.toggle('active',_battleAuto);autoBtn.textContent=_battleAuto?'🔄 自动✓':'🔄 自动'}
   document.getElementById('battleLevel').textContent=id+' '+lv.npc+(affix?' 👑':'')+(affix?' ['+affix.name+']':'')
