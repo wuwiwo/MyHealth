@@ -118,6 +118,37 @@ function settleAllPets(now) {
   return allEvents;
 }
 
+/* ============================================================
+   v2.3 WP-I：**结算按钮的可用判据**（作者原话：「结算按钮没有用就隐藏，有用再显示」）
+   —— 纯函数、只读、不写存档。
+
+   ⚠️ 判据**逐条镜像** `settleAllPets()` → `settlePet()`（pets.js:172）的实际分支，
+      不新增任何业务条件（也不看受伤 / 产出 / 材料 —— 结算与它们无关）：
+        · `!pet.lastSettleDate`      → settlePet 走首日分支：写 today + 产出 1 条「开始记录」事件；
+        · `pet.isDead`               → settlePet 直接 return []（**点了也不会变**）；
+        · `daysBetween(上次, 今天)>0` → settlePet 真的逐日推进（ageDays / 饥饿 / 成长 / 孵化 / 阵亡）。
+      三者之外（今天已结算过且无离线天数、存档里没有宠物）点一下**没有任何可观察变化**，
+      故按钮应隐藏。已阵亡且日期陈旧的宠物单独统计（dead），便于解释「为什么按钮没了」。
+   @returns {{ready:boolean, due:number, firstTimers:number, dead:number, total:number, today:string}}
+   ============================================================ */
+function petSettleStatus(d, now) {
+  d = d || getPetStore();
+  var today = dateKey(now || new Date());
+  var pets = d.pets || [];
+  var due = 0, firstTimers = 0, dead = 0;
+  pets.forEach(function (pet) {
+    if (!pet) return;
+    if (!pet.lastSettleDate) { firstTimers++; return; }        // settlePet 首日分支（会写 lastSettleDate）
+    if (pet.isDead) { dead++; return; }                        // settlePet 对已阵亡直接跳过
+    if (daysBetween(pet.lastSettleDate, today) > 0) due++;      // 真正会推进天数
+  });
+  return {
+    ready: (due + firstTimers) > 0,
+    due: due, firstTimers: firstTimers, dead: dead,
+    total: pets.length, today: today
+  };
+}
+
 /* 月度重置入口（月底调用）：炼化/技能/材料 */
 /* v2.1.19：战斗失败后，参战的成熟宠物各有 50% 几率进入受伤状态。
    受伤期间不可出战，需喂营养液（+10~15%）/ 饲料（+4~5%）把恢复进度喂到 100 解除。
@@ -442,6 +473,7 @@ if (typeof window !== 'undefined') {
   window.grantStarterPet = grantStarterPet;
   window.grantMaterial = grantMaterial;
   window.settleAllPets = settleAllPets;
+  window.petSettleStatus = petSettleStatus;
   window.monthlyResetPets = monthlyResetPets;
   window.hatchAllEggs = hatchAllEggs;
   window.getBattleReadyPets = getBattleReadyPets;
@@ -470,6 +502,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.grantStarterPet = grantStarterPet;
   globalThis.grantMaterial = grantMaterial;
   globalThis.settleAllPets = settleAllPets;
+  globalThis.petSettleStatus = petSettleStatus;
   globalThis.monthlyResetPets = monthlyResetPets;
   globalThis.hatchAllEggs = hatchAllEggs;
   globalThis.getBattleReadyPets = getBattleReadyPets;

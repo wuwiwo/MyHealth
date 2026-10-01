@@ -118,31 +118,82 @@ function orbSlotsHtml(pet, d) {
   return h;
 }
 
-/* 宠物面板 overlay（新版式：卡片/大按钮/12px+） */
+/* ============================================================
+   v2.3 WP-I：宠物面板版式整改（作者原话：「一键治疗、选择参战宠物要重新布局，
+   结算按钮没有用就隐藏，有用再显示」）
+
+   改前：一键治疗挤在材料数字行里，与「🔄 兑换 10→1」抢同一行宽度；
+         「选择参战宠物」贴在宠物列表**最底部**（真机 5 只宠要滚 2 屏才看得到，附录 A-3）。
+   改后（面板自上而下的信息顺序）：
+     ① 参战阵容（芯片 + 开战按钮）→ **顶部摘要**，打开面板即见当前阵容、就地切换；
+     ② 材料区（数字独占一行）→ 按钮组另起一行，**一键治疗全宽独占一行**（大按钮）；
+     ③ 💎 宝珠 → ④ 宠物卡列表（顺序不变）。
+
+   ⚠️ 结算按钮：**条件渲染**，判据来自 pet-store.js 的 `petSettleStatus()`
+      （逐条镜像 settlePet 的实际分支；不可用时整块不渲染，而不是灰掉——按钮没有
+       disabled 语义就先别出现）。
+   ⚠️ 只重排 + 改尺寸所在区块的骨架：所有数值/口径仍全部来自 pet-store.js，
+      热区一律 ≥ --touch-min(44px)，不新字号、不新颜色（样式见 index.css 的 .pet-lineup/.pet-mat）。 */
 function renderPetPanel() {
   var ov = document.getElementById('panelOverlay')
   if (!ov) return
   var d = getPetStore()
   /* v2.2 WP-H1：从存档恢复参战宠物选择（刷新/重开后保留） */
   if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
+  /* v2.3：结算按钮的可用判据（不写存档的纯函数） */
+  var st = (typeof petSettleStatus === 'function') ? petSettleStatus(d) : { ready: false }
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
     +'<button class="speed-btn" id="petClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
     +'<span style="font-size:var(--fs-lg);font-weight:700">🐾 宠物面板</span>'
     +'<span style="flex:1"></span>'
-    +'<button class="speed-btn" id="petSettle" style="padding:10px 14px;min-height:44px;font-size:var(--fs-base);border-color:var(--green);color:var(--green)">结算</button>'
+    /* v2.3：**有用才显示** —— 没有可结算内容（今天已结算过 / 只剩阵亡宠 / 没有宠物）时整块不渲染 */
+    +(st.ready
+      ? '<button class="speed-btn" id="petSettle" title="把离线天数补算到今天（待结算 '
+          + (st.due + st.firstTimers) + ' 只宠物）" style="padding:10px 14px;min-height:44px;font-size:var(--fs-base);border-color:var(--green);color:var(--green)">结算</button>'
+      : '')
     +'</div>'
-  // 材料
+  /* ⚔️ 参战阵容（v2.3：从列表底部**上移到顶部**）—— 成熟 + 未阵亡的宠物都能被选，
+     选中态由 `_petBattlePicks` 决定；未选择时开战会自动带成熟宠物（game-render.js autoPickPets），
+     这句话写在摘要里，免得「空摘要」让人以为开战不带宠。 */
+  var ready = d.pets.filter(function(p){return p.stage==='mature'&&!p.isDead})
+  if (ready.length) {
+    var _petMaxLabel = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
+    var _picks = _petBattlePicks || []
+    h += '<div class="pet-lineup">'
+      +'<div class="pet-lineup-hd">⚔️ 参战阵容'
+      +'<span class="pet-lineup-count">'+_picks.length+'/'+_petMaxLabel+'</span>'
+      +'<span class="pet-lineup-hint">'+(_picks.length ? '点宠物名切换' : '还没选 · 开战会自动带成熟宠物')+'</span>'
+      +'</div>'
+      +'<div class="pet-pick-chips">'
+    ready.forEach(function(p) {
+      var sel = _picks.indexOf(p.speciesId) > -1
+      /* v2.2.29：参战芯片加 32px 头像，扫一眼就能认出是哪只（原来只有文字）
+         ⚠️ 头像 <img> 必须紧跟按钮起始标签（test-pet-icons.js 4d 的契约） */
+      h += '<button class="speed-btn pet-pick-chip" data-pet-pick="'+p.speciesId+'" aria-pressed="'+(sel?'true':'false')+'" style="padding:3px 10px;'+(sel?'border-color:var(--green);color:var(--green)':'')+'">'
+        + petIconHtml(p.speciesId, 32) + '<span>'+(getPetCodex(p.speciesId)||{}).name+'</span></button>'
+    })
+    h += '</div>'
+    /* 开战按钮随「参战选择」一起上移：它作用的正是上面这份选择 */
+    h += '<button class="speed-btn pet-start-battle" id="petStartBattle" style="border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button>'
+    h += '</div>'
+  }
+  // 材料（v2.3：数字独占一行，按钮组另起一行；一键治疗全宽独占一行）
   var m = d.materials || {}
   /* v2.2 WP-H5：一键治疗的候选 = 成熟 + 未阵亡 + 受伤（已死亡 / 未成熟不参与） */
   var injuredN = d.pets.filter(function(p){ return p.stage==='mature' && !p.isDead && p.injured }).length
-  h += '<div style="font-size:var(--fs-sm);background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;line-height:1.6">'
+  h += '<div class="pet-mat">'
+    +'<div class="pet-mat-row">'
     +'<span>🧪 营养液 <b style="font-size:var(--fs-base)">'+m.nutrition+'</b></span>'
     +'<span>🍖 饲料 <b style="font-size:var(--fs-base)">'+m.feed+'</b></span>'
     +'<span>✨ 灵能 <b style="font-size:var(--fs-base)">'+m.spirit+'</b></span>'
     +'<span>🪨 炼化石 <b style="font-size:var(--fs-base)">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:var(--fs-base)">'+m.refineHigh+'</b></span>'
     +'<span>💎 宝珠碎片 <b style="font-size:var(--fs-base)">'+m.orbShard+'</b></span>'
+    +'</div>'
+    +'<div class="pet-mat-actions">'
     +'<button class="speed-btn" id="petExchange" title="10 个普通炼化石兑换 1 个高级炼化石" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">🔄 兑换 10→1</button>'
-    +'<button class="speed-btn" id="petHealAll" title="自动消耗营养液，把所有受伤宠物一次治好（已阵亡/未成熟的不参与）" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)'+(injuredN?';border-color:var(--red);color:var(--red)':'')+'">🧪 一键治疗'+(injuredN?'（'+injuredN+'）':'')+'</button>'
+    /* v2.3：一键治疗**全宽独占一行**（.pet-btn-wide 的 flex:1 1 100%），不再与兑换并列 */
+    +'<button class="speed-btn pet-btn-wide" id="petHealAll" title="自动消耗营养液，把所有受伤宠物一次治好（已阵亡/未成熟的不参与）" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(injuredN?';border-color:var(--red);color:var(--red)':'')+'">🧪 一键治疗'+(injuredN?'（'+injuredN+'）':'')+'</button>'
+    +'</div>'
     +'</div>'
   // v2.1.17 宝珠：合成 / 库存分解
   h += orbBagHtml(d)
@@ -182,23 +233,12 @@ function renderPetPanel() {
         +'</div>'
     })
   }
-  // 参战选择（成熟宠物）
-  var ready = d.pets.filter(function(p){return p.stage==='mature'&&!p.isDead})
-  if (ready.length) {
-    var _petMaxLabel = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
-    h += '<div style="margin-top:10px;font-size:var(--fs-xs)">⚔️ 选择参战宠物（最多 '+_petMaxLabel+' 只）</div>'
-    h += '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">'
-    ready.forEach(function(p, ri) {
-      var sel = (_petBattlePicks||[]).includes(p.speciesId)
-      /* v2.2.29：参战芯片加 24px 头像，扫一眼就能认出是哪只（原来只有文字） */
-      h += '<button class="speed-btn pet-pick-chip" data-pet-pick="'+p.speciesId+'" style="padding:3px 10px;'+(sel?'border-color:var(--green);color:var(--green)':'')+'">'
-        + petIconHtml(p.speciesId, 32) + '<span>'+(getPetCodex(p.speciesId)||{}).name+'</span></button>'
-    })
-    h += '</div>'
-    h += '<div style="margin-top:8px"><button class="speed-btn" id="petStartBattle" style="padding:4px 16px;border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button></div>'
-  }
+  /* v2.3：重渲染前记下滚动位置并还原（与详情页同一处理）—— 面板是滚动容器，
+     不还原的话在列表里点「🍖喂 / ✨炼化」会被弹回顶部，与「一键治疗」上移的初衷相反。 */
+  var _st = ov.scrollTop
   ov.innerHTML = '<div class="panel-inner">' + h + '</div>'
   ov.classList.add('open')
+  ov.scrollTop = _st
 
   // 事件
   var closeBtn = document.getElementById('petClose')

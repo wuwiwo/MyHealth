@@ -739,12 +739,48 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .pet-detail-ico{display:block;flex-shrink:0}
 /* 参战 / 对比芯片：头像与文字同一行对齐（原来只有文字） */
 .pet-pick-chip,.pet-cmp-chip{display:inline-flex;align-items:center;gap:6px}
+
+/* ========== v2.3.0 怪兽头像图标（page/media/monsters/*.svg） ==========
+   48×48 像素风，按**视觉原型**归纳为 18 个（189 个敌人名 → 18 个原型，
+   规格与映射规则见 doc/design-monster-icons.md）。
+   与 .pet-ico 同一套口径：pixelated + SVG 内建 crispEdges 双保险。
+   ⚠️ 显示尺寸必须是 16 的倍数：图标是 16×16 逻辑网格、1 格 = 3px（48px 基准）。
+      32px → 每格 2px 干净；24px → 每格 1.5px 已接近下限但仍为 16 的倍数（可接受）。
+      尺寸由 JS 侧 `monsterIconHtml(id, size)` 注入 width/height，别在 CSS 里改。 */
+.mon-ico{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+/* 关卡列表卡片：图标居中放在关卡号与关卡名之间 */
+.lv-ico{display:flex;justify-content:center;margin:2px 0}
+/* 敌群战斗单位卡：头像在名称行最左，与名字同一基线区 */
+.gb-ico{display:inline-flex;flex-shrink:0;align-items:center}
+/* 单敌对战界面：头像在「敌人」块顶部居中，名字在下方 */
+.be-ico{display:flex;justify-content:center;margin-bottom:4px}
+.be-nm{display:block}
 .pet-card-name{flex:1;min-width:0;font-size:var(--fs-lg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pet-card-rarity{flex-shrink:0;font-size:var(--fs-xs);color:var(--purple,#a855f7)}
 .pet-card-status{font-size:var(--fs-xs);color:var(--text3);margin-top:4px}
 .pet-card-bar{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-top:4px}
 .pet-card-bar i{display:block;height:100%;background:var(--orange);border-radius:3px;transition:width .3s}
 .pet-card-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px}
+
+/* ========== v2.3 WP-I：宠物面板版式（参战阵容置顶 / 一键治疗独立成行 / 材料区） ==========
+   作者原话：「一键治疗、选择参战宠物要重新布局，结算按钮没有用就隐藏，有用再显示」。
+   改前：一键治疗挤在材料数字行里与「🔄 兑换 10→1」并列；参战选择贴在列表最底部（真机 5 只
+         宠要滚 2 屏才看得到）。改后：
+     ① .pet-lineup —— 参战阵容做成**顶部摘要卡**（芯片 + 开战），打开面板即见当前阵容；
+     ② .pet-mat —— 材料数字独占一行（.pet-mat-row），按钮组另起一行（.pet-mat-actions），
+        其中「🧪 一键治疗」加 .pet-btn-wide → flex-basis 100% **全宽独占一行**；
+     ③ 「结算」按钮的显隐不在这里 —— 由 pet-ui.js 按 pet-store.js 的 petSettleStatus() 条件渲染。
+   ⚠️ 全部复用既有令牌：无新字号、无新颜色；触控目标一律 ≥ --touch-min(44px)。 */
+.pet-lineup{background:var(--bg2);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.pet-lineup-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:var(--fs-sm);font-weight:700}
+.pet-lineup-count{color:var(--text2);font-variant-numeric:tabular-nums}
+.pet-lineup-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
+.pet-pick-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pet-start-battle{width:100%;margin-top:10px;min-height:var(--touch-min);padding:10px 14px;font-size:var(--fs-sm)}
+.pet-mat{font-size:var(--fs-sm);background:var(--bg2);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.pet-mat-row{display:flex;gap:12px;flex-wrap:wrap;line-height:1.6}
+.pet-mat-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.pet-btn-wide{flex:1 1 100%;min-height:var(--touch-min)}
 
 .skill-card{background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
 .skill-card-name{font-size:var(--fs-md);font-weight:600}
