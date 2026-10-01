@@ -20,8 +20,8 @@
     if (errs.length > 30) errs.pop();
   });
 
-  var SECS = [['ov', '概览'], ['st', '存储'], ['at', '属性·经济'], ['ba', '⚖️ 平衡'], ['ch', '挑战'], ['sy', '☁️ 同步'], ['pf', '⏱ 性能'], ['rp', '🎬 回放'], ['er', '错误']];
-  var state = { open: false, sec: 'ov', openKey: null, bal: null };
+  var SECS = [['ov', '概览'], ['st', '存储'], ['at', '属性·经济'], ['ba', '⚖️ 平衡'], ['ch', '挑战'], ['pg', '🗺 敌群'], ['sy', '☁️ 同步'], ['pf', '⏱ 性能'], ['rp', '🎬 回放'], ['er', '错误']];
+  var state = { open: false, sec: 'ov', openKey: null, bal: null, gpArm: false };
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   /* 非 JSON 值原样打印即可，不是错误 */
@@ -147,7 +147,7 @@
     }, '宠物: ⚠ 读取失败'));
     L.push(tryFn(function () {
       var st = groupProgressStats();
-      return '敌群进度: ' + st.cleared + '/' + st.total + ' 已通关';
+      return '敌群进度: ' + st.cleared + '/' + st.total + ' 已通关（点「🗺 敌群」区可重置）';
     }, '进度: ⚠ 读取失败'));
     if (s) {
       L.push('最终属性: 攻 ' + s.atk + ' · 防 ' + s.def + ' · 血 ' + s.hp + ' · 魂攻 ' + (s.soulAtk || 0) + ' · 魂防 ' + (s.soulDef || 0));
@@ -276,6 +276,114 @@
     h += 'challenge 存档: ' + pre(j(tryFn(function () { return getChallenge(); }, '未初始化')));
     h += 'canSummon: ' + pre(j(tryFn(function () { return canSummon(); }, '未初始化')));
     h += '今日容量: ' + pre(tryFn(function () { return getTodayVolume(); }, '?') + '（召唤门槛 100kg/次）');
+    return h;
+  }
+
+  /* ================= 🗺 敌群试炼进度重置（v2.3.x） =================
+     ⚠️ 本区**只清「敌群试炼的通关进度」**，目的是让玩家从第 1 大关第 1 小关重打
+        （作者原话：「重置敌群战斗进度，我现在敌群一下就被秒」）。
+     · 动的唯一数据 = store 逻辑键 `groupProgress`（物理键 `dh-groupProgress-v1`，由 store.js 的
+       physKey 规则生成；schema 在 page/group-progress.js 注册）里的 `cleared` 数组 → 清空。
+     · 清空后解锁链自动回到起点：`isGroupStageUnlocked` / `currentGroupStageId` / `groupClearedCount`
+       **全部由 `cleared` 派生**（group-progress.js），没有第二处进度真源需要同步。
+     ⛔ 绝不动（连读都不读、绝不写）：该键之外的任何 store 键 / localStorage 键 ——
+        宠物·材料袋·宝珠(`pets`) · 玩家技能与技能点(`skills`) · 炼魂(`refine`) · 角色等级(level-system 的键)
+        · 训练与有氧记录(`strength` `cardio` `weight` `plans` `cardioPlans` `missed` `prs` `attrLog`)
+        · 隐藏挑战(`challenge`) · **关卡试炼**(`game` —— 单敌那套，与敌群是两套系统)
+        · 历史最佳(`records`，其 `maxCleared` 是**关卡试炼**的最高章，不是敌群)。
+        UI 偏好键 `dh-group-mode` / `dh-group-speed` 属显示设置、不是进度，同样不动。
+     ⛔ 不用 `localStorage.clear` / `store.setAll` 这类整库清空，也不删任何 `-bak` 备份键。
+        （⚠️ 上面两处刻意写成**不带括号**的形式：scripts/test-progress-reset.js 用
+          `/localStorage\.clear\s*\(/` 扫描本文件做护栏断言，写全调用式会把自己扫出来。）
+     ⚠️ 两步确认：`DebugPanel.resetGroupProgress()` 只**挂起**（面板列出将清空的键与字段/当前进度），
+        必须再调 `DebugPanel.confirmResetGroupProgress()` 才真正写入；`cancelResetGroupProgress()` 撤销。 */
+  var GP_KEY = 'groupProgress';
+  var GP_PHYS = 'dh-groupProgress-v1';
+
+  function gpNow() {
+    return tryFn(function () {
+      var d = (typeof getGroupProgress === 'function') ? getGroupProgress() : store.get(GP_KEY);
+      return (d && typeof d === 'object') ? d : null;
+    }, null);
+  }
+  function gpStats() { return tryFn(function () { return groupProgressStats(); }, null); }
+
+  /* 执行重置（纯逻辑、无 UI、幂等）。返回 {ok, before, after, total, noop?} */
+  function resetGroupProgressNow() {
+    var st = gpStats();
+    var before = st ? st.cleared : 0, total = st ? st.total : 0;
+    /* 幂等：已经是空的就**一个字节都不写**（连 store.set 的 touchModTime 都不触发）——
+       重复点不产生副作用，也不会把「修改时间戳」顶高而误导云同步去推一次空改动。 */
+    if (before === 0) return { ok: true, before: 0, after: 0, total: total, noop: true };
+    var cur = gpNow();
+    /* 浅拷贝旧对象，**只**把 cleared 置空 —— `version`（及将来 schema 新增的字段）原样保留，
+       避免「重置进度」顺带把版本号写回 1 而触发迁移链误判。 */
+    var next = {};
+    if (cur) { for (var k in cur) { if (Object.prototype.hasOwnProperty.call(cur, k)) next[k] = cur[k]; } }
+    if (next.version == null) next.version = 1;
+    next.cleared = [];
+    try {
+      if (typeof saveGroupProgress === 'function') saveGroupProgress(next);            // → store.set(GP_KEY, next)
+      else if (typeof store !== 'undefined' && store.set) store.set(GP_KEY, next);
+    } catch (e) { console.warn('[debug] 重置敌群进度写入失败', e); }
+    var st2 = gpStats();
+    var after = st2 ? st2.cleared : null;
+    return { ok: after === 0, before: before, after: after, total: total };
+  }
+
+  /* 重置后刷新界面：敌群列表/大关卡片上的「已通关 N/10」都来自 cleared，需重绘才看得见 */
+  function gpRefreshViews() {
+    tryFn(function () { if (typeof renderGameViews === 'function') renderGameViews(); }, null);
+  }
+
+  var GP_WARN = 'margin:4px 0;padding:8px;background:var(--surface-2);border:2px solid var(--red);border-radius:var(--rad-sm);font-size:var(--fs-3xs);color:var(--text2);line-height:1.7';
+  function gpList(items, mark, color) {
+    return items.map(function (t) {
+      return '<div style="margin:2px 0"><b style="color:' + color + '">' + mark + '</b> ' + esc(t) + '</div>';
+    }).join('');
+  }
+  function secGp() {
+    var st = gpStats();
+    var d = gpNow();
+    var L = [];
+    L.push('敌群试炼进度: ' + (st ? (st.cleared + ' / ' + st.total + ' 关已通关') : '⚠ 不可读（group-progress.js 未加载）'));
+    L.push('存档键: ' + GP_KEY + '（物理键 ' + GP_PHYS + '）');
+    L.push('字段: version=' + ((d && d.version != null) ? d.version : '?')
+      + ' · cleared=' + ((d && d.cleared) ? d.cleared.length : '?') + ' 项');
+    if (st && st.clearedStages && st.clearedStages.length) {
+      L.push('已通关: ' + st.clearedStages.slice(0, 14).join(' ') + (st.clearedStages.length > 14 ? ' …' : ''));
+    }
+    L.push('下一关（重打起点）: ' + tryFn(function () {
+      return (typeof allStageIds === 'function' && allStageIds().length) ? allStageIds()[0] + ' ~' : '—';
+    }, '—'));
+    var h = pre(L.join('\n'));
+    if (state.gpArm) {
+      h += '<div style="' + GP_WARN + '">'
+        + '<div style="font-weight:700;color:var(--red);margin-bottom:4px">⚠️ 二次确认：即将清空敌群试炼的通关进度</div>'
+        + gpList([
+          '『' + GP_KEY + '』（' + GP_PHYS + '）的 cleared 数组 → 清空（当前 ' + (st ? st.cleared : '?') + ' 关）',
+          '重置后：敌群列表回到第 1 大关第 1 小关（仅 ' + (tryFn(function () { return allStageIds()[0]; }, 'g1-1')) + ' 可挑战），已通关计数归 0'
+        ], '✅', 'var(--green)')
+        + gpList([
+          '宠物 · 材料袋 · 宝珠（pets）',
+          '玩家技能与技能点（skills）',
+          '角色等级 / 炼魂（refine）',
+          '力量 · 有氧 · 体重 · 计划 · 个人最佳等训练记录',
+          '隐藏挑战存档（challenge）· 关卡试炼进度（game）· 历史最佳（records）'
+        ], '⛔', 'var(--red)')
+        + '<div style="margin-top:4px;color:var(--text3)">不可撤销（但可以重新一关关打回来）。'
+        + '若此刻正有一场敌群战斗没打完，结束后仍会把那场记成通关 —— 想干净重打请先退出战斗。</div>'
+        + '</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+        + '<span role="button" tabindex="0" style="' + LINK + ';color:var(--red)" onclick="DebugPanel.confirmResetGroupProgress()">✅ 确认清空（第二次确认）</span>'
+        + '<span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.cancelResetGroupProgress()">取消</span>'
+        + '</div>';
+    } else {
+      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+        + '<span role="button" tabindex="0" style="' + LINK + ';color:var(--red)" onclick="DebugPanel.resetGroupProgress()">🗺 重置敌群战斗进度…</span>'
+        + '</div>'
+        + '<div style="font-size:var(--fs-3xs);color:var(--text3);margin-top:2px">只清敌群通关进度，宠物 / 材料 / 宝珠 / 技能 / 等级 / 训练记录一律不动。点一下先看清单，再确认一次才执行。</div>';
+    }
     return h;
   }
 
@@ -483,6 +591,7 @@
       : state.sec === 'at' ? secAt()
       : state.sec === 'ba' ? secBa()
       : state.sec === 'ch' ? secCh()
+      : state.sec === 'pg' ? secGp()
       : state.sec === 'sy' ? secSy()
       : state.sec === 'pf' ? secPf()
       : state.sec === 'rp' ? secRp()
@@ -561,8 +670,43 @@
       tryFn(function () { renderSummonPanel(); }, null);
       render();
     },
+    /* --- 🗺 敌群进度重置（两步确认，见 secGp 顶部说明） --- */
+    /* 第一步：只挂起。**不改任何数据**，仅把面板切到「待确认」态并提示将清空什么。 */
+    resetGroupProgress: function () {
+      state.gpArm = true;
+      state.sec = 'pg';
+      render();
+      if (window.toast) toast('⚠️ 已进入待确认（未动数据）：再点「确认清空」才执行', '');
+      return { armed: true };
+    },
+    /* 第二步：真正执行。未挂起时拒绝（防误触 / 防被当成普通按钮点） */
+    confirmResetGroupProgress: function () {
+      if (!state.gpArm) {
+        if (window.toast) toast('请先点「重置敌群战斗进度…」再确认（两步确认）', 'e');
+        return { ok: false, reason: 'not-armed' };
+      }
+      state.gpArm = false;
+      var r = resetGroupProgressNow();
+      if (r.ok) gpRefreshViews();
+      render();
+      if (window.toast) {
+        toast(!r.ok
+          ? ('⚠️ 重置异常：cleared 仍为 ' + r.after)
+          : r.noop ? '🗺 敌群进度本来就是空的（未做任何写入）'
+            : ('🗺 敌群进度已重置：清空 ' + r.before + ' 关，回到第 1 大关重打'),
+          r.ok ? 's' : 'e');
+      }
+      return r;
+    },
+    cancelResetGroupProgress: function () {
+      state.gpArm = false;
+      render();
+      return { armed: false };
+    },
     errors: errs
   };
+  /* 无 UI 的直接入口（控制台 / 测试用；绕过两步确认，**别**在界面上接线） */
+  if (typeof window !== 'undefined') window.__dbgResetGroupProgress = resetGroupProgressNow;
 
   build();
 })();

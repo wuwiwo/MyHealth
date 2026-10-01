@@ -741,6 +741,48 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .skill-card-lv{font-size:var(--fs-xs);color:var(--text3);margin-top:3px}
 .skill-card-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px}
 
+/* ========== WP-I A-6：宠物详情 · 属性区三段（① 基础 → ② 加成 → ③ 最终） ==========
+   作者要求：基础与加成分开、最后再显示最终、层次分明；加成统一 ×N%；
+   可展开加成来源，属性行同理；新增对比宠物。
+   全程复用既有令牌（无新字号/新颜色），触控目标一律 ≥ --touch-min（44px）。 */
+.pet-sec{background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
+.pet-sec-hd{font-size:var(--fs-sm);font-weight:700;margin-bottom:4px}
+.pet-sec-sub{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
+.pet-sec-empty{font-size:var(--fs-xs);color:var(--text3);line-height:1.6}
+.pet-sec-title{font-size:var(--fs-xs);font-weight:700;color:var(--text2);margin:10px 0 4px;padding-top:8px;border-top:1px solid var(--surface-3)}
+.pet-sec-title:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.pet-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 6px}
+.pet-cell{display:flex;align-items:baseline;gap:3px;min-width:0;font-size:var(--fs-xs);color:var(--text3)}
+.pet-cell-ico{flex-shrink:0}
+.pet-cell-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pet-cell-val,.pet-cell-mult{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pet-cell-val{color:var(--text);font-weight:700}
+.pet-cell-mult{color:var(--brand-fill);font-weight:700}
+.pet-src-toggle{display:block;width:100%;min-height:var(--touch-min);margin-top:6px;padding:0 var(--sp-2);text-align:left;background:transparent;border:0;border-top:1px solid var(--surface-3);color:var(--text2);font-family:inherit;font-size:var(--fs-xs);font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pet-src-toggle:focus-visible{outline:2px solid var(--orange);outline-offset:-2px}
+.pet-src{padding:2px 0 4px}
+.pet-src-line{display:flex;gap:6px;font-size:var(--fs-xs);line-height:1.6;color:var(--text2);padding:2px 0}
+.pet-src-tag{flex-shrink:0;min-width:5.5em;color:var(--text3)}
+.pet-src-note{margin-top:4px;padding-top:4px;border-top:1px solid var(--surface-3);font-size:var(--fs-xs);line-height:1.6;color:var(--text3)}
+.pet-final-cell{display:flex;align-items:center;gap:3px;min-width:0;min-height:var(--touch-min);padding:0 6px;font-family:inherit;font-size:var(--fs-xs);color:var(--text3);background:var(--surface-2);border:1px solid transparent;border-radius:var(--rad-sm);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pet-final-cell.active{border-color:var(--brand-fill);color:var(--text)}
+.pet-chain{margin-top:6px;padding-top:6px;border-top:1px dashed var(--surface-3)}
+.pet-chain-hd{font-size:var(--fs-xs);font-weight:700;color:var(--text2)}
+.pet-chain-line{font-size:var(--fs-xs);line-height:1.6;color:var(--text2);font-variant-numeric:tabular-nums}
+.pet-cmp-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.pet-cmp-chip{font-size:var(--fs-xs)}
+.pet-cmp-res{margin-top:8px}
+.pet-cmp-note{font-size:var(--fs-xs);line-height:1.6;color:var(--text3)}
+.pet-cmp-table{width:100%;margin-top:6px;border-collapse:collapse;font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
+.pet-cmp-table th,.pet-cmp-table td{padding:5px 2px;text-align:right;border-bottom:1px solid var(--surface-3)}
+.pet-cmp-table thead th{color:var(--text3);font-weight:600}
+.pet-cmp-table tbody th,.pet-cmp-table tbody td{color:var(--text)}
+.pet-cmp-table th:first-child,.pet-cmp-table td:first-child{text-align:left}
+.pet-cmp-diff{font-weight:700}
+.pet-cmp-up{color:var(--green)}
+.pet-cmp-dn{color:var(--red)}
+.pet-cmp-exit{margin-top:8px}
+
 /* ========== LOADING / SKELETON ========== */
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--text3);border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
 .btn.loading{pointer-events:none;opacity:.7}

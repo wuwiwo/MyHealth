@@ -358,6 +358,61 @@ function petStatBreakdown(pet) {
 }
 
 /* ============================================================
+   v2.2 WP-I A-6：属性区**展示口径辅助**（作者要求「加成统一用 ×N% 表达」）
+   ⚠️ **纯展示**：不产生任何新数值、不改公式、不写存档 ——
+      输入是上面 `petStatBreakdown()` 已经算好的字段，
+      输出只是给 UI 打印用的整数「倍数百分比」。
+   · benchMultPct = 凝聚＋共鸣 把本宠「基础」抬到「上场基础」的倍数（bench ÷ base）
+   · poolMultPct  = 倍率池倍数（稀有度% ＋ Σ宝珠%；速度不参与 → 100）
+   · orbMultPct   = 宝珠自身倍数（100 ＋ 该属性宝珠%，未装配 = 100）
+   · statMultPct  = 基础 → 最终 的总倍数（＝上两者之积）
+   引擎（`group-levels.js` 的 `boostPetForGroup`）本身就是「先把凝聚/共鸣加进基础值、
+   再把整块乘倍率池」，所以「上两者之积」与引擎结果同源；四舍五入可能带来 ±1 的
+   **显示**偏差（引擎结果另由 `bd.final` 原样展示），不是口径差异。
+   base ≤ 0 时返回 null → UI 显示「×—」（无法表达为倍数）。
+   ============================================================ */
+function petStatBaseOf(bd, k) { return (bd && bd.base && bd.base[k]) || 0; }
+function petBenchMultPct(bd, k) {
+  if (!bd || !bd.ok) return null;
+  var b = petStatBaseOf(bd, k);
+  if (b <= 0) return null;
+  return Math.round(((bd.bench[k] || 0) * 100) / b);
+}
+function petPoolMultPct(bd, k) {
+  if (!bd || !bd.ok) return null;
+  if (k === 'spd') return 100;                    // 速度不参与百分比池（与 boostPetForGroup 一致）
+  return bd.poolPct[k] || 0;
+}
+function petOrbMultPct(bd, k) {
+  if (!bd || !bd.ok) return null;
+  return 100 + ((bd.orbPct || {})[k] || 0);
+}
+function petStatMultPct(bd, k) {
+  if (!bd || !bd.ok) return null;
+  var b = petStatBaseOf(bd, k);
+  if (b <= 0) return null;
+  return Math.round(((bd.bench[k] || 0) * (petPoolMultPct(bd, k) || 0)) / b);
+}
+
+/* 对比：**只列主要几项**（作者要求「只显示主要几项即可，别塞满」） */
+var PET_COMPARE_KEYS = ['hp', 'atk', 'def', 'soulAtk', 'soulDef'];
+/* 对比口径（UI 必须写明）：两只宠**都用「此宠上场计算」** ——
+   即各自走 `petStatBreakdown()`，与详情面板展示的是同一个口径，
+   杜绝「拿 A 的上场值比 B 的基础值」。两宠各自把对方算作「未上场后备」，
+   与引擎「本场谁上场」的语义一致（同一次对比里口径完全一致）。
+   @returns {{ok:boolean, baseline:'fielded', rows:[{key,a,b,diff}]}}  diff = 对比宠 − 本宠 */
+function petCompareFinal(petA, petB) {
+  var a = (typeof petStatBreakdown === 'function') ? petStatBreakdown(petA) : { ok: false };
+  var b = (typeof petStatBreakdown === 'function') ? petStatBreakdown(petB) : { ok: false };
+  var rows = PET_COMPARE_KEYS.map(function (k) {
+    var av = a.ok ? (a.final[k] || 0) : null;
+    var bv = b.ok ? (b.final[k] || 0) : null;
+    return { key: k, a: av, b: bv, diff: (av == null || bv == null) ? null : (bv - av) };
+  });
+  return { ok: !!(a.ok && b.ok), baseline: 'fielded', rows: rows };
+}
+
+/* ============================================================
    v2.2 WP-A3/A4：敌群参战宠物的**唯一入口**
    = 建单位 → 基础值加成（团队凝聚 / 共鸣）→ 稀有度放大（百分比池）。
    ⚠️ 顺序不能反：基础值必须在百分比池之前进入，否则两类加成的性质就变了。
@@ -392,6 +447,12 @@ if (typeof window !== 'undefined') {
   window.getBattleReadyPets = getBattleReadyPets;
   window.healAllInjuredPets = healAllInjuredPets;
   window.petStatBreakdown = petStatBreakdown;
+  window.petStatMultPct = petStatMultPct;
+  window.petBenchMultPct = petBenchMultPct;
+  window.petPoolMultPct = petPoolMultPct;
+  window.petOrbMultPct = petOrbMultPct;
+  window.PET_COMPARE_KEYS = PET_COMPARE_KEYS;
+  window.petCompareFinal = petCompareFinal;
   window.getPetBattlePicks = getPetBattlePicks;
   window.savePetBattlePicks = savePetBattlePicks;
   window.createPetUnitsForBattle = createPetUnitsForBattle;
@@ -414,6 +475,12 @@ if (typeof globalThis !== 'undefined') {
   globalThis.getBattleReadyPets = getBattleReadyPets;
   globalThis.healAllInjuredPets = healAllInjuredPets;
   globalThis.petStatBreakdown = petStatBreakdown;
+  globalThis.petStatMultPct = petStatMultPct;
+  globalThis.petBenchMultPct = petBenchMultPct;
+  globalThis.petPoolMultPct = petPoolMultPct;
+  globalThis.petOrbMultPct = petOrbMultPct;
+  globalThis.PET_COMPARE_KEYS = PET_COMPARE_KEYS;
+  globalThis.petCompareFinal = petCompareFinal;
   globalThis.getPetBattlePicks = getPetBattlePicks;
   globalThis.savePetBattlePicks = savePetBattlePicks;
   globalThis.createPetUnitsForBattle = createPetUnitsForBattle;

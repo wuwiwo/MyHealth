@@ -235,7 +235,11 @@ console.log('\n[4] 接线守卫');
 const petUi = src('pet-ui.js');
 const petStore = src('pet-store.js');
 assert('UI 详情调用 petStatBreakdown 展示拆解', petUi.indexOf('petStatBreakdown') >= 0);
-assert('UI 详情出现「基础 ＋ 加成 → 最终」标题', petUi.indexOf('基础 ＋ 加成') >= 0 && petUi.indexOf('最终') >= 0);
+/* v2.2 WP-I A-6：属性区由「基础 ＋ 加成 → 最终」的一句话标题
+   改为三段固定结构（① 基础属性 / ② 加成 / ③ 最终属性）→ 断言跟着改结构标签，
+   判据仍是「层次仍在且层次分明」（不是字符串巧合）。 */
+assert('UI 详情出现三段标题「① 基础属性 / ② 加成 / ③ 最终属性」',
+  petUi.indexOf('① 基础属性') >= 0 && petUi.indexOf('② 加成') >= 0 && petUi.indexOf('③ 最终属性') >= 0);
 assert('UI 面板有一键治疗按钮 petHealAll', petUi.indexOf('petHealAll') >= 0);
 assert('UI 一键治疗真的调 healAllInjuredPets', petUi.indexOf('healAllInjuredPets') >= 0);
 assert('UI 单只营养按钮仍走 useNutrition（与一键同一治疗口径）', petUi.indexOf('useNutrition') >= 0);

@@ -266,6 +266,180 @@ function renderPetPanel() {
   })
 }
 
+/* ============================================================
+   v2.2 WP-I A-6：宠物详情「属性区」重组 —— 作者原话：
+     「修改宠物-详情页面，属性部分将基础属性与加成分开，最后再显示最终属性，
+       层次要分明，现在太乱了。加成用：×N% 显示，可以展开加成来源，属性同理；
+       增加对比宠物的功能。」
+   三段固定结构：① 基础属性 → ② 加成（统一 ×N%）→ ③ 最终属性。
+   ⚠️ **只重组展示**：所有数字来自 pet-store.js 的 `petStatBreakdown()`
+      （本文件**不重算**任何数值口径、不引用稀有度倍率常量、不写存档）；
+      `×N%` 只是把 bd 的既有字段换算成倍数文本（换算见 petStatMultPct / petBenchMultPct /
+      petPoolMultPct / petOrbMultPct，全在 pet-store.js）。
+   ⚠️ 面板前提「按此宠上场计算」**保留并讲清楚**：团队凝聚 / 共鸣只作用于参战宠，
+      故 ② 的副标题、③ 的副标题、对比区口径行都写明这一前提。
+   ============================================================ */
+var PET_STAT_ROWS = [
+  { ico:'❤️', name:'生命', k:'hp' },
+  { ico:'⚔️', name:'攻击', k:'atk' },
+  { ico:'🛡️', name:'防御', k:'def' },
+  { ico:'👻', name:'魂攻', k:'soulAtk' },
+  { ico:'🌫️', name:'魂防', k:'soulDef' },
+  { ico:'💨', name:'速度', k:'spd' }
+];
+function petStatMeta(k) {
+  for (var i = 0; i < PET_STAT_ROWS.length; i++) if (PET_STAT_ROWS[i].k === k) return PET_STAT_ROWS[i];
+  return { ico: '•', name: k, k: k };
+}
+/* ×N% 文本（null = 基础为 0，无法表达为倍数） */
+function petMultTxt(pct) { return (pct == null) ? '×—' : '×' + pct + '%'; }
+
+/* 展开状态：模块级 UI 状态（**不进存档**，重渲染后保留） */
+var _petSrcOpen = false;      // ②「加成来源」
+var _petStatOpen = null;      // ③ 当前展开的属性 k（null = 全收起）
+var _petCompareSel = null;    // 对比对象 speciesId（null = 未对比）
+
+/* ② 加成来源：每一项都写成 ×N% */
+function petBonusSrcHtml(bd) {
+  var h = '';
+  h += '<div class="pet-src-line"><span class="pet-src-tag">稀有度倍率</span><span>' + petMultTxt(bd.rarityPct || 0) + '（全属性）</span></div>';
+  var orb = [];
+  PET_STAT_ROWS.forEach(function (r) {
+    if (r.k === 'spd') return;
+    var p = petOrbMultPct(bd, r.k);
+    if (p != null && p !== 100) orb.push(r.name + ' ' + petMultTxt(p));
+  });
+  h += '<div class="pet-src-line"><span class="pet-src-tag">宝珠</span><span>'
+    + (orb.length ? orb.join(' · ') + '（与稀有度<b>相加</b>进倍率池）' : '未装配（×100%）')
+    + '</span></div>';
+  var bench = [];
+  PET_STAT_ROWS.forEach(function (r) {
+    var p = petBenchMultPct(bd, r.k);
+    if (p != null && p !== 100) bench.push(r.name + ' ' + petMultTxt(p));
+  });
+  h += '<div class="pet-src-line"><span class="pet-src-tag">凝聚＋共鸣</span><span>'
+    + (bench.length
+        ? bench.join(' · ') + '（未上场 ' + bd.benchCount + ' 只：凝聚 10% ＋ 共鸣 ' + Math.round((bd.resonanceRate || 0) * 100) + '%）'
+        : '无后备宠（×100%）')
+    + '</span></div>';
+  h += '<div class="pet-src-note">倍率池 ＝ 稀有度 ＋ Σ宝珠%（两项<b>相加</b>，不是相乘）；'
+    + '凝聚/共鸣是<b>直接加属性值</b>，先并入基础、再整块乘倍率池。</div>';
+  return h;
+}
+
+/* ③ 单属性链路：基础 → 各来源 → 最终 */
+function petStatChainHtml(bd, k) {
+  var m = petStatMeta(k);
+  var ch = bd.cohesion[k] || 0, rr = bd.resonance[k] || 0;
+  var h = '<div class="pet-chain-hd">' + m.ico + ' ' + m.name + '</div>';
+  h += '<div class="pet-chain-line">基础 <b>' + (bd.base[k] || 0) + '</b>';
+  if (ch) h += ' ＋凝聚 <b>' + ch + '</b>';
+  if (rr) h += ' ＋共鸣 <b>' + rr + '</b>';
+  if (ch || rr) h += ' ＝ 上场 <b>' + (bd.bench[k] || 0) + '</b>';
+  h += ' → 最终 <b>' + (bd.final[k] || 0) + '</b>';
+  h += '<span class="pet-sec-sub"> （×倍率池 ' + petMultTxt(petPoolMultPct(bd, k)) + '，含稀有度' + (k === 'spd' ? '不参与' : '与宝珠相加') + '）</span>';
+  h += '</div>';
+  return h;
+}
+
+/* 属性区三段（① 基础 → ② 加成 → ③ 最终） */
+function petStatSectionsHtml(bd) {
+  var h = '<div class="pet-sec">';
+  h += '<div class="pet-sec-hd">📊 属性 <span class="pet-sec-sub">（① 基础 → ② 加成 → ③ 最终 · 按此宠上场计算）</span></div>';
+  if (!bd || !bd.ok) {
+    h += '<div class="pet-sec-empty">（属性拆解暂不可用）</div></div>';
+    return h;
+  }
+  h += '<div class="pet-sec-title">① 基础属性 <span class="pet-sec-sub">图鉴＋炼化＋天赋静态</span></div>';
+  h += '<div class="pet-grid">';
+  PET_STAT_ROWS.forEach(function (r) {
+    h += '<div class="pet-cell"><span class="pet-cell-ico">' + r.ico + '</span><span class="pet-cell-name">' + r.name
+      + '</span><b class="pet-cell-val">' + (bd.base[r.k] || 0) + '</b></div>';
+  });
+  h += '</div>';
+  h += '<div class="pet-sec-title">② 加成 <span class="pet-sec-sub">统一为 ×N% · 凝聚/共鸣只作用于参战宠</span></div>';
+  h += '<div class="pet-grid">';
+  PET_STAT_ROWS.forEach(function (r) {
+    h += '<div class="pet-cell"><span class="pet-cell-ico">' + r.ico + '</span><span class="pet-cell-name">' + r.name
+      + '</span><b class="pet-cell-mult">' + petMultTxt(petStatMultPct(bd, r.k)) + '</b></div>';
+  });
+  h += '</div>';
+  var srcLabel = '加成来源（未上场 ' + bd.benchCount + ' 只）';
+  h += '<button class="pet-src-toggle" id="petBonusSrcBtn" aria-expanded="' + (_petSrcOpen ? 'true' : 'false') + '" aria-controls="petBonusSrc" data-label="' + srcLabel + '">'
+    + (_petSrcOpen ? '▾ ' : '▸ ') + srcLabel + '</button>';
+  h += '<div class="pet-src" id="petBonusSrc"' + (_petSrcOpen ? '' : ' hidden') + '>' + petBonusSrcHtml(bd) + '</div>';
+  h += '<div class="pet-sec-title">③ 最终属性 <span class="pet-sec-sub">上场数值 · 点属性行看该属性的「基础 → 各来源 → 最终」</span></div>';
+  h += '<div class="pet-grid">';
+  PET_STAT_ROWS.forEach(function (r) {
+    var on = (_petStatOpen === r.k);
+    h += '<button class="pet-final-cell' + (on ? ' active' : '') + '" data-pet-stat="' + r.k + '" aria-expanded="' + (on ? 'true' : 'false') + '">'
+      + '<span class="pet-cell-ico">' + r.ico + '</span><span class="pet-cell-name">' + r.name
+      + '</span><b class="pet-cell-val">' + (bd.final[r.k] || 0) + '</b></button>';
+  });
+  h += '</div>';
+  h += '<div class="pet-chain" id="petStatDetail"' + (_petStatOpen ? '' : ' hidden') + '>'
+    + (_petStatOpen ? petStatChainHtml(bd, _petStatOpen) : '') + '</div>';
+  h += '</div>';
+  return h;
+}
+
+/* ============================================================
+   对比宠物（作者要求：可选另一只宠对比、最终属性并排 + 差值、只显示主要几项、可退出）
+   口径：**两只宠都按「此宠上场计算」**（与详情面板同一个 petStatBreakdown 口径）——
+         UI 里明写这一行，避免「拿 A 的上场值比 B 的基础值」。
+   交互：点宠物名开始对比 / 再点一次或点「退出对比」结束；换对象 = 直接点另一只。
+   ⚠️ 不新增页面 / 路由，全部在宠物面板 overlay 内完成。
+   ============================================================ */
+function petCompareHtml(pet) {
+  var d = getPetStore();
+  var list = (d.pets || []).filter(function (p) { return p.speciesId !== pet.speciesId; });
+  var ready = list.filter(function (p) { return canPetBattle(p); });
+  if (ready.length) list = ready;     // 优先列可参战的（口径就是「上场计算」）
+  var h = '<div class="pet-sec">';
+  h += '<div class="pet-sec-hd">⚖️ 对比宠物 <span class="pet-sec-sub">（两只宠同口径：都按「此宠上场计算」）</span></div>';
+  if (!list.length) {
+    h += '<div class="pet-sec-empty">还没有其它宠物可以对比</div></div>';
+    return h;
+  }
+  h += '<div class="pet-cmp-chips">';
+  list.forEach(function (p) {
+    var c = getPetCodex(p.speciesId) || {};
+    var on = (_petCompareSel === p.speciesId);
+    h += '<button class="speed-btn pet-cmp-chip' + (on ? ' active' : '') + '" data-pet-cmp="' + p.speciesId + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
+      + (c.name || p.name || p.speciesId) + '</button>';
+  });
+  h += '</div>';
+  var sel = null;
+  list.forEach(function (p) { if (p.speciesId === _petCompareSel) sel = p; });
+  if (!sel) h += '<div class="pet-sec-empty">点上面的宠物名开始对比（再点一次 = 结束对比）</div>';
+  else h += petCompareResultHtml(pet, sel);
+  h += '</div>';
+  return h;
+}
+
+function petCompareResultHtml(petA, petB) {
+  var na = (getPetCodex(petA.speciesId) || {}).name || petA.name;
+  var nb = (getPetCodex(petB.speciesId) || {}).name || petB.name;
+  var cmp = (typeof petCompareFinal === 'function') ? petCompareFinal(petA, petB) : null;
+  var h = '<div class="pet-cmp-res">';
+  h += '<div class="pet-cmp-note">口径：两只宠<b>都按「此宠上场计算」</b>（含凝聚/共鸣 ＋ 稀有度/宝珠倍率池）'
+    + '—— 不是「本宠的上场值比对比宠的基础值」。</div>';
+  if (!cmp || !cmp.ok) { h += '<div class="pet-sec-empty">（对比暂不可用）</div></div>'; return h; }
+  h += '<table class="pet-cmp-table"><thead><tr><th scope="col">属性</th><th scope="col">本宠·' + na
+    + '</th><th scope="col">对比·' + nb + '</th><th scope="col">差值</th></tr></thead><tbody>';
+  cmp.rows.forEach(function (row) {
+    var m = petStatMeta(row.key), dd = row.diff;
+    var txt = (dd == null) ? '—' : (dd > 0 ? '+' + dd : (dd < 0 ? '−' + Math.abs(dd) : '0'));
+    var cls = (dd == null || dd === 0) ? '' : (dd > 0 ? ' pet-cmp-up' : ' pet-cmp-dn');
+    h += '<tr><th scope="row">' + m.ico + ' ' + m.name + '</th><td>' + row.a + '</td><td>' + row.b + '</td>'
+      + '<td class="pet-cmp-diff' + cls + '">' + txt + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  h += '<button class="speed-btn pet-cmp-exit" id="petCmpExit">✕ 退出对比</button>';
+  h += '</div>';
+  return h;
+}
+
 /* 宠物详情（属性/炼化/技能/天赋）
    v2.1.3：补炼化进度条、技能指定升级
    v2.1.4：天赋改为固有展示（按 design-v2.0.md §2.6 回退「槽位解锁」） */
@@ -295,34 +469,14 @@ function renderPetDetail(pet, idx) {
     +'<div style="height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:var(--brand-fill);border-radius:4px;transition:width .3s"></div></div>'
     +'<div style="margin-top:6px;color:var(--text3)">成功率：普通石 '+(rateN ? rateN+'%' : '不可用（Lv≥50）')+'　·　高级石 '+rateH+'%</div>'
     +'</div>'
-  /* v2.2 WP-H5：属性拆解 —— 基础 ＋ 加成（凝聚 / 共鸣 / 宝珠%）→ 最终属性。
-     ⚠️ **只改展示**：四个数全部来自 pet-store.js 的 `petStatBreakdown()`（它又直接复用
-     createPetUnit / benchBonusSum / resonanceBonus / boostPetForGroup 这套数值口径），
-     本处**不另算一套**、不写存档。 */
+  /* v2.2 WP-I A-6：属性区重组 —— ① 基础属性 → ② 加成（统一 ×N%）→ ③ 最终属性。
+     ⚠️ **只重组展示与表达**：所有数字来自 pet-store.js 的 `petStatBreakdown()`
+     （它又直接复用 createPetUnit / benchBonusSum / resonanceBonus / boostPetForGroup
+     这套数值口径），本处**不另算一套**、不写存档、不引入新字号/颜色。 */
   var bd = (typeof petStatBreakdown === 'function') ? petStatBreakdown(pet) : null
-  h += '<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:8px 10px;margin-bottom:8px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">📊 属性 <span style="color:var(--text3);font-weight:400">（基础 ＋ 加成 → 最终）</span></div>'
-  if (!bd || !bd.ok) {
-    h += '<div style="color:var(--text3)">（属性拆解暂不可用）</div>'
-  } else {
-    h += '<div style="color:var(--text3)">百分比池（逐属性）＝ 稀有度 <b style="color:var(--text2)">' + bd.rarityPct + '%</b> ＋ Σ宝珠%（速度不参与）</div>'
-    h += '<div style="color:var(--text3)">加成来源＝团队凝聚（未上场 ' + bd.benchCount + ' 只 ×10%）＋共鸣 ' + Math.round((bd.resonanceRate || 0) * 100) + '%　·　按此宠上场计算</div>'
-    ;[['❤️','HP','hp'],['⚔️','攻','atk'],['🛡️','防','def'],['👻','魂攻','soulAtk'],['🌫️','魂防','soulDef'],['💨','速','spd']].forEach(function(r){
-      var k = r[2]
-      var bv = bd.base[k] || 0
-      var ch = bd.cohesion[k] || 0, rr = bd.resonance[k] || 0
-      var add = ch + rr
-      var src = []
-      if (ch) src.push('凝聚 ' + ch)
-      if (rr) src.push('共鸣 ' + rr)
-      h += '<div>' + r[0] + ' ' + r[1] + ' <b style="color:var(--brand-fill)">' + (bd.final[k] || 0) + '</b>'
-        + '<span style="color:var(--text3)"> ＝ 基础 ' + bv
-        + (add ? ' ＋加成 <span style="color:var(--green)">' + add + '</span>（' + src.join('＋') + '）' : '')
-        + (k === 'spd' ? '（不参与百分比）' : ' ×' + (bd.poolPct[k] || 0) + '%')
-        + '</span></div>'
-    })
-  }
-  h += '</div>'
+  h += petStatSectionsHtml(bd)
+  // v2.2 WP-I A-6：对比宠物（同口径：两只宠都按「此宠上场计算」）
+  h += petCompareHtml(pet)
   // v2.1.17 宝珠槽位
   h += orbSlotsHtml(pet, d).replace(/__IDX__/g, idx)
   // 技能（v2.1.3：指定技能升级，消耗灵能）
@@ -352,10 +506,62 @@ function renderPetDetail(pet, idx) {
     h += '<div>'+(t?t.name:tid)+' <span style="color:var(--text3)">· '+(t?t.desc:'')+'</span></div>'
   })
   h += '</div>'
+  /* 重渲染前记下滚动位置，赋值后还原 —— 详情页比一屏高，
+     「展开属性 / 换对比对象」都会重渲染，不还原就会弹回顶部。 */
+  var _st = ov.scrollTop
   ov.innerHTML = '<div class="panel-inner">' + h + '</div>'
   ov.classList.add('open')   // 防御：直接调用详情时也能显示（原先依赖 panel 已打开）
+  ov.scrollTop = _st
   var back = document.getElementById('petDBack')
-  if (back) back.addEventListener('click', function(){ renderPetPanel() })
+  if (back) back.addEventListener('click', function(){ _petCompareSel = null; renderPetPanel() })
+  /* v2.2 WP-I A-6：属性区交互（纯前端状态，不写存档、不开新页面）
+     ③ 的属性行：点开看该属性的「基础 → 各来源 → 最终」（同一时刻只展开一行）
+     ② 「加成来源」：展开各来源明细（每项都是 ×N%） */
+  function paintPetStatDetail() {
+    var box = document.getElementById('petStatDetail')
+    var show = !!(bd && bd.ok && _petStatOpen)
+    if (box) {
+      box.innerHTML = show ? petStatChainHtml(bd, _petStatOpen) : ''
+      box.hidden = !show
+    }
+    ov.querySelectorAll('[data-pet-stat]').forEach(function (b) {
+      var on = b.getAttribute('data-pet-stat') === _petStatOpen
+      b.setAttribute('aria-expanded', on ? 'true' : 'false')
+      b.classList.toggle('active', on)
+    })
+  }
+  ov.querySelectorAll('[data-pet-stat]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var k = btn.getAttribute('data-pet-stat')
+      _petStatOpen = (_petStatOpen === k) ? null : k
+      paintPetStatDetail()
+    })
+  })
+  var srcBtn = document.getElementById('petBonusSrcBtn')
+  if (srcBtn) srcBtn.addEventListener('click', function () {
+    _petSrcOpen = !_petSrcOpen
+    srcBtn.setAttribute('aria-expanded', _petSrcOpen ? 'true' : 'false')
+    srcBtn.textContent = (_petSrcOpen ? '▾ ' : '▸ ') + (srcBtn.getAttribute('data-label') || '加成来源')
+    var box = document.getElementById('petBonusSrc')
+    if (box) box.hidden = !_petSrcOpen
+  })
+  /* 对比宠物：点宠物名开始对比；再点同一只 = 结束（可换对象、可退出，无新页面/路由） */
+  function petDetailRerender() {
+    var p2 = getPetStore().pets[idx]
+    if (p2) renderPetDetail(p2, idx)
+  }
+  ov.querySelectorAll('[data-pet-cmp]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var sid = btn.getAttribute('data-pet-cmp')
+      _petCompareSel = (_petCompareSel === sid) ? null : sid
+      petDetailRerender()
+    })
+  })
+  var cmpExit = document.getElementById('petCmpExit')
+  if (cmpExit) cmpExit.addEventListener('click', function () {
+    _petCompareSel = null
+    petDetailRerender()
+  })
   // 技能升级
   ov.querySelectorAll('[data-pet-skill]').forEach(function(btn){
     btn.addEventListener('click', function(){
