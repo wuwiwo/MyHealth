@@ -1,7 +1,151 @@
 # v2.3 变更日志
 
 > 本文件只记录 **v2.3.x** 的变更。v2.2 及更早见 `doc/changelog-v2.2.md`。
-> 设计规格：`doc/design-monster-icons.md`（怪兽头像）· `doc/design-pet-icons.md`（宠物头像）
+> 设计规格：`doc/design-monster-icons.md`（怪兽头像）· `doc/design-pet-icons.md`（宠物头像）·
+> `doc/design-skill-icons.md`（技能图标）
+
+---
+
+## v2.3.2
+
+**技能图标像素图标：48 个技能 → 逐技能各一枚 + 接入三处界面 + 修 `.gitignore` 地雷**
+
+### 新增功能
+
+**① 48 枚技能图标（一技能一枚，不做原型收敛）**
+
+| 来源 | 数量 | 注册表 | 说明 |
+|---|---|---|---|
+| 玩家技能 | 10 | `page/skills.js` 的 `PLAYER_SKILLS` | 装备在角色上 |
+| 敌方技能 | 25 | `page/skill.js` 的 `SKILLS` | 敌人单位 `u.skills` |
+| 宠物技能 | 13 | `page/pet-codex.js` → 注册进**同一个** `SKILLS` | 全部 `p_` 前缀 |
+| **合计** | **48** | | |
+
+**为什么技能不按原型收敛，而怪兽要**（`doc/design-skill-icons.md` §0）：
+
+- 怪兽 189 个名字里大量是**同形不同名的改词**（`永恒壁垒`/`终极壁垒`/`星核壁垒` = 同一面方正盾），
+  收敛成原型不丢辨识度；
+- 而技能语义**真正互斥** —— `暴击`/`治愈`/`冰冻三尺`/`地刺`/`暴风雪` 是不同的视觉概念，
+  强行合并会把本该分开的东西挤成同一张图；
+- 技能注册在代码里、几乎不变动，「降低维护成本」这个收敛收益也不成立。
+
+**② 新增模块 `page/skill-icon.js`（图标渲染唯一入口）**
+
+与 `monster-archetype.js` 同构：所有技能图标都只能从这里取，禁止在业务代码里手拼路径。
+
+- `SKILL_ICON_PLAYER`（10）· `SKILL_ICON_ENEMY`（25）· `SKILL_ICON_PET`（13）三张白名单
+- `skillIconKnown(id, isPlayer)` —— id 合法性校验；`isPlayer` 缺省时跨三表查找
+- `skillIconUrl()` / `skillIconHtml()` / `skillIconHtmlByOwner()` / `skillIconHtmlByName()` / `skillIconIds()`
+- 非法 id 返回 `null` / `''`，**由调用方降级**，绝不拼出必然 404 的路径
+
+> ⚠️ **`isPlayer === false` 必须同时认敌方表与宠物表**：宠物技能注册在同一个 `SKILLS` 里，
+> 战斗中由同一段 `renderUnitSkillChips` / `showSkillDetail` 渲染，那些调用点会显式传 `false`。
+> 若只认敌方表，宠物技能被判非法 → 界面**空白图标**（静默降级）。
+> 这是本版测试实际抓到的缺陷（见下方「修复」②）。
+
+**③ 资源 `page/media/skills/*.svg` × 48**
+
+| 组 | ids |
+|---|---|
+| 玩家 10 | `crit` `vitality` `meteor` `block` `momentum` `icebeam` `goldshield` `spotlight` `boulder` `qifeng` |
+| 敌方 25 | `charge` `bite` `surprise` `blackmist` `spikes` `blizzard` `snowball` `deepfreeze` `chargeup` `armorbreak` `stardust` `shrink` `yawn` `drench` `possess` `taunt` `doom` `drainbuff` `bulwark` `cleanse` `heal` `empower` `lastword` `fortify` `clearfog` |
+| 宠物 13 | `p_shine` `p_drench` `p_sleep` `p_flamepeck` `p_sing` `p_thundercharge` `p_doublehit` `p_phantom` `p_iceburst` `p_holylight` `p_dreamball` `p_shadowfist` `p_warmight` |
+
+规格与逐技能提示词（形象描述 / 像素化要点 / 调色板 / 构图草图指引 / 去重红线）
+见新增 `doc/design-skill-icons.md` §1~§3；交付哈希与方法论教训见 §5。
+
+**④ 接入三处界面**
+
+| 界面 | 位置 | 尺寸 |
+|---|---|---|
+| 培养页技能卡片 | `page/skill-ui.js` `.skill-card-name` 内 | 32px |
+| 战斗技能芯片（敌方 + 玩家） | `page/game-render.js` `renderUnitSkillChips` 两条分支 | 32px |
+| 技能详情弹窗（敌方 + 玩家） | `game-render.js` `showSkillDetail` / `showPlayerSkillDetail` 标题 | 32px |
+
+全部采用**守卫式调用**（`typeof skillIconHtml === 'function'`），模块缺失时退化为纯文字，
+**不留裂图**。详情弹窗的 `⚡` 占位符仅在图标不可用时保留。
+
+CSS 新增 `.sk-ico`（`image-rendering:pixelated`）+ `.skill-card-ico` / `.gb-chip-ico` /
+`.det-title-ico` 三个定位类。
+
+**⑤ 新增回归测试 `scripts/test-skill-icons.js`**
+
+七类守卫：三套 id 空间覆盖、白名单↔文件双向一致、SVG 硬规格、主题可读性（含**主体色断言**）、
+缺图标不炸、唯一入口、五处调用点接线。
+**运行结果 990 通过 / 0 失败。**
+
+### 修复
+
+**① `.gitignore` 把技能图标整个忽略掉（本版最重要的修复）**
+
+`.gitignore` 第 5 行原为 `skills/`（**无前导斜杠**）。该规则本意是忽略根目录的工具目录 `skills/`，
+但无锚定的写法会匹配**任意层级**的同名目录 —— 把新建的 `page/media/skills/` 一起吃掉。
+
+**后果**：48 枚技能图标**根本不会进版本库**，部署后全部 404。
+`git status` 不显示、测试脚本只读文件系统也测不出（文件在本地确实存在）。
+
+**修法**：改为 `/skills/`（锚定到仓库根）。已用 `git check-ignore` 双向验证：
+根 `skills/` 仍被忽略，`page/media/skills/` 可正常跟踪。
+
+> ⚠️ 同类风险：v2.3.1 的怪兽图标侥幸没踩雷，因为它们放在 `page/media/monsters/`。
+> **以后往 `page/media/` 下加目录时，务必先跑一次 `git check-ignore -v <新文件>`。**
+
+**② 宠物技能被判非法 id → 空白图标**
+
+测试第 3 节「每个真实技能都必须渲染出非空 `<img>`」抓到：13 个 `p_*` 技能传
+`isPlayer=false`（战斗中的真实调用方式）时返回空串。
+
+根因：`skillIconKnown()` 的 `isPlayer === false` 分支只查 `SKILL_ICON_ENEMY`，
+而宠物技能在独立表 `SKILL_ICON_PET` 里。
+
+> 这正是本条工作线的第一个「静默降级」类缺陷：id 判错**不抛错**，只是图标不见了。
+
+**③ 测试脚本自身的两个误报**
+
+- `SKILLS` 实为 **38** 条（敌方 25 + 宠物 13），原测试按 25 断言 → 误报 13 个「敌方技能漏画图标」。
+  已改为先按 `p_` 前缀排除宠物技能再校验敌方表。
+- 「skill-card 卡片内未渲染图标」误报：图标 HTML 被先算进 `sIco` 变量、再拼进卡片，
+  断言窗口需从卡片起始处**往回**留出变量声明那几行。
+
+**④ game-render.js 引入顺序注释修正**
+
+`skill-icon.js` 的 `<script>` 位置注释里写了 `game-render.js（316 行）`，实际在 320 行；
+已随本轮改动一并订正为不带行号的表述。
+
+### UI 调整
+
+- 技能名左侧统一加 32px 像素图标：培养页卡片、战斗芯片、详情弹窗标题三处。
+- 详情弹窗标题的 `⚡` 占位符在图标可用时移除，仅在降级路径保留。
+
+### 新增/删除文件
+
+**新增**
+
+| 文件 | 说明 |
+|---|---|
+| `page/skill-icon.js` | 技能图标渲染唯一入口（三套 id 空间） |
+| `page/media/skills/*.svg` × 48 | 技能图标资源（**新建目录**，本版修 `.gitignore` 后方可入库） |
+| `scripts/test-skill-icons.js` | 回归测试（990 断言） |
+| `doc/design-skill-icons.md` | 设计规格 + 逐技能提示词 + 交付记录 |
+
+**修改**
+
+`.gitignore` · `page/index.html`（引入 + 缓存令牌 `v130` → `v131`）· `page/index.css`（图标样式）·
+`page/game-render.js`（4 处接入）· `page/skill-ui.js`（1 处接入）· `page/utils.js`（`APP_VERSION`）·
+`README.md` · `doc/changelog-v2.3.md`
+
+**删除**：无
+
+### 已知偏弱图标（作者已决定「先接入，再看实际效果」）
+
+| id | 名称 | 问题 |
+|---|---|---|
+| `charge` | 冲撞 | 改 4 版；薄 V 形带被描边吃掉，靠加厚到 5 格 + 膨胀描边成立，形态偏简 |
+| `qifeng` | 启风 | 弧带过宽会吃掉全部 16 行；改「三行带」后成立，但仍是 2 色最简 |
+| `shrink` | 变小 | 前两版（虚线框+箭头 / 菱形）均失败；第三版同心方框成立，语义偏抽象 |
+| `surprise` | 击掌奇袭 | 覆盖率 164/256，元素偏密 |
+| `taunt` | 嘲讽 | 覆盖率 232/256，全套装最密 |
+| `p_shadowfist` | 无影拳 | 改 8 版后定为**临时版本**，形态可读但不够理想 |
 
 ---
 
@@ -236,11 +380,23 @@ B 组全部为非人形，轮廓本身差异巨大（三角帽 / 方块 / 倒三
 | v2.2.29 | 48 | 1409 行 game-render.js | 🐾 宠物头像 14 只（`page/media/pets/*.svg`）+ 接入 UI |
 | v2.2.30 | 48 | 1409 行 game-render.js | 🔍 宠物头像第三方评审收口（darkcrow 对比度 / alt / 32px / 去角标） |
 | v2.3.0 | 48 | 1409 行 game-render.js | 🐾 宠物面板布局整改（参战阵容上移 / 一键治疗全宽 / 结算按钮条件显示）—— **并行会话，记录见 `doc/changelog-v2.2.md`** |
-| v2.3.1 | 49 | 1422 行 game-render.js | 🐉 **怪兽头像 18 原型**（`page/media/monsters/*.svg`）+ `monster-archetype.js` + 接入关卡列表卡片·单敌对战界面·敌群战斗单位卡 |
+| v2.3.1 | 50 | 1422 行 game-render.js | 🐉 **怪兽头像 18 原型**（`page/media/monsters/*.svg`）+ `monster-archetype.js` + 接入关卡列表卡片·单敌对战界面·敌群战斗单位卡 |
+| v2.3.2 | **51** | **1430 行 game-render.js** | 🎯 **技能图标 48 枚**（`page/media/skills/*.svg`）+ `skill-icon.js` + 接入培养页卡片·战斗芯片·详情弹窗；修 `.gitignore` 的 `skills/` 未锚定地雷 |
 
-> 「JS文件数」= `page/` 下 `*.js` 文件数量。v2.3.1 由 48 → **49**（新增 `monster-archetype.js`）。
+> 「JS文件数」= `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）。
+>
+> ⚠️ **v2.3.1 行的数字已勘误**：原记 `49`，实测为 **50** —— 旧行漏计了子目录里的
+> `page/data/exercises-dataset.js`（`ls page/*.js` 不展开子目录）。v2.3.2 由 50 → **51**
+> （新增 `skill-icon.js`）。
+>
+> 「最大文件」v2.3.2 按 `wc -l` 对**本版提交内容**实测为 `game-render.js` **1430 行**。
+> ⚠️ 注意：工作树里同时存在**并行会话未提交的 v2.3.3 WP-I 战斗页宠物头像**改动
+> （`gbPetIconHtml` / `GB_PET_ICO_SIZE`，净增约 +51 行），
+> 直接 `wc -l page/game-render.js` 会得到 1486 行 —— **那 56 行不属于本版**。
+> 本表只记本版自己的变化：1422 + 8（本版 4 处接入共 4×+2/−1）= **1430**。
+>
 > 「最大文件」v2.3.1 按 `wc -l` 实测为 `game-render.js` **1422 行**
-> （v2.2.29 / v2.2.30 两行记的 1409 行是**改前**的值；本版在 `game-render.js` 内新增了两处接入代码：
+> （v2.2.29 / v2.2.30 两行记的 1409 行是**改前**的值；v2.3.1 在 `game-render.js` 内新增了两处接入代码：
 > 关卡列表卡片的头像注入 + `renderGroupUnit` 的敌方头像）。
 >
 > ⚠️ **历史行口径说明**：v1.0 ~ v2.2.28 的行**逐字取自 `doc/changelog-v2.2.md` 的架构演化表**，

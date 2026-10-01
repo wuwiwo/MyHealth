@@ -945,8 +945,10 @@ function renderUnitSkillChips(u){
       var s=(typeof SKILLS!=='undefined')?SKILLS[sid]:null
       var nm=s?s.name:sid
       var cd=skillCooldownLeft(u,sid)
+      /* v2.3.2：敌方技能芯片给图标（守卫式，模块缺失时退化为纯文字） */
+      var eIco=(typeof skillIconHtml==='function')?skillIconHtml(sid,32,'gb-chip-ico'):''
       out+='<button type="button" class="gb-chip sk '+(cd>0?'cd':'ready')+'" data-skill="'+sid+'" data-uid="'+u.id+'" title="'+escHtml(nm)+'（点看详情）">'
-        +escHtml(nm)+(cd>0?(' ⏳'+cd):' ✓')+'</button>'
+        +eIco+escHtml(nm)+(cd>0?(' ⏳'+cd):' ✓')+'</button>'
     })
   }
   if(u._playerSkills&&typeof getPlayerSkill==='function'){
@@ -957,8 +959,10 @@ function renderUnitSkillChips(u){
       var cd=(typeof skillCooldownLeft==='function')?skillCooldownLeft(u,sid):0
       var active=(s.type==='attack')   // 只有主动技能吃冷却
       var tail=active?(cd>0?(' ⏳'+cd):' ✓'):''
+      /* v2.3.2：玩家技能芯片给图标 */
+      var pIco=(typeof skillIconHtml==='function')?skillIconHtml(sid,32,'gb-chip-ico'):''
       out+='<button type="button" class="gb-chip sk '+((active&&cd>0)?'cd':'ready')+'" data-pskill="'+sid+'" data-uid="'+u.id+'" title="'+escHtml(s.name)+' Lv'+lv+'（点看详情）">'
-        +escHtml(s.name)+'<span class="gb-chip-lv">Lv'+lv+'</span>'+tail+'</button>'
+        +pIco+escHtml(s.name)+'<span class="gb-chip-lv">Lv'+lv+'</span>'+tail+'</button>'
     })
   }
   return out
@@ -1284,9 +1288,11 @@ function showSkillDetail(skillId, unit){
   pauseGroupBattle()
   var cd=(unit&&typeof skillCooldownLeft==='function')?skillCooldownLeft(unit,skillId):0
   var doc=(typeof SKILL_DOCS!=='undefined'&&SKILL_DOCS[skillId])?SKILL_DOCS[skillId]:null
+  /* v2.3.2：⚡ 换成敌方技能图标（isPlayer=false 走敌方 id 空间） */
+  var eDetIco=(typeof skillIconHtml==='function')?skillIconHtml(skillId,32,'det-title-ico',false):''
   var h='<div class="det-hdr">'
     +'<button class="speed-btn" id="detailClose">← 返回</button>'
-    +'<span class="det-title">⚡ '+escHtml(s.name)+'</span>'
+    +'<span class="det-title">'+(eDetIco||'⚡ ')+escHtml(s.name)+'</span>'
     +(unit?('<span class="det-sub">'+escHtml(unit.name)+'</span>'):'')
     +'</div>'
   h+='<div class="det-card"><div class="det-h">📋 基本信息</div>'
@@ -1346,9 +1352,11 @@ function showPlayerSkillDetail(skillId, unit, restore){
   pauseGroupBattle()
   var lv=(unit&&unit._playerSkills&&unit._playerSkills[skillId])
     ||((typeof getSkillState==='function'&&getSkillState().levels[skillId])||0)
+  /* v2.3.2：⚡ 换成技能图标（守卫式，模块缺失时保留 ⚡ 降级） */
+  var pDetIco=(typeof skillIconHtml==='function')?skillIconHtml(skillId,32,'det-title-ico',true):''
   var h='<div class="det-hdr">'
     +'<button class="speed-btn" id="detailClose">← 返回</button>'
-    +'<span class="det-title">⚡ '+escHtml(s.name)+'</span>'
+    +'<span class="det-title">'+(pDetIco||'⚡ ')+escHtml(s.name)+'</span>'
     +(unit?('<span class="det-sub">'+escHtml(unit.name)+'</span>'):'')
     +'</div>'
   h+='<div class="det-card"><div class="det-h">📋 基本信息</div>'

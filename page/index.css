@@ -630,7 +630,18 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-order-chip.now{border-color:var(--orange);color:var(--orange);font-weight:700}
 .gb-order-chip.ally{color:var(--green)}
 .gb-order-chip.enemy{color:var(--red)}
-/* 日志页：分回合 + 行动者标头 + 事件分行分色 */
+/* ========== v2.3.3 WP-I：战斗页宠物头像（单位卡 + 队伍条） ==========
+   头像渲染入口是 pet-ui.js 的 petIconStageHtml()（内部即 petIconHtml），尺寸由 JS 注入
+   （game-render.js 的 GB_PET_ICO_SIZE），别在 CSS 里改尺寸。
+   **两处都用 16px**：图标是 16×16 逻辑网格、1 格 = 3px → 16px 时每格 1px（干净），
+   且 16 ≤ 单位卡名字行实测 21px、芯片文字行盒 13.2px 的可容高度 ——
+   取 32px 会把名字行顶到 32px（整卡 96.4 → 107.4px）、把队伍条 38 → 54px，
+   而作者对战斗页的唯一硬要求是**不得变密**，故此处不取 32。
+   单位卡容器沿用 v2.3.0 的 .gb-ico（inline-flex + flex-shrink:0，与怪兽头像同一套）；
+   队伍条芯片只有「真有 SVG 头像」时才加 .has-ico：芯片自身转 flex，16px <img> 直接作
+   flex item（**不套 .gb-ico** —— inline-flex 容器会按基线把行盒撑高 3px、把 .gb-order
+   从 38px 顶到 41px 实测发生）。emoji 兜底时不加该类，走原行内排版，高度不变。 */
+.gb-order-chip.has-ico{display:flex;align-items:center;gap:4px}
 .gb-log-hdr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .gb-log-title{font-size:var(--fs-base);font-weight:700}
 .gb-log-note{font-size:var(--fs-2xs);color:var(--text3)}
@@ -755,6 +766,23 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 /* 单敌对战界面：头像在「敌人」块顶部居中，名字在下方 */
 .be-ico{display:flex;justify-content:center;margin-bottom:4px}
 .be-nm{display:block}
+
+/* ========== v2.3.2 技能图标（page/media/skills/*.svg） ==========
+   48×48 像素风，**一技能一枚（35 枚：玩家 10 + 敌方 25）**。
+   与怪兽线相反，技能不做原型收敛 —— 35 个语义真正互斥（暴击/治愈/冰冻三尺/
+   地刺/暴风雪 是不同视觉概念），强行合并会毁掉辨识度。理由见
+   doc/design-skill-icons.md §0。
+   与 .pet-ico / .mon-ico 同一套口径：pixelated + SVG 内建 crispEdges 双保险。
+   ⚠️ 显示尺寸必须是 16 的倍数：48px→每格 3px、32px→每格 2px、16px→每格 1px。
+      **24px 不是 16 的倍数**（1.5px/格，格宽不匀），禁止使用。
+      尺寸由 JS 侧 `skillIconHtml(id, size)` 注入 width/height，别在 CSS 里改。 */
+.sk-ico{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+/* 培养页技能卡片：图标在技能名前，与名称同一基线 */
+.skill-card-ico{display:inline-block;vertical-align:-8px;margin-right:6px;flex-shrink:0}
+/* 战斗技能芯片：图标与芯片文字同行对齐 */
+.gb-chip-ico{display:inline-block;vertical-align:-9px;margin-right:4px;flex-shrink:0}
+/* 技能详情弹窗标题：图标在标题文字之前 */
+.det-title-ico{display:inline-block;vertical-align:-9px;margin-right:4px;flex-shrink:0}
 .pet-card-name{flex:1;min-width:0;font-size:var(--fs-lg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pet-card-rarity{flex-shrink:0;font-size:var(--fs-xs);color:var(--purple,#a855f7)}
 .pet-card-status{font-size:var(--fs-xs);color:var(--text3);margin-top:4px}

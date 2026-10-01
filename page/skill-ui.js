@@ -40,8 +40,10 @@ function renderSkillPanel() {
     var equippedSlot = (st.loadout||[]).indexOf(id)
     /* WP-I C-01：与宠物卡（A-1）同一套版式 —— 说明独占正文行（原先被右侧 3 个 44px
        按钮挤到 94px 宽、折成 4~10 行），按钮组落到独立操作行；名称行 nowrap。 */
+    /* v2.3.2：技能卡片给图标。守卫式调用 —— 模块缺失时退化为纯文字，不留裂图。 */
+    var sIco = (typeof skillIconHtml === 'function') ? skillIconHtml(id, 32, 'skill-card-ico') : ''
     h += '<div class="skill-card">'
-      +'<div class="skill-card-name">'+s.name+' <span style="color:var(--text3);font-size:var(--fs-xs)">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
+      +'<div class="skill-card-name">'+sIco+s.name+' <span style="color:var(--text3);font-size:var(--fs-xs)">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
       +'<div class="skill-card-desc">'+(typeof fillPlayerSkillDesc==='function'?fillPlayerSkillDesc(s,lv):String(s.desc||'').replace(/n/g,String(lv)))+'</div>'
       +'<div class="skill-card-lv">Lv '+lv+'/'+s.maxLevel+(lv>=s.maxLevel?' · 已满级':' · 升级需 '+cost+' 点')+'</div>'
       // 操作（大按钮 44px）
