@@ -700,6 +700,17 @@ function groupVictoryReward(gb) {
   return { msg: msgs.join(' · ') }
 }
 
+/* v2.2.27 WP-I：一方的剩余总血量百分比（Σ当前HP ÷ Σ最大HP）。
+   ⚠️ **纯展示、只读**：不写回任何单位、不参与结算，也不改任何战斗数值/平衡。 */
+function gbSideHpPct(units){
+  var cur=0,max=0
+  ;(units||[]).forEach(function(u){
+    max+=(u.base&&u.base.hp)||0
+    cur+=Math.max(0,u.hp||0)
+  })
+  return max>0?Math.round(cur/max*100):0
+}
+
 /* 渲染群战 overlay：手动/自动 + 调速 + 单位 + 动画 + 详情 + 日志 */
 function renderGroupOverlay(show){
   var ov=document.getElementById('battleOverlay')
@@ -707,6 +718,7 @@ function renderGroupOverlay(show){
   if(show)ov.classList.add('open')
   if(!_groupBattle){ov.classList.remove('open');return}
   var gb=_groupBattle
+  var allyPct=gbSideHpPct(gb.allies), foePct=gbSideHpPct(gb.enemies)
   // v2.1.14：控制条常驻（sticky），其下是「战斗 / 日志」双 Tab —— 两个页签各自独立滚动
   var h='<div class="gb-ctrl">'
     +'<button class="speed-btn" id="gbClose" aria-label="退出战斗">✕</button>'
@@ -722,6 +734,13 @@ function renderGroupOverlay(show){
     +(_groupMode==='auto'?'<button class="speed-btn" id="gbSpeed">'+_groupSpeed+'×</button>':'')
     // 手动：推进一回合按钮
     +(_groupMode==='manual'?'<button class="speed-btn on-good" id="gbStep">⏭️ 下一回合</button>':'')
+    /* v2.2.27 WP-I：双方血量总览（控制条常驻 → 不滚屏也能看清敌我剩余血量）。
+       回合数已在上面的标题里；这里只补「我方 / 敌方」两条总量条。
+       数据来自 gbSideHpPct(gb.allies / gb.enemies)，纯展示、不参与结算。 */
+    +'<div class="gb-ovw">'
+    +'<span class="gb-ovw-side ally">🟢 我方<span class="gb-ovw-bar"><i style="width:'+allyPct+'%"></i></span>'+allyPct+'%</span>'
+    +'<span class="gb-ovw-side enemy">🔴 敌方<span class="gb-ovw-bar"><i style="width:'+foePct+'%"></i></span>'+foePct+'%</span>'
+    +'</div>'
     +'</div>'
   // v2.1.14 双 Tab（战斗 / 日志）
   h+='<div class="gb-tabs" role="tablist" aria-label="战斗视图">'
@@ -865,10 +884,12 @@ function logEventClass(e){
 /* 战斗页：行动顺序 + 我方 + 敌方 */
 function renderGroupBattlePane(gb){
   var h=renderGroupOrder(gb)
+  var petCount=0
+  gb.allies.forEach(function(u){ if(u._petSpecies) petCount++ })
   h+='<div class="gb-side-hdr ally"><span>🟢 我方</span>'
-  gb.allies.forEach(function(u){
-    if(u._petSpecies)h+='<span class="gb-tag pet">🐾 宠物</span>'
-  })
+  /* v2.2.27 WP-I：此前按宠物数逐个渲染「🐾 宠物」标签（4 只宠 → 同一标签重复 4 次，
+     挤占头部宽度）。合并为一个「🐾 宠物 ×N」，信息不减、标签数 4 → 1。 */
+  if(petCount)h+='<span class="gb-tag pet">🐾 宠物 ×'+petCount+'</span>'
   h+='</div>'
   gb.allies.forEach(function(u){h+=renderGroupUnit(u,'ally')})
   h+='<div class="gb-side-hdr enemy"><span>🔴 敌方</span></div>'
@@ -989,6 +1010,22 @@ function renderGroupUnit(u,side){
   var acting=(_groupActing===u.id)
   var cls='gb-unit'+(dead?' gb-dead':'')+(low?' gb-low':'')+(acting?' gb-acting':'')
   var barColor=dead?'var(--text3)':hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)'
+  /* v2.2.27 WP-I：阵亡单位**折叠成一行**。
+     此前阵亡卡片与存活卡片同高（血条 + 属性 + 技能/天赋标签一应俱全，约 125px），
+     5 个阵亡单位就把一屏填满，而它们的信息量已降为 0（血量恒 0、冷却/状态已无意义）。
+     折叠后只留「💀 名字 · 已阵亡」；卡片仍是 role=button 且内层行锁在 --touch-min(44px)，
+     热区不缩水，点开仍能看到详情的属性/技能/天赋。 */
+  if(dead){
+    return '<div class="'+cls+'" data-uid="'+u.id+'" role="button" tabindex="0" aria-label="'+escHtml(u.name)+' 已阵亡 详情">'
+      +'<div class="gb-dead-line">'
+      +'<span aria-hidden="true">💀</span>'
+      +'<span class="gb-dead-name">'+escHtml(u.name)+'</span>'
+      /* 不再渲染「▶ 行动中」：阵亡单位不可能再行动；自身反冲致死等场景下
+         _groupActing 仍指向它，两个标签同屏会自相矛盾。 */
+      +'<span class="gb-dead-tag">已阵亡</span>'
+      +'</div>'
+      +'</div>'
+  }
   // 状态徽章（图标 + 剩余回合；title 用中文名而非英文 id）
   var statusHtml=(u.statuses||[]).map(function(s){
     var ic=statusIcon(s.id)
@@ -1027,21 +1064,22 @@ function renderGroupUnit(u,side){
     +(acting?'<span class="gb-acting-tag">▶ 行动中</span>':'')
     +statusHtml+scared
     +'</div>'
-    // 第二行：血条（大）+ 数值与百分比
+    // 第二行（v2.2.27 WP-I：血条与属性合并同行，此前是「血条 16px」+「属性 17px」两行）
+    +'<div class="gb-hp-row">'
     +'<div class="gb-hp-wrap">'
     +'<div class="gb-hp-fill" style="width:'+hpPct+'%;background:'+barColor+'"></div>'
-    +'<span class="gb-hp-text">'+Math.max(0,u.hp)+'/'+u.base.hp+'　'+hpPct+'%</span>'
+    /* 血条内只留「当前/上限」：百分比文字与条长完全重复，去掉后宽属性单位（敌群敌人数值大）
+       也不会把数值挤出条外（详情页仍显示精确 HP）。 */
+    +'<span class="gb-hp-text" title="'+hpPct+'%">'+Math.max(0,u.hp)+'/'+u.base.hp+'</span>'
     +'</div>'
-    // 第三行：属性直显（有效值 + 修正箭头）+ 提示
     +'<div class="gb-stats">'
     +statCell('⚔️', 'atk')
     +statCell('🛡️', 'def')
     +statCell('💨', 'spd', (typeof effectiveSpeed === 'function') ? effectiveSpeed(u) : (u.base.spd || 0))
     +soulTxt
-    +'<span style="flex:1"></span>'
-    +(dead?'<span class="gb-dim">💀 已阵亡</span>':'<span class="gb-dim">👆 详情</span>')
     +'</div>'
-    // 第四行：技能冷却 + 天赋
+    +'</div>'
+    // 第三行：技能冷却 + 天赋
     +((skillChips||talentChips)?'<div class="gb-row4">'+skillChips+talentChips+'</div>':'')
     +'</div>'
 }
