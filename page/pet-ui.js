@@ -42,7 +42,14 @@ function orbSlotsHtml(pet, d) {
   var h = '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">';
   h += '<div style="font-weight:700;margin-bottom:4px">💎 宝珠 <span style="color:var(--text3);font-weight:400">（每类型 1 颗 · 碎片 <b>' + sh + '</b>）</span></div>';
   var eq = pet.orbs || {};
-  Object.keys(ORB_TYPES).forEach(function (t) {
+  /* WP-I A-5-5：5 槽全空、且库存也为空时，原来逐条渲染「（空）/ 无库存」共 5 行 ≈180px 零信息，
+     折叠成一行文案即可；只要任一类已装配、或库存里有货，就仍逐条展开（装配/升级/卸下）。 */
+  var orbTypes = Object.keys(ORB_TYPES);
+  var anyEquipped = orbTypes.some(function (t) { return !!eq[t]; });
+  if (!anyEquipped && !(d.orbs || []).length) {
+    h += '<div style="color:var(--text3)">' + orbTypes.length + ' 槽均空 · 通关隐藏挑战掉落宝珠，装配到宠物身上生效</div>';
+  } else {
+  orbTypes.forEach(function (t) {
     var ot = ORB_TYPES[t], o = eq[t];
     h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0">';
     if (o) {
@@ -66,6 +73,7 @@ function orbSlotsHtml(pet, d) {
     }
     h += '</div>';
   });
+  }
   h += '</div>';
   return h;
 }
@@ -112,16 +120,20 @@ function renderPetPanel() {
       var inj = (!p.isDead && p.injured) ? '<span style="color:var(--red)">🤕 受伤 ' + Math.round(p.injuryHeal || 0) + '%</span>' : ''
       // 进度条（孵化/成长）
       var prog = p.stage==='egg' ? p.hatchProgress : p.stage==='grow' ? p.growth : 100
-      h += '<div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg2);border-radius:14px;margin-bottom:10px">'
-        +'<span style="font-size:var(--fs-2xl)">'+stageIcon+'</span>'
-        +'<div style="flex:1">'
-        +'<div style="font-size:var(--fs-lg);font-weight:600">'+(codex.name||p.name)+' <span style="color:var(--purple,#a855f7);font-size:var(--fs-xs)">'+p.rarity+'</span></div>'
-        +'<div style="font-size:var(--fs-xs);color:var(--text3);margin:3px 0">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+(inj?' · '+inj:'')+'</div>'
-        // 进度条
-        +'<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;border:1px solid var(--bg2)"><div style="width:'+Math.min(100,prog)+'%;height:100%;background:var(--orange);border-radius:3px;transition:width .3s"></div></div>'
+      /* WP-I A-1：拆成「标题行（头像+名称+稀有度）/ 正文行（状态+进度）/ 操作行（按钮组）」。
+         原来单行 flex 时右侧按钮把中文名压到 ~21px 宽 →「清脆鸟」竖排三行。现在名称
+         独占标题行且 nowrap+省略号，任何宽度都不会竖排；按钮组独立一行，仍各 44px 热区。 */
+      h += '<div class="pet-card">'
+        +'<div class="pet-card-head">'
+        +'<span class="pet-card-ico">'+stageIcon+'</span>'
+        +'<span class="pet-card-name">'+(codex.name||p.name)+'</span>'
+        +'<span class="pet-card-rarity">'+p.rarity+'</span>'
         +'</div>'
+        +'<div class="pet-card-status">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+(inj?' · '+inj:'')+'</div>'
+        // 进度条
+        +'<div class="pet-card-bar"><i style="width:'+Math.min(100,prog)+'%"></i></div>'
         // 操作按钮（大按钮 44px）
-        +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+        +'<div class="pet-card-actions">'
         +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">🍖喂</button>'
         +((p.stage==='egg'||(p.stage==='mature'&&!p.isDead))?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(p.injured?';border-color:var(--red);color:var(--red)':'')+'">🧪营养</button>':'')
         +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">✨炼化</button>':'')

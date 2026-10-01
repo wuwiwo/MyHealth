@@ -38,14 +38,14 @@ function renderSkillPanel() {
     var lv = st.levels[id] || 0
     var cost = lv >= s.maxLevel ? 0 : skillUpgradeCost(s, lv)
     var equippedSlot = (st.loadout||[]).indexOf(id)
-    h += '<div style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--bg2);border-radius:14px;margin-bottom:10px">'
-      +'<div style="flex:1">'
-      +'<div style="font-size:var(--fs-md);font-weight:600">'+s.name+' <span style="color:var(--text3);font-size:var(--fs-xs)">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
-      +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:3px;line-height:1.5">'+(typeof fillPlayerSkillDesc==='function'?fillPlayerSkillDesc(s,lv):String(s.desc||'').replace(/n/g,String(lv)))+'</div>'
-      +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:3px">Lv '+lv+'/'+s.maxLevel+(lv>=s.maxLevel?' · 已满级':' · 升级需 '+cost+' 点')+'</div>'
-      +'</div>'
+    /* WP-I C-01：与宠物卡（A-1）同一套版式 —— 说明独占正文行（原先被右侧 3 个 44px
+       按钮挤到 94px 宽、折成 4~10 行），按钮组落到独立操作行；名称行 nowrap。 */
+    h += '<div class="skill-card">'
+      +'<div class="skill-card-name">'+s.name+' <span style="color:var(--text3);font-size:var(--fs-xs)">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
+      +'<div class="skill-card-desc">'+(typeof fillPlayerSkillDesc==='function'?fillPlayerSkillDesc(s,lv):String(s.desc||'').replace(/n/g,String(lv)))+'</div>'
+      +'<div class="skill-card-lv">Lv '+lv+'/'+s.maxLevel+(lv>=s.maxLevel?' · 已满级':' · 升级需 '+cost+' 点')+'</div>'
       // 操作（大按钮 44px）
-      +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+      +'<div class="skill-card-actions">'
       // v2.1.14：技能详情（当前等级数值 / 满级预览 / 升级花费）
       +'<button class="speed-btn" data-skill-info="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">ℹ️ 详情</button>'
       +(equippedSlot>-1

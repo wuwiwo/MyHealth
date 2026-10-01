@@ -1192,7 +1192,12 @@ var _SKILL_TYPE_NAMES={attack:'攻击类',support:'辅助类',passive:'被动'}
 /* 玩家技能 effect() 返回值的展示标签 */
 var _EFFECT_LABELS={chance:'触发几率',critMult:'暴击伤害倍率',healPct:'回复比例（基于防御）',power:'威力倍率（基于魂攻）',
   targets:'目标数',cd:'冷却回合',reduce:'减伤比例',atkBoost:'全队攻击加成',dur:'持续回合',lock:'触发后锁',
-  shieldPct:'护盾比例（攻+魂攻）',tauntDur:'嘲讽回合',soulDefDown:'降低魂防比例',freeze:'冰冻回合',ignoreSoulDef:'无视魂防'}
+  shieldPct:'护盾比例（攻+魂攻）',tauntDur:'嘲讽回合',soulDefDown:'降低魂防比例',freeze:'冰冻回合',ignoreSoulDef:'无视魂防',
+  /* WP-I A-2：补齐此前未登记的 effect() 键 —— 漏一个就会把 camelCase 英文标识符直接印在
+     「数值对比」表上（真机直证：`reflectPct 0.2 0.2`，应为「破盾反伤比例 20%」）。
+     映射表之外的键一律隐藏（见 showPlayerSkillDetail），兜底而不是露英文。 */
+  passiveReduce:'常驻减伤比例',perfectChance:'完美格挡几率',perfectMin:'完美格挡减伤下限',perfectMax:'完美格挡减伤上限',
+  reflectPct:'破盾反伤比例',spdPct:'速度提升比例',extraMult:'额外攻击倍率',everyTurns:'触发间隔（回合）'}
 /* 天赋 hook → 人话触发时机 */
 var _HOOK_LABELS={onBattleStart:'战斗开始时（仅一次）',onTurnStart:'自己回合开始',onTurnEnd:'自己回合结束',
   onBeforeAction:'自己行动前（可跳过行动）',onAfterAction:'自己行动后',onDamage:'伤害结算时（攻防双方都会问）',
@@ -1203,12 +1208,15 @@ var _HOOK_LABELS={onBattleStart:'战斗开始时（仅一次）',onTurnStart:'�
      此前漏登记 → 天赋详情弹层「触发时机」会把原始 hook id 打印两次（label 与 dim 都是 id）。 */
   onBeforeSupportEffect:'自己将受到辅助效果时'}
 
-/* 比例类数值 → 百分数；倍率类 → 保留两位 */
+/* 比例类数值 → 百分数；倍率类 → 保留两位；布尔 → 是/否（A-2：原先 `true` 会当英文原样打印） */
+var _EFFECT_PCT={chance:1,healPct:1,reduce:1,passiveReduce:1,perfectChance:1,perfectMin:1,perfectMax:1,
+  atkBoost:1,shieldPct:1,reflectPct:1,soulDefDown:1,spdPct:1}
 function fmtEffectVal(k,v){
   if(v==null||v==='')return '—'
+  if(typeof v==='boolean')return v?'是':'否'
   if(typeof v!=='number')return String(v)
-  if(k==='chance'||k==='healPct'||k==='reduce'||k==='atkBoost'||k==='shieldPct'||k==='soulDefDown')return Math.round(v*100)+'%'
-  if(k==='power')return (Math.round(v*100)/100)+'×'
+  if(_EFFECT_PCT[k])return Math.round(v*100)+'%'
+  if(k==='power'||k==='extraMult')return (Math.round(v*100)/100)+'×'
   if(k==='critMult')return v.toFixed(2)+'×'
   return String(v)
 }
@@ -1306,9 +1314,11 @@ function showPlayerSkillDetail(skillId, unit, restore){
     h+='<div class="det-card"><div class="det-h">📊 数值对比</div>'
     h+='<div class="det-kv head"><span class="det-k">项目</span><span class="det-v">Lv'+lv+'</span><span class="det-v2">Lv'+s.maxLevel+' 满级</span></div>'
     Object.keys(max||cur||{}).forEach(function(k){
+      /* WP-I A-2：映射表未登记的键直接隐藏（兜底），绝不把英文标识符 `reflectPct` 之类露给用户 */
+      if(!_EFFECT_LABELS[k])return
       var a=(cur&&cur[k]!=null)?cur[k]:'—'
       var b=(max&&max[k]!=null)?max[k]:'—'
-      h+='<div class="det-kv"><span class="det-k">'+escHtml(_EFFECT_LABELS[k]||k)+'</span><span class="det-v">'+escHtml(fmtEffectVal(k,a))+'</span><span class="det-v2">'+escHtml(fmtEffectVal(k,b))+'</span></div>'
+      h+='<div class="det-kv"><span class="det-k">'+escHtml(_EFFECT_LABELS[k])+'</span><span class="det-v">'+escHtml(fmtEffectVal(k,a))+'</span><span class="det-v2">'+escHtml(fmtEffectVal(k,b))+'</span></div>'
     })
     h+='</div>'
   }

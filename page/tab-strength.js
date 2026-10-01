@@ -144,7 +144,10 @@ function renderMissed(){
   c.innerHTML=missed.map(dd=>{
     const note=getMissed()[dd]||''
     const isRest=note.indexOf('🛌')===0
-    return '<div class="md-item'+(isRest?' rest':'')+'"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button>'+(isRest?'':'<button class="md-write" data-date="'+dd+'" data-rest="1" style="color:var(--green)">🛌 休息日</button>')+'<button class="md-write" data-date="'+dd+'" data-makeup="1" style="color:var(--green)">➕ 补签</button></div>'+(isRest?'<span class="md-rest-badge">🛌 休息日</span>':'')+'<div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(isRest?'':note)+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
+    /* WP-I C-02：原来「日期 + ✏️说明原因 + 🛌休息日 + ➕补签」4 个元素挤在同一 flex 行，
+       4 个全部折成 2 行。现在拆成「日期一行（.md-hdr）/ 操作一行（.md-actions）」，
+       按钮仍各自 min-height:var(--touch-min)=44px（不缩热区）。 */
+    return '<div class="md-item'+(isRest?' rest':'')+'"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span></div><div class="md-actions"><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button>'+(isRest?'':'<button class="md-write" data-date="'+dd+'" data-rest="1" style="color:var(--green)">🛌 休息日</button>')+'<button class="md-write" data-date="'+dd+'" data-makeup="1" style="color:var(--green)">➕ 补签</button></div>'+(isRest?'<span class="md-rest-badge">🛌 休息日</span>':'')+'<div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(isRest?'':note)+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
   }).join('')
   c.querySelectorAll('.md-write').forEach(b=>b.addEventListener('click',()=>{
     const dd=b.dataset.date

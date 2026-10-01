@@ -89,10 +89,18 @@
 .no-transition,.no-transition *{transition:none!important}
 html{font-size:16px;-webkit-text-size-adjust:100%}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-#app{max-width:var(--mw);margin:0 auto;padding:0 var(--pad-screen) calc(var(--sp-6) + var(--sab));position:relative}
+/* 底部安全内边距：右下角固定 FAB（.debug-fab，44px + bottom 16px）会压住滚动区最后一屏，
+   WP-I A-5-1 → 预留 44 + 16 + 16 = 76px，让内容可滚过 FAB（不改 FAB 位置）。 */
+#app{max-width:var(--mw);margin:0 auto;padding:0 var(--pad-screen) calc(var(--touch-min) + var(--sp-4) + var(--sp-4) + var(--sab));position:relative}
 
 /* Header */
 .app-header{background:var(--surface);margin:0 calc(-1 * var(--pad-screen)) 0;position:relative;border-bottom:2px solid var(--orange);box-shadow:var(--shadow);overflow:hidden}
+/* WP-I C-04 诊断记录（**故意不改**）：审计里每个视图都出现的
+   「header cw390<sw429 / cw360<sw396 / cw500<sw550」恒定裁切 36~50px，
+   根因就是这条装饰光晕 `right:-10%` —— 绝对定位子元素把 scrollWidth 撑出容器宽度的
+   10%（390→39 / 360→36 / 500→50），再由 `overflow:hidden` 吃掉，属**设计内裁切**；
+   实测 `.header-title-group` / `.header-subtitle` 都是 cw==sw（无文字被裁），
+   与安全区(--sat=0) 或吸顶高度计算无关。故保持原样，仅记录以免复诊。 */
 .app-header::before{content:'';position:absolute;top:-60%;right:-10%;width:280px;height:280px;background:radial-gradient(circle,var(--orange-g) 0%,transparent 70%);border-radius:50%;pointer-events:none}
 .header-inner{padding:16px 16px 12px;position:relative;z-index:1}
 .header-top{display:flex;align-items:center;justify-content:space-between}
@@ -158,8 +166,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .ex-suggest button{min-height:var(--touch-min);padding:0 var(--sp-3);display:inline-flex;align-items:center;border:1px solid var(--bd);background:var(--bg3);color:var(--text2);border-radius:var(--rp);font-size:var(--fs-xs);font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;-webkit-tap-highlight-color:transparent}
 .ex-suggest button:hover{border-color:var(--orange);color:var(--orange);background:rgba(var(--brand-rgb),.1)}
 
-/* Weight Grid */
-.weight-grid{display:flex;flex-wrap:wrap;gap:6px}
+/* Weight Grid
+   WP-I C-07：13 个筹码原来按 flex-wrap 排成 6/6/1，最后一行只剩「25」= 孤立行。
+   项集（COMMON_W）在 utils.js，本批不可改，故只改列数：固定 5 列 → 5+5+3，
+   任意宽度下末行都不再只有 1 个。最窄支持宽度 298px（360 视口 add-card 内宽）下
+   每格 ≈54px，仍 ≥ --touch-min(44px)，热区下限不变。 */
+.weight-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
 .wt-btn{min-width:var(--touch-min);height:var(--touch-min);padding:0 var(--sp-3);border:1px solid var(--bd);border-radius:var(--rs);background:var(--bg3);font-size:var(--fs-sm);font-weight:600;cursor:pointer;transition:all .15s;color:var(--text2);font-family:var(--font);-webkit-tap-highlight-color:transparent;user-select:none}
 .wt-btn:hover{border-color:var(--orange);color:var(--orange)}
 .wt-btn:active{transform:scale(.94)}
@@ -258,7 +270,10 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 
 /* Missed Days */
 .md-item{background:var(--bg2);border-radius:var(--r);padding:14px;border:1px solid var(--bd);margin-bottom:6px;box-shadow:var(--shadow)}
+/* WP-I C-02：原来日期 + 3 个 .md-write 按钮挤在同一 flex 行 → 4 个元素全部折成 2 行。
+   现拆成「日期一行 / 操作一行」，按钮组单独一行（仍保留各自 44px 触控高度）。 */
 .md-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.md-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
 .md-date{font-size:var(--fs-sm);font-weight:700;color:var(--text)}
 .md-write{font-size:var(--fs-xs);color:var(--orange);background:none;border:none;cursor:pointer;font-family:inherit;min-height:var(--touch-min);padding:0 var(--sp-3);border-radius:6px;display:inline-flex;align-items:center;transition:all .15s;-webkit-tap-highlight-color:transparent}
 .md-write:hover{background:rgba(var(--brand-rgb),.1)}
@@ -331,7 +346,8 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 /* 全屏可滚动面板（宠物/技能培养）：battle-overlay 为战斗 flex 布局且不可滚动，勿复用 */
 .panel-overlay{position:fixed;inset:0;z-index:var(--z-panel);background:var(--bg);display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .panel-overlay.open{display:block}
-.panel-inner{max-width:var(--mw);margin:0 auto;padding:calc(var(--sp-4) + var(--sat)) var(--pad-screen) calc(var(--sp-8) + var(--sab))}
+/* 同上（A-5-1）：面板 overlay 内也是滚动容器，底部同样让开 FAB */
+.panel-inner{max-width:var(--mw);margin:0 auto;padding:calc(var(--sp-4) + var(--sat)) var(--pad-screen) calc(var(--touch-min) + var(--sp-4) + var(--sp-4) + var(--sab))}
 /* v2.1.7 关卡选择：大关卡片 + 进度条
    状态用「文字标签 + 颜色」双重表达，不靠颜色单独传达（WCAG 1.4.1） */
 .gl-group-card{display:flex;flex-direction:column;gap:6px;text-align:left;padding:12px;min-height:76px;border-radius:var(--rad-md)}
@@ -418,7 +434,10 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .m-btn-save:hover{box-shadow:0 4px 16px var(--orange-g);transform:translateY(-1px)}
 
 /* Toast */
-.toast-c{position:fixed;top:calc(var(--sp-10) + var(--sat));left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+/* WP-I C-05：原 top 只有 40px，压在 81px 高的 header 标题上。
+   header 实测 81px（≤380px 时 68px）+ 主导航 --tabbar-h(48px) → 取
+   「2×--tabbar-h + --sp-10」= 136px，落在 header + 导航之下（不写 130px 裸值）。 */
+.toast-c{position:fixed;top:calc(var(--tabbar-h) * 2 + var(--sp-10) + var(--sat));left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
 .toast{background:var(--surface-2);color:var(--text);padding:12px 22px;border-radius:var(--rp);font-size:var(--fs-sm);font-weight:600;border:1px solid var(--bd);box-shadow:var(--shadow-lg);animation:ti var(--dur-3) var(--ease-out);transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)pointer-events:auto;display:flex;align-items:center;gap:8px}
 .toast-s{border-color:var(--green);background:rgba(var(--success-rgb),.12);color:var(--green)}
 .toast-e{border-color:var(--red);background:rgba(var(--danger-rgb),.12);color:var(--red)}
@@ -428,7 +447,7 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 /* Responsive */
 @media(max-width:380px){
   :root{--pad-screen:12px}
-  #app{padding:0 var(--pad-screen) calc(var(--sp-5) + var(--sab))}
+  #app{padding:0 var(--pad-screen) calc(var(--touch-min) + var(--sp-4) + var(--sp-4) + var(--sab))}
   .header-inner{padding:12px 12px 10px}
   .tab-btn{font-size:var(--fs-xs);padding:10px 2px}
   .stats-grid{grid-template-columns:1fr 1fr}
@@ -437,7 +456,7 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 }
 @media(min-width:600px){
   :root{--pad-screen:24px}
-  #app{padding:0 var(--pad-screen) calc(var(--sp-8) + var(--sab))}
+  #app{padding:0 var(--pad-screen) calc(var(--touch-min) + var(--sp-4) + var(--sp-4) + var(--sab))}
   .stats-grid{grid-template-columns:1fr 1fr 1fr 1fr}
 }
 
@@ -679,6 +698,28 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 /* 动作百科筛选区：紧凑单行横向滚动（不换行，不占垂直空间） */
 #dsCatRow,#dsEqRow{flex-wrap:nowrap !important}
 #dsCatRow .car-type,#dsEqRow .car-type{flex-shrink:0;min-height:36px;padding:0 var(--sp-3);font-size:var(--fs-xs);white-space:nowrap}
+
+/* ========== WP-I A-1 / C-01：宠物卡 / 技能卡（拆成「标题行 / 正文行 / 操作行」） ==========
+   原来卡片是单行 flex，右侧 3~4 个 44px 按钮把中文字符串挤到 ~21px 宽 →
+   「清脆鸟」竖排成三行（A-1），技能说明被压成 4~10 行、宽仅 94px（C-01）。
+   两张卡现在同一套版式：① 标题行（头像+名称+稀有度 ／ 名称+类型+槽位）
+   ② 正文行（状态与进度 ／ 说明与等级）③ 操作行（按钮组独占一行、可 wrap）。
+   名称 nowrap + 省略号 → 任何宽度都不会再竖排；按钮各自 ≥44px 热区不变。 */
+.pet-card{background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.pet-card-head{display:flex;align-items:center;gap:10px;min-width:0}
+.pet-card-ico{font-size:var(--fs-2xl);flex-shrink:0}
+.pet-card-name{flex:1;min-width:0;font-size:var(--fs-lg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pet-card-rarity{flex-shrink:0;font-size:var(--fs-xs);color:var(--purple,#a855f7)}
+.pet-card-status{font-size:var(--fs-xs);color:var(--text3);margin-top:4px}
+.pet-card-bar{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-top:4px}
+.pet-card-bar i{display:block;height:100%;background:var(--orange);border-radius:3px;transition:width .3s}
+.pet-card-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px}
+
+.skill-card{background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.skill-card-name{font-size:var(--fs-md);font-weight:600}
+.skill-card-desc{font-size:var(--fs-xs);color:var(--text3);margin-top:3px;line-height:1.5}
+.skill-card-lv{font-size:var(--fs-xs);color:var(--text3);margin-top:3px}
+.skill-card-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px}
 
 /* ========== LOADING / SKELETON ========== */
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--text3);border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
