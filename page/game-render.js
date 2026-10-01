@@ -141,7 +141,13 @@ function renderGame(){
       const isCur=getGame().current===lv.id
       const allPrev=allPrevCleared(k,lv.id)
       const locked=!cleared&&!isCur&&!allPrev
-      h+='<div class="lv-card'+(cleared?' done':'')+(isCur?' current':'')+(locked?' locked':'')+'" data-lv="'+lv.id+'"><div class="lv-num">'+lv.id+'</div><div class="lv-name">'+lv.npc+'</div><div class="lv-status '+(cleared?'done':isCur?'current':'locked')+'">'+(cleared?'✅ 已通关':isCur?'⚔️ 挑战中':locked?'🔒 未解锁':'⚔️ 可挑战')+'</div></div>'
+      /* v2.3.1：头像按「视觉原型」取（敌人的 189 个名字归纳为 18 个原型，
+         详见 doc/design-monster-icons.md）。**带存在性守卫**——本函数在
+         monster-archetype.js 未加载时（部分测试只加载子集）必须照常工作，
+         退化成原来的纯文字卡片，而不是抛错炸掉整个关卡列表。 */
+      const monIco=(typeof monsterIconHtmlByLevel==='function')
+        ? '<span class="lv-ico">'+monsterIconHtmlByLevel(lv,32)+'</span>' : ''
+      h+='<div class="lv-card'+(cleared?' done':'')+(isCur?' current':'')+(locked?' locked':'')+'" data-lv="'+lv.id+'"><div class="lv-num">'+lv.id+'</div>'+monIco+'<div class="lv-name">'+lv.npc+'</div><div class="lv-status '+(cleared?'done':isCur?'current':'locked')+'">'+(cleared?'✅ 已通关':isCur?'⚔️ 挑战中':locked?'🔒 未解锁':'⚔️ 可挑战')+'</div></div>'
     })
     h+='</div>'
   })
@@ -1057,9 +1063,16 @@ function renderGroupUnit(u,side){
   var effSoulDef = effOf('soulDef');
   var soulTxt = (effSoulAtk > 0 || effSoulDef > 0)
     ? '<span class="gb-stat soul">👻' + effSoulAtk + ' 🔮' + effSoulDef + '</span>' : '';
+  /* v2.3.1：敌群单位卡头像 —— **只给敌方单位**（我方是玩家与宠物，各有自己的形象，
+     给它们套怪物头像会语义错乱）。`side` 由 renderGroupUnit 的第二个参数传入。
+     单位名与头像走同一套「名字 → 原型」映射；名字匹配不上时映射内部会退回兜底原型，
+     不会出现空图标。**带存在性守卫**：monster-archetype.js 未加载时退化为原样。 */
+  var unitIco = (side !== 'ally' && typeof monsterIconHtmlByName === 'function')
+    ? monsterIconHtmlByName(u.name, u._tier === 'boss', 32) : '';
   return '<div class="'+cls+'" data-uid="'+u.id+'" role="button" tabindex="0" aria-label="'+escHtml(u.name)+' 详情"'+(acting?' aria-current="true"':'')+'>'
     // 第一行：名称 + 行动标记 + 状态
     +'<div class="gb-row1">'
+    +(unitIco ? '<span class="gb-ico">'+unitIco+'</span>' : '')
     +'<span class="gb-name" style="color:'+color+'">'+escHtml(u.name)+'</span>'
     +(acting?'<span class="gb-acting-tag">▶ 行动中</span>':'')
     +statusHtml+scared

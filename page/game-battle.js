@@ -58,7 +58,18 @@ function startBattle(id){
   var autoBtn=document.getElementById('battleAuto');
   if(autoBtn){autoBtn.classList.toggle('active',_battleAuto);autoBtn.textContent=_battleAuto?'🔄 自动✓':'🔄 自动'}
   document.getElementById('battleLevel').textContent=id+' '+lv.npc+(affix?' 👑':'')+(affix?' ['+affix.name+']':'')
-  document.getElementById('beName').textContent='👹 '+lv.npc+(affix?' 👑':'')
+  /* v2.3.1：单敌对战界面给出怪物头像。此前是「👹 名字」纯文字。
+     ⚠️ 这里把 `textContent` 换成 `innerHTML` —— 必须对名字做 HTML 转义（`escHtml`），
+        否则名字里一旦出现 `<` / `&` 会破坏结构。lv.npc 目前都是中文，但没有理由
+        把「当前数据恰好安全」当成契约。
+     ⚠️ 存在性守卫：monster-archetype.js 未加载时退回原来的 emoji 写法。 */
+  ;(function(){
+    var nameEl=document.getElementById('beName'); if(!nameEl)return
+    var ico=(typeof monsterIconHtmlByName==='function')?monsterIconHtmlByName(lv.npc,!!lv.boss,32):''
+    if(!ico){nameEl.textContent='👹 '+lv.npc+(affix?' 👑':'');return}
+    var esc=(typeof escHtml==='function')?escHtml(lv.npc):lv.npc
+    nameEl.innerHTML='<span class="be-ico">'+ico+'</span><span class="be-nm">'+esc+(affix?' 👑':'')+'</span>'
+  })()
   document.getElementById('bpHP').style.width='100%'
   document.getElementById('bpHPText').textContent='❤️ '+stats.hp
   document.getElementById('bpAtk').textContent='⚔️ '+stats.atk
@@ -111,7 +122,8 @@ function runBattle(){
       }
     })
     if(_battle.done){endBattle(_battle.winner);_battleRunning=false;return}
-    _battleTimer=setTimeout(tick,600/_battleSpeed)
+    /* 间隔 = 基准 ÷ 当前速度档位（每次调度都读 `_battleSpeed`，战斗中改档立即生效） */
+    _battleTimer=setTimeout(tick,battleStepDelay(BATTLE_STEP_BASE_MS,_battleSpeed))
   }
   tick()
 }

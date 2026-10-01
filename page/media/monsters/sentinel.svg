@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>哨卫</title>
+<!-- sentinel · 哨卫 · 16x16 字符草图（每字符 = 3x3px，'.' = 透明）
+     调色板: K=#23262E  G=#4E7C5A  g=#35573E  Y=#B9BFC9  A=#8B6B3D  S=#E8B48C
+     . . . . . . . . . . . . . K K .
+     . . . . . . . . . . . . K A K .
+     . . . . . . . . . . . K A K . .
+     . . . . . K K K . . K A K . . .
+     . . . . K Y Y Y K . K A K . . .
+     . . . . K Y S Y K K A K . . . .
+     . . . . . K S K A K . . . . . .
+     . . . . . . K A K . . . . . . .
+     . . . . K G G G A G . . . . . .
+     . . . . K G G G A G . . . . . .
+     . . . . K g G G A G . . . . . .
+     . . . . K g G G A G . . . . . .
+     . . . . K G G G A G . . . . . .
+     . . . . K G G G A G . . . . . .
+     . . . . . K G G G . . . . . . .
+     . . . . . K G G K . . . . . . .
+-->
+<rect x="39" y="0" width="6" height="3" fill="#23262E"/>
+<rect x="36" y="3" width="3" height="3" fill="#23262E"/>
+<rect x="39" y="3" width="3" height="3" fill="#8B6B3D"/>
+<rect x="42" y="3" width="3" height="3" fill="#23262E"/>
+<rect x="33" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="36" y="6" width="3" height="3" fill="#8B6B3D"/>
+<rect x="39" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="9" width="9" height="3" fill="#23262E"/>
+<rect x="30" y="9" width="3" height="3" fill="#23262E"/>
+<rect x="33" y="9" width="3" height="3" fill="#8B6B3D"/>
+<rect x="36" y="9" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="12" width="9" height="3" fill="#B9BFC9"/>
+<rect x="24" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="30" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="33" y="12" width="3" height="3" fill="#8B6B3D"/>
+<rect x="36" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="15" width="3" height="3" fill="#B9BFC9"/>
+<rect x="18" y="15" width="3" height="3" fill="#E8B48C"/>
+<rect x="21" y="15" width="3" height="3" fill="#B9BFC9"/>
+<rect x="24" y="15" width="6" height="3" fill="#23262E"/>
+<rect x="30" y="15" width="3" height="3" fill="#8B6B3D"/>
+<rect x="33" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="18" y="18" width="3" height="3" fill="#E8B48C"/>
+<rect x="21" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="24" y="18" width="3" height="3" fill="#8B6B3D"/>
+<rect x="27" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="18" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="21" y="21" width="3" height="3" fill="#8B6B3D"/>
+<rect x="24" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="24" width="9" height="3" fill="#4E7C5A"/>
+<rect x="24" y="24" width="3" height="3" fill="#8B6B3D"/>
+<rect x="27" y="24" width="3" height="3" fill="#4E7C5A"/>
+<rect x="12" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="27" width="9" height="3" fill="#4E7C5A"/>
+<rect x="24" y="27" width="3" height="3" fill="#8B6B3D"/>
+<rect x="27" y="27" width="3" height="3" fill="#4E7C5A"/>
+<rect x="12" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="30" width="3" height="3" fill="#35573E"/>
+<rect x="18" y="30" width="6" height="3" fill="#4E7C5A"/>
+<rect x="24" y="30" width="3" height="3" fill="#8B6B3D"/>
+<rect x="27" y="30" width="3" height="3" fill="#4E7C5A"/>
+<rect x="12" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="33" width="3" height="3" fill="#35573E"/>
+<rect x="18" y="33" width="6" height="3" fill="#4E7C5A"/>
+<rect x="24" y="33" width="3" height="3" fill="#8B6B3D"/>
+<rect x="27" y="33" width="3" height="3" fill="#4E7C5A"/>
+<rect x="12" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="36" width="9" height="3" fill="#4E7C5A"/>
+<rect x="24" y="36" width="3" height="3" fill="#8B6B3D"/>
+<rect x="27" y="36" width="3" height="3" fill="#4E7C5A"/>
+<rect x="12" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="39" width="9" height="3" fill="#4E7C5A"/>
+<rect x="24" y="39" width="3" height="3" fill="#8B6B3D"/>
+<rect x="27" y="39" width="3" height="3" fill="#4E7C5A"/>
+<rect x="15" y="42" width="3" height="3" fill="#23262E"/>
+<rect x="18" y="42" width="9" height="3" fill="#4E7C5A"/>
+<rect x="15" y="45" width="3" height="3" fill="#23262E"/>
+<rect x="18" y="45" width="6" height="3" fill="#4E7C5A"/>
+<rect x="24" y="45" width="3" height="3" fill="#23262E"/>
+</svg>

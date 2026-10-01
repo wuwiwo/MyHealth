@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>怪兽头像像素图标 · 预览</title>
+<style>
+  :root{
+    --bg:#F6F7F9; --panel:#FFFFFF; --line:#E3E6EB; --text:#1E2229; --dim:#6B7280;
+    --dark:#111827; --accent:#B4443A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  header{padding:28px 32px 18px;border-bottom:1px solid var(--line);background:var(--panel);}
+  h1{margin:0 0 6px;font-size:20px;letter-spacing:.5px}
+  header p{margin:0;color:var(--dim);font-size:13px}
+  header code{background:#EEF1F5;padding:1px 5px;border-radius:4px;font-size:12px}
+  .stats{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap}
+  .stat b{display:block;font-size:18px}
+  .stat span{color:var(--dim);font-size:12px}
+  .note{margin:18px 32px 0;padding:12px 14px;background:#FFF8E6;border:1px solid #F0DCA8;
+        border-radius:8px;font-size:12.5px;color:#5A4A1E;line-height:1.7}
+  .note b{color:#8A6B12}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+        gap:16px;padding:22px 32px 48px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:16px;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--accent)}
+  /* 双主题对照：图标必须在浅卡与深卡上都能看清 */
+  .pair{display:flex;gap:10px;padding-left:8px}
+  .theme{flex:1;border-radius:8px;padding:10px 8px;display:flex;flex-direction:column;
+         align-items:center;gap:8px}
+  .theme.light{background:#ffffff;border:1px solid var(--line)}
+  .theme.dark{background:var(--dark);border:1px solid #1F2937}
+  .theme .lbl{font-size:10px;letter-spacing:.5px;text-transform:uppercase}
+  .theme.light .lbl{color:#9AA3AF}
+  .theme.dark .lbl{color:#6B7280}
+  .sizes{display:flex;align-items:flex-end;gap:10px;height:68px}
+  .icon{flex:0 0 auto;line-height:0}
+  img.px{image-rendering:pixelated}
+  img.i32{width:32px;height:32px}
+  img.i48{width:48px;height:48px}
+  img.i64{width:64px;height:64px}
+  .meta{margin-top:14px;padding-left:8px}
+  .title{display:flex;align-items:center;gap:8px}
+  .name{font-size:15px;font-weight:600}
+  .aid{font-size:11px;font-weight:700;padding:1px 6px;border-radius:999px;
+       color:#fff;background:var(--accent)}
+  .sub{color:var(--dim);font-size:12px;margin-top:3px;
+       font-family:ui-monospace,Consolas,monospace}
+  .desc{font-size:12.5px;color:#3D4450;margin-top:6px}
+  .hits{display:flex;gap:6px;margin-top:10px;padding-left:8px;flex-wrap:wrap}
+  .hits span{font-size:11px;color:var(--dim);border:1px solid var(--line);
+             border-radius:4px;padding:0 6px}
+  footer{padding:0 32px 40px;color:var(--dim);font-size:12px;line-height:1.8}
+</style>
+</head>
+<body>
+<header>
+  <h1>怪兽头像像素图标</h1>
+  <p>1:1 · 48×48 · 16×16 逻辑网格 · 纯 <code>&lt;rect&gt;</code> 扁平色 · 透明背景 · 接入尺寸 <b>32px</b> · 原型表 <code>page/monster-archetype.js</code></p>
+  <div class="stats">
+    <div class="stat"><b>18</b><span>视觉原型</span></div>
+    <div class="stat"><b>189</b><span>覆盖关卡数</span></div>
+    <div class="stat"><b>21</b><span>敌群名称池</span></div>
+    <div class="stat"><b>32px</b><span>实际接入尺寸</span></div>
+  </div>
+</header>
+
+<div class="note">
+  <b>为什么是「原型」而不是「每个敌人一张」</b> —— <code>levels.js</code> 共 33 章、<b>189 个唯一敌人名</b>，
+  另有敌群 21 个大关的名称池。逐名绘制会产生大量结构上几乎相同的图（<code>永恒壁垒</code> / <code>终极壁垒</code> /
+  <code>星核壁垒</code>），且每加一章都要补图。<br>
+  故收敛为 <b>18 个视觉原型</b>，由 <code>monster-archetype.js</code> 按「槽位角色为主 + 关键词覆盖」确定性映射，
+  <b>新章节只加数据、无需新增图标</b>；未知名字回落 <code>sentinel</code>，永远不会出现空图标。<br>
+  下方每张卡片<b>左浅右深</b>两个底色即为应用的两套主题 —— 图标在两边都必须看得清（各自至少一色达 3:1 对比度）。
+</div>
+
+<div class="grid">
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="soldier.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="soldier.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="soldier.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="soldier.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="soldier.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="soldier.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">步兵</span><span class="aid">soldier</span></div>
+      <div class="sub">soldier.svg · 通用杂兵</div>
+      <div class="desc">标准人形 + 短剑 + 小盾 · 整套的视觉基线</div>
+    </div>
+    <div class="hits"><span>战士</span><span>先锋</span><span>行者</span><span>使徒</span><span>审判</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="guard.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="guard.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="guard.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="guard.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="guard.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="guard.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">守卫</span><span class="aid">guard</span></div>
+      <div class="sub">guard.svg · 防御型</div>
+      <div class="desc">盾牌占画面 1/3 · 头盔 + 全身甲 · 无露脸</div>
+    </div>
+    <div class="hits"><span>守卫</span><span>近卫</span><span>守门人</span><span>铁卫</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="berserker.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="berserker.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="berserker.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="berserker.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="berserker.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="berserker.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">狂战</span><span class="aid">berserker</span></div>
+      <div class="sub">berserker.svg · 攻击型</div>
+      <div class="desc">双持斧 + 红瞳 + 无甲裸上身 · 怒张姿态</div>
+    </div>
+    <div class="hits"><span>狂战</span><span>毁灭</span><span>灭世</span><span>天灾</span><span>末日</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="sentinel.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="sentinel.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="sentinel.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="sentinel.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="sentinel.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="sentinel.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">哨卫</span><span class="aid">sentinel</span></div>
+      <div class="sub">sentinel.svg · 兜底原型</div>
+      <div class="desc">蒙面兜帽 + 长柄武器 · 未知名字的回落目标</div>
+    </div>
+    <div class="hits"><span>哨卫</span><span>暗影</span><span>虚空</span><span>混沌</span><span>深渊</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="bow.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="bow.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="bow.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="bow.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="bow.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="bow.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">弓手</span><span class="aid">bow</span></div>
+      <div class="sub">bow.svg · 远程型</div>
+      <div class="desc">侧身拉弓 + 弧臂弓 + 弓弦 + 背部箭袋（3 根白箭羽）</div>
+    </div>
+    <div class="hits"><span>弓手</span><span>弩手</span><span>神射</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="ranger.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="ranger.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="ranger.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="ranger.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="ranger.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="ranger.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">游侠</span><span class="aid">ranger</span></div>
+      <div class="sub">ranger.svg · 敏捷型</div>
+      <div class="desc">轻甲 + 斗篷 + 长弓斜背 · 与 bow 靠「持弓 vs 背弓」区分</div>
+    </div>
+    <div class="hits"><span>游侠</span><span>猎手</span><span>猎者</span><span>守望</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="assassin.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="assassin.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="assassin.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="assassin.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="assassin.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="assassin.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">刺客</span><span class="aid">assassin</span></div>
+      <div class="sub">assassin.svg · 敏捷型</div>
+      <div class="desc">锥形兜帽 + 只露双眼 + 双肩披风 + 持匕首</div>
+    </div>
+    <div class="hits"><span>刺客</span><span>猎影</span><span>岁月</span><span>暮光</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="knight.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="knight.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="knight.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="knight.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="knight.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="knight.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">剑士</span><span class="aid">knight</span></div>
+      <div class="sub">knight.svg · 近战型</div>
+      <div class="desc">全身板甲 + 面甲缝 + 双手巨剑竖起</div>
+    </div>
+    <div class="hits"><span>剑圣</span><span>剑帝</span><span>剑神</span><span>剑尊</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="rider.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="rider.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="rider.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="rider.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="rider.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="rider.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">骑兵</span><span class="aid">rider</span></div>
+      <div class="sub">rider.svg · 冲锋型</div>
+      <div class="desc">骑士 + 坐骑侧影 + 骑枪前指 · 整套里唯一有坐骑的</div>
+    </div>
+    <div class="hits"><span>骑兵</span><span>骑士</span><span>统领</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="mage.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="mage.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="mage.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="mage.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="mage.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="mage.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">术士</span><span class="aid">mage</span></div>
+      <div class="sub">mage.svg · 法术型</div>
+      <div class="desc">尖顶宽檐帽 + 长袍 + 法杖顶珠发光</div>
+    </div>
+    <div class="hits"><span>法师</span><span>魔导</span><span>咒术</span><span>先知</span><span>毒师</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="golem.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="golem.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="golem.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="golem.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="golem.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="golem.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">石像</span><span class="aid">golem</span></div>
+      <div class="sub">golem.svg · 防御型</div>
+      <div class="desc">方形岩体 + 横向独眼缝 + 石块拼缝 · 无四肢</div>
+    </div>
+    <div class="hits"><span>巨像</span><span>壁垒</span><span>永恒壁垒</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="titan.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="titan.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="titan.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="titan.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="titan.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="titan.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">巨神</span><span class="aid">titan</span></div>
+      <div class="sub">titan.svg · 力量型</div>
+      <div class="desc">超宽肩 + 小头 + 胸口青色神纹（2×2） · 与 golem 靠「人形 vs 方块」区分</div>
+    </div>
+    <div class="hits"><span>巨神</span><span>巨人</span><span>巨灵</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="beast.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="beast.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="beast.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="beast.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="beast.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="beast.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">凶兽</span><span class="aid">beast</span></div>
+      <div class="sub">beast.svg · 野兽型</div>
+      <div class="desc">四足侧影 + 獠牙 + 立耳 · 无装备</div>
+    </div>
+    <div class="hits"><span>狼</span><span>熊</span><span>猪</span><span>蛇</span><span>蛛</span><span>蝙蝠</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="undead.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="undead.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="undead.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="undead.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="undead.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="undead.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">亡灵</span><span class="aid">undead</span></div>
+      <div class="sub">undead.svg · 不死型</div>
+      <div class="desc">骷髅头 + 空洞眼窝（纯黑无瞳）+ 飘散下摆</div>
+    </div>
+    <div class="hits"><span>死士</span><span>亡灵</span><span>游魂</span><span>黄泉</span><span>轮回</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="dragon.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="dragon.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="dragon.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="dragon.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="dragon.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="dragon.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">龙</span><span class="aid">dragon</span></div>
+      <div class="sub">dragon.svg · 精英型</div>
+      <div class="desc">龙头侧影 + 犄角 + 长吻獠牙 · 唯一有角与翼膜的</div>
+    </div>
+    <div class="hits"><span>暗龙</span><span>圣龙</span><span>龙王</span><span>龙帝</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="lord.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="lord.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="lord.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="lord.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="lord.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="lord.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">领主</span><span class="aid">lord</span></div>
+      <div class="sub">lord.svg · BOSS 型</div>
+      <div class="desc">王冠 + 长披风 + 权杖（<b>不画巨剑</b>）· 与 knight/titan 靠王冠区分</div>
+    </div>
+    <div class="hits"><span>主宰</span><span>天尊</span><span>神王</span><span>炎尊</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="eyeboss.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="eyeboss.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="eyeboss.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="eyeboss.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="eyeboss.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="eyeboss.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">巨眼</span><span class="aid">eyeboss</span></div>
+      <div class="sub">eyeboss.svg · BOSS 型</div>
+      <div class="desc">巨大眼球占主体 + 竖直瞳孔 + 环绕触须 · 与 golem 靠「眼球为主」区分</div>
+    </div>
+    <div class="hits"><span>邪眼</span><span>万古长夜</span><span>之渊</span></div>
+  </div>
+
+  <div class="card">
+    <div class="pair">
+      <div class="theme light"><span class="lbl">浅色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="avatar.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="avatar.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="avatar.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+      <div class="theme dark"><span class="lbl">深色主题</span>
+        <div class="sizes">
+          <div class="icon"><img class="px i32" src="avatar.svg" width="32" height="32" alt=""></div>
+          <div class="icon"><img class="px i48" src="avatar.svg" width="48" height="48" alt=""></div>
+          <div class="icon"><img class="px i64" src="avatar.svg" width="64" height="64" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title"><span class="name">化身</span><span class="aid">avatar</span></div>
+      <div class="sub">avatar.svg · BOSS 型</div>
+      <div class="desc">无腿飘浮 + 头顶光环 + 浅色灵体描边（<b>用浅色而非 opacity</b>）· 与 mage 区分</div>
+    </div>
+    <div class="hits"><span>化身</span><span>终焉</span><span>虚无</span><span>归零</span><span>无相</span></div>
+  </div>
+
+</div>
+
+<footer>
+  <b>硬规格</b>：48×48 · <code>viewBox="0 0 48 48"</code> · <code>shape-rendering="crispEdges"</code> ·
+  只用 <code>&lt;rect&gt;</code> · 16×16 逻辑网格 / 3px 单元格 · 坐标全为 3 的倍数 · 不越界 ·
+  ≤8 色扁平 hex · 无渐变 / 无 filter / 无 opacity / 无 stroke 属性 · 透明背景 ·
+  统一描边 <code>#23262E</code> 且占比 ≤20% · <b>包围盒 ≥30×30</b> · 文件 &lt;6KB。<br>
+  <b>可读性</b>：在深色卡面 <code>#111827</code> 与浅色卡面 <code>#ffffff</code> 上，
+  <b>各自</b>至少有一种颜色达 3:1 对比度 —— 两套主题<b>允许用不同的颜色</b>。<br>
+  <b>接入尺寸</b>：32px（16 的倍数 → 每格恰好 2px，<code>pixelated</code> 下完全干净）。
+  用 40px / 24px 会让格宽变成 2.5px / 1.5px，<code>crispEdges</code> 硬切成粗细不均。
+</footer>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>步兵</title>
+<!-- soldier · 步兵 · 16x16 字符草图（每字符 = 3x3px，'.' = 透明）
+     调色板: K=#23262E  H=#3A2A22  S=#E8B48C  B=#3E6FA8  b=#6FA0D0  G=#5A6270  Y=#C9CDD6  W=#FFFFFF
+     . . . . . . . . . . . . . . . .
+     . . . . . . . . . . . . . . . .
+     . . . . . . . . . . . . . . . .
+     . . . . . . . . . . . . . . . .
+     . . . . . K K K K . . . K K . .
+     . . . . K H H H H K . . Y Y . .
+     . . . K H S S S S H K . Y Y . .
+     . . . K S S K K S S K . Y Y . .
+     . . . K S S S S S S K . Y Y . .
+     . . . . K S S S S K . . Y Y . .
+     . . . K B B B B B B K K K K . .
+     . . K B B b b b b B B K . . . .
+     . . K B B B B B B B B K . . . .
+     . . K G G G G G G G G K . . . .
+     . . . K B B K K B B K . . . . .
+     . . . K G G K K G G K . . . . .
+-->
+<rect x="15" y="12" width="12" height="3" fill="#23262E"/>
+<rect x="36" y="12" width="6" height="3" fill="#23262E"/>
+<rect x="12" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="15" width="12" height="3" fill="#3A2A22"/>
+<rect x="27" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="36" y="15" width="6" height="3" fill="#C9CDD6"/>
+<rect x="9" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="18" width="3" height="3" fill="#3A2A22"/>
+<rect x="15" y="18" width="12" height="3" fill="#E8B48C"/>
+<rect x="27" y="18" width="3" height="3" fill="#3A2A22"/>
+<rect x="30" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="36" y="18" width="6" height="3" fill="#C9CDD6"/>
+<rect x="9" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="21" width="6" height="3" fill="#E8B48C"/>
+<rect x="18" y="21" width="6" height="3" fill="#23262E"/>
+<rect x="24" y="21" width="6" height="3" fill="#E8B48C"/>
+<rect x="30" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="36" y="21" width="6" height="3" fill="#C9CDD6"/>
+<rect x="9" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="24" width="18" height="3" fill="#E8B48C"/>
+<rect x="30" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="36" y="24" width="6" height="3" fill="#C9CDD6"/>
+<rect x="12" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="27" width="12" height="3" fill="#E8B48C"/>
+<rect x="27" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="36" y="27" width="6" height="3" fill="#C9CDD6"/>
+<rect x="9" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="30" width="18" height="3" fill="#3E6FA8"/>
+<rect x="30" y="30" width="12" height="3" fill="#23262E"/>
+<rect x="6" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="33" width="6" height="3" fill="#3E6FA8"/>
+<rect x="15" y="33" width="12" height="3" fill="#6FA0D0"/>
+<rect x="27" y="33" width="6" height="3" fill="#3E6FA8"/>
+<rect x="33" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="36" width="24" height="3" fill="#3E6FA8"/>
+<rect x="33" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="39" width="24" height="3" fill="#5A6270"/>
+<rect x="33" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="42" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="42" width="6" height="3" fill="#3E6FA8"/>
+<rect x="18" y="42" width="6" height="3" fill="#23262E"/>
+<rect x="24" y="42" width="6" height="3" fill="#3E6FA8"/>
+<rect x="30" y="42" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="45" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="45" width="6" height="3" fill="#5A6270"/>
+<rect x="18" y="45" width="6" height="3" fill="#23262E"/>
+<rect x="24" y="45" width="6" height="3" fill="#5A6270"/>
+<rect x="30" y="45" width="3" height="3" fill="#23262E"/>
+</svg>

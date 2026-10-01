@@ -1,0 +1,104 @@
+<!--
+archetypeId: titan
+name: 巨神
+palette: K=#23262E S=#C9955E s=#9C6E3E E=#23262E C=#7FD4FF
+
+   0123456789012345
+ 00 ................
+ 01 ......KKK.......
+ 02 ......KEK.......
+ 03 ......KSK.......
+ 04 ....KKKSKKK.....
+ 05 ..KKsSSSSSsKK...
+ 06 .KSSsSSSSSsSSK..
+ 07 .KSsSSSSSSSsSK..
+ 08 .KSsSCCCCSSsSK..
+ 09 .KSsSCCCCSSsSK..
+ 10 .KSsSSSSSSSsSK..
+ 11 .KSsSSSSSSSsSK..
+ 12 ..KsSSSSSSSsK...
+ 13 ...KSsSSSsSK....
+ 14 ....KSSSSSK.....
+ 15 ....KKK.KKK.....
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>巨神 titan</title>
+<rect x="18" y="3" width="9" height="3" fill="#23262E"/>
+<rect x="18" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="21" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="24" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="18" y="9" width="3" height="3" fill="#23262E"/>
+<rect x="21" y="9" width="3" height="3" fill="#C9955E"/>
+<rect x="24" y="9" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="12" width="9" height="3" fill="#23262E"/>
+<rect x="21" y="12" width="3" height="3" fill="#C9955E"/>
+<rect x="24" y="12" width="9" height="3" fill="#23262E"/>
+<rect x="6" y="15" width="6" height="3" fill="#23262E"/>
+<rect x="12" y="15" width="3" height="3" fill="#9C6E3E"/>
+<rect x="15" y="15" width="15" height="3" fill="#C9955E"/>
+<rect x="30" y="15" width="3" height="3" fill="#9C6E3E"/>
+<rect x="33" y="15" width="6" height="3" fill="#23262E"/>
+<rect x="3" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="18" width="6" height="3" fill="#C9955E"/>
+<rect x="12" y="18" width="3" height="3" fill="#9C6E3E"/>
+<rect x="15" y="18" width="15" height="3" fill="#C9955E"/>
+<rect x="30" y="18" width="3" height="3" fill="#9C6E3E"/>
+<rect x="33" y="18" width="6" height="3" fill="#C9955E"/>
+<rect x="39" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="21" width="3" height="3" fill="#C9955E"/>
+<rect x="9" y="21" width="3" height="3" fill="#9C6E3E"/>
+<rect x="12" y="21" width="21" height="3" fill="#C9955E"/>
+<rect x="33" y="21" width="3" height="3" fill="#9C6E3E"/>
+<rect x="36" y="21" width="3" height="3" fill="#C9955E"/>
+<rect x="39" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="24" width="3" height="3" fill="#C9955E"/>
+<rect x="9" y="24" width="3" height="3" fill="#9C6E3E"/>
+<rect x="12" y="24" width="3" height="3" fill="#C9955E"/>
+<rect x="15" y="24" width="12" height="3" fill="#7FD4FF"/>
+<rect x="27" y="24" width="6" height="3" fill="#C9955E"/>
+<rect x="33" y="24" width="3" height="3" fill="#9C6E3E"/>
+<rect x="36" y="24" width="3" height="3" fill="#C9955E"/>
+<rect x="39" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="27" width="3" height="3" fill="#C9955E"/>
+<rect x="9" y="27" width="3" height="3" fill="#9C6E3E"/>
+<rect x="12" y="27" width="3" height="3" fill="#C9955E"/>
+<rect x="15" y="27" width="12" height="3" fill="#7FD4FF"/>
+<rect x="27" y="27" width="6" height="3" fill="#C9955E"/>
+<rect x="33" y="27" width="3" height="3" fill="#9C6E3E"/>
+<rect x="36" y="27" width="3" height="3" fill="#C9955E"/>
+<rect x="39" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="30" width="3" height="3" fill="#C9955E"/>
+<rect x="9" y="30" width="3" height="3" fill="#9C6E3E"/>
+<rect x="12" y="30" width="21" height="3" fill="#C9955E"/>
+<rect x="33" y="30" width="3" height="3" fill="#9C6E3E"/>
+<rect x="36" y="30" width="3" height="3" fill="#C9955E"/>
+<rect x="39" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="33" width="3" height="3" fill="#C9955E"/>
+<rect x="9" y="33" width="3" height="3" fill="#9C6E3E"/>
+<rect x="12" y="33" width="21" height="3" fill="#C9955E"/>
+<rect x="33" y="33" width="3" height="3" fill="#9C6E3E"/>
+<rect x="36" y="33" width="3" height="3" fill="#C9955E"/>
+<rect x="39" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="36" width="3" height="3" fill="#9C6E3E"/>
+<rect x="12" y="36" width="21" height="3" fill="#C9955E"/>
+<rect x="33" y="36" width="3" height="3" fill="#9C6E3E"/>
+<rect x="36" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="39" width="3" height="3" fill="#C9955E"/>
+<rect x="15" y="39" width="3" height="3" fill="#9C6E3E"/>
+<rect x="18" y="39" width="9" height="3" fill="#C9955E"/>
+<rect x="27" y="39" width="3" height="3" fill="#9C6E3E"/>
+<rect x="30" y="39" width="3" height="3" fill="#C9955E"/>
+<rect x="33" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="42" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="42" width="15" height="3" fill="#C9955E"/>
+<rect x="30" y="42" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="45" width="9" height="3" fill="#23262E"/>
+<rect x="24" y="45" width="9" height="3" fill="#23262E"/>
+</svg>

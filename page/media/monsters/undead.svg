@@ -1,0 +1,82 @@
+<!--
+archetypeId: undead
+name: 亡灵
+palette: K=#23262E W=#FFFFFF w=#C4C9C0 G=#6F7F6B g=#5D6B5A
+
+   0123456789012345
+ 00 ................
+ 01 ................
+ 02 ................
+ 03 ....KKKKKKKK....
+ 04 ...KWWWWWWWWK...
+ 05 ...KWWWWWWWWK...
+ 06 ...KKKKWWKKKK...
+ 07 ...KKKKWWKKKK...
+ 08 ...KWWWWWWWWK...
+ 09 ...KKKKKKKKKK...
+ 10 ...KWKWKWKWKK...
+ 11 ..KKKKKKKKKKKK..
+ 12 .KGGGGGGGGGGGGK.
+ 13 .KGGKGGGGGGKGGK.
+ 14 .KgGKKGGGGKKGgK.
+ 15 .KKKKggKKggKKKK.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>亡灵 undead</title>
+<rect x="12" y="9" width="24" height="3" fill="#23262E"/>
+<rect x="9" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="12" width="24" height="3" fill="#FFFFFF"/>
+<rect x="36" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="15" width="24" height="3" fill="#FFFFFF"/>
+<rect x="36" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="18" width="6" height="3" fill="#23262E"/>
+<rect x="18" y="18" width="6" height="3" fill="#FFFFFF"/>
+<rect x="24" y="18" width="12" height="3" fill="#23262E"/>
+<rect x="36" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="21" width="6" height="3" fill="#23262E"/>
+<rect x="18" y="21" width="6" height="3" fill="#FFFFFF"/>
+<rect x="24" y="21" width="12" height="3" fill="#23262E"/>
+<rect x="36" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="24" width="24" height="3" fill="#FFFFFF"/>
+<rect x="36" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="27" width="30" height="3" fill="#23262E"/>
+<rect x="9" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="30" width="3" height="3" fill="#FFFFFF"/>
+<rect x="15" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="18" y="30" width="3" height="3" fill="#FFFFFF"/>
+<rect x="21" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="24" y="30" width="3" height="3" fill="#FFFFFF"/>
+<rect x="27" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="30" y="30" width="3" height="3" fill="#FFFFFF"/>
+<rect x="33" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="33" width="30" height="3" fill="#23262E"/>
+<rect x="3" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="36" width="36" height="3" fill="#6F7F6B"/>
+<rect x="42" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="39" width="3" height="3" fill="#6F7F6B"/>
+<rect x="9" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="39" width="24" height="3" fill="#6F7F6B"/>
+<rect x="36" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="39" y="39" width="3" height="3" fill="#6F7F6B"/>
+<rect x="42" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="42" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="42" width="3" height="3" fill="#5D6B5A"/>
+<rect x="9" y="42" width="3" height="3" fill="#6F7F6B"/>
+<rect x="12" y="42" width="6" height="3" fill="#23262E"/>
+<rect x="18" y="42" width="12" height="3" fill="#6F7F6B"/>
+<rect x="30" y="42" width="6" height="3" fill="#23262E"/>
+<rect x="36" y="42" width="3" height="3" fill="#6F7F6B"/>
+<rect x="39" y="42" width="3" height="3" fill="#5D6B5A"/>
+<rect x="42" y="42" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="45" width="6" height="3" fill="#23262E"/>
+<rect x="12" y="45" width="6" height="3" fill="#5D6B5A"/>
+<rect x="18" y="45" width="3" height="3" fill="#23262E"/>
+<rect x="30" y="45" width="3" height="3" fill="#23262E"/>
+<rect x="33" y="45" width="6" height="3" fill="#5D6B5A"/>
+<rect x="42" y="45" width="3" height="3" fill="#23262E"/>
+</svg>
