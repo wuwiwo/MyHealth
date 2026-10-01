@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>宠物头像像素图标 · 预览</title>
+<style>
+  :root{
+    --bg:#F6F7F9; --panel:#FFFFFF; --line:#E3E6EB; --text:#1E2229; --dim:#6B7280;
+    --r:#8FA3B8; --sr:#4FA3D9; --ssr:#9B6FD9; --ur:#E0A020;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  header{padding:28px 32px 18px;border-bottom:1px solid var(--line);background:var(--panel);}
+  h1{margin:0 0 6px;font-size:20px;letter-spacing:.5px}
+  header p{margin:0;color:var(--dim);font-size:13px}
+  header code{background:#EEF1F5;padding:1px 5px;border-radius:4px;font-size:12px}
+  .stats{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap}
+  .stat b{display:block;font-size:18px}
+  .stat span{color:var(--dim);font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));
+        gap:16px;padding:22px 32px 48px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:16px;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;inset:0 auto 0 0;width:4px}
+  .r-R::before{background:var(--r)} .r-SR::before{background:var(--sr)}
+  .r-SSR::before{background:var(--ssr)} .r-UR::before{background:var(--ur)}
+  .sizes{display:flex;align-items:flex-end;gap:16px;height:150px;padding-left:8px}
+  .icon{flex:0 0 auto;line-height:0}
+  img.px{image-rendering:pixelated}
+  img.i48{width:48px;height:48px}
+  img.i96{width:96px;height:96px}
+  img.i144{width:144px;height:144px}
+  .meta{margin-top:14px;padding-left:8px}
+  .title{display:flex;align-items:center;gap:8px}
+  .name{font-size:15px;font-weight:600}
+  .rar{font-size:11px;font-weight:700;padding:1px 6px;border-radius:999px;color:#fff}
+  .rar-R{background:var(--r)} .rar-SR{background:var(--sr)}
+  .rar-SSR{background:var(--ssr)} .rar-UR{background:var(--ur)}
+  .sub{color:var(--dim);font-size:12px;margin-top:2px;font-family:ui-monospace,Consolas,monospace}
+  .desc{font-size:12.5px;color:#3D4450;margin-top:6px}
+  .chips{display:flex;gap:6px;margin-top:10px;padding-left:8px}
+  .chips span{font-size:11px;color:var(--dim);border:1px solid var(--line);
+              border-radius:4px;padding:0 6px}
+  footer{padding:0 32px 40px;color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>宠物头像像素图标</h1>
+  <p>1:1 · 48×48 · 16×16 逻辑网格 · 纯 <code>&lt;rect&gt;</code> 扁平色 · 透明背景 · 来源 <code>page/pet-codex.js</code> PET_CODEX</p>
+  <div class="stats">
+    <div class="stat"><b>14</b><span>图标总数</span></div>
+    <div class="stat"><b>4</b><span>稀有度档位</span></div>
+    <div class="stat"><b>16×16</b><span>逻辑网格</span></div>
+    <div class="stat"><b>48×48</b><span>输出像素</span></div>
+  </div>
+</header>
+<div class="grid">
+<div class="card r-R">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="sparkle.svg" width="48" height="48" alt="闪闪星"></div>
+        <div class="icon"><img class="px i96" src="sparkle.svg" width="96" height="96" alt="闪闪星"></div>
+        <div class="icon"><img class="px i144" src="sparkle.svg" width="144" height="144" alt="闪闪星"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">闪闪星</span><span class="rar rar-R">R</span></div>
+        <div class="sub">sparkle · 辅助</div>
+        <div class="desc">四角闪光星 · 纯星形无四肢</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-R">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="waterdrop.svg" width="48" height="48" alt="水水滴"></div>
+        <div class="icon"><img class="px i96" src="waterdrop.svg" width="96" height="96" alt="水水滴"></div>
+        <div class="icon"><img class="px i144" src="waterdrop.svg" width="144" height="144" alt="水水滴"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">水水滴</span><span class="rar rar-R">R</span></div>
+        <div class="sub">waterdrop · 辅助</div>
+        <div class="desc">水滴形 · 上尖下圆</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-R">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="pongpong.svg" width="48" height="48" alt="彭彭猪"></div>
+        <div class="icon"><img class="px i96" src="pongpong.svg" width="96" height="96" alt="彭彭猪"></div>
+        <div class="icon"><img class="px i144" src="pongpong.svg" width="144" height="144" alt="彭彭猪"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">彭彭猪</span><span class="rar rar-R">R</span></div>
+        <div class="sub">pongpong · 辅助</div>
+        <div class="desc">猪鼻外凸 + 耷拉耳</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-SR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="flamechick.svg" width="48" height="48" alt="火焰鸡"></div>
+        <div class="icon"><img class="px i96" src="flamechick.svg" width="96" height="96" alt="火焰鸡"></div>
+        <div class="icon"><img class="px i144" src="flamechick.svg" width="144" height="144" alt="火焰鸡"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">火焰鸡</span><span class="rar rar-SR">SR</span></div>
+        <div class="sub">flamechick · 攻击</div>
+        <div class="desc">矮胖雏鸡 + 头顶三簇火焰</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-SR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="rocksteady.svg" width="48" height="48" alt="坚强岩"></div>
+        <div class="icon"><img class="px i96" src="rocksteady.svg" width="96" height="96" alt="坚强岩"></div>
+        <div class="icon"><img class="px i144" src="rocksteady.svg" width="144" height="144" alt="坚强岩"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">坚强岩</span><span class="rar rar-SR">SR</span></div>
+        <div class="sub">rocksteady · 辅助</div>
+        <div class="desc">方块岩体 + 粗平眉</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-SR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="chirpbird.svg" width="48" height="48" alt="清脆鸟"></div>
+        <div class="icon"><img class="px i96" src="chirpbird.svg" width="96" height="96" alt="清脆鸟"></div>
+        <div class="icon"><img class="px i144" src="chirpbird.svg" width="144" height="144" alt="清脆鸟"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">清脆鸟</span><span class="rar rar-SR">SR</span></div>
+        <div class="sub">chirpbird · 攻击</div>
+        <div class="desc">高瘦蓝鸟 + 张口歌唱与音符</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-SR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="thunderdog.svg" width="48" height="48" alt="雷霆犬"></div>
+        <div class="icon"><img class="px i96" src="thunderdog.svg" width="96" height="96" alt="雷霆犬"></div>
+        <div class="icon"><img class="px i144" src="thunderdog.svg" width="144" height="144" alt="雷霆犬"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">雷霆犬</span><span class="rar rar-SR">SR</span></div>
+        <div class="sub">thunderdog · 攻击</div>
+        <div class="desc">立耳犬 + 脸颊闪电</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-SSR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="possum.svg" width="48" height="48" alt="小负鼠"></div>
+        <div class="icon"><img class="px i96" src="possum.svg" width="96" height="96" alt="小负鼠"></div>
+        <div class="icon"><img class="px i144" src="possum.svg" width="144" height="144" alt="小负鼠"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">小负鼠</span><span class="rar rar-SSR">SSR</span></div>
+        <div class="sub">possum · 攻击</div>
+        <div class="desc">尖长吻 + 腹部育儿袋</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-SSR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="darkcrow.svg" width="48" height="48" alt="黑暗鸦"></div>
+        <div class="icon"><img class="px i96" src="darkcrow.svg" width="96" height="96" alt="黑暗鸦"></div>
+        <div class="icon"><img class="px i144" src="darkcrow.svg" width="144" height="144" alt="黑暗鸦"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">黑暗鸦</span><span class="rar rar-SSR">SSR</span></div>
+        <div class="sub">darkcrow · 攻击</div>
+        <div class="desc">通体黑 + 紫瞳 + 单侧展翼</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-SSR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="icecrystal.svg" width="48" height="48" alt="小冰晶"></div>
+        <div class="icon"><img class="px i96" src="icecrystal.svg" width="96" height="96" alt="小冰晶"></div>
+        <div class="icon"><img class="px i144" src="icecrystal.svg" width="144" height="144" alt="小冰晶"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">小冰晶</span><span class="rar rar-SSR">SSR</span></div>
+        <div class="sub">icecrystal · 攻击</div>
+        <div class="desc">棱角六边晶体 · 非生物</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-SSR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="lightspirit.svg" width="48" height="48" alt="光之精灵"></div>
+        <div class="icon"><img class="px i96" src="lightspirit.svg" width="96" height="96" alt="光之精灵"></div>
+        <div class="icon"><img class="px i144" src="lightspirit.svg" width="144" height="144" alt="光之精灵"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">光之精灵</span><span class="rar rar-SSR">SSR</span></div>
+        <div class="sub">lightspirit · 辅助</div>
+        <div class="desc">头顶光环 + 无腿飘尾</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-UR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="dream.svg" width="48" height="48" alt="梦幻"></div>
+        <div class="icon"><img class="px i96" src="dream.svg" width="96" height="96" alt="梦幻"></div>
+        <div class="icon"><img class="px i144" src="dream.svg" width="144" height="144" alt="梦幻"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">梦幻</span><span class="rar rar-UR">UR</span></div>
+        <div class="sub">dream · 输出</div>
+        <div class="desc">猫耳 + 长尾 + 怀中光球</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-UR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="nonebear.svg" width="48" height="48" alt="无念熊"></div>
+        <div class="icon"><img class="px i96" src="nonebear.svg" width="96" height="96" alt="无念熊"></div>
+        <div class="icon"><img class="px i144" src="nonebear.svg" width="144" height="144" alt="无念熊"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">无念熊</span><span class="rar rar-UR">UR</span></div>
+        <div class="sub">nonebear · 输出</div>
+        <div class="desc">方头熊 + 闭眼禅意</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+<div class="card r-UR">
+      <div class="sizes">
+        <div class="icon"><img class="px i48" src="kirin.svg" width="48" height="48" alt="圣光麒麟"></div>
+        <div class="icon"><img class="px i96" src="kirin.svg" width="96" height="96" alt="圣光麒麟"></div>
+        <div class="icon"><img class="px i144" src="kirin.svg" width="144" height="144" alt="圣光麒麟"></div>
+      </div>
+      <div class="meta">
+        <div class="title"><span class="name">圣光麒麟</span><span class="rar rar-UR">UR</span></div>
+        <div class="sub">kirin · 辅助</div>
+        <div class="desc">额前独角 + 鬃毛 + 背脊鳞纹</div>
+      </div>
+      <div class="chips"><span>48px</span><span>96px</span><span>144px</span></div>
+    </div>
+</div>
+<footer>放大预览使用 <code>image-rendering: pixelated</code>，与游戏中 48px 原尺寸渲染一致。背景为透明，本页浅色底仅为预览。</footer>
+</body>
+</html>

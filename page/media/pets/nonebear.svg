@@ -1,0 +1,77 @@
+<!--
+speciesId: nonebear
+name: 无念熊
+rarity: UR
+palette: K=#23262E B=#8A6244 b=#B08A66 d=#4A3524 W=#FFFFFF
+
+   0123456789012345
+ 00 ................
+ 01 ...KK.......KK..
+ 02 ...KK.......KK..
+ 03 ..KKKKKKKKKKKK..
+ 04 ..KBBBBBBBBBBK..
+ 05 ..KBBBBBBBBBBK..
+ 06 ..KBBKKBBKKBBBK.
+ 07 ..KBBBBBBBBBBBK.
+ 08 ..KBBbbdbbBBBK..
+ 09 ..KBBbbbbbBBBK..
+ 10 ..KBBbbKKbbBBK..
+ 11 .KKKKKKKKKKKKKK.
+ 12 ..KddddddddddK..
+ 13 ...KWWddddWWK...
+ 14 ...KKKKKKKKKK...
+ 15 ................
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>无念熊</title>
+<rect x="9" y="3" width="6" height="3" fill="#23262E"/>
+<rect x="36" y="3" width="6" height="3" fill="#23262E"/>
+<rect x="9" y="6" width="6" height="3" fill="#23262E"/>
+<rect x="36" y="6" width="6" height="3" fill="#23262E"/>
+<rect x="6" y="9" width="36" height="3" fill="#23262E"/>
+<rect x="6" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="12" width="30" height="3" fill="#8A6244"/>
+<rect x="39" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="15" width="30" height="3" fill="#8A6244"/>
+<rect x="39" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="18" width="6" height="3" fill="#8A6244"/>
+<rect x="15" y="18" width="6" height="3" fill="#23262E"/>
+<rect x="21" y="18" width="6" height="3" fill="#8A6244"/>
+<rect x="27" y="18" width="6" height="3" fill="#23262E"/>
+<rect x="33" y="18" width="9" height="3" fill="#8A6244"/>
+<rect x="42" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="21" width="33" height="3" fill="#8A6244"/>
+<rect x="42" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="24" width="6" height="3" fill="#8A6244"/>
+<rect x="15" y="24" width="6" height="3" fill="#B08A66"/>
+<rect x="21" y="24" width="3" height="3" fill="#4A3524"/>
+<rect x="24" y="24" width="6" height="3" fill="#B08A66"/>
+<rect x="30" y="24" width="9" height="3" fill="#8A6244"/>
+<rect x="39" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="27" width="6" height="3" fill="#8A6244"/>
+<rect x="15" y="27" width="15" height="3" fill="#B08A66"/>
+<rect x="30" y="27" width="9" height="3" fill="#8A6244"/>
+<rect x="39" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="30" width="6" height="3" fill="#8A6244"/>
+<rect x="15" y="30" width="6" height="3" fill="#B08A66"/>
+<rect x="21" y="30" width="6" height="3" fill="#23262E"/>
+<rect x="27" y="30" width="6" height="3" fill="#B08A66"/>
+<rect x="33" y="30" width="6" height="3" fill="#8A6244"/>
+<rect x="39" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="33" width="42" height="3" fill="#23262E"/>
+<rect x="6" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="36" width="30" height="3" fill="#4A3524"/>
+<rect x="39" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="39" width="6" height="3" fill="#FFFFFF"/>
+<rect x="18" y="39" width="12" height="3" fill="#4A3524"/>
+<rect x="30" y="39" width="6" height="3" fill="#FFFFFF"/>
+<rect x="36" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="42" width="30" height="3" fill="#23262E"/>
+</svg>

@@ -603,7 +603,8 @@ function startHiddenChallenge(hotBuff){
               var sid = codex[Math.floor(Math.random() * codex.length)]
               var pet = createPet({ speciesId: sid, rarity: getPetCodex(sid).rarity, name: getPetCodex(sid).name })
               d.pets.push(pet)
-              petEgg = { name: pet.name }
+              /* v2.2.29：带上 speciesId，结算面板据此显示宠物头像（原来只有名字） */
+              petEgg = { name: pet.name, speciesId: sid }
             }
           } catch (e2) { console.warn('[challenge] 宠物蛋发放失败', e2) }
         }
@@ -667,7 +668,9 @@ function startHiddenChallenge(hotBuff){
           return '<span style="margin-right:8px">'+(names[d.type]||d.type)+' <b style="color:var(--green)">+'+d.n+'</b></span>';
         }).join('') : '<span style="color:var(--text3)">—</span>')
       +(state.skillPointReward > 0 ? '<div style="margin-top:4px">💠 技能点 <b style="color:var(--blue)">+'+state.skillPointReward+'</b>（本周 '+weekCount+' 次额外奖励）</div>' : '')
-      +(state.petEggReward ? '<div style="margin-top:4px">🥚 宠物蛋 <b style="color:var(--orange)">'+state.petEggReward.name+'</b></div>' : '')
+      +(state.petEggReward ? '<div style="margin-top:4px;display:flex;align-items:center;gap:6px">'
+        + ((typeof petIconHtml === 'function') ? petIconHtml(state.petEggReward.speciesId, 32) : '')
+        + '🥚 宠物蛋 <b style="color:var(--orange)">'+state.petEggReward.name+'</b></div>' : '')
       +(state.orbReward ? '<div style="margin-top:4px">🔮 宝珠 <b style="color:var(--purple)">'+((ORB_TYPES[state.orbReward.type]||{}).name||state.orbReward.type)+'（'+state.orbReward.rarity+' · +'+(typeof orbPct==='function'?orbPct(state.orbReward):'?')+'%）</b></div>' : '')
       +  '</div>'
       +'</div>'

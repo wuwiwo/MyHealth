@@ -728,6 +728,16 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .pet-card{background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
 .pet-card-head{display:flex;align-items:center;gap:10px;min-width:0}
 .pet-card-ico{font-size:var(--fs-2xl);flex-shrink:0}
+/* v2.2.29 宠物头像图标（page/media/pets/*.svg，48×48 像素风，规格见 doc/design-pet-icons.md）
+   pixelated + SVG 内建的 shape-rendering="crispEdges" 双保险：非整数倍缩放时也不糊。
+   角标保留原阶段 emoji 语义（蛋 🥚 / 成长 🌱），成熟期不显示角标。 */
+.pet-ico{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+.pet-ico-wrap{position:relative;display:block;flex-shrink:0}
+.pet-ico-wrap>.pet-ico{width:100%;height:100%}
+.pet-ico-badge{position:absolute;right:-5px;bottom:-5px;font-style:normal;font-size:var(--fs-2xs);line-height:1;padding:1px 2px;border-radius:50%;background:var(--bg2);box-shadow:0 0 0 1px var(--surface-3)}
+.pet-detail-ico{display:block;flex-shrink:0}
+/* 参战 / 对比芯片：头像与文字同一行对齐（原来只有文字） */
+.pet-pick-chip,.pet-cmp-chip{display:inline-flex;align-items:center;gap:6px}
 .pet-card-name{flex:1;min-width:0;font-size:var(--fs-lg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pet-card-rarity{flex-shrink:0;font-size:var(--fs-xs);color:var(--purple,#a855f7)}
 .pet-card-status{font-size:var(--fs-xs);color:var(--text3);margin-top:4px}

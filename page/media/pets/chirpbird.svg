@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>清脆鸟 chirpbird</title>
+<!--
+speciesId: chirpbird
+name: 清脆鸟
+16x16 ASCII sketch (char = palette key, . = transparent)
+00 ................
+01 ......B.........
+02 .....KBK........
+03 ....KBBBK.......
+04 ...KBBBBBK......
+05 ...KBBBBBK...YY.
+06 ...KBBKKBK....Y.
+07 ...KBBKWBKOO..Y.
+08 ...KBBBBBKM..YY.
+09 ...KBBBBBKOO.YY.
+10 ...KMMLLBK......
+11 ...KMMLLBK......
+12 ...KMMLLBK......
+13 ....KBLBK.......
+14 ....B.B.B.......
+15 ....B.B.........
+-->
+<rect x="18" y="3" width="3" height="3" fill="#4FC3D9"/>
+<rect x="15" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="18" y="6" width="3" height="3" fill="#4FC3D9"/>
+<rect x="21" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="9" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="9" width="9" height="3" fill="#4FC3D9"/>
+<rect x="24" y="9" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="12" width="15" height="3" fill="#4FC3D9"/>
+<rect x="27" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="15" width="15" height="3" fill="#4FC3D9"/>
+<rect x="27" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="39" y="15" width="6" height="3" fill="#FFC531"/>
+<rect x="9" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="18" width="6" height="3" fill="#4FC3D9"/>
+<rect x="18" y="18" width="6" height="3" fill="#23262E"/>
+<rect x="24" y="18" width="3" height="3" fill="#4FC3D9"/>
+<rect x="27" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="42" y="18" width="3" height="3" fill="#FFC531"/>
+<rect x="9" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="21" width="6" height="3" fill="#4FC3D9"/>
+<rect x="18" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="21" y="21" width="3" height="3" fill="#FFFFFF"/>
+<rect x="24" y="21" width="3" height="3" fill="#4FC3D9"/>
+<rect x="27" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="30" y="21" width="6" height="3" fill="#F5A623"/>
+<rect x="42" y="21" width="3" height="3" fill="#FFC531"/>
+<rect x="9" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="24" width="15" height="3" fill="#4FC3D9"/>
+<rect x="27" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="30" y="24" width="3" height="3" fill="#2A7F96"/>
+<rect x="39" y="24" width="6" height="3" fill="#FFC531"/>
+<rect x="9" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="27" width="15" height="3" fill="#4FC3D9"/>
+<rect x="27" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="30" y="27" width="6" height="3" fill="#F5A623"/>
+<rect x="39" y="27" width="6" height="3" fill="#FFC531"/>
+<rect x="9" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="30" width="6" height="3" fill="#2A7F96"/>
+<rect x="18" y="30" width="6" height="3" fill="#BEEBF5"/>
+<rect x="24" y="30" width="3" height="3" fill="#4FC3D9"/>
+<rect x="27" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="33" width="6" height="3" fill="#2A7F96"/>
+<rect x="18" y="33" width="6" height="3" fill="#BEEBF5"/>
+<rect x="24" y="33" width="3" height="3" fill="#4FC3D9"/>
+<rect x="27" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="36" width="6" height="3" fill="#2A7F96"/>
+<rect x="18" y="36" width="6" height="3" fill="#BEEBF5"/>
+<rect x="24" y="36" width="3" height="3" fill="#4FC3D9"/>
+<rect x="27" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="39" width="3" height="3" fill="#4FC3D9"/>
+<rect x="18" y="39" width="3" height="3" fill="#BEEBF5"/>
+<rect x="21" y="39" width="3" height="3" fill="#4FC3D9"/>
+<rect x="24" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="42" width="3" height="3" fill="#4FC3D9"/>
+<rect x="18" y="42" width="3" height="3" fill="#4FC3D9"/>
+<rect x="24" y="42" width="3" height="3" fill="#4FC3D9"/>
+<rect x="12" y="45" width="3" height="3" fill="#4FC3D9"/>
+<rect x="18" y="45" width="3" height="3" fill="#4FC3D9"/>
+</svg>

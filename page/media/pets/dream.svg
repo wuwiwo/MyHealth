@@ -1,0 +1,82 @@
+<!--
+speciesId: dream
+name: 梦幻
+rarity: UR
+palette: K=#23262E P=#C79BE0 p=#F7D0F5 d=#A855B8 R=#FF6FA5 Y=#FFE48A W=#FFFFFF
+
+   0123456789012345
+ 00 ................
+ 01 ................
+ 02 ................
+ 03 ...P....P.......
+ 04 ..KPPKKPPK......
+ 05 ...KKKKKKK......
+ 06 ...KPPPPPK......
+ 07 ...KPRPRPK......
+ 08 ..WKPPdPPKW.....
+ 09 .W.KKKKKKK.W....
+ 10 ...KYYKPPPPPKpp.
+ 11 ..KYYYYKPPPPKp..
+ 12 ..KYWYYKPPPPKpp.
+ 13 ...KYYKPPPPK....
+ 14 ....KK..KKK.....
+ 15 ................
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>梦幻</title>
+<rect x="9" y="9" width="3" height="3" fill="#C79BE0"/>
+<rect x="24" y="9" width="3" height="3" fill="#C79BE0"/>
+<rect x="6" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="12" width="6" height="3" fill="#C79BE0"/>
+<rect x="15" y="12" width="6" height="3" fill="#23262E"/>
+<rect x="21" y="12" width="6" height="3" fill="#C79BE0"/>
+<rect x="27" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="15" width="21" height="3" fill="#23262E"/>
+<rect x="9" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="18" width="15" height="3" fill="#C79BE0"/>
+<rect x="27" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="21" width="3" height="3" fill="#C79BE0"/>
+<rect x="15" y="21" width="3" height="3" fill="#FF6FA5"/>
+<rect x="18" y="21" width="3" height="3" fill="#C79BE0"/>
+<rect x="21" y="21" width="3" height="3" fill="#FF6FA5"/>
+<rect x="24" y="21" width="3" height="3" fill="#C79BE0"/>
+<rect x="27" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="24" width="3" height="3" fill="#FFFFFF"/>
+<rect x="9" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="24" width="6" height="3" fill="#C79BE0"/>
+<rect x="18" y="24" width="3" height="3" fill="#A855B8"/>
+<rect x="21" y="24" width="6" height="3" fill="#C79BE0"/>
+<rect x="27" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="30" y="24" width="3" height="3" fill="#FFFFFF"/>
+<rect x="3" y="27" width="3" height="3" fill="#FFFFFF"/>
+<rect x="9" y="27" width="21" height="3" fill="#23262E"/>
+<rect x="33" y="27" width="3" height="3" fill="#FFFFFF"/>
+<rect x="9" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="30" width="6" height="3" fill="#FFE48A"/>
+<rect x="18" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="21" y="30" width="15" height="3" fill="#C79BE0"/>
+<rect x="36" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="39" y="30" width="6" height="3" fill="#F7D0F5"/>
+<rect x="6" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="33" width="12" height="3" fill="#FFE48A"/>
+<rect x="21" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="24" y="33" width="12" height="3" fill="#C79BE0"/>
+<rect x="36" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="39" y="33" width="3" height="3" fill="#F7D0F5"/>
+<rect x="6" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="36" width="3" height="3" fill="#FFE48A"/>
+<rect x="12" y="36" width="3" height="3" fill="#FFFFFF"/>
+<rect x="15" y="36" width="6" height="3" fill="#FFE48A"/>
+<rect x="21" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="24" y="36" width="12" height="3" fill="#C79BE0"/>
+<rect x="36" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="39" y="36" width="6" height="3" fill="#F7D0F5"/>
+<rect x="9" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="39" width="6" height="3" fill="#FFE48A"/>
+<rect x="18" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="21" y="39" width="12" height="3" fill="#C79BE0"/>
+<rect x="33" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="42" width="6" height="3" fill="#23262E"/>
+<rect x="24" y="42" width="9" height="3" fill="#23262E"/>
+</svg>

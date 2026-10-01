@@ -5,6 +5,40 @@
    依赖 pet-store.js / pets.js / pet-materials.js / pet-codex.js。
    ============================================ */
 
+/* ============ v2.2.29 宠物头像图标（page/media/pets/<speciesId>.svg） ============
+   14 只宠物各有一枚 48×48 像素风 SVG（设计规格与逐只提示词见 doc/design-pet-icons.md）。
+   本区块是**图标渲染的唯一入口** —— 任何需要显示宠物头像的地方都走 petIconHtml()，
+   不要在别处硬拼 <img> 路径：换目录 / 换格式 / 换尺寸时只改这里。
+   ⚠️ 路径相对 page/（与 utils.js 的 exMediaUrl `'media/' + rel` 同一约定）——
+      index.html 就挂在 page/ 下，而 page/ 即 Vercel 部署根。
+   ⚠️ **缺图标时返回空串**，由调用方各自兜底回原来的 emoji —— 不抛错、不显示裂图，
+      也不会因为某个 speciesId 没有对应文件就把整张卡片搞崩。 */
+var PET_ICON_DIR = 'media/pets/';
+function petIconUrl(speciesId) {
+  if (!speciesId) return null;
+  if (typeof PET_CODEX === 'undefined' || !PET_CODEX[speciesId]) return null;
+  return PET_ICON_DIR + speciesId + '.svg';
+}
+/* 头像 <img>；size = 显示边长(px)；缺图标返回 '' */
+function petIconHtml(speciesId, size, cls) {
+  var url = petIconUrl(speciesId);
+  if (!url) return '';
+  var c = (typeof getPetCodex === 'function' ? getPetCodex(speciesId) : null) || {};
+  return '<img class="pet-ico' + (cls ? ' ' + cls : '') + '" src="' + url + '"'
+    + ' width="' + size + '" height="' + size + '"'
+    + ' alt="' + (c.name || speciesId) + '" loading="lazy" decoding="async">';
+}
+/* 头像 + 阶段角标（列表卡片用）：蛋期 🥚 / 成长期 🌱 / 成熟期无角标。
+   无图标时整体退回原来的单 emoji（行为与接入前一致）。 */
+function petIconStageHtml(speciesId, size, stage) {
+  var fallback = stage === 'egg' ? '🥚' : stage === 'grow' ? '🌱' : '🐾';
+  var ico = petIconHtml(speciesId, size);
+  if (!ico) return fallback;
+  var badge = stage === 'egg' ? '🥚' : stage === 'grow' ? '🌱' : '';
+  return '<span class="pet-ico-wrap" style="width:' + size + 'px;height:' + size + 'px">'
+    + ico + (badge ? '<i class="pet-ico-badge">' + badge + '</i>' : '') + '</span>';
+}
+
 
 /* ============ v2.1.17 宝珠 UI（design-v2.0.md §2.7） ============
    此前 orbs.js 逻辑完整但 UI 零调用、存档也没有库存字段 —— 碎片只能用不能花。
@@ -113,7 +147,7 @@ function renderPetPanel() {
     d.pets.forEach(function(p, i) {
       normalizePetStage(p);   // v2.0.9: 实时校正阶段（防 hatchProgress=100 卡 egg）
       var codex = getPetCodex(p.speciesId) || { name: p.name, rarity: p.rarity }
-      var stageIcon = p.stage==='egg'?'🥚':p.stage==='grow'?'🌱':'🐾'
+      /* v2.2.29：头像改用宠物专属图标（petIconStageHtml 内部兜底回原来的阶段 emoji） */
       var stageText = p.stage==='egg'?'孵化 '+Math.round(p.hatchProgress)+'%':p.stage==='grow'?'成长 '+Math.round(p.growth)+'%':'成熟'
       var dead = p.isDead ? '<span style="color:var(--red)">💀 阵亡</span>' : ''
       // v2.1.19 受伤状态：无法参战，需喂养把恢复进度喂到 100
@@ -125,7 +159,7 @@ function renderPetPanel() {
          独占标题行且 nowrap+省略号，任何宽度都不会竖排；按钮组独立一行，仍各 44px 热区。 */
       h += '<div class="pet-card">'
         +'<div class="pet-card-head">'
-        +'<span class="pet-card-ico">'+stageIcon+'</span>'
+        +'<span class="pet-card-ico">'+petIconStageHtml(p.speciesId, 40, p.stage)+'</span>'
         +'<span class="pet-card-name">'+(codex.name||p.name)+'</span>'
         +'<span class="pet-card-rarity">'+p.rarity+'</span>'
         +'</div>'
@@ -150,7 +184,9 @@ function renderPetPanel() {
     h += '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">'
     ready.forEach(function(p, ri) {
       var sel = (_petBattlePicks||[]).includes(p.speciesId)
-      h += '<button class="speed-btn" data-pet-pick="'+p.speciesId+'" style="padding:3px 10px;'+(sel?'border-color:var(--green);color:var(--green)':'')+'">'+(getPetCodex(p.speciesId)||{}).name+'</button>'
+      /* v2.2.29：参战芯片加 24px 头像，扫一眼就能认出是哪只（原来只有文字） */
+      h += '<button class="speed-btn pet-pick-chip" data-pet-pick="'+p.speciesId+'" style="padding:3px 10px;'+(sel?'border-color:var(--green);color:var(--green)':'')+'">'
+        + petIconHtml(p.speciesId, 24) + '<span>'+(getPetCodex(p.speciesId)||{}).name+'</span></button>'
     })
     h += '</div>'
     h += '<div style="margin-top:8px"><button class="speed-btn" id="petStartBattle" style="padding:4px 16px;border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button></div>'
@@ -406,7 +442,7 @@ function petCompareHtml(pet) {
     var c = getPetCodex(p.speciesId) || {};
     var on = (_petCompareSel === p.speciesId);
     h += '<button class="speed-btn pet-cmp-chip' + (on ? ' active' : '') + '" data-pet-cmp="' + p.speciesId + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
-      + (c.name || p.name || p.speciesId) + '</button>';
+      + petIconHtml(p.speciesId, 24) + '<span>' + (c.name || p.name || p.speciesId) + '</span></button>';
   });
   h += '</div>';
   var sel = null;
@@ -451,6 +487,8 @@ function renderPetDetail(pet, idx) {
   var codex = getPetCodex(pet.speciesId) || {}
   var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
     +'<button class="speed-btn" id="petDBack" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">←</button>'
+    /* v2.2.29：详情页头部也挂头像（与卡片同一个渲染入口） */
+    +'<span class="pet-detail-ico">'+petIconHtml(pet.speciesId, 40)+'</span>'
     +'<span style="font-size:var(--fs-lg);font-weight:700">'+(codex.name||pet.name)+' <span style="color:var(--purple);font-size:var(--fs-xs)">'+pet.rarity+'</span></span>'
     +'<span style="flex:1"></span>'
     +'<span style="font-size:var(--fs-sm);color:var(--text2)">✨ 灵能 <b>'+(bag.spirit||0)+'</b></span>'

@@ -1,0 +1,79 @@
+<!--
+speciesId: lightspirit
+name: 光之精灵
+rarity: SSR
+palette: K=#23262E W=#FFFFFF Y=#FFF4C2 y=#FFD86B g=#C9CED6
+
+   0123456789012345
+ 00 ................
+ 01 ......yyyy......
+ 02 .....yY..Yy.....
+ 03 .....yY..Yy.....
+ 04 ......yyyy......
+ 05 ................
+ 06 .......KK.......
+ 07 ....KYWWWYK.....
+ 08 ...KYWKWWKYK....
+ 09 ..KYWWWWWWWYK...
+ 10 ..KYWWWWWWWYK...
+ 11 ...KYWWWWWYK....
+ 12 ....KYWWWYK.....
+ 13 .....g..g..g....
+ 14 ....g...g..g....
+ 15 .....g......g...
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>光之精灵</title>
+<rect x="18" y="3" width="12" height="3" fill="#FFD86B"/>
+<rect x="15" y="6" width="3" height="3" fill="#FFD86B"/>
+<rect x="18" y="6" width="3" height="3" fill="#FFF4C2"/>
+<rect x="27" y="6" width="3" height="3" fill="#FFF4C2"/>
+<rect x="30" y="6" width="3" height="3" fill="#FFD86B"/>
+<rect x="15" y="9" width="3" height="3" fill="#FFD86B"/>
+<rect x="18" y="9" width="3" height="3" fill="#FFF4C2"/>
+<rect x="27" y="9" width="3" height="3" fill="#FFF4C2"/>
+<rect x="30" y="9" width="3" height="3" fill="#FFD86B"/>
+<rect x="18" y="12" width="12" height="3" fill="#FFD86B"/>
+<rect x="21" y="18" width="6" height="3" fill="#23262E"/>
+<rect x="12" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="21" width="3" height="3" fill="#FFF4C2"/>
+<rect x="18" y="21" width="9" height="3" fill="#FFFFFF"/>
+<rect x="27" y="21" width="3" height="3" fill="#FFF4C2"/>
+<rect x="30" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="24" width="3" height="3" fill="#FFF4C2"/>
+<rect x="15" y="24" width="3" height="3" fill="#FFFFFF"/>
+<rect x="18" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="21" y="24" width="6" height="3" fill="#FFFFFF"/>
+<rect x="27" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="30" y="24" width="3" height="3" fill="#FFF4C2"/>
+<rect x="33" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="27" width="3" height="3" fill="#FFF4C2"/>
+<rect x="12" y="27" width="21" height="3" fill="#FFFFFF"/>
+<rect x="33" y="27" width="3" height="3" fill="#FFF4C2"/>
+<rect x="36" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="30" width="3" height="3" fill="#FFF4C2"/>
+<rect x="12" y="30" width="21" height="3" fill="#FFFFFF"/>
+<rect x="33" y="30" width="3" height="3" fill="#FFF4C2"/>
+<rect x="36" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="33" width="3" height="3" fill="#FFF4C2"/>
+<rect x="15" y="33" width="15" height="3" fill="#FFFFFF"/>
+<rect x="30" y="33" width="3" height="3" fill="#FFF4C2"/>
+<rect x="33" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="36" width="3" height="3" fill="#FFF4C2"/>
+<rect x="18" y="36" width="9" height="3" fill="#FFFFFF"/>
+<rect x="27" y="36" width="3" height="3" fill="#FFF4C2"/>
+<rect x="30" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="15" y="39" width="3" height="3" fill="#C9CED6"/>
+<rect x="24" y="39" width="3" height="3" fill="#C9CED6"/>
+<rect x="33" y="39" width="3" height="3" fill="#C9CED6"/>
+<rect x="12" y="42" width="3" height="3" fill="#C9CED6"/>
+<rect x="24" y="42" width="3" height="3" fill="#C9CED6"/>
+<rect x="33" y="42" width="3" height="3" fill="#C9CED6"/>
+<rect x="15" y="45" width="3" height="3" fill="#C9CED6"/>
+<rect x="36" y="45" width="3" height="3" fill="#C9CED6"/>
+</svg>

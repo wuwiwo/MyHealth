@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.2.28
+> Personal Health Manager — 个人健身健康管理应用 v2.2.29
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -95,7 +95,7 @@ page/
 ├── orbs.js             宝珠系统（5 类型×4 品质 合成/分解/装配/月重置）
 ├── index.html          页面骨架
 ├── index.css           样式表
-├── media/              动作媒体（images/ + videos/，已关联动作）
+├── media/              媒体资源（images/ 动作图 · videos/ 动作视频 · pets/ 14 只宠物头像 SVG）
 ├── data/
 │   └── exercises-dataset.js  动作数据集（window.EX_DATASET，仅中文瘦身）
 ├── api/
@@ -354,4 +354,6 @@ Vercel 项目设置：
 
 | **v2.2.28** | **2026-09-29** | **WP-I 第三批（两条线并行）**：① **敌群战斗进度重置** ② **宠物详情属性区三段式 + 宠物对比**。**①** 作者要求（「重置敌群战斗进度，我现在敌群一下就被秒」）→ 查清**进度唯一真源** = 存档键 `groupProgress`（物理 **`dh-groupProgress-v1`**）的 **`cleared[]`**（已通关小关 id），其余 `isGroupStageCleared/Unlocked`、`groupProgressStats()`（0/240）、`groupClearedCount`、`currentGroupStageId` **全部派生、不落盘**；**易混淆但不动**：`dh-group-mode/-speed`（显示偏好）、`records.maxCleared`+`monthly`（**关卡试炼**）、`game`（**关卡试炼**进度）、`skills.winCountThisWeek`（技能点经济）、各种内存态。入口挂在**已有调试面板**（每个 tab 都有 🔍 FAB）新增「🗺 敌群」分区；**两步确认**（先挂起并展开红框清单「将清空 / 不动 / 不可撤销」，再点确认才写入；**未挂起直接 confirm 被拒**）。写入时**浅拷贝旧对象只改 `cleared`**（`version` 与将来新增字段保留 → 不把版本号写回 1 触发迁移误判）；**未动**宠物/材料/宝珠、技能与技能点、炼魂、角色等级、力量/有氧/体重/计划/补练/PR/属性日志、隐藏挑战、关卡试炼、历史最佳、显示偏好、任何 `-bak`；**未用** `localStorage.clear`/`store.setAll`/`removeItem`（有源码级护栏断言）。**幂等**：已空则**零写入**（连 `touchModTime` 都不触发 → 不会让云同步白推）。⚠️ 两点提醒：走 `store.set` 会触发云同步（**另一台设备拉取后同样被清**）；若重置时正有战斗未结束，结束后仍会把那场记成通关 → 面板红框已写「想干净重打请先退出战斗」。**②** 宠物详情属性区改**三段式**：**① 基础属性（图鉴＋炼化＋天赋静态）→ ② 加成（统一 `×N%`，稀有度 `×1500%`/宝珠 `×130%`/凝聚＋共鸣按"对本宠实际倍数"；速度固定 `×100%`）→ ③ 最终属性（上场数值）**，段标题 + 分隔线；**② 段「▸ 加成来源」可展开**（三行明细 + 明注**相加不是相乘**）；**③ 段每个属性行可点开**看「基础 ＋凝聚 ＋共鸣 ＝ 上场 → 最终（×倍率池）」链路（同刻只开一行、重渲染与滚动位置都保留）；**新增宠物对比**：选另一只宠 → **并排 + 差值**（正绿负红），**两侧统一按"此宠上场计算"**口径（UI 明写，避免上场值比基础值），选择器只列**可参战**宠。**数值口径一行未改**（`petStatMultPct/petBenchMultPct/petPoolMultPct/petOrbMultPct/petCompareFinal` 全为纯展示换算，与 `petStatBreakdown()` 同源；测试含"基础×总倍数 ≈ 引擎最终值 ±1"）。新增 `test-progress-reset.js`（**69 断言**，含"除 `groupProgress` 外 **17 个 store 键逐字节不变**"）与 `test-pet-compare.js`（**88 断言**），全量 **50 套件 / 1883 断言 / 0 失败**；`test-a11y-tokens` 40/40、浏览器 axe **violations 0**、新控件热区全 ≥44px（312×44 / 100×44×6 / 50×44 / 62×44 / 87×44）；缓存版本对齐（v125）。⚠️ **「被秒」判断（未改任何平衡数值）**：实测稳过带只到 **g16=100%**，g17 **35%** / g18 83% / g19~g24 恒 0%（g19 是 40/40 全败的墙），该账号 g19 需 **6.5×**、g21 8.7×、g23 ≈17.5×、g24 ≈25× 属性；**若在 g17/g18**，直接原因是 v2.2.20 天赋接成长（blade/roughskin 15%→50%，同机 bisect 单一归因）；**若在 g19/g20** 另有难度倒挂待定夺 —— 但**"我被秒"与"我秒敌群"解药相反**，已请作者确认是哪种 + 在哪一关。**需作者确认**：稀有度/宝珠是否要按"相乘"理解（现为相加并明注）、凝聚＋共鸣取实际倍数 vs 档位率、③ 明细是否保留绝对加值、② 段是否显示速度、对比对象是否含蛋期/受伤宠、重置是否顺带清周胜场。**并行会话提示**：工作树里另有头像线产出（`page/media/pets/*.svg` 14 个、`doc/design-pet-icons.md`、`.workbuddy-ai/tmp/**`），**按纪律未纳入本提交**；`.workbuddy-ai/` 为临时产物建议忽略 | `doc/changelog-v2.2.md` |
 
-> 当前版本：**v2.2.28**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）
+| **v2.2.29** | **2026-10-01** | **🐾 宠物头像像素图标：14 只全量绘制 + 接入 UI**。**① 资源**：新增 `page/media/pets/<speciesId>.svg` × **14**（48×48 / 16×16 逻辑网格 / 3px 单元格 / 纯 `<rect>` 扁平色 / 透明背景 / ≤8 色 / 统一描边 `#23262E` / 文件 ≤6KB）+ `preview.html`（48·96·144px 三档预览画廊）+ `overview.png`（4× 总览）+ `overview-48px.png`（1:1 真实尺寸条）；设计规格、去重矩阵与 **14 份逐只优化提示词**见新增 `doc/design-pet-icons.md`。**② 接入（唯一入口）**：`pet-ui.js` 新增 `PET_ICON_DIR` / `petIconUrl()` / `petIconHtml()` / `petIconStageHtml()`，四处调用点 —— 列表卡片（40px + 蛋 🥚 / 成长 🌱 阶段角标，成熟期无角标）、详情页头部（40px）、参战芯片（24px）、对比芯片（24px）；`challenge.js` 的宠物蛋结算奖励补 `speciesId` 并挂 32px 头像（原来只有名字）。**③ 降级**：未知 speciesId → `null`/空串，卡片整体退回原阶段 emoji，**不抛错、不产生裂图**。**④ 零数值影响**：未动任何战斗 / 经济 / 存档口径，纯展示层。**⑤ 测试**：新增 `scripts/test-pet-icons.js`（**223 断言**）—— 核心是「PET_CODEX 的 14 个 speciesId **逐一**能在 `page/media/pets/` 找到同名文件，且该文件满足 48×48 / viewBox / crispEdges / 只用 `<rect>` / 无渐变描边透明度 / 坐标全为 3 的倍数 / 颜色 ≤8」，外加「缺图标不炸」「`'media/pets/'` 字面量只允许出现在 `pet-ui.js` 一处」的源码级守卫，以及**用真实渲染函数取 HTML** 断言四处调用点（不是 grep 源码）；已做**变异验证**（移走 1 个 SVG ／ 删掉 CSS 的 `pixelated` ／ 在别处硬拼路径 → 三种变异均被捕获）。全量 **51 套件 / 2106 断言 / 0 失败**；`page/` JS 文件数不变（48）；缓存版本对齐（**v126**）。**⑥ 设计分工**：双子代理并行绘制（R+SR 7 只 / SSR+UR 7 只）→ 交叉复核（P0 ×4 / P1 ×7 / P2 若干）→ 两轮修复收敛，交付记录见 `doc/design-pet-icons.md` §5。**⑦ 顺带**：`.gitignore` 补 `.workbuddy-ai/`（工具临时目录，与既有 `.workbuddy/` 同处理）；架构演化表的「最大文件行数」本版按 `wc -l` **复核更正**为 1409（v2.2.27 / v2.2.28 两行记的 1348 系未复核的旧值，本版未改那两行）| `doc/changelog-v2.2.md` |
+
+> 当前版本：**v2.2.29**（设计规范：`doc/design-tokens-v2.1.md`｜v2.2 变更日志：`doc/changelog-v2.2.md`）

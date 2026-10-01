@@ -9,3 +9,4 @@ backup/
 .git-disabled/
 .tmp-analysis/
 .workbuddy/
+.workbuddy-ai/

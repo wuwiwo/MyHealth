@@ -1,0 +1,65 @@
+<!--
+speciesId: darkcrow
+name: 黑暗鸦
+rarity: SSR
+palette: K=#0B0D12 N=#2A3550 V=#A855F7 W=#FFFFFF g=#3A3F4A
+
+   0123456789012345
+ 00 ................
+ 01 ..........N.....
+ 02 ........NNN.....
+ 03 .......NNNN.....
+ 04 ..KKKKKNNNNN....
+ 05 ..KKKKKKNNNNN...
+ 06 .NNNKVWKKKNNNN..
+ 07 .NNNKKKKKKNNN...
+ 08 ..KKKKKKKKNN....
+ 09 ...KNNNNNNKN....
+ 10 ...KNNNNNNK.....
+ 11 ....KNNNNK......
+ 12 ....KNNNNK......
+ 13 .....KKKK.......
+ 14 ....gKKKKg......
+ 15 .....K.K.K......
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>黑暗鸦</title>
+<rect x="30" y="3" width="3" height="3" fill="#2A3550"/>
+<rect x="24" y="6" width="9" height="3" fill="#2A3550"/>
+<rect x="21" y="9" width="12" height="3" fill="#2A3550"/>
+<rect x="6" y="12" width="15" height="3" fill="#0B0D12"/>
+<rect x="21" y="12" width="15" height="3" fill="#2A3550"/>
+<rect x="6" y="15" width="18" height="3" fill="#0B0D12"/>
+<rect x="24" y="15" width="15" height="3" fill="#2A3550"/>
+<rect x="3" y="18" width="9" height="3" fill="#2A3550"/>
+<rect x="12" y="18" width="3" height="3" fill="#0B0D12"/>
+<rect x="15" y="18" width="3" height="3" fill="#A855F7"/>
+<rect x="18" y="18" width="3" height="3" fill="#FFFFFF"/>
+<rect x="21" y="18" width="9" height="3" fill="#0B0D12"/>
+<rect x="30" y="18" width="12" height="3" fill="#2A3550"/>
+<rect x="3" y="21" width="9" height="3" fill="#2A3550"/>
+<rect x="12" y="21" width="18" height="3" fill="#0B0D12"/>
+<rect x="30" y="21" width="9" height="3" fill="#2A3550"/>
+<rect x="6" y="24" width="24" height="3" fill="#0B0D12"/>
+<rect x="30" y="24" width="6" height="3" fill="#2A3550"/>
+<rect x="9" y="27" width="3" height="3" fill="#0B0D12"/>
+<rect x="12" y="27" width="18" height="3" fill="#2A3550"/>
+<rect x="30" y="27" width="3" height="3" fill="#0B0D12"/>
+<rect x="33" y="27" width="3" height="3" fill="#2A3550"/>
+<rect x="9" y="30" width="3" height="3" fill="#0B0D12"/>
+<rect x="12" y="30" width="18" height="3" fill="#2A3550"/>
+<rect x="30" y="30" width="3" height="3" fill="#0B0D12"/>
+<rect x="12" y="33" width="3" height="3" fill="#0B0D12"/>
+<rect x="15" y="33" width="12" height="3" fill="#2A3550"/>
+<rect x="27" y="33" width="3" height="3" fill="#0B0D12"/>
+<rect x="12" y="36" width="3" height="3" fill="#0B0D12"/>
+<rect x="15" y="36" width="12" height="3" fill="#2A3550"/>
+<rect x="27" y="36" width="3" height="3" fill="#0B0D12"/>
+<rect x="15" y="39" width="12" height="3" fill="#0B0D12"/>
+<rect x="12" y="42" width="3" height="3" fill="#3A3F4A"/>
+<rect x="15" y="42" width="12" height="3" fill="#0B0D12"/>
+<rect x="27" y="42" width="3" height="3" fill="#3A3F4A"/>
+<rect x="15" y="45" width="3" height="3" fill="#0B0D12"/>
+<rect x="21" y="45" width="3" height="3" fill="#0B0D12"/>
+<rect x="27" y="45" width="3" height="3" fill="#0B0D12"/>
+</svg>
