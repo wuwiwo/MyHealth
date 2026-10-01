@@ -730,11 +730,12 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .pet-card-ico{font-size:var(--fs-2xl);flex-shrink:0}
 /* v2.2.29 宠物头像图标（page/media/pets/*.svg，48×48 像素风，规格见 doc/design-pet-icons.md）
    pixelated + SVG 内建的 shape-rendering="crispEdges" 双保险：非整数倍缩放时也不糊。
-   角标保留原阶段 emoji 语义（蛋 🥚 / 成长 🌱），成熟期不显示角标。 */
+   ⚠️ v2.2.30：**去掉阶段角标**（`.pet-ico-wrap` / `.pet-ico-badge`）—— 角标会压住
+      头像右下角（评审 7-4：sparkle 星角被盖），而阶段在卡片正文行已完整表达。
+   ⚠️ 显示尺寸必须是 16 的倍数（现统一 32px）：图标是 16×16 逻辑网格、1 格 = 3px，
+      32px → 每格 2px 干净；40px → 2.5px、24px → 1.5px，crispEdges 会把格宽硬切成
+      2/3px 或 1/2px 粗细不均。尺寸由 JS 侧 `petIconHtml(id, size)` 注入 width/height。 */
 .pet-ico{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
-.pet-ico-wrap{position:relative;display:block;flex-shrink:0}
-.pet-ico-wrap>.pet-ico{width:100%;height:100%}
-.pet-ico-badge{position:absolute;right:-5px;bottom:-5px;font-style:normal;font-size:var(--fs-2xs);line-height:1;padding:1px 2px;border-radius:50%;background:var(--bg2);box-shadow:0 0 0 1px var(--surface-3)}
 .pet-detail-ico{display:block;flex-shrink:0}
 /* 参战 / 对比芯片：头像与文字同一行对齐（原来只有文字） */
 .pet-pick-chip,.pet-cmp-chip{display:inline-flex;align-items:center;gap:6px}

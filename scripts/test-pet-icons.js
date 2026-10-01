@@ -84,6 +84,21 @@ ok(fs.existsSync(ICON_DIR), 'page/media/pets/ 目录不存在');
 const BANNED_TAG = /<(path|circle|ellipse|polygon|polyline|line|text|image|g|defs|linearGradient|radialGradient|filter|mask|clipPath)[\s/>]/i;
 const BANNED_ATTR = /\b(opacity|fill-opacity|stroke|stroke-width|style|transform)\s*=/i;
 
+/* 对比度（WCAG 相对亮度）：守住「深色主题下不隐形、浅色主题下不隐形」。
+   v2.2.30 起每条颜色都必须至少有一个 fill 在两种卡面上都读得出 —— 起因是
+   darkcrow 原来用 #0B0D12 作主体，在默认深色主题卡面 #111827 上只有 **1.10:1**，
+   接入后整只几乎消失（原来放 emoji 时不存在这个问题，属本版引入的退化）。 */
+const CARD_DARK = '#111827';   // 默认（深色）主题 --bg2 = --surface
+const CARD_LIGHT = '#ffffff';  // [data-theme="light"] 的 --surface
+function _lin(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function _lum(hex) {
+  const t = hex.replace('#', '');
+  const f = t.length === 3 ? t.split('').map(x => x + x).join('') : t;
+  return 0.2126 * _lin(parseInt(f.slice(0, 2), 16)) + 0.7152 * _lin(parseInt(f.slice(2, 4), 16)) + 0.0722 * _lin(parseInt(f.slice(4, 6), 16));
+}
+function _contrast(a, b) { const la = _lum(a), lb = _lum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); }
+const MIN_READABLE = 3.0;   // 图标为图形（非文字），取 3:1
+
 SPECIES.forEach(id => {
   const f = path.join(ICON_DIR, id + '.svg');
   if (!fs.existsSync(f)) { ok(false, `缺少图标文件 media/pets/${id}.svg`); return; }
@@ -112,7 +127,26 @@ SPECIES.forEach(id => {
   ok(inBounds, `${id}: 有 rect 越界`);
   ok(fills.size <= 8, `${id}: 颜色数 ${fills.size} > 8`);
   ok(s.length < 6144, `${id}: 文件 ${s.length}B ≥ 6KB`);
+
+  /* 主题可读性：至少有一个颜色能在每种卡面上读出来（否则整只隐形）。
+     ⚠️ 这条只保证「不是全图都隐形」，不保证每个色块都达标 —— 浅色主体
+     （lightspirit/kirin 的白身）靠 #23262E 描边承托，属已知取舍。 */
+  const fl = [...fills];
+  const bestDark = Math.max(...fl.map(c => _contrast(c, CARD_DARK)));
+  const bestLight = Math.max(...fl.map(c => _contrast(c, CARD_LIGHT)));
+  ok(bestDark >= MIN_READABLE, `${id}: 深色主题卡面 #111827 下最可读色仅 ${bestDark.toFixed(2)}:1（<${MIN_READABLE}，整只会隐形）`);
+  ok(bestLight >= MIN_READABLE, `${id}: 浅色主题卡面 #ffffff 下最可读色仅 ${bestLight.toFixed(2)}:1（<${MIN_READABLE}，整只会隐形）`);
 });
+
+/* darkcrow 专项回归：v2.2.30 前它是唯一在深色主题下「整只隐形」的一只
+   （主体 #0B0D12 = 1.10:1、翼 #2A3550 = 1.46:1）。提亮后主体 #5B6B7C = 3.24:1。
+   这条守住「不许再退回深黑主体」。 */
+const crowFills = [...new Set([...fs.readFileSync(path.join(ICON_DIR, 'darkcrow.svg'), 'utf8')
+  .matchAll(/<rect[^>]*fill="([^"]+)"/g)].map(m => m[1].toLowerCase()))];
+ok(!crowFills.includes('#0b0d12'), 'darkcrow 又用回了 #0B0D12 作主体（深色主题下 1.10:1 不可见）');
+ok(!crowFills.includes('#2a3550'), 'darkcrow 又用回了 #2A3550（深色主题下 1.46:1 不可见）');
+ok(_contrast('#5B6B7C', CARD_DARK) >= MIN_READABLE,
+  `darkcrow 主体 #5B6B7C 对深色卡面仅 ${_contrast('#5B6B7C', CARD_DARK).toFixed(2)}:1`);
 
 /* ============ 2. 缺图标不炸 ============ */
 console.log('--- 2. 缺图标不炸 ---');
@@ -121,12 +155,27 @@ ok(sb.petIconUrl(null) === null, 'petIconUrl(null) 应为 null');
 ok(sb.petIconUrl('not_a_real_pet') === null, '未知 speciesId 应为 null（PET_CODEX 白名单）');
 ok(sb.petIconHtml('not_a_real_pet', 40) === '', '未知 speciesId 的 petIconHtml 应为空串（不产生裂图）');
 ok(sb.petIconUrl('kirin') === 'media/pets/kirin.svg', 'petIconUrl 路径拼接错误：' + sb.petIconUrl('kirin'));
-ok(sb.petIconHtml('kirin', 40).includes('alt="圣光麒麟"'), 'img 的 alt 应为宠物名');
-ok(sb.petIconHtml('kirin', 40).includes('width="40"'), 'img 未按 size 输出 width');
+/* 装饰性头像：alt 必须为空串 —— 头像永远紧邻可见的宠物名，
+   写 alt="圣光麒麟" 会让读屏念两遍「圣光麒麟 圣光麒麟 UR」 */
+const kirinImg = sb.petIconHtml('kirin', 32);
+ok(kirinImg.includes('alt=""'), '装饰性头像的 alt 应为空串，实际：' + kirinImg);
+ok(!/alt="[^"]+"/.test(kirinImg), '头像不应带非空 alt（会与相邻宠物名重复朗读）');
+ok(kirinImg.includes('width="32"') && kirinImg.includes('height="32"'), 'img 未按 size 输出 width/height（会按 48px 固有尺寸撑开行高）');
 SPECIES.forEach(id => {
   const u = sb.petIconUrl(id);
   ok(u === 'media/pets/' + id + '.svg', `${id}: petIconUrl 应为 media/pets/${id}.svg，实际 ${u}`);
 });
+
+/* 显示尺寸必须是 16 的倍数：图标是 16×16 逻辑网格、1 格 = 3px（48px 基准）。
+   32px → 每格 2px（干净）；40px → 每格 2.5px，crispEdges 把格宽硬切成 2/3px 粗细不均；
+   24px → 每格 1.5px，跳动更明显。这条守卫防以后有人随手写 40/24。 */
+console.log('--- 2b. 显示尺寸必须是 16 的倍数 ---');
+const uiSrc = src('pet-ui.js');
+const sizeLits = [...uiSrc.matchAll(/petIcon(?:Stage)?Html\(\s*[^,)]+,\s*(\d+)/g)].map(m => Number(m[1]));
+ok(sizeLits.length >= 4, `pet-ui.js 里应能找到 ≥4 处图标尺寸字面量，实际 ${sizeLits.length}`);
+sizeLits.forEach(n => ok(n % 16 === 0, `图标尺寸 ${n}px 不是 16 的倍数（会因非整数倍缩放导致格宽粗细不均）`));
+const chSizeLits = [...src('challenge.js').matchAll(/petIconHtml\(\s*[^,)]+,\s*(\d+)/g)].map(m => Number(m[1]));
+chSizeLits.forEach(n => ok(n % 16 === 0, `challenge.js 图标尺寸 ${n}px 不是 16 的倍数`));
 
 /* ============ 3. 唯一入口（源码级守卫） ============ */
 console.log('--- 3. 唯一入口 ---');
@@ -152,12 +201,15 @@ SPECIES.forEach(id => {
 });
 ok(panelHtml.includes('class="pet-ico'), '卡片头像未带 .pet-ico class（pixelated 样式会失效）');
 
-/* 4b 阶段角标：蛋期/成长期要有角标，成熟期不要 */
+/* 4b 阶段表达：v2.2.30 起**不再用角标**（角标会压住头像右下角，评审 7-4），
+   阶段改由正文行文字承担 —— 这里同时守住「角标不许回来」与「阶段文字还在」。 */
 seedStore([mkPet('sparkle', 'egg'), mkPet('waterdrop', 'grow'), mkPet('pongpong', 'mature')]);
 sb.renderPetPanel();
 const h2 = sb.__ov.innerHTML;
-ok(h2.includes('pet-ico-badge'), '蛋期/成长期卡片缺少阶段角标');
-ok(h2.includes('🥚') && h2.includes('🌱'), '阶段角标 emoji 丢失（蛋 🥚 / 成长 🌱）');
+ok(!h2.includes('pet-ico-badge'), '阶段角标不应再出现（会压住头像右下角，评审 7-4）');
+ok(!h2.includes('pet-ico-wrap'), '头像不应再包 .pet-ico-wrap（角标容器已废弃）');
+ok(h2.includes('孵化') && h2.includes('成长') && h2.includes('成熟'),
+  '阶段信息必须在卡片正文行可见（角标去掉后不能丢信息）');
 
 /* 4c 详情页头部 */
 seedStore([mkPet('darkcrow', 'mature')]);
@@ -196,7 +248,7 @@ ok(/typeof petIconHtml === 'function'/.test(chSrc),
 /* 4g CSS 契约：.pet-ico 必须带 pixelated，否则非整数倍缩放会糊 */
 const css = src('index.css');
 ok(/\.pet-ico\s*\{[^}]*image-rendering\s*:\s*pixelated/.test(css), 'index.css 的 .pet-ico 缺少 image-rendering:pixelated');
-ok(/\.pet-ico-badge\s*\{/.test(css), 'index.css 缺少 .pet-ico-badge');
+ok(!/\.pet-ico-badge\s*\{/.test(css), 'index.css 不应再有 .pet-ico-badge（角标会压住头像，评审 7-4）');
 ok(/\.pet-pick-chip\s*,\s*\.pet-cmp-chip\s*\{[^}]*display\s*:\s*inline-flex/.test(css),
   'index.css 的芯片未设为 inline-flex（头像与文字会错行）');
 

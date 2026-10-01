@@ -19,24 +19,30 @@ function petIconUrl(speciesId) {
   if (typeof PET_CODEX === 'undefined' || !PET_CODEX[speciesId]) return null;
   return PET_ICON_DIR + speciesId + '.svg';
 }
-/* 头像 <img>；size = 显示边长(px)；缺图标返回 '' */
+/* 头像 <img>；size = 显示边长(px)；缺图标返回 ''。
+   ⚠️ `alt=""`（空）是**故意的**：所有接入点头像都紧邻可见的宠物名
+      （卡片 `.pet-card-name` / 详情标题 / 芯片文字），属**装饰性图像**。
+      若写成 alt="闪闪星"，读屏会念两遍「闪闪星 闪闪星 SSR」。
+      将来若做「只有图标没有名字」的图鉴网格或分享卡，那里要单独给
+      `role="img" aria-label="闪闪星"`，不要改这里。
+   ⚠️ `size` **必须是 16 的倍数**（推荐 32 / 48）：图标是 16×16 逻辑网格、
+      1 格 = 3px，48px 显示时 1 格 = 3px。取 32 → 每格 2px（干净）；
+      取 40 → 每格 2.5px，crispEdges 会把格宽硬切成 2 或 3px **粗细不均**；
+      取 24 → 每格 1.5px，跳动更明显。 */
 function petIconHtml(speciesId, size, cls) {
   var url = petIconUrl(speciesId);
   if (!url) return '';
-  var c = (typeof getPetCodex === 'function' ? getPetCodex(speciesId) : null) || {};
   return '<img class="pet-ico' + (cls ? ' ' + cls : '') + '" src="' + url + '"'
-    + ' width="' + size + '" height="' + size + '"'
-    + ' alt="' + (c.name || speciesId) + '" loading="lazy" decoding="async">';
+    + ' width="' + size + '" height="' + size + '" alt=""'
+    + ' loading="lazy" decoding="async">';
 }
-/* 头像 + 阶段角标（列表卡片用）：蛋期 🥚 / 成长期 🌱 / 成熟期无角标。
-   无图标时整体退回原来的单 emoji（行为与接入前一致）。 */
+/* 列表卡片头像：无图标时退回该阶段的 emoji（= 接入前的行为）。
+   ⚠️ v2.2.30：**不再叠加阶段角标** —— 角标（🥚/🌱）会压住头像右下角
+      （评审 7-4：`sparkle` 的星角被盖住），而阶段信息在卡片正文行
+      （「孵化 40% / 成长 30% / 成熟」）与进度条里已经完整表达，角标属重复信息。
+      「无图标 → 退回 emoji」这条降级语义保留。 */
 function petIconStageHtml(speciesId, size, stage) {
-  var fallback = stage === 'egg' ? '🥚' : stage === 'grow' ? '🌱' : '🐾';
-  var ico = petIconHtml(speciesId, size);
-  if (!ico) return fallback;
-  var badge = stage === 'egg' ? '🥚' : stage === 'grow' ? '🌱' : '';
-  return '<span class="pet-ico-wrap" style="width:' + size + 'px;height:' + size + 'px">'
-    + ico + (badge ? '<i class="pet-ico-badge">' + badge + '</i>' : '') + '</span>';
+  return petIconHtml(speciesId, size) || (stage === 'egg' ? '🥚' : stage === 'grow' ? '🌱' : '🐾');
 }
 
 
@@ -159,7 +165,7 @@ function renderPetPanel() {
          独占标题行且 nowrap+省略号，任何宽度都不会竖排；按钮组独立一行，仍各 44px 热区。 */
       h += '<div class="pet-card">'
         +'<div class="pet-card-head">'
-        +'<span class="pet-card-ico">'+petIconStageHtml(p.speciesId, 40, p.stage)+'</span>'
+        +'<span class="pet-card-ico">'+petIconStageHtml(p.speciesId, 32, p.stage)+'</span>'
         +'<span class="pet-card-name">'+(codex.name||p.name)+'</span>'
         +'<span class="pet-card-rarity">'+p.rarity+'</span>'
         +'</div>'
@@ -186,7 +192,7 @@ function renderPetPanel() {
       var sel = (_petBattlePicks||[]).includes(p.speciesId)
       /* v2.2.29：参战芯片加 24px 头像，扫一眼就能认出是哪只（原来只有文字） */
       h += '<button class="speed-btn pet-pick-chip" data-pet-pick="'+p.speciesId+'" style="padding:3px 10px;'+(sel?'border-color:var(--green);color:var(--green)':'')+'">'
-        + petIconHtml(p.speciesId, 24) + '<span>'+(getPetCodex(p.speciesId)||{}).name+'</span></button>'
+        + petIconHtml(p.speciesId, 32) + '<span>'+(getPetCodex(p.speciesId)||{}).name+'</span></button>'
     })
     h += '</div>'
     h += '<div style="margin-top:8px"><button class="speed-btn" id="petStartBattle" style="padding:4px 16px;border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button></div>'
@@ -442,7 +448,7 @@ function petCompareHtml(pet) {
     var c = getPetCodex(p.speciesId) || {};
     var on = (_petCompareSel === p.speciesId);
     h += '<button class="speed-btn pet-cmp-chip' + (on ? ' active' : '') + '" data-pet-cmp="' + p.speciesId + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
-      + petIconHtml(p.speciesId, 24) + '<span>' + (c.name || p.name || p.speciesId) + '</span></button>';
+      + petIconHtml(p.speciesId, 32) + '<span>' + (c.name || p.name || p.speciesId) + '</span></button>';
   });
   h += '</div>';
   var sel = null;
@@ -488,7 +494,7 @@ function renderPetDetail(pet, idx) {
   var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
     +'<button class="speed-btn" id="petDBack" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">←</button>'
     /* v2.2.29：详情页头部也挂头像（与卡片同一个渲染入口） */
-    +'<span class="pet-detail-ico">'+petIconHtml(pet.speciesId, 40)+'</span>'
+    +'<span class="pet-detail-ico">'+petIconHtml(pet.speciesId, 32)+'</span>'
     +'<span style="font-size:var(--fs-lg);font-weight:700">'+(codex.name||pet.name)+' <span style="color:var(--purple);font-size:var(--fs-xs)">'+pet.rarity+'</span></span>'
     +'<span style="flex:1"></span>'
     +'<span style="font-size:var(--fs-sm);color:var(--text2)">✨ 灵能 <b>'+(bag.spirit||0)+'</b></span>'

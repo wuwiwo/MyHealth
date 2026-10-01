@@ -2,7 +2,7 @@
 speciesId: darkcrow
 name: 黑暗鸦
 rarity: SSR
-palette: K=#0B0D12 N=#2A3550 V=#A855F7 W=#FFFFFF g=#3A3F4A
+palette: K=#5B6B7C N=#3E4C6B V=#A855F7 W=#FFFFFF g=#8B9099
 
    0123456789012345
  00 ................
@@ -24,42 +24,45 @@ palette: K=#0B0D12 N=#2A3550 V=#A855F7 W=#FFFFFF g=#3A3F4A
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
 <title>黑暗鸦</title>
-<rect x="30" y="3" width="3" height="3" fill="#2A3550"/>
-<rect x="24" y="6" width="9" height="3" fill="#2A3550"/>
-<rect x="21" y="9" width="12" height="3" fill="#2A3550"/>
-<rect x="6" y="12" width="15" height="3" fill="#0B0D12"/>
-<rect x="21" y="12" width="15" height="3" fill="#2A3550"/>
-<rect x="6" y="15" width="18" height="3" fill="#0B0D12"/>
-<rect x="24" y="15" width="15" height="3" fill="#2A3550"/>
-<rect x="3" y="18" width="9" height="3" fill="#2A3550"/>
-<rect x="12" y="18" width="3" height="3" fill="#0B0D12"/>
+<!-- v2.2.30 提亮：深色主题卡面 #111827 下原 #0B0D12 仅 1.10:1（几乎不可见）。
+     统一上移一档 K #0B0D12→#5B6B7C（3.24:1）、N #2A3550→#3E4C6B（2.07:1）、爪 #3A3F4A→#8B9099（5.53:1）。
+     几何一格未动；「通体黑」按可读性让位（评审 A 级：darkcrow 深色主题不可见）。 -->
+<rect x="30" y="3" width="3" height="3" fill="#3E4C6B"/>
+<rect x="24" y="6" width="9" height="3" fill="#3E4C6B"/>
+<rect x="21" y="9" width="12" height="3" fill="#3E4C6B"/>
+<rect x="6" y="12" width="15" height="3" fill="#5B6B7C"/>
+<rect x="21" y="12" width="15" height="3" fill="#3E4C6B"/>
+<rect x="6" y="15" width="18" height="3" fill="#5B6B7C"/>
+<rect x="24" y="15" width="15" height="3" fill="#3E4C6B"/>
+<rect x="3" y="18" width="9" height="3" fill="#3E4C6B"/>
+<rect x="12" y="18" width="3" height="3" fill="#5B6B7C"/>
 <rect x="15" y="18" width="3" height="3" fill="#A855F7"/>
 <rect x="18" y="18" width="3" height="3" fill="#FFFFFF"/>
-<rect x="21" y="18" width="9" height="3" fill="#0B0D12"/>
-<rect x="30" y="18" width="12" height="3" fill="#2A3550"/>
-<rect x="3" y="21" width="9" height="3" fill="#2A3550"/>
-<rect x="12" y="21" width="18" height="3" fill="#0B0D12"/>
-<rect x="30" y="21" width="9" height="3" fill="#2A3550"/>
-<rect x="6" y="24" width="24" height="3" fill="#0B0D12"/>
-<rect x="30" y="24" width="6" height="3" fill="#2A3550"/>
-<rect x="9" y="27" width="3" height="3" fill="#0B0D12"/>
-<rect x="12" y="27" width="18" height="3" fill="#2A3550"/>
-<rect x="30" y="27" width="3" height="3" fill="#0B0D12"/>
-<rect x="33" y="27" width="3" height="3" fill="#2A3550"/>
-<rect x="9" y="30" width="3" height="3" fill="#0B0D12"/>
-<rect x="12" y="30" width="18" height="3" fill="#2A3550"/>
-<rect x="30" y="30" width="3" height="3" fill="#0B0D12"/>
-<rect x="12" y="33" width="3" height="3" fill="#0B0D12"/>
-<rect x="15" y="33" width="12" height="3" fill="#2A3550"/>
-<rect x="27" y="33" width="3" height="3" fill="#0B0D12"/>
-<rect x="12" y="36" width="3" height="3" fill="#0B0D12"/>
-<rect x="15" y="36" width="12" height="3" fill="#2A3550"/>
-<rect x="27" y="36" width="3" height="3" fill="#0B0D12"/>
-<rect x="15" y="39" width="12" height="3" fill="#0B0D12"/>
-<rect x="12" y="42" width="3" height="3" fill="#3A3F4A"/>
-<rect x="15" y="42" width="12" height="3" fill="#0B0D12"/>
-<rect x="27" y="42" width="3" height="3" fill="#3A3F4A"/>
-<rect x="15" y="45" width="3" height="3" fill="#0B0D12"/>
-<rect x="21" y="45" width="3" height="3" fill="#0B0D12"/>
-<rect x="27" y="45" width="3" height="3" fill="#0B0D12"/>
+<rect x="21" y="18" width="9" height="3" fill="#5B6B7C"/>
+<rect x="30" y="18" width="12" height="3" fill="#3E4C6B"/>
+<rect x="3" y="21" width="9" height="3" fill="#3E4C6B"/>
+<rect x="12" y="21" width="18" height="3" fill="#5B6B7C"/>
+<rect x="30" y="21" width="9" height="3" fill="#3E4C6B"/>
+<rect x="6" y="24" width="24" height="3" fill="#5B6B7C"/>
+<rect x="30" y="24" width="6" height="3" fill="#3E4C6B"/>
+<rect x="9" y="27" width="3" height="3" fill="#5B6B7C"/>
+<rect x="12" y="27" width="18" height="3" fill="#3E4C6B"/>
+<rect x="30" y="27" width="3" height="3" fill="#5B6B7C"/>
+<rect x="33" y="27" width="3" height="3" fill="#3E4C6B"/>
+<rect x="9" y="30" width="3" height="3" fill="#5B6B7C"/>
+<rect x="12" y="30" width="18" height="3" fill="#3E4C6B"/>
+<rect x="30" y="30" width="3" height="3" fill="#5B6B7C"/>
+<rect x="12" y="33" width="3" height="3" fill="#5B6B7C"/>
+<rect x="15" y="33" width="12" height="3" fill="#3E4C6B"/>
+<rect x="27" y="33" width="3" height="3" fill="#5B6B7C"/>
+<rect x="12" y="36" width="3" height="3" fill="#5B6B7C"/>
+<rect x="15" y="36" width="12" height="3" fill="#3E4C6B"/>
+<rect x="27" y="36" width="3" height="3" fill="#5B6B7C"/>
+<rect x="15" y="39" width="12" height="3" fill="#5B6B7C"/>
+<rect x="12" y="42" width="3" height="3" fill="#8B9099"/>
+<rect x="15" y="42" width="12" height="3" fill="#5B6B7C"/>
+<rect x="27" y="42" width="3" height="3" fill="#8B9099"/>
+<rect x="15" y="45" width="3" height="3" fill="#5B6B7C"/>
+<rect x="21" y="45" width="3" height="3" fill="#5B6B7C"/>
+<rect x="27" y="45" width="3" height="3" fill="#5B6B7C"/>
 </svg>
