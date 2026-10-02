@@ -345,8 +345,13 @@ assert('§3.9 不动如山 E2E → 血量>95% 时受伤 ×0.5', hitPlain > 0 && 
   'plain=' + hitPlain + ' immovable=' + takeHit(['immovable']));
 
 /* §3.10 威压领域：无条件 -10%，自身>70% 血翻倍为 -20%（真实治疗通道消费 healReduce）
-   ⚠️ 口径说明：selectTargets('ally1') 恒从 **gb.allies** 取目标，故要让「敌方治疗」落到
-      aura 的判定面内，威压持有者须站在**敌方**（治疗目标是 gb.allies 单位 → foes 侧含持有者）。 */
+   ⚠️ v2.4.3 口径更新：此前这里靠「敌方施放『治愈』会治疗 gb.allies」来构造场景 —— 那正是
+      v2.4.3 修掉的 bug（selectTargets 的 ally1/ally2 写死了玩家方；设计文档《2.0 敌群设计》
+      第 160~171 行明确这三个技能作用于施法者**自己一方**）。
+      修后敌方「治愈」治的是敌方自己，故本用例改为**我方治疗者**治疗我方 vict。
+      这不改变本用例要验的东西：onFoeHeal 的派发看的是**被治疗者**阵营，与谁施放无关 ——
+      `battle-group.js` 里 `foes = (t.side === 'ally' ? gb.enemies : gb.allies)`，
+      被治疗者是我方 → 参与判定的仍是**敌方**的威压领域持有者。 */
 function pfHeal(holderHpRatio) {
   const vict = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 5 });
   vict.hp = 100;
@@ -357,8 +362,9 @@ function pfHeal(holderHpRatio) {
     foes.push(holder);
   }
   foes.push(mkSide('enemy', { hp: 500, atk: 10, def: 5, spd: 6, soulAtk: 100 }, null, 10));
-  const gb = sandbox.createGroupBattle({ allies: [vict], enemies: foes, rng: function () { return 0; } });
-  sandbox.castSkill(gb, foes[foes.length - 1], 'heal');
+  const healer = mkSide('ally', { hp: 300, atk: 10, def: 5, spd: 2, soulAtk: 100 });
+  const gb = sandbox.createGroupBattle({ allies: [vict, healer], enemies: foes, rng: function () { return 0; } });
+  sandbox.castSkill(gb, healer, 'heal');
   return vict.hp - 100;
 }
 const pfBase = pfHeal(null);

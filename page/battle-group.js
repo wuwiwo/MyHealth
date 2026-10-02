@@ -363,17 +363,27 @@ function buildActionQueue(gb) {
      · skillDef.wounded —— ally1 只挑**未满血**的友方（§2.11 圣光治愈） */
 function selectTargets(gb, actor, skillDef) {
   var target = (skillDef && skillDef.target) || 'random1';
-  var enemies = gb.enemies.filter(function (u) { return u.hp > 0; });
-  var allies = gb.allies.filter(function (u) { return u.hp > 0; });
+  /* 🔴 v2.4.3 修复（真 bug，非设计）：候选名单必须按**施法者阵营**取，不能写死 gb.allies。
+     此前 `ally1` / `ally2` 两个分支直接用「玩家方」→ 敌方施放「治愈 / 强攻 / 净化」时
+     目标 100% 落到我方（实测每个技能 40/40 次全部命中 ally 侧），等于**敌方辅助技能长期在帮玩家**
+     （敌人从没给自己奶过一口）。设计文档《2.0 敌群设计》第 160~171 行明确写这三个技能作用于
+     「我方」＝**施法者自己一方**：「解除我方场上 1 名……负面状态」/「使我方随机 1 名角色恢复生命值」/
+     「使我方除自身外一名角色攻击提升」。
+     ⚠️ 本文件另外 27 处阵营判断本来就是正确的 `actor.side === 'ally' ? gb.enemies : gb.allies` 写法
+        （见 70 / 117 / 238 / 372 / 578 / 791 / 834 / 850 / 951 / 1062 / 1083 / 1130 / 1131 / 1152 /
+         1177 / 1183 / 1184 / 1227 / 1258 / 1259 / 1276 / 1294 / 1295 行）—— 修的是**单点缺失**，
+        不要顺手改写别处。 */
+  var mates = (actor.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return u.hp > 0; });
+  var foes = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; });
 
   if (target === 'self') return [actor];
   if (target === 'all') {
     // 嘲讽者被单独挑出，其余全体
-    var taunter = (actor.side === 'ally' ? gb.enemies : gb.allies).find(function (u) { return u._taunting && u.hp > 0; });
+    var taunter = foes.find(function (u) { return u._taunting && u.hp > 0; });
     if (taunter && target === 'all') {
       // 全体技能仍打全体，但嘲讽者额外承伤由 battle 处理
     }
-    return actor.side === 'ally' ? enemies : allies;
+    return foes;
   }
   /* 从候选里无放回地随机抽 n 个（顺序即抽取顺序，走本场种子 gb.rng） */
   function drawRandom(list, n) {
@@ -384,8 +394,8 @@ function selectTargets(gb, actor, skillDef) {
     return picks;
   }
   if (target === 'ally1') {
-    var healTargets = allies.filter(function (u) { return u.id !== actor.id; });
-    if (!healTargets.length) healTargets = allies;
+    var healTargets = mates.filter(function (u) { return u.id !== actor.id; });
+    if (!healTargets.length) healTargets = mates;
     /* WP-C（§2.11 圣光治愈「随机 1 名受伤队友」）：只挑未满血者；
        全队满血时退回全体（否则技能无目标 = 空放）。 */
     if (skillDef && skillDef.wounded) {
@@ -396,20 +406,20 @@ function selectTargets(gb, actor, skillDef) {
   }
   if (target === 'ally2') {
     /* WP-C（§2.14 战意灌注「随机 2 名友方」）：沿用 ally1 的口径（优先排除自身），
-       不足 2 名旁观者时退回含自身的全体友方。 */
-    var pool2 = allies.filter(function (u) { return u.id !== actor.id; });
-    if (pool2.length < 2) pool2 = allies;
+       不足 2 名旁观者时退回含自身的全体友方。v2.4.3：候选改为 `mates`（施法者自己一方）。 */
+    var pool2 = mates.filter(function (u) { return u.id !== actor.id; });
+    if (pool2.length < 2) pool2 = mates;
     return drawRandom(pool2, 2);
   }
   if (target === 'enemy2' || target === 'enemy12') {
     var n = (target === 'enemy2') ? 2 : (1 + (gb.rng() < 0.5 ? 1 : 0));
-    return drawRandom(enemies, n);
+    return drawRandom(foes, n);
   }
   if (target === 'enemy1') {
-    return [enemies[Math.floor(gb.rng() * enemies.length)]];
+    return [foes[Math.floor(gb.rng() * foes.length)]];
   }
   // random1：嘲讽优先
-  var pool = actor.side === 'ally' ? enemies : allies;
+  var pool = foes;
   var t = pool.find(function (u) { return u._taunting && u.hp > 0; });
   if (t) return [t];
   if (!pool.length) return [];
