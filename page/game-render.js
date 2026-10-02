@@ -1130,11 +1130,54 @@ function gbDropChargeNoise(events){
   })
 }
 
-/* 战报文本：**唯一来源** —— 日志页「📋 复制」与结算面板「📋 复制战报」共用（禁两处各写一套） */
+/* ============================================================
+   v2.4.5：四阶段显示（显示侧唯一实现，禁两处各写一套）
+
+   冻结契约（引擎侧）：`window.GB_PHASES = ['准备','行动','判定','结束']`（顺序固定）；
+   `gb.phase` = 当前阶段；**每条 `gb.log` 条目带 `phase: gb.phase`**。
+   ⚠️ 引擎可能还没落地 / 旧日志可能整条缺 `phase` —— 本层一律**防御式兜底**：
+      缺字段或非法值时 `gbPhaseCanon()` 返回 `''`，调用方走既有渲染（不分组、不出标题、
+      不显示 `undefined`）。故这里**不声明**全局 `GB_PHASES`（那是引擎的变量，
+      在同一个全局作用域里重复 `var` 会互相覆盖），只读它、读不到就用内置顺序。 */
+var _GB_PHASE_FALLBACK=['准备','行动','判定','结束']
+
+/* 契约顺序：优先读引擎的 window.GB_PHASES，读不到退回内置顺序（只用于排序与合法性校验） */
+function gbPhaseOrder(){
+  try{
+    var ext=(typeof window!=='undefined')?window.GB_PHASES:null
+    if(ext&&ext.length&&typeof ext.length==='number')return ext
+  }catch(e){ console.warn('[group] 读取 GB_PHASES 失败，退回内置阶段顺序',e) }
+  return _GB_PHASE_FALLBACK
+}
+/* 合法阶段名归一化：缺失 / 非字符串 / 未知值一律返回 ''（**绝不回显 undefined**）。
+   容忍引擎写成带后缀的「准备阶段」（契约字面量是短名，长名也认）。 */
+function gbPhaseCanon(v){
+  if(typeof v!=='string')return ''
+  var s=v.replace(/\s+/g,'')
+  if(!s)return ''
+  var order=gbPhaseOrder(),i
+  for(i=0;i<order.length;i++){ if(order[i]===s)return order[i] }
+  if(s.length>2&&s.slice(-2)==='阶段')s=s.slice(0,-2)
+  for(i=0;i<order.length;i++){ if(order[i]===s)return order[i] }
+  return ''
+}
+/* 日志条目 → 阶段名；没有就返回 ''（调用方据此走兜底渲染） */
+function gbLogPhaseOf(l){ return l?gbPhaseCanon(l.phase):'' }
+/* 阶段序号（用于 CSS 类 ph-0..ph-3，四阶段各自可区分）；非法值 -1 */
+function gbPhaseIdx(p){
+  var order=gbPhaseOrder()
+  for(var i=0;i<order.length;i++){ if(order[i]===p)return i }
+  return -1
+}
+
+/* 战报文本：**唯一来源** —— 日志页「📋 复制」与结算面板「📋 复制战报」共用（禁两处各写一套）
+   v2.4.5：head 追加阶段 → `【回合 1·准备阶段】…`；缺 phase 时 head **逐字不变**
+   （`【回合 1】…` / `【开场】…`），故旧日志与旧断言的输出等价。 */
 function groupLogText(gb){
   if(!gb||!gb.log)return ''
   return gb.log.map(function(l){
-    var head='【'+(l.turn===0?'开场':'回合 '+l.turn)+'】'+(l.unit||'')
+    var ph=gbLogPhaseOf(l)
+    var head='【'+(l.turn===0?'开场':'回合 '+l.turn)+(ph?('·'+ph+'阶段'):'')+'】'+(l.unit||'')
     var body=gbDropChargeNoise(l.events).filter(function(e){return e&&e.msg&&e.type!=='bubble'})
       .map(function(e){return e.msg}).join('；')
     return head+': '+body
@@ -1266,8 +1309,14 @@ function renderGroupActionBanner(gb){
     text=nm&&evText?(nm+' '+evText):(nm||evText)
   }
   if(!text)return ''
+  /* v2.4.5 改造 2：阶段徽标 —— 数据取 `gb.phase`，放在「谁 + 做了什么」左侧。
+     ⚠️ 缺字段 / 非法值 → `gbPhaseCanon()` 返回 '' → **不渲染徽标**（绝不显示 undefined）。
+     ⚠️ 徽标高 ≈19px ＜ .gb-banner 的 min-height:32px → 横幅 44px 上限不变（CSS 走令牌字号）。 */
+  var ph=gbPhaseCanon(gb.phase)
+  var phBadge=ph?('<span class="gb-banner-phase ph-'+gbPhaseIdx(ph)+'" data-phase="'+escHtml(ph)+'">'+escHtml(ph)+'</span>'):''
   return '<div id="gbActionBanner" class="gb-banner tone-'+tone+'" aria-hidden="true" title="'+escHtml(text)+'">'
     +'<span class="gb-banner-chip"></span>'
+    +phBadge
     +'<span class="gb-banner-text">'+escHtml(text)+'</span>'
     +'</div>'
 }
@@ -1626,6 +1675,72 @@ function gbLogEvHtml(e){
   return '<div class="gb-log-ev '+cls+'">'+s+'</div>'
 }
 
+/* ============================================================
+   v2.4.5：日志页阶段分组（改造 1）
+
+   目标形态（每回合内部按契约顺序分组，只渲染**有事件**的阶段）：
+     —— 回合 1 ——
+     ▸ 准备阶段
+       [行动者] 事件…
+     ▸ 行动阶段
+       …
+   ⚠️ 兜底（契约明确要求）：整段没有任何条目带合法 `phase` 时，
+      `gbLogPhaseGroups()` 返回 null → 调用方走**改造前的渲染**（每个条目一个
+      `—— 回合 N ——` 头、无阶段标题），输出与改造前逐字等价。
+      这样引擎还没落地 / 旧日志 / `opening` 条目缺字段时都不会崩、不会出现 undefined。
+   ⚠️ 混合态（同一回合里部分条目带 phase、部分不带，例如引擎迁移到一半的 `opening`）：
+      带的走分组，不带的作为「无阶段条目」跟在分组之后，**同样不出阶段标题**。
+   ============================================================ */
+
+/* 阶段标题：`▸ 准备阶段`，类名带 ph-N 供 CSS 上色（与 `—— 回合 N ——` 层级区分） */
+function gbLogPhaseHeaderHtml(phase){
+  var i=gbPhaseIdx(phase)
+  return '<div class="gb-log-phase ph-'+(i<0?0:i)+'" data-phase="'+escHtml(phase)+'">▸ '+escHtml(phase)+'阶段</div>'
+}
+/* 回合头（既有文案，**逐字保留** —— 兜底路径要与之等价，故不「顺手美化」） */
+function gbLogTurnLabel(l){
+  var x=l||{}
+  return '—— '+(x.turn===0?'开场':'回合 '+x.turn)+' ——'
+}
+/* 单个日志条目的正文（行动者徽章 + 事件行）—— 分组路径与兜底路径**共用**，禁两处各写一套 */
+function gbLogEntryHtml(item,idx){
+  var l=(item&&item.l)||{}
+  var h='<div class="gb-log-actor'+(l.terrain?' terrain':'')+(l.opening?' opening':'')+'">'
+    +gbActorBadge(l,idx)+escHtml(gbStripLeadEmoji(l.unit||'单位'))+'</div>'
+  var lines=0
+  ;((item&&item.events)||[]).forEach(function(e){
+    lines++
+    h+=gbLogEvHtml(e)
+  })
+  if(!lines)h+='<div class="gb-log-ev muted">（本回合无事发生）</div>'
+  return h
+}
+/* 按回合切段：同一个 turn 的连续条目 = 一段（阶段分组只在段内做，不跨回合） */
+function gbLogTurnChunks(items){
+  var out=[],cur=null
+  ;(items||[]).forEach(function(it){
+    var t=((it&&it.l&&it.l.turn)||0)
+    if(!cur||cur.turn!==t){cur={turn:t,items:[]};out.push(cur)}
+    cur.items.push(it)
+  })
+  return out
+}
+/* 一段（一个回合）内的阶段分组。
+   返回 null = 本段没有任何条目带合法 phase → **调用方必须走改造前的渲染**；
+   返回 {groups,unphased} = 按契约顺序、只含有事件的阶段 + 无阶段条目（排在最后、不出标题）。 */
+function gbLogPhaseGroups(items){
+  var all=items||[],phased=0,i
+  for(i=0;i<all.length;i++){ if(gbLogPhaseOf(all[i]&&all[i].l))phased++ }
+  if(!phased)return null
+  var order=gbPhaseOrder(),groups=[]
+  for(i=0;i<order.length;i++){
+    var grp=all.filter(function(it){ return gbLogPhaseOf(it&&it.l)===order[i] })
+    if(grp.length)groups.push({phase:order[i],items:grp})   /* ⚠️ 空阶段不 push → 不出现空标题 */
+  }
+  var unphased=all.filter(function(it){ return !gbLogPhaseOf(it&&it.l) })
+  return {groups:groups,unphased:unphased}
+}
+
 /* 日志页：分回合 + 每段标出行动者 + 类型筛选（筛选在「仅最近 8 条」**之前**执行）
    v2.1.14：此前日志只输出裸事件文案，看不出这段是谁的行动；
    场地事件还完全不在 gb.log 里（引擎侧已补）。 */
@@ -1648,17 +1763,25 @@ function renderGroupLogPane(gb){
     +'</div>'
   h+='<div id="gbLogBox" class="gb-log-box">'
   if(!filtered.length)h+='<div class="gb-log-note">'+(_gbLogFilter==='all'?'战斗开始…':'该类型暂无事件')+'</div>'
-  logs.forEach(function(item){
-    var l=item.l
-    h+='<div class="gb-log-turn">—— '+(l.turn===0?'开场':'回合 '+l.turn)+' ——</div>'
-    h+='<div class="gb-log-actor'+(l.terrain?' terrain':'')+(l.opening?' opening':'')+'">'
-      +gbActorBadge(l,idx)+escHtml(gbStripLeadEmoji(l.unit||'单位'))+'</div>'
-    var lines=0
-    ;(item.events||[]).forEach(function(e){
-      lines++
-      h+=gbLogEvHtml(e)
+  /* v2.4.5 改造 1：回合内按「准备 / 行动 / 判定 / 结束」分组（只渲染有事件的阶段；
+     无 phase 的回合走 gbLogPhaseGroups()===null 的兜底分支 = 改造前的渲染，逐字等价） */
+  gbLogTurnChunks(logs).forEach(function(chunk){
+    var grouped=gbLogPhaseGroups(chunk.items)
+    if(!grouped){
+      /* 兜底：引擎未落地 / 旧日志整条缺 phase → 保持既有渲染（每个条目一个回合头） */
+      chunk.items.forEach(function(item){
+        h+='<div class="gb-log-turn">'+gbLogTurnLabel(item.l)+'</div>'+gbLogEntryHtml(item,idx)
+      })
+      return
+    }
+    /* 分组态：回合头一个回合只出一个，其后是各阶段标题 + 该阶段的条目 */
+    h+='<div class="gb-log-turn">'+gbLogTurnLabel(chunk.items[0].l)+'</div>'
+    grouped.groups.forEach(function(g){
+      h+=gbLogPhaseHeaderHtml(g.phase)
+      g.items.forEach(function(item){ h+=gbLogEntryHtml(item,idx) })
     })
-    if(!lines)h+='<div class="gb-log-ev muted">（本回合无事发生）</div>'
+    /* 混合态：无阶段的条目跟在后面，**不出阶段标题**（不猜它属于哪个阶段） */
+    grouped.unphased.forEach(function(item){ h+=gbLogEntryHtml(item,idx) })
   })
   h+='</div>'
   return h

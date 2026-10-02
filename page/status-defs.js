@@ -74,11 +74,17 @@ defineStatus({
   }
 });
 
-/* 哈欠：下回合开始 55% 几率进入睡眠 1 回合 */
+/* 哈欠：下回合开始 55% 几率进入睡眠 1 回合
+   v2.4.5（作者裁定 §10-2）：**诅咒类** —— 本状态的 `onTurnStart` 归「准备阶段」结算
+   （每回合一次、在行动队列建立之前统一派发），不再挂在该单位自己的行动开始。
+   `phase:'prepare'` 是引擎侧 battle-group.js 的**逐条分类标记**（为什么不能整体搬，见那里的注释）；
+   判定阶段的 duration 递减对「尚未在准备阶段触发过」的这类状态会跳过一回合 ——
+   否则 duration:1 的哈欠会在「下回合准备阶段触发」之前就被判定阶段删掉，效果直接消失。 */
 defineStatus({
   id: 'sleepy',
   name: '哈欠',
   grade: 1,
+  phase: 'prepare',
   maxStacks: 1,
   stacking: 'refresh',
   hooks: {
@@ -140,11 +146,16 @@ defineStatus({
   }
 });
 
-/* 末日：无法治疗·技能禁用·普攻减半·每回合开始受魂攻比例伤害（无视防御减伤） */
+/* 末日：无法治疗·技能禁用·普攻减半·每回合开始受魂攻比例伤害（无视防御减伤）
+   v2.4.5（作者裁定 §10-2 / §10-5）：**诅咒类** —— `onTurnStart`（每回合开始的那次伤害）
+   归「准备阶段」统一结算；`onBeforeAction`（技能禁用）与 `onHeal`（治疗阻断）**不受影响**，
+   仍留在行动阶段（分类只作用于 onTurnStart，见 battle-group.js 的 dispatchStatusesPhase）。
+   ⚠️ 由此「本回合发动 → 下回合准备阶段才生效」，实测扣血次数见报告（与作者预判 3 次的差异同处说明）。 */
 defineStatus({
   id: 'doomed',
   name: '末日',
   grade: 3,
+  phase: 'prepare',
   maxStacks: 1,
   stacking: 'refresh',
   hooks: {
@@ -251,6 +262,7 @@ defineStatus({
   id: 'lastworded',
   name: '遗言诅咒',
   grade: 3,
+  phase: 'prepare',   // v2.4.5（§10-2 诅咒类）：每回合开始的那次伤害归**准备阶段**结算
   maxStacks: 1,
   stacking: 'refresh',
   /* v2.3.0（朴实作用面，§5.6-1）：本状态**既有能力增减（降攻/降魂攻）又有附加效果（每回合掉血）**，
@@ -325,12 +337,15 @@ defineStatus({
    设计依据 doc/design-v2.0.md:229 —— 「迷惑 1 敌 1 回合，使其随机执行其一：
    ①丧失防备 / ②不分敌我攻击其他敌人 / ③牺牲自我」。
    结算放在 battle-group.js 的 resolveConfusion()：它是「替代行动」而不是 skipAction ——
-   被迷惑的单位仍要动手，只是打错人 / 打自己 / 放弃防备。 */
+   被迷惑的单位仍要动手，只是打错人 / 打自己 / 放弃防备。
+   v2.4.5（作者裁定 §10-2）：幻影之瞳属**诅咒类** —— 三选一改在**下回合的准备阶段**统一触发
+   （不再在目标自己的行动开始时），行动阶段只保留「本次行动已被迷惑占用」这一步。 */
 
 defineStatus({
   id: 'confused',
   name: '迷惑',
   grade: 2,
+  phase: 'prepare',   // v2.4.5（§10-2 诅咒类）：三选一改在**下回合准备阶段**触发（幻影之瞳）
   maxStacks: 1,
   stacking: 'refresh',
   hooks: {}

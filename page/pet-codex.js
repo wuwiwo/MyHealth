@@ -438,8 +438,13 @@ registerTalent({ id:'mirror_field', name:'镜像结界', desc:'受我方辅助�
     }
   } });
 
-/* 梦幻：灵感涌动 —— 每回合开始随机 1 名友方魂攻 +20%（持续到本回合结束） */
-registerTalent({ id:'inspiration', name:'灵感涌动', desc:'每回合开始随机友方魂攻+20%', petOnly:true,
+/* 梦幻：灵感涌动 —— 每回合开始随机 1 名友方魂攻 +20%（持续到本回合结束）
+   v2.4.5（作者裁定 §10-2 推论 + 任务书核心诉求）：`onTurnStart` 归**准备阶段**结算
+   —— 每回合一次、且在行动队列建立**之前**落地，从而覆盖本回合**所有**队友的行动窗口
+   （改前挂点在该单位自己的 `groupUnitTurn` 里，只有比梦幻先出手的队友吃得到）。
+   `phase:'prepare'` 是引擎侧 battle-group.js 的逐条分类标记；`onTurnEnd`（收尾还原）随
+   天赋 onTurnEnd 一起在**判定阶段**派发。 */
+registerTalent({ id:'inspiration', name:'灵感涌动', desc:'每回合开始随机友方魂攻+20%', petOnly:true, phase:'prepare',
   hooks: {
     onTurnStart: function (unit, ctx) {
       var mates = (ctx.allyUnits || []).filter(function (u) { return u.hp > 0; });

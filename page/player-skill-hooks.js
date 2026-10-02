@@ -116,7 +116,11 @@ function attachPetSharedSkills(pets, stateOverride) {
 }
 
 /* 回合开始钩子：气势如虹（全队攻击+，触发锁3回合）/ 气力恢复（每4回合后2回合回血）/ 启风
-   v2.2.5：**宠物档**只共享气力恢复（每 5 回合回 (防+魂防)×120%），在**宠物自己回合开始**结算。 */
+   v2.2.5：**宠物档**只共享气力恢复（每 5 回合回 (防+魂防)×120%），在**宠物自己回合开始**结算。
+   v2.4.5（作者裁定 §10-2 推论）：这些「回合开始」类效果改由群战引擎的**准备阶段**调用
+   （battle-group.js 的 runPhasePrepare，每回合一次、在出手队列建立之前）——
+   本函数体**一字未改**（数值/概率/公式/触发判据全部保持），只换调用时机；
+   `turn` 仍是既有约定 `gb.turn + 1`，故 `(turn-5)%4`、`_spotTauntTurn === turn` 等判据不受影响。 */
 function playerSkillTurnStart(gb, player, turn) {
   var events = [];
   if (!player) return events;
@@ -267,7 +271,10 @@ function qifengExtraAttack(gb, actor) {
   return evts;
 }
 
-/* 瞩目回合结束：全体回复 (防+魂防)×受击次数 */
+/* 瞩目回合结束：全体回复 (防+魂防)×受击次数
+   v2.4.5（作者裁定 §10-2 推论 / 清单表）：改由群战引擎的**判定阶段**调用
+   （battle-group.js 的 runPhaseJudge，每回合一次、队列跑完之后）—— 本函数体一字未改，
+   `turn` 仍是 `gb.turn + 1`，故 `_spotTauntTurn === turn` 的配对判据不受影响。 */
 function playerSkillTurnEnd(gb, player, turn) {
   var events = [];
   if (!player || !player._playerSkills) return events;

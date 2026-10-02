@@ -872,6 +872,206 @@ console.log('--- 15. v2.4.4 蓄力矛盾文案折叠 ---');
   ok(fnBody(grSrc, 'gbDropChargeNoise').indexOf('document') < 0, 'gbDropChargeNoise 是纯函数（不碰 DOM）');
 }
 
+/* ============ 16. v2.4.5 阶段显示（日志页分组 / 行动横幅徽标 / 战报文本） ============
+
+   契约（引擎侧正在实现，本层按契约写、**不依赖它已完成**）：
+     `window.GB_PHASES = ['准备','行动','判定','结束']`（顺序固定）；
+     `gb.phase` = 当前阶段；每条 `gb.log` 条目带 `phase: gb.phase`；
+     `opening` 开战条目的 phase 为 '准备'，但**按实现可能缺字段**。
+
+   本节验的是「显示侧」四件事，全部用**自己注入的假 log**（带 phase），不依赖引擎改动：
+     ① 日志页按阶段分组：四阶段标题、契约顺序、空阶段不出现、条目落在正确标题之下；
+     ② 行动横幅：有 gb.phase 出阶段徽标（四阶段可区分）、缺 gb.phase 不出且不抛错；
+     ③ groupLogText 带阶段（`【回合 1·准备阶段】`）且仍走 gbDropChargeNoise 折叠；
+     ④ **兜底**：整条 log 都没有 phase 时，渲染与改造前等价（无阶段标题、既有回合标题在）。
+   外加源码守卫（分组函数存在且被 renderGroupLogPane 调用 / groupLogText 仍只有一处实现）。 */
+console.log('--- 16. v2.4.5 四阶段显示（日志页 / 横幅 / 战报） ---');
+{
+  const sb5 = makeSandbox();
+  const U5 = (msg, type) => ({ msg: msg, type: type });
+  const cnt = (s, sub) => s.split(sub).length - 1;     /* 子串出现次数（不写正则，免转义踩坑） */
+
+  /* 带 phase 的假 log。回合 2 故意**只有** 准备 / 行动 → 判定、结束必须是空阶段（不得出标题）。 */
+  function phasedGb() {
+    const a = mkUnit('u1', '🧑 你', 'ally'), e = mkUnit('e1', '👹 熔岩巨兽', 'enemy');
+    return { units: [a, e], allies: [a], enemies: [e], turn: 2, done: true, winner: 'ally',
+      log: [
+        { turn: 1, phase: '准备', unit: '场地·沙暴', terrain: true, events: [U5('🪨 👹 熔岩巨兽 受碎石伤害 40', 'terrain')] },
+        { turn: 1, phase: '行动', unit: '🧑 你', events: [U5('⚔️ 🧑 你 攻击 👹 熔岩巨兽 → 1218 伤害', 'damage')] },
+        { turn: 1, phase: '行动', unit: '👹 熔岩巨兽', events: [U5('👹 熔岩巨兽 攻击 🧑 你 → 77 伤害', 'damage')] },
+        { turn: 1, phase: '判定', unit: '🧑 你', events: [U5('☠️ 中毒: -12', 'dot')] },
+        { turn: 1, phase: '结束', unit: '场地·沙暴', terrain: true, events: [U5('⏳ 场地结算完毕', 'status')] },
+        { turn: 2, phase: '准备', unit: '🧑 你', events: [U5('🔋 蓄力（下回合释放）', 'status')] },
+        { turn: 2, phase: '行动', unit: '🧑 你', events: [U5('💚 🧑 你 → 🧑 你 治疗 +120', 'heal')] }
+      ] };
+  }
+  /* 无 phase 的日志（改造前的口径）—— 用于兜底等价断言 */
+  function plainGb() {
+    const a = mkUnit('u1', '🧑 你', 'ally'), e = mkUnit('e1', '👹 熔岩巨兽', 'enemy');
+    return { units: [a, e], allies: [a], enemies: [e], turn: 2, done: true, winner: 'ally',
+      log: [
+        { turn: 0, unit: '开场', opening: true, events: [U5('🛡️ 🧑 你 金身护盾 +733（吸收伤害）', 'talent')] },
+        { turn: 1, unit: '🧑 你', events: [U5('⚔️ 🧑 你 攻击 👹 熔岩巨兽 → 1218 伤害', 'damage')] },
+        { turn: 1, unit: '👹 熔岩巨兽', events: [U5('💚 熔岩巨兽 自愈 +120', 'heal')] },
+        { turn: 2, unit: '👹 熔岩巨兽', events: [] }
+      ] };
+  }
+
+  sb5._gbLogAll = true;      /* 关掉「仅最近 8 条」，否则 7 条注入会被截断 */
+
+  /* ---- 16.1 日志页：四阶段标题 / 顺序 / 空阶段 / 归属 ---- */
+  const html = sb5.renderGroupLogPane(phasedGb());
+  eq(cnt(html, '▸ 准备阶段'), 2, '回合 1 与回合 2 各出一个「准备阶段」标题');
+  eq(cnt(html, '▸ 行动阶段'), 2, '两个回合都有「行动阶段」标题（回合 1 两个行动者也只出一个标题）');
+  eq(cnt(html, '▸ 判定阶段'), 1, '只有回合 1 有「判定阶段」标题（回合 2 无判定事件 → 空阶段不出标题）');
+  eq(cnt(html, '▸ 结束阶段'), 1, '只有回合 1 有「结束阶段」标题（空阶段不出现空标题）');
+  const iPrep = html.indexOf('▸ 准备阶段'), iAct = html.indexOf('▸ 行动阶段');
+  const iJudge = html.indexOf('▸ 判定阶段'), iEnd = html.indexOf('▸ 结束阶段');
+  ok(iPrep > -1 && iPrep < iAct && iAct < iJudge && iJudge < iEnd,
+    '回合内四阶段标题按契约顺序 准备→行动→判定→结束（实际下标 ' + iPrep + '/' + iAct + '/' + iJudge + '/' + iEnd + '）');
+  /* 条目落在正确标题之下（真量 HTML 位置，不是只看标题存在） */
+  const segPrep = html.slice(iPrep, iAct);
+  ok(segPrep.indexOf('受碎石伤害 40') > -1 && segPrep.indexOf('dmg-num') < 0,
+    '准备阶段标题之下只有准备阶段的事件（行动阶段的事件不在其下）');
+  const segAct = html.slice(iAct, iJudge);
+  /* ⚠️ 伤害数字在 gbLogEvHtml 里被包成 `<b class="dmg-num">1218</b> 伤害`，
+     故不能用「1218 伤害」这种裸串去匹配（中间夹着标签） */
+  ok(segAct.indexOf('class="dmg-num">1218<') > -1 && segAct.indexOf('class="dmg-num">77<') > -1
+    && segAct.indexOf('中毒: -12') < 0,
+    '行动阶段标题之下是两条行动事件（判定事件不在其下）');
+  const segJudge = html.slice(iJudge, iEnd);
+  ok(segJudge.indexOf('中毒: -12') > -1 && segJudge.indexOf('场地结算完毕') < 0,
+    '判定阶段标题之下只有判定事件（结束事件不在其下）');
+  ok(html.slice(iEnd).indexOf('场地结算完毕') > -1, '结束阶段标题之下是结束事件');
+  /* 回合头在分组态一个回合只出一个（与阶段标题层级区分：回合头仍是 `—— 回合 N ——`） */
+  eq(cnt(html, '—— 回合 1 ——'), 1, '分组态：回合头一个回合只出一个');
+  const turn2 = html.slice(html.lastIndexOf('—— 回合 2 ——'));
+  ok(turn2.indexOf('▸ 准备阶段') > -1 && turn2.indexOf('▸ 行动阶段') > -1
+    && turn2.indexOf('判定阶段') < 0 && turn2.indexOf('结束阶段') < 0,
+    '回合 2 只有准备 / 行动两个阶段标题（空阶段真的没渲染，不是被截掉了）');
+  /* 既有功能未丢：类型筛选（筛选在截断之前）/ 行动者徽章 / 数字高亮 / 复制按钮 */
+  ok(/id="gbCopyLog"/.test(html) && /class="gb-log-filter/.test(html), '既有「📋 复制」与类型筛选按钮仍在');
+  ok(/gb-log-actor-badge/.test(html), '既有行动者徽章仍在（分组后每个条目都带）');
+  ok(/class="dmg-num">1218</.test(html) && /class="heal-num">120</.test(html), '既有 .dmg-num / .heal-num 高亮仍在');
+  const evLine = sb5.gbLogEntries(phasedGb()).filter(x => x.l.turn === 1 && x.l.phase === '准备')[0];
+  ok(evLine && evLine.events.length === 1, 'gbLogEntries 仍按条目返回过滤后事件（分组不改变数据层）');
+
+  /* ---- 16.2 行动横幅：阶段徽标（有 → 出；无 → 不出；非法 → 不出） ---- */
+  const bA = mkUnit('u1', '🧑 你', 'ally'), bE = mkUnit('e1', '👹 熔岩巨兽', 'enemy');
+  const bGb = { units: [bA, bE], allies: [bA], enemies: [bE], turn: 1, done: false, winner: null, phase: '判定',
+    log: [{ turn: 1, phase: '判定', unit: '🧑 你', events: [U5('☠️ 中毒: -12', 'dot')] }] };
+  sb5._groupActing = 'u1';
+  const bHtml = sb5.renderGroupActionBanner(bGb);
+  ok(/gb-banner-phase/.test(bHtml), '有 gb.phase 时横幅出现阶段徽标：' + bHtml);
+  ok(/<span class="gb-banner-phase ph-2"[^>]*>判定<\/span>/.test(bHtml), '阶段徽标文案 = 当前阶段名，且带自己的颜色档 ph-2');
+  /* 四阶段各自可区分（颜色档互不相同） */
+  const phCls = ['准备', '行动', '判定', '结束'].map(function (p) {
+    const m = /gb-banner-phase ph-(\d)/.exec(sb5.renderGroupActionBanner(Object.assign({}, bGb, { phase: p })));
+    return m ? m[1] : '?';
+  });
+  eq(new Set(phCls).size, 4, '四个阶段的徽标颜色档互不相同（可区分）：' + phCls.join('/'));
+  /* 兜底：缺字段 / 非法值 → 不渲染徽标、不抛错、不出现 undefined */
+  const noPh = Object.assign({}, bGb); delete noPh.phase;
+  let npOut = '', npThrow = '';
+  try { npOut = sb5.renderGroupActionBanner(noPh); } catch (e) { npThrow = e.message; }
+  ok(npThrow === '', '缺 gb.phase 时 renderGroupActionBanner 不抛错（实际 ' + (npThrow || '无异常') + '）');
+  ok(npOut.indexOf('id="gbActionBanner"') > -1 && npOut.indexOf('gb-banner-phase') < 0,
+    '缺 gb.phase 时不渲染阶段徽标（兜底，其余横幅结构不变）');
+  ok(npOut.indexOf('undefined') < 0, '缺 gb.phase 时横幅里不出现 undefined');
+  const badOut = sb5.renderGroupActionBanner(Object.assign({}, bGb, { phase: '出牌' }));
+  ok(badOut.indexOf('gb-banner-phase') < 0 && badOut.indexOf('undefined') < 0,
+    'phase 为契约外非法值时也不渲染徽标、不回显原值（防御式）');
+  /* 横幅高度硬约束：徽标不得把横幅顶过 44px（结构守卫 + CSS 守卫） */
+  const bRule = (css.match(/\.gb-banner\{[^}]*\}/) || [''])[0];
+  ok(/max-height:44px/.test(bRule) && /overflow:hidden/.test(bRule), '横幅仍是 max-height:44px + overflow:hidden');
+  const bTextRule = (css.match(/\.gb-banner-text\{[^}]*\}/) || [''])[0];
+  ok(/white-space:nowrap/.test(bTextRule) && /text-overflow:ellipsis/.test(bTextRule), '横幅文本仍 nowrap + ellipsis');
+  const bBadgeRule = (css.match(/\.gb-banner-phase\{[^}]*\}/) || [''])[0];
+  ok(/font-size:var\(--fs-/.test(bBadgeRule), '阶段徽标字号走令牌（实际 ' + bBadgeRule + '）');
+  ok(bBadgeRule.indexOf('!important') < 0, '阶段徽标无 !important');
+  ok(['ph-0', 'ph-1', 'ph-2', 'ph-3'].every(function (c) {
+    return new RegExp('\\.gb-banner-phase\\.' + c + '\\{').test(css);
+  }), '四个阶段的横幅徽标样式均在（可区分）');
+
+  /* ---- 16.3 战报文本：带阶段，且仍走 gbDropChargeNoise ---- */
+  const txt = sb5.groupLogText(phasedGb());
+  ok(txt.indexOf('【回合 1·准备阶段】') > -1, '战报文本带阶段：' + txt.split('\n')[0]);
+  ok(txt.indexOf('【回合 1·行动阶段】🧑 你') > -1, '行动阶段头 + 行动者：' + txt.split('\n')[1]);
+  ok(txt.indexOf('【回合 1·判定阶段】') > -1 && txt.indexOf('【回合 1·结束阶段】') > -1, '判定 / 结束阶段头同上');
+  ok(txt.indexOf('undefined') < 0, '战报文本不出现 undefined');
+  /* 仍走 v2.4.4 的折叠（唯一来源）：带 phase 的条目也要折叠 */
+  const noisy = { units: [], log: [{ turn: 1, phase: '判定', unit: '梦幻', events: [
+    { msg: '✨ 灵感涌动: 黑暗鸦 魂攻 +20%', type: 'talent' },
+    { msg: '⏳ 梦幻 蓄力（梦幻光球，下回合释放）', type: 'status' },
+    { msg: '蓄力完成!', type: 'expire' },
+    { msg: '⏳ 梦幻 的【蓄力】结束', type: 'expire' }] }] };
+  const tNoisy = sb5.groupLogText(noisy);
+  ok(tNoisy.indexOf('【回合 1·判定阶段】') > -1 && tNoisy.indexOf('蓄力（') > -1,
+    '带 stage 的条目保留「进入蓄力」并带阶段头');
+  ok(tNoisy.indexOf('蓄力完成') < 0 && tNoisy.indexOf('【蓄力】结束') < 0,
+    '带 phase 时仍走 gbDropChargeNoise 折叠（v2.4.4 契约不破）');
+  /* 兜底：无 phase → 战报文本逐字退回既有格式（v2.4.4 第 15 节的老断言正依赖这一点） */
+  const tPlain = sb5.groupLogText(plainGb());
+  ok(tPlain.indexOf('【开场】开场') > -1 && tPlain.indexOf('【回合 1】🧑 你') > -1,
+    '无 phase 时战报文本仍是【开场】/【回合 N】+ 行动者（兜底）');
+  ok(tPlain.indexOf('阶段') < 0 && tPlain.indexOf('undefined') < 0,
+    '无 phase 时战报文本不出现「阶段」字样与 undefined');
+
+  /* ---- 16.4 兜底等价：整条 log 无 phase → 与改造前等价 ---- */
+  const p1 = sb5.renderGroupLogPane(plainGb());
+  ok(p1.indexOf('▸ ') < 0 && p1.indexOf('gb-log-phase') < 0,
+    '全无 phase 时不出现任何阶段标题（退回既有渲染）');
+  eq(cnt(p1, '—— 回合 1 ——'), 2, '无 phase 时保持既有渲染：回合 1 的两个条目各出一个回合头');
+  ok(p1.indexOf('—— 开场 ——') > -1, '既有回合标题（含「开场」）仍在');
+  ok(p1.indexOf('undefined') < 0 && p1.indexOf('NaN') < 0, '无 phase 时不出现 undefined / NaN（不崩、不回显字段）');
+  ok(/gb-log-actor-badge/.test(p1) && /class="dmg-num">1218</.test(p1) && /class="heal-num">120</.test(p1),
+    '无 phase 时行动者徽章 / 数字高亮 / 事件行照旧');
+  ok(p1.indexOf('（本回合无事发生）') > -1, '无 phase 时空事件条目仍显示既有「（本回合无事发生）」');
+  /* 混合态（引擎迁移到一半：opening 缺 phase + 其余带 phase）→ 开场回退、其余分组，都不崩 */
+  const mixed = phasedGb();
+  mixed.log = [{ turn: 0, unit: '开场', opening: true, events: [U5('🛡️ 🧑 你 金身护盾 +733（吸收伤害）', 'talent')] }]
+    .concat(mixed.log);
+  const pMixed = sb5.renderGroupLogPane(mixed);
+  const mixTurn0 = pMixed.slice(pMixed.indexOf('—— 开场 ——'), pMixed.indexOf('—— 回合 1 ——'));
+  ok(mixTurn0.indexOf('gb-log-phase') < 0, '混合态：缺 phase 的开场条目不硬套阶段标题（回退既有渲染）');
+  ok(pMixed.indexOf('▸ 准备阶段') > -1 && pMixed.indexOf('undefined') < 0,
+    '混合态：带 phase 的回合照常分组，且不出现 undefined');
+
+  /* ---- 16.5 既有「仅最近 8 条」截断不得被分组改坏 ---- */
+  sb5._gbLogAll = false;
+  const many = { units: [], allies: [], enemies: [], turn: 12, done: true, winner: 'ally',
+    log: Array.from({ length: 12 }, function (_, i) {
+      return { turn: i + 1, phase: '行动', unit: '单位' + (i + 1), events: [U5('事件 ' + (i + 1), 'status')] };
+    }) };
+  const mh = sb5.renderGroupLogPane(many);
+  ok(mh.indexOf('事件 12') > -1 && mh.indexOf('事件 4') < 0, '「仅最近 8 条」截断仍在（12 条 → 只留后 8 条）');
+  eq(cnt(mh, 'gb-log-phase'), 8, '截断后的 8 个条目各落在自己的阶段分组里（8 个阶段标题）');
+  sb5._gbLogAll = true;
+
+  /* ---- 16.6 源码守卫：分组函数唯一实现且真的被日志页调用 ---- */
+  eq((grSrc.match(/function gbLogPhaseGroups/g) || []).length, 1, 'gbLogPhaseGroups 只有一个实现');
+  ok(fnBody(grSrc, 'renderGroupLogPane').indexOf('gbLogPhaseGroups') > -1,
+    'renderGroupLogPane 真的调用阶段分组函数（不是写了没人用）');
+  ok(fnBody(grSrc, 'renderGroupLogPane').indexOf('gbLogTurnChunks') > -1,
+    '日志页按回合切段后再分组（阶段分组不跨回合）');
+  eq((grSrc.match(/function groupLogText/g) || []).length, 1, 'groupLogText 仍只有一处实现（唯一来源）');
+  ok(fnBody(grSrc, 'groupLogText').indexOf('gbDropChargeNoise') > -1, 'groupLogText 仍走 gbDropChargeNoise（唯一来源）');
+  ok(fnBody(grSrc, 'renderGroupActionBanner').indexOf('gbPhaseCanon') > -1,
+    '横幅的阶段徽标取自 gb.phase 的归一化函数（缺字段返回空 → 不出徽标）');
+  eq((grSrc.match(/function gbPhaseCanon/g) || []).length, 1, 'gbPhaseCanon 只有一个实现（禁两处各写一套）');
+  /* 不得声明全局 GB_PHASES（那是引擎的变量，同一个全局作用域里重复 var 会互相覆盖） */
+  ok(!/\bvar\s+GB_PHASES\b/.test(grSrc), 'game-render.js 不自建全局 GB_PHASES（只读引擎的）');
+  /* 阶段标题与徽标的字号/颜色走令牌，且无 !important、无内联像素字号 */
+  const phTitleRule = (css.match(/\.gb-log-phase\{[^}]*\}/) || [''])[0];
+  ok(/font-size:var\(--fs-/.test(phTitleRule), '阶段标题字号走令牌（实际 ' + phTitleRule + '）');
+  ok(phTitleRule.indexOf('!important') < 0, '阶段标题无 !important');
+  ok(['ph-0', 'ph-1', 'ph-2', 'ph-3'].every(function (c) {
+    return new RegExp('\\.gb-log-phase\\.' + c + '\\{').test(css);
+  }), '四个阶段的日志页阶段标题样式均在（与横幅同一套 ph-N）');
+  ok(!/font-size:\s*[0-9]/.test(grSrc), 'game-render.js 无内联像素字号（新代码也走令牌）');
+  ok(grSrc.indexOf('!important') < 0, 'game-render.js 无 !important（新代码亦不例外）');
+}
+
 /* ---------- 汇总 ---------- */
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }

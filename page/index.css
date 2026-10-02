@@ -665,6 +665,16 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-banner.tone-terrain .gb-banner-chip{background:var(--purple)}
 .gb-banner.tone-opening .gb-banner-chip{background:var(--yellow)}
 .gb-banner-text{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* v2.4.5 改造 2：横幅里的阶段徽标（准备 / 行动 / 判定 / 结束）。
+   高度核算：--fs-2xs(.6875rem=11px) × line-height 1.2 ≈ 13px + 上下 padding 4px + 边框 2px ≈ 19px
+   ＜ .gb-banner 的 min-height:32px → **不把横幅顶过 44px**（.gb-banner 的 max-height:44px 未动）。
+   四阶段「各自可区分」走**文字 + 颜色**双通道（不靠颜色单独传达），ph-0..ph-3 = 契约顺序下标。 */
+.gb-banner-phase{flex-shrink:0;font-size:var(--fs-2xs);font-weight:800;line-height:1.2;padding:2px 6px;
+  border-radius:var(--rad-full);border:1px solid var(--bd);background:var(--surface-2);color:var(--text2);white-space:nowrap}
+.gb-banner-phase.ph-0{color:var(--blue);border-color:var(--blue)}
+.gb-banner-phase.ph-1{color:var(--green);border-color:var(--green)}
+.gb-banner-phase.ph-2{color:var(--yellow);border-color:var(--yellow)}
+.gb-banner-phase.ph-3{color:var(--purple);border-color:var(--purple)}
 
 /* ========== v2.4.2 战场化布局：上下对阵舞台（广场常驻 + 日志抽屉） ==========
    DOM 顺序（自上而下）：
@@ -792,6 +802,17 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-log-box{font-size:var(--fs-xs);line-height:1.7;border:1px solid var(--bd);border-radius:var(--rad-md);padding:10px 12px;background:var(--surface)}
 .gb-log-turn{font-weight:700;color:var(--orange);margin:8px 0 4px}
 .gb-log-turn:first-child{margin-top:0}
+/* v2.4.5 改造 1：日志页阶段标题（`▸ 准备阶段`）。
+   与「—— 回合 N ——」（.gb-log-turn：橙色粗体整行）**层级区分**：
+   阶段头降一档字号（--fs-2xs）、左侧一根 currentColor 竖线、无上下大留白。
+   颜色同样走 ph-0..ph-3 与横幅徽标同一套（准备蓝 / 行动绿 / 判定黄 / 结束紫）。 */
+.gb-log-phase{display:flex;align-items:center;gap:4px;margin:6px 0 2px;
+  font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;line-height:1.4;color:var(--text2)}
+.gb-log-phase::before{content:'';flex-shrink:0;width:3px;height:10px;border-radius:var(--rad-full);background:currentColor}
+.gb-log-phase.ph-0{color:var(--blue)}
+.gb-log-phase.ph-1{color:var(--green)}
+.gb-log-phase.ph-2{color:var(--yellow)}
+.gb-log-phase.ph-3{color:var(--purple)}
 .gb-log-actor{font-weight:700;color:var(--text2);margin:6px 0 2px}
 .gb-log-actor.terrain{color:var(--purple)}
 .gb-log-actor.opening{color:var(--yellow)}

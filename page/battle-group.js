@@ -2,7 +2,9 @@
    MyHealth — Group Battle Engine (M2b-4)
    多 Unit 行动队列战斗。独立于原 battleTick（单敌零回归）。
    行动队列：按 effectiveSpeed 降序 + 稳定 tie-break（同速我方先手、同方按 id 稳定序）+ 先制度 priority。
-   每单位回合：天赋 hook → 普攻或技能 → 状态 tick。
+   v2.4.5：**每回合拆成四阶段**（准备 → 行动 → 判定 → 结束），见下方「四阶段」小节；
+       两条推进路径（groupBattleTick / groupBattleStep）共用同一组阶段 helper。
+   行动阶段（每单位）：天赋/状态 hook → 普攻或技能 → 状态施加；回合末结算统一归判定阶段。
    纯逻辑，无 DOM/store。
    ============================================ */
 
@@ -282,6 +284,9 @@ function groupRestore(gb, snap) {
   if (!gb || !snap || !Array.isArray(snap.units)) return { ok: false, reason: '快照无效' };
   try {
     gb.turn = snap.turn; gb.done = !!snap.done; gb.winner = snap.winner || null;
+    /* v2.4.5：快照不含 phase，回滚后按「已分胜负」重建阶段，维持 checkGroupWin 的同一契约
+       （done ⟹ 结束；未分胜负则回到准备，下一步 step/tick 会正常从准备阶段重开本回合）。 */
+    gb.phase = gb.done ? GB_PHASES[3] : GB_PHASES[0];
     if (gb.rng && gb.rng.setState && snap.rngState != null) gb.rng.setState(snap.rngState);
     snap.units.forEach(function (su) {
       var u = null;
@@ -300,6 +305,9 @@ function groupRestore(gb, snap) {
       Object.keys(su).forEach(function (k) { u[k] = su[k]; });
     });
     gb._stepQueue = null; gb._stepIdx = 0;
+    /* v2.4.5：_roundOpen 必须一起重置 —— 它与 _stepQueue 是同一件事的两个面
+       （队列为空 = 准备阶段待跑），否则回滚后下一次 step 会跳过准备阶段、直接按旧队列跑。 */
+    gb._roundOpen = false;
     if (typeof syncStatusDerived === 'function') (gb.units || []).forEach(syncStatusDerived);
     return { ok: true, turn: gb.turn };
   } catch (e) { console.warn('[group] 回滚失败', e); return { ok: false, reason: String(e && e.message) }; }
@@ -326,6 +334,10 @@ function createGroupBattle(opts) {
     turn: 0,
     done: false,
     winner: null,        // 'ally' | 'enemy'
+    /* v2.4.5：当前阶段（GB_PHASES 之一）。建场时先落在「准备」——
+       runPhasePrepare 每次进入阶段都会重写它，两条推进路径共用。 */
+    phase: GB_PHASES[0],
+    _roundOpen: false,   // v2.4.5：本回合的准备阶段是否已跑过（step 路径跨调用保存）
     events: [],
     log: [],
     /* v2.1.27：给了 seed 就用可播种 RNG（可复现 / 可回退）；都没给才退回 Math.random */
@@ -936,6 +948,385 @@ function playerAttackSkillPick(gb, actor) {
   return null;
 }
 
+/* ============================================================
+   v2.4.5：每回合拆成四阶段（实现依据：doc/plans/战斗阶段化-技能与天赋清单.md §10 作者裁定记录）
+
+   **冻结契约**（另一子代理的显示层依赖，改名即破坏）：
+     · window.GB_PHASES = ['准备','行动','判定','结束']（顺序固定）
+     · gb.phase = 当前阶段（上面四个中文字面量之一）
+     · **每一次 gb.log.push({...}) 的条目都带 `phase: gb.phase`** —— 统一走 logPhase()，
+       禁止在别处裸 push（契约要求「每个条目」都带，漏一条显示层就退化成不分组的兜底渲染）。
+     · **gb.done 为真 ⟹ gb.phase = '结束'**（详见 checkGroupWin）——
+       step 路径的驱动方在 done 之后就不会再调 groupBattleStep，没有这一步就会停在「行动」。
+   其余字段（_roundOpen / _stepQueue / _prepareQueue …）可自由新增。
+
+   职责划分（只在**时序**上搬运，数值/概率/公式一字未改）：
+     ① 准备（每回合一次，在行动队列建立之前）：开战钩子 / 冰魄余威 / 场地 onTurnStart /
+        每回合一次的回合开始类效果（灵感涌动 + 玩家气力恢复·气势如虹·瞩目①·启风①）/
+        诅咒类状态的目标结算（哈欠·末日·遗言·幻影之瞳）/ 慢启动·懒惰的「本回合能否行动」/
+        最后才 refreshAllStatMods + buildActionQueue。
+     ② 行动（按队列逐个单位）：onBeforeAction（非准备类）、技能/普攻、伤害/治疗/护盾、状态施加、
+        onAfterAction、疾影额外行动、破盾反伤、启风②、蓄力释放（裁定 §10-1：留在行动阶段）。
+     ③ 判定（每回合一次，队列跑完之后）：状态 onTurnEnd（中毒·潮湿·睡眠回复）、
+        天赋+词条 onTurnEnd（振翅·再生·灵感涌动收尾·战意高涨·铁壁·终末宣告·疾影冷却）、
+        玩家技能回合末（瞩目回复）、duration 递减与到期。
+     ④ 结束（每回合一次）：场地 onTurnEnd、回合级守卫清理、胜负判定。
+
+   ⚠️ 唯一一处「同一个函数两种语境」：`groupUnitTurn` 既是行动阶段的单单位实现，又是**既有的单位级
+   API**（单测/调试脚本直接调用它 = 该单位的一整个回合）。编排内（gb._roundOpen 为真）只跑行动阶段
+   的那部分；编排外保持 v2.4.5 之前的语义（回合开始三处派发 + 回合末收尾）。判据与理由见该函数内注释。
+   ============================================================ */
+var GB_PHASES = ['准备', '行动', '判定', '结束'];
+if (typeof window !== 'undefined') window.GB_PHASES = GB_PHASES;
+if (typeof globalThis !== 'undefined') globalThis.GB_PHASES = GB_PHASES;
+
+/* 天赋「准备阶段」分类表 —— **为什么必须逐条分类，不能把 onTurnStart / onBeforeAction 整体搬**：
+   ① 天赋 onTurnStart 上除了 inspiration（灵感涌动：每回合一次的全局增益，必须在出手队列之前
+      落地才影响得到本回合更慢出手的队友），还挂着：
+        · vengeance（复仇）—— 读的是**该单位自己行动时**的血量快照来叠层，搬到准备阶段读到的
+          血量不同，强度直接变（清单 §8.1-3）；
+        · intimidate 的解除分支 —— 按**施加者自己行动时**的血量与回合计数判定（清单 §8.1-4）。
+      两者都与「自己何时行动」绑定 → 留在原来的自然触发点（作者裁定 §10-3「纯被动随触发事件结算」）。
+   ② 天赋 onBeforeAction 上除了 slowstart / lazy（真正的「回合开始」判定：前者只读回合号、
+      后者是每回合一次的 25% 掷骰），还挂着冻结 / 畏缩 / 睡眠 / 附身等**反应式**控制：
+      它们是本回合中途被施加、当场就该生效的（暴风雪 / 冰冻三尺 / 歌唱都在行动阶段落状态），
+      若提前到准备阶段预判，「同一回合内新挂上的控制」会全部失效。
+   故只有下面这张显式表里的条目进准备阶段，其余一律留在原来的自然触发点：
+     · 状态侧的分类标记写在 status-defs.js 的 `phase:'prepare'`（sleepy / doomed / lastworded / confused）；
+     · 天赋侧：inspiration 的标记写在 pet-codex.js 的 `phase:'prepare'`；
+       slowstart / lazy 定义在 talent.js（不在本版写域，无法在定义上加标记）→ 只能在此用集中常量。
+   ⚠️ 判定阶段对 `def.phase === 'prepare'` 的状态有一条 duration 例外，见 ageStatusesInJudge()。 */
+var PREPARE_BEFORE_ACTION_TALENTS = ['slowstart', 'lazy'];
+
+/* 进入某阶段 —— **唯一**写 gb.phase 的地方 */
+function enterPhase(gb, phase) { gb.phase = phase; return phase; }
+
+/* 落日志 —— **唯一**的 gb.log.push 入口（契约：每个条目都带 phase: gb.phase） */
+function logPhase(gb, entry) {
+  entry.phase = gb.phase || GB_PHASES[0];
+  gb.log.push(entry);
+  return entry;
+}
+
+/* 状态「阶段分类」派发：hook === 'onTurnStart' 时按 def.phase 分流，其余 hook 不分类
+   （例如 doomed 的 onBeforeAction「技能禁用」必须留在行动阶段，只搬它的回合开始伤害）。
+   phase='prepare' → 只派发带标记的；phase='action' → 只派发没带标记的。
+   准备阶段的这次派发同时给实例打 `_prepFired`，供判定阶段的 duration 例外使用。 */
+function dispatchStatusesPhase(unit, hook, ctx, phase) {
+  var out = { skipAction: false, mutations: [], events: [] };
+  var list = (unit && unit.statuses) || [];
+  for (var i = 0; i < list.length; i++) {
+    var st = list[i];
+    if (!st) continue;
+    var def = (typeof STATUS_DEFS !== 'undefined') ? STATUS_DEFS[st.id] : null;
+    if (!def || !def.hooks || !def.hooks[hook]) continue;
+    var isPrepare = (def.phase === 'prepare');
+    if (phase === 'prepare' ? !isPrepare : isPrepare) continue;
+    /* 只在准备阶段打标记：意思是「本实例已经在准备阶段触发过」——
+       只有触发过，判定阶段才会开始扣它的 duration（见 ageStatusesInJudge）。 */
+    if (phase === 'prepare') st._prepFired = true;
+    var r = def.hooks[hook](unit, st, ctx);
+    if (!r) continue;
+    if (r.skipAction) out.skipAction = true;
+    if (r.mutations) out.mutations = out.mutations.concat(r.mutations);
+    if (r.events) out.events = out.events.concat(r.events);
+  }
+  return out;
+}
+
+/* 天赋「阶段分类」派发（与 talentDispatch 同形，但只派发属于本阶段的天赋）。
+   为什么需要它：talent.js 不在本次写域，无法在定义上加过滤参数；
+   而整体搬运 onTurnStart / onBeforeAction 会改变多类效果（见上方分类表注释）。
+   · 词条（affix.js 的 8 条）只用 onDamage / onTurnEnd / onAfterAction，与 onTurnStart /
+     onBeforeAction 无关；为不改既有语义，仍原样并入**行动阶段**那一次派发。 */
+function talentInPhase(id, hook, phase) {
+  var t = (typeof TALENTS !== 'undefined') ? TALENTS[id] : null;
+  var marked = !!(t && t.phase === 'prepare');
+  if (hook === 'onBeforeAction') marked = PREPARE_BEFORE_ACTION_TALENTS.indexOf(id) >= 0;
+  return (phase === 'prepare') ? marked : !marked;
+}
+function talentDispatchPhase(unit, hook, ctx, phase) {
+  var out = { skipAction: false, mutations: [], events: [] };
+  ((unit && unit._talents) || []).forEach(function (id) {
+    var t = (typeof TALENTS !== 'undefined') ? TALENTS[id] : null;
+    if (!t || !t.hooks || !t.hooks[hook]) return;
+    if (!talentInPhase(id, hook, phase)) return;
+    var r = t.hooks[hook](unit, ctx);
+    if (!r) return;
+    if (r.skipAction) out.skipAction = true;
+    if (r.mutations) out.mutations = out.mutations.concat(r.mutations);
+    if (r.events) out.events = out.events.concat(r.events);
+  });
+  if (phase !== 'prepare' && typeof affixDispatch === 'function') {
+    var ar = affixDispatch(unit, hook, ctx);
+    if (ar.skipAction) out.skipAction = true;
+    out.mutations = out.mutations.concat(ar.mutations);
+    out.events = out.events.concat(ar.events);
+  }
+  return out;
+}
+
+/* 判定阶段的 duration 递减 —— ageStatuses 的**带阶段例外**版本。
+   例外规则：`def.phase === 'prepare'` 的状态**在首次于准备阶段触发之前不递减**。
+   为什么：这类状态是在**行动阶段**被挂上的（挂上时本回合的准备阶段已经过去），
+   若在当回合的判定阶段就扣 1：
+     · duration:1 的哈欠（sleepy）/ 迷惑（confused）会在「下回合准备阶段触发」之前被删掉，
+       效果直接消失 —— 而作者裁定恰恰要求它们「下回合准备阶段触发」；
+     · 末日 / 遗言的扣血次数也会随之变化（这正是实测 4 / 7 与作者预判 3 / 6 的差别来源，
+       见报告：作者预判假设「duration 含发动当回合」，与本裁定对 duration:1 状态的要求互斥）。
+   其余状态走的分支与 state-core.js 的 ageStatuses **逐字一致**（同样的到期文案与 onExpire），
+   之所以在此保留一份带例外的实现：state-core.js 不在本版写域。 */
+function ageStatusesInJudge(unit) {
+  var events = [];
+  if (!unit || !unit.statuses) return events;
+  for (var i = unit.statuses.length - 1; i >= 0; i--) {
+    var st = unit.statuses[i];
+    if (!st) continue;
+    var def = ((typeof STATUS_DEFS !== 'undefined') ? STATUS_DEFS[st.id] : null) || {};
+    if (def.phase === 'prepare' && !st._prepFired) continue;
+    st.duration = (st.duration == null ? 1 : st.duration) - 1;
+    if (st.duration > 0) continue;
+    if (def.hooks && def.hooks.onExpire) {
+      var r = def.hooks.onExpire(unit, st);
+      if (r && r.events) events = events.concat(r.events);
+    }
+    unit.statuses.splice(i, 1);
+    events.push({
+      type: 'expire', statusId: st.id, unitId: unit.id,
+      msg: '⏳ ' + (unit.name || '单位') + ' 的【' + (def.name || st.id) + '】结束'
+    });
+  }
+  return events;
+}
+
+/* 胜负判定（群战口径：每个单位行动后即时判）。与旧 step 路径一致：两边同时团灭时后者生效。
+   v2.4.5：胜负一分出就顺手把阶段推进到「结束」——
+   契约要求收尾时 gb.phase 停在最后一个合法阶段，而 step 路径在 gb.done 之后会**直接退出驱动循环**
+   （调用方看到 done 就不再调 groupBattleStep），不会再有 finishRound 帮它补「结束」；
+   不补这一句就会停在「行动」，UI/日志拿到一个与 gb.done 自相矛盾的阶段。
+   ⚠️ 调用点必须仍在**落日志之后**（runPhaseAction / groupBattleStep 都是先 logPhase 再判胜负），
+   否则本回合最后一条日志会被误标成「结束」。 */
+function checkGroupWin(gb) {
+  var alliesAlive = gb.allies.some(function (a) { return a.hp > 0; });
+  var enemiesAlive = gb.enemies.some(function (e) { return e.hp > 0; });
+  if (!alliesAlive) { gb.done = true; gb.winner = 'enemy'; }
+  if (!enemiesAlive) { gb.done = true; gb.winner = 'ally'; }
+  if (gb.done) enterPhase(gb, GB_PHASES[3]);
+  return !!gb.done;
+}
+
+/* ---------- 阶段①：准备（每回合一次，在行动队列建立之前） ----------
+   顺序即「先把本回合开始的效果落地，再算属性与队列」。
+   ⚠️ refreshAllStatMods / buildActionQueue 必须放在最后：本节落下的加速/减速
+      （启风①的疾风、气势如虹的攻击加成）要能影响本回合的出手顺序，否则等于没生效。 */
+function runPhasePrepare(gb) {
+  enterPhase(gb, '准备');
+  /* v2.4.5：本回合的**四阶段编排**从这一刻开始、到 finishRound 收尾为止。
+     groupUnitTurn 的独立调用分支据此区分「自己被编排驱动」还是「被既有调用方当作一整个单位回合」
+     （见那里的 standalone 分支）—— 故两条推进路径都要在这里把它打开。 */
+  gb._roundOpen = true;
+  /* 开战钩子：本函数每回合只跑一次，故 gb.turn === 0 等价于「每场一次」 */
+  if (gb.turn === 0) {
+    dispatchBattleStartTalents(gb);
+    if (typeof playerSkillBattleStart === 'function') {
+      var p0 = gb.allies.find(function (u) { return u._playerSkills; });
+      if (p0) {
+        var evs0 = playerSkillBattleStart(gb, p0);
+        evs0.forEach(function (e) { gb.events.push(e); logPhase(gb, { turn: 0, unit: p0.name, events: [e] }); });
+      }
+    }
+  }
+  gb.turn++;
+  var turn = gb.turn + 1;   // 既有约定：传给钩子的 turn = 实际回合号 + 1（首回合传入 2）
+
+  /* 冰魄余威：设计上就是「回合开始触发、不占用行动」（OQ-12），故落在准备阶段 */
+  resolveIceFollowUps(gb);
+  /* 场地：回合开始结算（放在冰魄之后 —— 与 v2.4.5 之前 step 路径的顺序一致） */
+  if (gb.terrain && gb.terrain.onTurnStart) {
+    var ts3 = gb.terrain.onTurnStart(gb);
+    if (ts3 && ts3.events) { gb.events = gb.events.concat(ts3.events); logTerrainEvents(gb, ts3.events); }
+  }
+
+  (gb.units || []).forEach(function (u) {
+    if (!u || u.hp <= 0) return;
+    /* ① 每回合一次的「回合开始」类天赋效果（灵感涌动） */
+    var evts = [];
+    var auraCtx = {
+      turn: turn,
+      allyUnits: u.side === 'ally' ? gb.allies : gb.enemies,
+      enemyUnits: u.side === 'ally' ? gb.enemies : gb.allies
+    };
+    var ts = talentDispatchPhase(u, 'onTurnStart', auraCtx, 'prepare');
+    ts.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
+    /* ② 玩家技能的「回合开始」部分（气力恢复 / 气势如虹 / 瞩目① / 启风①；宠物档气力恢复同此） */
+    if (u.side === 'ally' && typeof playerSkillTurnStart === 'function') {
+      var ps = playerSkillTurnStart(gb, u, turn);
+      ps.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
+    }
+    if (evts.length) logPhase(gb, { turn: gb.turn, unit: u.name, events: evts });
+
+    /* ③ 诅咒类状态的目标结算：哈欠(入睡判定) / 末日 / 遗言 + 迷惑三选一（幻影之瞳） */
+    var cursed = [];
+    var ss = dispatchStatusesPhase(u, 'onTurnStart', { turn: turn }, 'prepare');
+    ss.events.forEach(function (e) { cursed.push({ msg: e.msg, reason: e.reason, targetId: e.unitId, type: e.type }); });
+    if (u.hp > 0 && hasStatus(u, 'confused')) {
+      var cfEv = resolveConfusion(gb, u);
+      u._confuseTurn = gb.turn;   // 行动阶段据此跳过「按自己的意志行动」
+      /* 迷惑是一次性的：本回合即算「已触发」，好让判定阶段能正常把它清掉（否则会永久滞留） */
+      (u.statuses || []).forEach(function (s) { if (s.id === 'confused') s._prepFired = true; });
+      cfEv.forEach(function (e) { cursed.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
+    }
+    if (cursed.length) logPhase(gb, { turn: gb.turn, unit: u.name, events: cursed });
+
+    /* ④ 慢启动 / 懒惰：「本回合能否行动」在准备阶段判定一次，行动阶段只消费结论 */
+    var tb = talentDispatchPhase(u, 'onBeforeAction', { turn: turn, actualTurn: gb.turn }, 'prepare');
+    u._prepSkipTurn = gb.turn;
+    u._prepSkipReason = tb.skipAction ? skipReasonText(tb.events) : '';
+  });
+
+  /* 属性修正重算 + 行动队列（顺序说明见函数头注释） */
+  refreshAllStatMods(gb.units);
+  return buildActionQueue(gb);
+}
+
+/* ---------- 阶段②：行动（按行动队列逐个单位） ---------- */
+/* 行动阶段：单个单位的「行动 + 行动后钩子」。
+   两条推进路径（groupBattleTick / groupBattleStep）**共用本函数** —— v2.4.5 之前
+   shieldPreSnapshot / shieldReflectAfter / qifengExtraAttack 三处钩子只有 step 路径有，
+   tick 完全没有，同一场战斗走哪条路径结果不同（清单 §8.5-6）。 */
+function runUnitActionStep(gb, actor) {
+  /* v2.2.9 金身护盾破盾反伤：行动前记一次护盾现值（行动后对比即可判定「谁把谁的盾打碎了」） */
+  if (typeof shieldPreSnapshot === 'function') shieldPreSnapshot(gb);
+  var evts = groupUnitTurn(gb, actor);
+  if (gb.done) _BATTLE_RNG = null;   // v2.1.27：本场结束，别污染下一场的建场阶段
+  /* v2.1.13 天赋「疾影」：本回合额外行动 1 次（只有这里的 mutations 会被消费） */
+  var exRes = talentDispatch(actor, 'onAfterAction', { turn: gb.turn });
+  var wantExtra = false;
+  exRes.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra = true; });
+  exRes.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
+  if (wantExtra && !gb.done && actor.hp > 0
+      && (actor.side === 'ally' ? gb.enemies : gb.allies).some(function (u) { return u.hp > 0; })) {
+    evts = evts.concat(groupUnitTurn(gb, actor));
+  }
+  /* v2.2.9 金身护盾破盾反伤：此刻的 actor 就是**刚刚出手的人** → 破盾者即他。放在启风之前。 */
+  if (!gb.done && typeof shieldReflectAfter === 'function') {
+    var sr = shieldReflectAfter(gb, actor);
+    if (sr && sr.length) evts = evts.concat(sr);
+  }
+  /* v2.2.5 启风（§1.3 效果②）：我方持「全场最快者」时，该角色每回合额外一次普通攻击。
+     每个**回合**只触发一次（gb._qifengTurn 守卫，由结束阶段清理）。 */
+  if (!gb.done && actor.hp > 0 && typeof qifengExtraAttack === 'function') {
+    var qe = qifengExtraAttack(gb, actor);
+    if (qe && qe.length) evts = evts.concat(qe);
+  }
+  return evts;
+}
+
+function runPhaseAction(gb, queue) {
+  enterPhase(gb, '行动');
+  (queue || []).forEach(function (u) {
+    if (gb.done) return;
+    if (!u || u.hp <= 0) return;
+    var evts = runUnitActionStep(gb, u);
+    gb.events = gb.events.concat(evts);
+    logPhase(gb, { turn: gb.turn, unit: u.name, events: evts });
+    checkGroupWin(gb);
+  });
+}
+
+/* ---------- 阶段③：判定（每回合一次，队列跑完之后） ----------
+   搬过来的（v2.4.5 之前分散在**每个单位自己**的 onTurnEnd 里，battle-group.js:1093-1105）：
+     · 玩家技能回合末（瞩目回复，旧顺序在天赋 onTurnEnd 之前）
+     · 天赋 + 词条 onTurnEnd（振翅 / 再生 / 灵感涌动收尾 / 战意高涨 / 铁壁 / 终末宣告 / 疾影冷却）
+     · 状态 onTurnEnd（中毒 / 潮湿 / 睡眠回复）
+     · duration 递减与到期（ageStatusesInJudge）
+   逐条确认过的「依赖该单位自身状态」的效果（本阶段**逐单位**跑，上下文与旧实现逐字相同）：
+     poison（unit.base.hp）/ wet（纯文案）/ sleep（st.data.healPct + unit.base）/ flutter（unit.base.spd）/
+     regen（ctx.turn + unit.base.hp）/ inspiration 收尾（ctx.allyUnits）/ grow_atk·grow_def（unit.base）/
+     doom_call（ctx.enemyUnits）/ extra_act（unit._extraCd）/ spotlight（player._spotTauntTurn·_spotHits）/
+     到期事件（onExpire：charging → _chargeReady 等）。
+   刻意**不搬**的两项（仍在行动阶段 groupUnitTurn 末尾，因为它们与「该单位本回合是否真的行动了」绑定）：
+     · tickSkillCooldowns —— 历史上「跳过行动」的单位不减冷却，附身暂停的判据也在那里；
+     · _hitModTurns 倒计时（闪耀 / 打湿）。
+   ⚠️ 胜负已分（gb.done）时不跑本阶段：避免在已定胜负的残局上继续掉血、改动结算面板的血量。 */
+
+/* 单位级「回合末结算」—— 判定阶段与 groupUnitTurn 的**独立调用**分支共用这一份实现，
+   避免同一个语义在两处各写一遍、日后再跑偏（v2.4.5 之前它就只存在于 groupUnitTurn 尾部）。
+   ageFn：判定阶段传 ageStatusesInJudge（带「准备阶段状态未触发前不递减」的例外）；
+          独立调用传 state-core 的 ageStatuses —— 独立调用没有准备阶段那次派发，
+          `_prepFired` 永远不成立，用带例外的版本会让末日/遗言这类状态的 duration 永不递减。 */
+function runUnitJudgeTail(gb, u, turn, ageFn) {
+  var evts = [];
+  if (u.side === 'ally' && typeof playerSkillTurnEnd === 'function') {
+    var pe = playerSkillTurnEnd(gb, u, turn);
+    pe.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
+  }
+  var te = talentDispatch(u, 'onTurnEnd', {
+    turn: turn,
+    allyUnits: u.side === 'ally' ? gb.allies : gb.enemies,
+    enemyUnits: u.side === 'ally' ? gb.enemies : gb.allies
+  });
+  te.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
+  var se = dispatch(u, 'onTurnEnd', { turn: turn });
+  se.events.forEach(function (e) { evts.push({ msg: e.msg, reason: e.reason, targetId: e.unitId, type: e.type }); });
+  var aged = ageFn(u);
+  aged.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.unitId, type: e.type, reason: e.reason }); });
+  if (aged.length) syncStatusDerived(u);
+  return evts;
+}
+
+function runPhaseJudge(gb) {
+  var all = [];
+  if (gb.done) return all;
+  enterPhase(gb, '判定');
+  var turn = gb.turn + 1;
+  (gb.units || []).forEach(function (u) {
+    if (!u || u.hp <= 0) return;   // 与旧行为一致：阵亡单位不参与回合末结算
+    var evts = runUnitJudgeTail(gb, u, turn, ageStatusesInJudge);
+    evts.forEach(function (e) { all.push(e); });
+    if (evts.length) logPhase(gb, { turn: gb.turn, unit: u.name, events: evts });
+  });
+  return all;
+}
+
+/* ---------- 阶段④：结束（每回合一次） ---------- */
+function runPhaseEnd(gb) {
+  enterPhase(gb, '结束');
+  var evts = [];
+  if (gb.terrain && gb.terrain.onTurnEnd) {
+    var te = gb.terrain.onTurnEnd(gb);
+    if (te && te.events) {
+      gb.events = gb.events.concat(te.events);
+      logTerrainEvents(gb, te.events);
+      evts = evts.concat(te.events);
+    }
+  }
+  /* 回合级「每回合一次」守卫清理。
+     ⚠️ _qifengTurn 必须在**行动阶段之后**才清（它管的就是行动阶段的启风②只触发一次）。 */
+  gb._qifengTurn = null;
+  (gb.units || []).forEach(function (u) {
+    if (!u) return;
+    u._prepSkipTurn = null; u._prepSkipReason = '';
+    if (u._confuseTurn != null && u._confuseTurn <= gb.turn) u._confuseTurn = null;
+  });
+  /* 胜负判定：已经分出胜负时**不重算**（判定阶段虽已跳过，仍避免任何后续改动翻盘） */
+  if (!gb.done) checkGroupWin(gb);
+  return evts;
+}
+
+/* 回合收尾（判定 + 结束），两条路径共用。
+   返回本回合「判定 + 结束」两个阶段产出的全部事件 —— step 路径的调用方（动画/单测）
+   原本只能从各单位的行动步里拿事件，回合末（dot / 到期 / 天赋 onTurnEnd / 场地）
+   产出的事件此前拿不到，只能去读 gb.log。 */
+function finishRound(gb) {
+  var judgeEvts = runPhaseJudge(gb) || [];
+  var endEvts = runPhaseEnd(gb) || [];
+  gb._roundOpen = false;
+  gb._stepQueue = null;
+  gb._stepIdx = 0;
+  return { done: !!gb.done, winner: gb.winner || null, phase: gb.phase, events: judgeEvts.concat(endEvts) };
+}
+
 /* 单单位回合 */
 function groupUnitTurn(gb, actor) {
   var events = [];
@@ -952,37 +1343,59 @@ function groupUnitTurn(gb, actor) {
     actor._tauntMark = null;
   }
 
-  // 玩家技能回合开始（气势如虹/气力恢复）
-  if (actor.side === 'ally' && typeof playerSkillTurnStart === 'function') {
-    var ps = playerSkillTurnStart(gb, actor, turn);
-    ps.forEach(function (e) { events.push({ msg: e.msg }); });
+  /* v2.4.5：`groupUnitTurn` 有两种调用语境，必须分开对待 —— 它同时是「行动阶段的单单位实现」
+     和「既有的单位级 API」（单测 / 调试脚本直接调用它 = 该单位的一整个回合）：
+
+       · **编排内**（runUnitActionStep 调用；此时 gb._roundOpen 为 true，由 runPhasePrepare 打开）：
+         只跑行动阶段的部分。回合开始类效果已由准备阶段派发、回合末结算已由判定阶段派发。
+       · **独立调用**（gb._roundOpen 为 false）：保持 v2.4.5 之前的语义 ——
+         三处「回合开始」派发（玩家技能 / 天赋 onTurnStart / 状态 onTurnStart，均**不过滤**）
+         与回合末收尾（runUnitJudgeTail）都在本函数内完成，否则同一个函数会因为调用方不同
+         而静默丢失一半效果（既有单测正是靠这条契约在盯 冰冻解冻 / 附身到期 / 蓄力到期 等行为）。
+     ⚠️ 编排内**不得**走独立分支：那会让 dot / duration 递减按单位散落在行动阶段里，
+        与作者裁定 §10（状态结算统一在判定阶段）以及同一回合的阶段顺序直接冲突。 */
+  var standalone = !gb._roundOpen;
+
+  if (standalone && actor.side === 'ally' && typeof playerSkillTurnStart === 'function') {
+    var ps0 = playerSkillTurnStart(gb, actor, turn);
+    ps0.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   }
-  // 天赋 onTurnStart
-  var ts = talentDispatch(actor, 'onTurnStart', { turn: turn, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies });
+  var ts = standalone
+    ? talentDispatch(actor, 'onTurnStart', { turn: turn, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies })
+    : talentDispatchPhase(actor, 'onTurnStart', { turn: turn, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies }, 'action');
   ts.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
 
-  // 状态 onTurnStart（哈欠→睡眠等）
-  var ss = dispatch(actor, 'onTurnStart', { turn: turn });
+  // 状态 onTurnStart（幽魂附身侵蚀 / 破甲提示 —— 诅咒类已上移准备阶段）
+  var ss = standalone
+    ? dispatch(actor, 'onTurnStart', { turn: turn })
+    : dispatchStatusesPhase(actor, 'onTurnStart', { turn: turn }, 'action');
   ss.events.forEach(function (e) { events.push({ msg: e.msg, reason: e.reason, targetId: e.unitId, type: e.type }); });
 
-  // 慢启动/懒惰/冰冻/畏缩 → skipAction
+  // 冰冻/畏缩/睡眠 → skipAction；慢启动/懒惰已在准备阶段判定（见 runPhasePrepare ④）
   /* v2.3.0（作者裁决）：另传 `actualTurn` = **实际回合号**（= gb.turn）。
      `turn` 这个局部值仍是 `gb.turn + 1`（既有约定，regen / 词条 / 玩家技能回合钩子都在用它，
      不动）；慢启动需要「设定 x 回合就真的 x 回合」，故单独给出真实回合号，见 talent.js 的 slowstart。 */
   var turnCtx = { turn: turn, actualTurn: gb.turn };
   var before = dispatch(actor, 'onBeforeAction', turnCtx);
-  var tBefore = talentDispatch(actor, 'onBeforeAction', turnCtx);
-  if (before.skipAction || tBefore.skipAction) {
+  /* 独立调用没有准备阶段，慢启动/懒惰（天赋 onBeforeAction）只能在这里现场派发；
+     编排内它们已在准备阶段判定一次、结论存在 _prepSkipTurn，这里**不能**再派发（否则重复掷骰）。 */
+  var tBefore = standalone ? talentDispatch(actor, 'onBeforeAction', turnCtx) : null;
+  var prepSkip = (actor._prepSkipTurn === gb.turn) ? (actor._prepSkipReason || '') : '';
+  if (prepSkip || before.skipAction || (tBefore && tBefore.skipAction)) {
     // v2.1.14：原日志只有「XX 无法行动」，玩家看不出到底是冰冻、畏缩还是慢启动。
-    // 现在把触发源的文案（冰冻/畏缩/睡眠/慢启动/懒惰…）拼进括号。
-    var why = skipReasonText((tBefore.events || []).concat(before.events || []));
+    // 现在把触发源的文案（冰冻/畏缩/睡眠/慢启动/懒惰…）拼进括号。准备阶段的结论优先（与旧口径一致：
+    // 旧实现把天赋事件排在状态事件之前，故两者同时命中时展示的是天赋那边的原因）。
+    var why = prepSkip || skipReasonText(((tBefore && tBefore.events) || []).concat(before.events || []));
     events.push({ msg: '🚫 ' + (actor.name || '单位') + ' 无法行动' + (why ? '（' + why + '）' : ''), targetId: actor.id, type: 'skip' });
-    /* v2.1.15：即使这回合没行动，状态 duration 也必须递减 ——
-       否则「跳过行动」这条早退分支永远走不到回合末的 ageStatuses，
-       冰冻/睡眠会重新变成永久锁定（修好一个坑又掉进同一个坑）。 */
-    var agedSkip = ageStatuses(actor);
-    agedSkip.forEach(function (e) { events.push({ msg: e.msg, targetId: e.unitId, type: e.type }); });
-    if (agedSkip.length) syncStatusDerived(actor);
+    /* v2.1.15：即使这回合没行动，状态 duration 也必须递减，否则冰冻/睡眠会永久锁死单位。
+       v2.4.5：编排内递减已统一搬到**判定阶段**（runPhaseJudge → ageStatusesInJudge），
+       判定阶段逐单位跑、不区分是否跳过行动，故这里的早退不再会漏掉递减；
+       独立调用没有判定阶段，仍在此就地补一次。 */
+    if (standalone) {
+      var agedSkip = ageStatuses(actor);
+      agedSkip.forEach(function (e) { events.push({ msg: e.msg, targetId: e.unitId, type: e.type }); });
+      if (agedSkip.length) syncStatusDerived(actor);
+    }
     return events;
   }
 
@@ -1008,9 +1421,16 @@ function groupUnitTurn(gb, actor) {
     acted = true;
   }
 
-  /* 迷惑（幻影之瞳）：随机执行三选一，而不是按自己的意志行动 */
-  if (!acted && hasStatus(actor, 'confused')) {
+  /* 迷惑（幻影之瞳）：
+     · 编排内：三选一在**准备阶段**统一结算（作者裁定 §10-2 诅咒类），这里只负责
+       「本次行动已被迷惑占用」—— 被迷惑的单位不能再按自己的意志行动
+       （三选一的事件、`confused_down` / 牺牲自我等后果都已在准备阶段落地）。
+     · 独立调用：没有准备阶段，保持 v2.4.5 之前的行为 —— 就在这里结算三选一。 */
+  if (!acted && standalone && hasStatus(actor, 'confused')) {
     events = events.concat(resolveConfusion(gb, actor));
+    acted = true;
+  }
+  if (!acted && actor._confuseTurn === gb.turn) {
     acted = true;
   }
 
@@ -1082,32 +1502,33 @@ function groupUnitTurn(gb, actor) {
     }
   }
 
-  // 玩家技能回合结束（瞩目回复）
-  if (actor.side === 'ally' && typeof playerSkillTurnEnd === 'function') {
-    var pe = playerSkillTurnEnd(gb, actor, turn);
-    pe.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
-  }
-  // 天赋 onAfterAction / onTurnEnd
+  /* v2.4.5：以下四步已搬到**判定阶段**（runPhaseJudge），那里逐单位跑、上下文逐字相同：
+       · playerSkillTurnEnd（瞩目回复，旧顺序在天赋 onTurnEnd 之前）
+       · 天赋 + 词条 onTurnEnd（振翅 / 再生 / 灵感涌动收尾 / 战意高涨 / 铁壁 / 终末宣告）
+       · 状态 onTurnEnd（中毒 / 潮湿 / 睡眠回复）
+       · duration 递减 + 到期 onExpire（判定阶段用 ageStatusesInJudge：带「准备阶段状态未触发
+         前不递减」的例外，理由见其注释）
+     旧注释保留在此备查：duration=N 的持续伤害类状态刚好结算 N 次（递减必须晚于 onTurnEnd 钩子）。 */
+  /* 天赋 onAfterAction（**内层**派发）：此处 mutations 被丢弃、只取 events；
+     真正消费 extraAction 的那次派发在两条路径共用的 runUnitActionStep —— 两步的顺序与语义
+     与 v2.4.5 之前完全一致。 */
   var ae = talentDispatch(actor, 'onAfterAction', {});
   ae.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
-  var te = talentDispatch(actor, 'onTurnEnd', { turn: turn, allyUnits: actor.side === 'ally' ? gb.allies : gb.enemies, enemyUnits: actor.side === 'ally' ? gb.enemies : gb.allies });
-  te.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
-  var se = dispatch(actor, 'onTurnEnd', { turn: turn });
-  se.events.forEach(function (e) { events.push({ msg: e.msg, reason: e.reason, targetId: e.unitId, type: e.type }); });
 
-  /* v2.1.15：回合末状态递减 —— 状态生命周期的关键一步，此前完全缺失
-     （ageStatuses 的角色原本由 tickStatuses 承担，而后者全项目零调用）。
-     放在 onTurnEnd 钩子之后，duration=N 的持续伤害类状态刚好结算 N 次。
-     修好之前：中毒/减速/破甲 挂上就是整场，冰冻/睡眠 更是因为「受击解除」也没接线
-     导致该单位整场无法行动。 */
-  var aged = ageStatuses(actor);
-  aged.forEach(function (e) { events.push({ msg: e.msg, targetId: e.unitId, type: e.type, reason: e.reason }); });
-  if (aged.length) syncStatusDerived(actor);
+  /* 独立调用：回合末收尾（playerSkillTurnEnd / onTurnEnd / duration 递减）就地跑完 ——
+     位置与 v2.4.5 之前一致（在 onAfterAction 之后、冷却递减之前）。
+     ageFn 用 state-core 的 ageStatuses：独立调用没有准备阶段派发，`_prepFired` 永不成立，
+     带例外的 ageStatusesInJudge 会让末日/遗言/哈欠这类状态的 duration 永不递减。 */
+  if (standalone) {
+    events = events.concat(runUnitJudgeTail(gb, actor, turn, ageStatuses));
+  }
 
   // 技能冷却递减（v2.1.33：幽魂附身期间暂停 —— 设计文档「附身状态下技能不可用，且冷却暂停」）
+  // v2.4.5：**留在行动阶段**。跳过行动的单位历史上不减冷却（本函数在 skip 分支就早退了），
+  // 且「附身期间暂停」的判据来自本函数开头的 possessedThisTurn 快照 —— 搬到判定阶段两者都会走样。
   if (!possessedThisTurn) tickSkillCooldowns(actor);
 
-  // 命中/闪避修正倒计时（闪耀 / 打湿）
+  // 命中/闪避修正倒计时（闪耀 / 打湿）—— 同口径留在行动阶段
   if (actor._hitModTurns > 0) {
     actor._hitModTurns--;
     if (actor._hitModTurns === 0) { actor._accMod = 0; actor._eva = 0; }
@@ -1122,7 +1543,7 @@ function groupUnitTurn(gb, actor) {
 function logTerrainEvents(gb, evts) {
   if (!evts || !evts.length) return;
   var label = (gb.terrain && gb.terrain.name) ? ('场地·' + gb.terrain.name) : '场地';
-  gb.log.push({
+  logPhase(gb, {
     turn: gb.turn,
     unit: label,
     terrain: true,
@@ -1142,7 +1563,7 @@ function dispatchBattleStartTalents(gb) {
   var evts = rA.events.concat(rE.events).filter(function (e) { return e && e.msg; });
   if (!evts.length) return evts;
   gb.events = gb.events.concat(evts);
-  gb.log.push({
+  logPhase(gb, {
     turn: 0,
     unit: '开场',
     opening: true,
@@ -1153,58 +1574,24 @@ function dispatchBattleStartTalents(gb) {
   return evts;
 }
 
-/* 一个完整回合（所有存活单位按行动队列行动一次） */
+/* 一个完整回合（四阶段依次跑完：准备 → 行动 → 判定 → 结束）。
+   ⚠️ 本函数与 groupBattleStep 是**同一个编排**的两条驱动方式（整回合 / 单单位一步），
+      两者共用 runPhasePrepare / runUnitActionStep / runPhaseJudge / runPhaseEnd，
+      故同一场战斗走哪条路径结果一致（v2.4.5 之前不是：tick 缺 shieldPreSnapshot /
+      shieldReflectAfter / qifengExtraAttack / resolveIceFollowUps 四处 step 专属钩子）。 */
 function groupBattleTick(gb) {
   if (gb.done) return;
   _setBattleRng(gb);   // v2.1.27
-  if (gb.turn === 0) dispatchBattleStartTalents(gb);
-  if (gb.turn === 0 && typeof playerSkillBattleStart === 'function') {
-    var player = gb.allies.find(function(u){ return u._playerSkills; });
-    if (player) {
-      var evs = playerSkillBattleStart(gb, player);
-      evs.forEach(function(e){ gb.events.push(e); gb.log.push({turn:0, unit:player.name, events:[e]}); });
-    }
-  }
-  gb.turn++;
-  // v2.1.13 场地：回合开始结算
-  if (gb.terrain && gb.terrain.onTurnStart) {
-    var ts3 = gb.terrain.onTurnStart(gb);
-    if (ts3 && ts3.events) { gb.events = gb.events.concat(ts3.events); logTerrainEvents(gb, ts3.events); }
-  }
-  // v2.1.15：建队列前先统一重算属性修正，否则「减速」影响不到出手顺序
-  refreshAllStatMods(gb.units);
-  var queue = buildActionQueue(gb);
-  queue.forEach(function (u) {
-    if (gb.done) return;
-    if (u.hp <= 0) return;
-    var evts = groupUnitTurn(gb, u);
-    // v2.1.13 天赋「疾影」：本回合额外行动 1 次
-    var exRes2 = talentDispatch(u, 'onAfterAction', { turn: gb.turn });
-    var wantExtra2 = false;
-    exRes2.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra2 = true; });
-    exRes2.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
-    if (wantExtra2 && !gb.done && u.hp > 0
-        && (u.side === 'ally' ? gb.enemies : gb.allies).some(function (a) { return a.hp > 0; })) {
-      evts = evts.concat(groupUnitTurn(gb, u));
-    }
-    gb.events = gb.events.concat(evts);
-    gb.log.push({ turn: gb.turn, unit: u.name, events: evts });
-    // 检查胜负
-    var alliesAlive = gb.allies.some(function (a) { return a.hp > 0; });
-    var enemiesAlive = gb.enemies.some(function (e) { return e.hp > 0; });
-    if (!alliesAlive) { gb.done = true; gb.winner = 'enemy'; return; }
-    if (!enemiesAlive) { gb.done = true; gb.winner = 'ally'; return; }
-  });
-  // 场地（M2b-5 接入）
-  if (gb.terrain && gb.terrain.onTurnEnd) {
-    var te = gb.terrain.onTurnEnd(gb);
-    if (te && te.events) { gb.events = gb.events.concat(te.events); logTerrainEvents(gb, te.events); }
-  }
+  var queue = runPhasePrepare(gb);
+  runPhaseAction(gb, queue);
+  finishRound(gb);
 }
 
 /* v2.1.33：冰魄光束的「下回合第二段」（OQ-12：回合开始时触发，不占用行动）。
    由 player-skill-hooks.js 施放时把 { targetId, dmg } 挂到施放者身上，
-   本函数在回合切换处统一结算并清空。目标已阵亡则该段不再生效。 */
+   本函数在回合切换处统一结算并清空。目标已阵亡则该段不再生效。
+   v2.4.5：由**准备阶段**调用（runPhasePrepare），两条推进路径因此都吃得到
+   （v2.4.5 之前只有 step 路径调它，tick 路径完全没有）。 */
 function resolveIceFollowUps(gb) {
   var events = [];
   (gb.units || []).forEach(function (u) {
@@ -1218,94 +1605,51 @@ function resolveIceFollowUps(gb) {
     var ev = { msg: '❄️ ' + u.name + ' 冰魄余威 → ' + t.name + ' ' + dmg + ' 魂伤害（无视魂防，不占用行动）', targetId: t.id, type: 'damage' };
     events.push(ev);
     gb.events.push(ev);
-    gb.log.push({ turn: gb.turn, unit: u.name, events: [ev] });
+    logPhase(gb, { turn: gb.turn, unit: u.name, events: [ev] });
   });
   return events;
 }
 
 /* 单步执行：一次只行动一个单位（用于逐个行动动画，速度优先级可见）
-   返回 { unit: 行动单位, events, done, winner, queueIndex, queue } */
+   返回 { unit: 行动单位, events, done, winner, queueIndex, queue, phase, turnEnd? }
+   阶段编排与 groupBattleTick **共用同一组 helper**；本函数只是把同一个回合拆成多次调用：
+     · 队列空时先跑「准备阶段」（并把本回合的队列放进 gb._stepQueue，供行动顺序条读取）；
+     · 队列跑完后在**同一次调用**里跑「判定 + 结束」两个阶段，返回 { turnEnd: true }。
+   v2.4.5：收尾那一步的返回值也带上 `events`（判定 + 结束两个阶段产出的事件）——
+   这些事件（dot / duration 到期 / 天赋 onTurnEnd / 场地）以前落在最后一个单位的行动返回值里，
+   现在归判定阶段，若不从这里取就只能去翻 gb.log。 */
 function groupBattleStep(gb) {
-  if (gb.done) return { done: true };
+  /* 胜负已分：本回合若还没收尾，先把「结束阶段」跑掉 ——
+     契约要求 gb.phase 在跑完后停在最后一个阶段（判定阶段在 gb.done 时内部直接返回，
+     不在已定胜负的残局上继续掉血）。 */
+  if (gb.done) {
+    if (!gb._roundOpen) return { done: true, winner: gb.winner || null, phase: gb.phase, events: [] };
+    var fr0 = finishRound(gb);
+    return { done: true, winner: gb.winner, turnEnd: true, phase: gb.phase, events: fr0.events };
+  }
   _setBattleRng(gb);   // v2.1.27：让技能/AI/场地里的随机也走本场种子
-  // 初始化队列（跨步保存）
-  if (!gb._stepQueue || gb._stepQueue.length === 0) {
-    // 开战钩子（威吓等天赋）
-    if (gb.turn === 0) dispatchBattleStartTalents(gb);
-    // 开战钩子（金身）
-    if (gb.turn === 0 && typeof playerSkillBattleStart === 'function') {
-      var p0 = gb.allies.find(function(u){ return u._playerSkills; });
-      if (p0) {
-        var evs0 = playerSkillBattleStart(gb, p0);
-        evs0.forEach(function(e){ gb.events.push(e); gb.log.push({turn:0, unit:p0.name, events:[e]}); });
-      }
-    }
-    gb.turn++;
-    // v2.1.15：建队列前先统一重算属性修正，否则「减速」影响不到出手顺序
-    refreshAllStatMods(gb.units);
-    gb._stepQueue = buildActionQueue(gb);
+  /* ① 准备阶段（每回合一次，在行动队列建立之前） */
+  if (!gb._roundOpen) {
+    gb._stepQueue = runPhasePrepare(gb);
     gb._stepIdx = 0;
-    /* v2.1.33：冰魄光束第二段 —— 设计 §1.3-6 与 OQ-12 裁决「下回合**战斗开始时**触发，不占用行动」。
-       此前只结算了施放当回合那一段（实际输出只有设计的一半，
-       与 v2.1.24 修的「无影拳 5 连击只打 1 次」同类）。放在回合切换处，故不占任何单位的行动。 */
-    resolveIceFollowUps(gb);
-    // v2.1.13 场地：回合开始结算（此前只接线了 onTurnEnd，开场类场地不生效）
-    if (gb.terrain && gb.terrain.onTurnStart) {
-      var ts2 = gb.terrain.onTurnStart(gb);
-      if (ts2 && ts2.events) { gb.events = gb.events.concat(ts2.events); logTerrainEvents(gb, ts2.events); }
-    }
+    gb._roundOpen = true;
   }
   // 跳过死亡单位
   while (gb._stepIdx < gb._stepQueue.length && gb._stepQueue[gb._stepIdx].hp <= 0) gb._stepIdx++;
   if (gb._stepIdx >= gb._stepQueue.length) {
-    // 本回合结束：场地结算 + 重置队列
-    if (gb.terrain && gb.terrain.onTurnEnd) {
-      var te = gb.terrain.onTurnEnd(gb);
-      if (te && te.events) { gb.events = gb.events.concat(te.events); logTerrainEvents(gb, te.events); }
-    }
-    gb._stepQueue = null; gb._stepIdx = 0;
-    // 回合末检查
-    var alliesAlive2 = gb.allies.some(function (a) { return a.hp > 0; });
-    var enemiesAlive2 = gb.enemies.some(function (e) { return e.hp > 0; });
-    if (!alliesAlive2) { gb.done = true; gb.winner = 'enemy'; }
-    if (!enemiesAlive2) { gb.done = true; gb.winner = 'ally'; }
-    return { done: gb.done, winner: gb.winner, turnEnd: true };
+    /* ③ 判定 + ④ 结束（本回合收尾） */
+    var fr = finishRound(gb);
+    return { done: gb.done, winner: gb.winner, turnEnd: true, phase: gb.phase, events: fr.events };
   }
+  /* ② 行动阶段：本次调用只推进一个单位（行动后钩子与 tick 路径共用 runUnitActionStep） */
   var actor = gb._stepQueue[gb._stepIdx];
   gb._stepIdx++;
-  /* v2.2.9 金身护盾破盾反伤：行动前记一次护盾现值（行动后对比即可判定「谁把谁的盾打碎了」） */
-  if (typeof shieldPreSnapshot === 'function') shieldPreSnapshot(gb);
-  var evts = groupUnitTurn(gb, actor);
-  if (gb.done) _BATTLE_RNG = null;   // v2.1.27：本场结束，别污染下一场的建场阶段
-  // v2.1.13 天赋「疾影」：本回合额外行动 1 次
-  var exRes = talentDispatch(actor, 'onAfterAction', { turn: gb.turn });
-  var wantExtra = false;
-  exRes.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra = true; });
-  exRes.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
-  if (wantExtra && !gb.done && actor.hp > 0
-      && (actor.side === 'ally' ? gb.enemies : gb.allies).some(function (u) { return u.hp > 0; })) {
-    evts = evts.concat(groupUnitTurn(gb, actor));
-  }
-  /* v2.2.9 金身护盾破盾反伤：本次行动是否打碎了带盾队友的护盾（此刻 actor = 破盾者）。
-     放在启风之前：反伤可能直接打死敌人，后续钩子自然跳过。 */
-  if (!gb.done && typeof shieldReflectAfter === 'function') {
-    var sr = shieldReflectAfter(gb, actor);
-    if (sr && sr.length) evts = evts.concat(sr);
-  }
-  /* v2.2.5 启风（§1.3 效果②）：我方持「全场最快者」时，该角色每回合额外一次普通攻击。
-     挂在行动之后、与疾影的 extraAction 同一位置；每个**回合**只触发一次（gb._qifengTurn 守卫）。 */
-  if (!gb.done && actor.hp > 0 && typeof qifengExtraAttack === 'function') {
-    var qe = qifengExtraAttack(gb, actor);
-    if (qe && qe.length) evts = evts.concat(qe);
-  }
+  enterPhase(gb, '行动');
+  var evts = runUnitActionStep(gb, actor);
   gb.events = gb.events.concat(evts);
-  gb.log.push({ turn: gb.turn, unit: actor.name, events: evts });
-  // 胜负检查
-  var alliesAlive = gb.allies.some(function (a) { return a.hp > 0; });
-  var enemiesAlive = gb.enemies.some(function (e) { return e.hp > 0; });
-  if (!alliesAlive) { gb.done = true; gb.winner = 'enemy'; }
-  if (!enemiesAlive) { gb.done = true; gb.winner = 'ally'; }
-  return { unit: actor, events: evts, done: gb.done, winner: gb.winner, queueIndex: gb._stepIdx, queue: gb._stepQueue };
+  logPhase(gb, { turn: gb.turn, unit: actor.name, events: evts });
+  checkGroupWin(gb);
+  return { unit: actor, events: evts, done: gb.done, winner: gb.winner, queueIndex: gb._stepIdx, queue: gb._stepQueue, phase: gb.phase };
 }
 
 /* 跑到结束（测试用） */
