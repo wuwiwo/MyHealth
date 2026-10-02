@@ -1108,12 +1108,34 @@ function groupBattleStats(gb){
     logs:((gb&&gb.log)||[]).length}
 }
 
+/* v2.4.4：蓄力「进入」与其到期文案在**同一条目里自相矛盾**（读起来像蓄力当场消失）。
+   机制其实是对的：伤害确实在下回合结算（实测 turn2 出「进入蓄力（下回合释放）」→ turn3 才打出 `💥 X 蓄力重击 → …`）。
+   矛盾来自：蓄力状态在**进入的当回合**就被状态到期流程消费，而释放走的是另一条调度。
+   条目实测形态：`🔋 梦幻 蓄力（梦幻光球，下回合释放）；蓄力完成!；⏳ 梦幻 的【蓄力】结束`
+   → 同一条目里若已有「蓄力（…）」进入事件，就把紧随其后的「蓄力完成…」「【蓄力】结束」丢掉。
+   ⚠️ **只影响显示**：不改引擎、不改机制；下回合那条伤害事件（`💥 … 蓄力重击 → …`）照常保留。
+   ⚠️ 唯一实现：日志页（gbLogEntries）与战报文本（groupLogText）**共用本函数**，禁两处各写一套。 */
+function gbDropChargeNoise(events){
+  var evs=events||[]
+  var hasEnter=false
+  for(var i=0;i<evs.length;i++){
+    if(evs[i]&&evs[i].msg&&evs[i].msg.indexOf('蓄力（')>-1){hasEnter=true;break}
+  }
+  if(!hasEnter)return evs
+  return evs.filter(function(e){
+    if(!e||!e.msg)return true
+    if(e.msg.indexOf('蓄力完成')===0)return false          /* 蓄力完成! */
+    if(e.msg.indexOf('【蓄力】结束')>-1)return false        /* ⏳ X 的【蓄力】结束 */
+    return true
+  })
+}
+
 /* 战报文本：**唯一来源** —— 日志页「📋 复制」与结算面板「📋 复制战报」共用（禁两处各写一套） */
 function groupLogText(gb){
   if(!gb||!gb.log)return ''
   return gb.log.map(function(l){
     var head='【'+(l.turn===0?'开场':'回合 '+l.turn)+'】'+(l.unit||'')
-    var body=(l.events||[]).filter(function(e){return e&&e.msg&&e.type!=='bubble'})
+    var body=gbDropChargeNoise(l.events).filter(function(e){return e&&e.msg&&e.type!=='bubble'})
       .map(function(e){return e.msg}).join('；')
     return head+': '+body
   }).join('\n')
@@ -1578,7 +1600,8 @@ function gbLogEvMatch(e,filter){
 function gbLogEntries(gb){
   var out=[]
   ;((gb&&gb.log)||[]).forEach(function(l){
-    var evs=((l&&l.events)||[]).filter(function(e){
+    /* v2.4.4：先折叠「蓄力」那条自相矛盾的到期文案（与战报文本共用 gbDropChargeNoise，唯一实现） */
+    var evs=gbDropChargeNoise((l&&l.events)||[]).filter(function(e){
       return e&&e.msg&&e.type!=='bubble'&&(_gbLogFilter==='all'||gbLogEvMatch(e,_gbLogFilter))
     })
     /* 「全部」保留无事发生的回合（既有「（本回合无事发生）」文案），筛选态则丢掉空条目 */

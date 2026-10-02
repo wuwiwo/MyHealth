@@ -815,6 +815,63 @@ console.log('--- 14. 收口：档位前缀 / 开场一句话 / 技能名兜底 -
   eq(sb3.gbSkillName(''), '', '空 id → 空串');
 }
 
+
+/* ============ 15. v2.4.4 蓄力矛盾文案折叠（只改显示，不动引擎） ============
+
+   作者报的问题：战报（groupLogText，即「📋 复制」的输出）里同一条目出现
+   `🔋 梦幻 蓄力（梦幻光球，下回合释放）；蓄力完成!；⏳ 梦幻 的【蓄力】结束` ——
+   同一秒既说「下回合释放」又说「完成/结束」，读起来像蓄力当场消失。
+   实测机制是对的：下回合确实打出 `💥 … 蓄力重击 → … 1642 伤害`（根因是蓄力状态在**进入的当回合**
+   就被状态到期流程消费，而释放走另一条调度）。
+   本节验：① 纯函数 gbDropChargeNoise 的折叠与**不误伤**；② 战报文本真输出；
+   ③ 日志页与战报**共用同一实现**（禁两处各写一套）。 */
+console.log('--- 15. v2.4.4 蓄力矛盾文案折叠 ---');
+{
+  const sb4 = makeSandbox();
+  const enter = { msg: '⏳ 梦幻 蓄力（梦幻光球，下回合释放）', type: 'status', targetId: 'p1' };
+  const done = { msg: '蓄力完成!', type: 'expire', targetId: 'p1' };
+  const end = { msg: '⏳ 梦幻 的【蓄力】结束', type: 'expire', targetId: 'p1' };
+  const talent = { msg: '✨ 灵感涌动: 黑暗鸦 魂攻 +20%', type: 'talent' };
+  const entry = [talent, enter, done, end];
+  const out = sb4.gbDropChargeNoise(entry);
+  eq(out.length, 2, '「进入蓄力」+ 两条到期文案 → 折叠成 2 条（其它事件 + 进入蓄力）');
+  ok(out.indexOf(talent) > -1 && out.indexOf(enter) > -1, '保留本条目其它事件与「进入蓄力」');
+  ok(out.indexOf(done) < 0 && out.indexOf(end) < 0, '丢掉「蓄力完成!」与「【蓄力】结束」');
+  /* 不误伤：没有「进入蓄力」的条目**逐字不动**（普通 expire 必须留着） */
+  const noEnter = [{ msg: '⏳ X 的【攻击提升】结束', type: 'expire' }, done];
+  eq(sb4.gbDropChargeNoise(noEnter).length, 2, '没有「进入蓄力」的条目不被过滤（不误伤普通 expire）');
+  eq(sb4.gbDropChargeNoise(null).length, 0, 'null 输入安全（不抛错）');
+  /* 机制见证：下回合的释放伤害必须保留 */
+  const release = { msg: '💥 梦幻 蓄力重击 → 精英·火枪手 1642 伤害', type: 'damage', targetId: 'e1' };
+  ok(sb4.gbDropChargeNoise([release]).indexOf(release) > -1,
+    '下回合的「蓄力重击 → … 伤害」必须保留（这是机制没错的证据）');
+
+  /* 战报文本真输出（作者贴的那份格式就是它） */
+  const gbLog = { units: [], log: [
+    { turn: 0, unit: '开场', opening: true, events: [{ msg: '🛡️ 🧑 你 金身护盾 +733（吸收伤害）' }] },
+    { turn: 1, unit: '梦幻', events: entry },
+    { turn: 2, unit: '梦幻', events: [release] }] };
+  const text = sb4.groupLogText(gbLog);
+  ok(text.indexOf('【开场】开场') > -1, '战报仍用【开场】/【回合 N】+ 行动者格式：' + text.split('\n')[0]);
+  ok(text.indexOf('蓄力（') > -1, '战报保留「蓄力（…，下回合释放）」');
+  ok(text.indexOf('蓄力完成') < 0, '战报不再出现自相矛盾的「蓄力完成!」');
+  ok(text.indexOf('【蓄力】结束') < 0, '战报不再出现「【蓄力】结束」');
+  ok(text.indexOf('1642 伤害') > -1, '战报保留下回合的释放伤害');
+  ok(text.indexOf('金身护盾 +733') > -1, '开场条目逐字不变（本版不动开场口径）');
+
+  /* 日志页共用同一过滤器 */
+  const entries = sb4.gbLogEntries(gbLog);
+  const t1 = entries.filter(x => x.l.turn === 1)[0];
+  ok(t1 && t1.events.length > 0 && t1.events.every(e =>
+    e.msg.indexOf('蓄力完成') < 0 && e.msg.indexOf('【蓄力】结束') < 0),
+    '日志页同一条目里也不再有那两条（与战报共用 gbDropChargeNoise）');
+  /* 唯一实现守卫：禁两处各写一套 */
+  eq((grSrc.match(/function gbDropChargeNoise/g) || []).length, 1, 'gbDropChargeNoise 只有一个实现');
+  ok(fnBody(grSrc, 'groupLogText').indexOf('gbDropChargeNoise') > -1, 'groupLogText 必须调用唯一过滤器（源码守卫）');
+  ok(fnBody(grSrc, 'gbLogEntries').indexOf('gbDropChargeNoise') > -1, 'gbLogEntries 必须调用唯一过滤器（源码守卫）');
+  ok(fnBody(grSrc, 'gbDropChargeNoise').indexOf('document') < 0, 'gbDropChargeNoise 是纯函数（不碰 DOM）');
+}
+
 /* ---------- 汇总 ---------- */
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }
