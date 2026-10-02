@@ -38,17 +38,47 @@ function assert(name, cond, detail) {
 const msgs = evts => (evts || []).map(e => (e && e.msg) || '').join(' | ');
 const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩', base: { hp: hp || 9999, atk: 1, def: 0, spd: 1 } });
 
+/* ============ v2.4.6：改为驱动四阶段编排（`groupUnitTurn` 已恢复单一语义） ============
+   v2.4.5 给 `groupUnitTurn` 留过一个兼容分支：单测直接调用它 = 该单位的「一整个回合」
+   （回合开始三处派发 + 回合末收尾）。该分支已删除 —— 一个函数只有一种含义：**只跑行动阶段**
+   （回合开始类归准备阶段、回合末结算归判定阶段）。故本套件显式驱动同一套编排 helper：
+     · unitActionTurn —— 行动阶段（该单位）+ 判定阶段（回合末结算：dot / duration 递减 / 到期）。
+       用于「duration 递减 / 冰冻跳过行动也递减 / 蓄力到期后释放」这类只在行动+判定里发生的用例。
+     · unitFullTurn   —— 上面再加**准备阶段**（诅咒类 onTurnStart：迷惑三选一在这里结算 ——
+       作者裁定 §10「诅咒类 → 准备阶段」）。仅迷惑（幻影之瞳）用例需要它。
+   ⚠️ 两个 helper 都**只推进指定的那一个单位**（不是整条行动队列），保持原用例「一个单位一个回合」
+   的口径；判定阶段本身按 gb.units 逐单位跑（与线上一致，故阵亡单位跳过、存活单位都要结算）。 */
+function unitActionTurn(gb, actor) {
+  sb.enterPhase(gb, '行动');
+  return sb.runUnitActionStep(gb, actor).concat(sb.runPhaseJudge(gb) || []);
+}
+function unitFullTurn(gb, actor) {
+  var logBefore = gb.log.length;
+  sb.runPhasePrepare(gb);   // 准备阶段：每回合一次，内部会进入「准备」并建立行动队列
+  /* 准备阶段的产出不随返回值给出，而是由 logPhase 落进 gb.log（阶段契约：每条都带 phase）——
+     这里把它取回来拼进事件流，使「回合开始类效果真的发生了」这类断言仍盯同一批事件
+     （与 v2.4.5 之前由 groupUnitTurn 直接返回的形状对齐），而不是绕过阶段契约去另找判据。 */
+  var prepEv = [];
+  gb.log.slice(logBefore).forEach(function (l) {
+    (l.events || []).forEach(function (e) {
+      prepEv.push({ msg: e.msg, targetId: e.targetId, type: e.type, reason: e.reason });
+    });
+  });
+  sb.enterPhase(gb, '行动');
+  return prepEv.concat(sb.runUnitActionStep(gb, actor)).concat(sb.runPhaseJudge(gb) || []);
+}
+
 /* ============ 1. 状态 duration 递减 / 到期（走战斗路径） ============ */
 {
   const u = sb.createUnit({ id: 'u1', side: 'ally', name: '甲', base: { hp: 500, atk: 20, def: 30, spd: 5 } });
   sb.applyStatus(u, { id: 'slow', duration: 2 });
   const gb = sb.createGroupBattle({ allies: [u], enemies: [dummy('e1')] });
   gb.turn = 1;
-  sb.groupUnitTurn(gb, u);
+  unitActionTurn(gb, u);
   assert('回合末状态 duration 递减', u.statuses.length === 1 && u.statuses[0].duration === 1,
     JSON.stringify(u.statuses));
   gb.turn = 2;
-  sb.groupUnitTurn(gb, u);
+  unitActionTurn(gb, u);
   assert('duration 归零后状态被移除', u.statuses.length === 0, JSON.stringify(u.statuses));
 }
 
@@ -72,15 +102,15 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   sb.applyStatus(fz, { id: 'freeze', duration: 2 });
   const gb = sb.createGroupBattle({ allies: [fz], enemies: [dummy('e2')] });
   gb.turn = 1;
-  const ev1 = sb.groupUnitTurn(gb, fz);
+  const ev1 = unitActionTurn(gb, fz);
   assert('冰冻期间无法行动', /无法行动（❄️ 冰冻）/.test(msgs(ev1)), msgs(ev1));
   assert('跳过行动的分支同样递减 duration', fz.statuses.length === 1 && fz.statuses[0].duration === 1,
     JSON.stringify(fz.statuses));
   gb.turn = 2;
-  const ev2 = sb.groupUnitTurn(gb, fz);
+  const ev2 = unitActionTurn(gb, fz);
   assert('冰冻到期后自动解冻（不再永久锁死）', fz.statuses.length === 0, JSON.stringify(fz.statuses));
   gb.turn = 3;
-  const ev3 = sb.groupUnitTurn(gb, fz);
+  const ev3 = unitActionTurn(gb, fz);
   assert('解冻后恢复行动', !/无法行动/.test(msgs(ev3)), msgs(ev3));
 }
 
@@ -282,7 +312,7 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   sb.ageStatuses(ch);   // 模拟回合末到期 → _chargeReady
   assert('蓄力完成置 _chargeReady', ch._chargeReady === true);
   const hpBefore = target.hp;
-  const ev2 = sb.groupUnitTurn(gb, ch);
+  const ev2 = unitActionTurn(gb, ch);
   assert('下回合开始自动结算 💥 重击', /💥 .* 蓄力重击 →/.test(msgs(ev2)), msgs(ev2));
   assert('重击伤害 = 攻击×400%（100×4）', target.hp === hpBefore - 400, hpBefore + '→' + target.hp);
   assert('结算占用该次行动（本回合只有这一击）', ev2.filter(e => e.type === 'damage').length === 1,
@@ -297,12 +327,14 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
     return sb.createUnit({ id: id, side: side, name: id, base: { hp: hp || 500, atk: 100, def: 100, spd: 5 } });
   }
   // 用固定 rng 精确命中三个分支：floor(r*3) = 0 / 1 / 2
+  /* v2.4.6：迷惑三选一是**准备阶段**的效果（作者裁定 §10-2 诅咒类），故这里必须驱动到准备阶段
+     （unitFullTurn），只跑行动+判定的话 `_confuseTurn` 永远不会被设置、三选一也不会发生。 */
   function runConfused(r, allies, enemies) {
     const gb = sb.createGroupBattle({ allies: allies, enemies: enemies });
     gb.rng = function () { return r; };
     const actor = enemies[0];
     sb.applyStatus(actor, { id: 'confused', duration: 1 });
-    return { gb: gb, actor: actor, ev: sb.groupUnitTurn(gb, actor) };
+    return { gb: gb, actor: actor, ev: unitFullTurn(gb, actor) };
   }
 
   // ① 丧失防备（r=0.1 → floor(0.3)=0）。未带等级信息 → 按技能 Lv1 = 区间下限 15%
@@ -514,7 +546,7 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   // 对照组：没有末日时，只有「冲撞」的敌人会放冲撞
   const foeA = mkFoe('dm-a', '对照敌');
   const gbA = sb.createGroupBattle({ allies: [mkHero('h-a')], enemies: [foeA] });
-  const evA = sb.groupUnitTurn(gbA, foeA);
+  const evA = unitActionTurn(gbA, foeA);
   assert('对照：无末日时正常施放技能（冲撞）', /冲撞/.test(msgs(evA)), msgs(evA));
 
   // 实验组：同一配置 + 末日 → 技能被禁用，退化为普通攻击（但仍要行动）
@@ -522,7 +554,7 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   const heroB = mkHero('h-b');
   const gbB = sb.createGroupBattle({ allies: [heroB], enemies: [foeB] });
   sb.applyStatus(foeB, { id: 'doomed', duration: 3, source: heroB });
-  const evB = sb.groupUnitTurn(gbB, foeB);
+  const evB = unitActionTurn(gbB, foeB);
   assert('末日：技能被禁用（不再施放冲撞）', !/冲撞/.test(msgs(evB)), msgs(evB));
   assert('末日：仍会行动，退化为普通攻击', /攻击/.test(msgs(evB)), msgs(evB));
   assert('末日：日志说明原因', /受末日影响/.test(msgs(evB)), msgs(evB));
@@ -532,7 +564,7 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
   const pAlly = sb.createUnit({ id: 'dm-pa', side: 'ally', name: '玩家', skills: ['charge'], base: { hp: 500, atk: 50, def: 10, spd: 5 } });
   const gbP = sb.createGroupBattle({ allies: [pAlly], enemies: [pFoe] });
   sb.applyStatus(pAlly, { id: 'doomed', duration: 3, source: pFoe });
-  const evP = sb.groupUnitTurn(gbP, pAlly);
+  const evP = unitActionTurn(gbP, pAlly);
   assert('末日对玩家侧同样禁用技能', !/冲撞/.test(msgs(evP)), msgs(evP));
 }
 
@@ -544,19 +576,19 @@ const dummy = (id, hp) => sb.createUnit({ id: id, side: 'enemy', name: '木桩',
 
   const foeA = mkFoe('po-a', '对照');
   const gbA = sb.createGroupBattle({ allies: [mkHero('ph-a')], enemies: [foeA] });
-  assert('对照：无附身时正常施放技能', /冲撞/.test(msgs(sb.groupUnitTurn(gbA, foeA))));
+  assert('对照：无附身时正常施放技能', /冲撞/.test(msgs(unitActionTurn(gbA, foeA))));
 
   const foeB = mkFoe('po-b', '被附身');
   const gbB = sb.createGroupBattle({ allies: [mkHero('ph-b')], enemies: [foeB] });
   sb.applyStatus(foeB, { id: 'possessed', duration: 1 });
   sb.setSkillCooldown(foeB, 'charge', 3);
-  const evB = sb.groupUnitTurn(gbB, foeB);
+  const evB = unitActionTurn(gbB, foeB);
   assert('附身：技能被封锁（不再施放冲撞）', !/冲撞/.test(msgs(evB)), msgs(evB));
   assert('附身：回合开始受 8% 最大生命伤害', foeB.hp === 460, 'hp=' + foeB.hp);
   assert('附身：技能冷却暂停（3 不递减）', sb.skillCooldownLeft(foeB, 'charge') === 3, 'cd=' + sb.skillCooldownLeft(foeB, 'charge'));
   assert('附身：状态在本回合末到期解除', !sb.hasStatus(foeB, 'possessed'));
 
-  sb.groupUnitTurn(gbB, foeB);
+  unitActionTurn(gbB, foeB);
   assert('附身结束后冷却恢复递减（3 → 2）', sb.skillCooldownLeft(foeB, 'charge') === 2, 'cd=' + sb.skillCooldownLeft(foeB, 'charge'));
 }
 

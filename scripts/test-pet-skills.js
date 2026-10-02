@@ -43,6 +43,17 @@ const R_BASE  = { hp: 100, atk: 10, def: 5, soulAtk: 6, soulDef: 3, spd: 5 };
 function foe(id) { return sandbox.createUnit({ id: id, side: 'enemy', name: '木桩', level: 1, base: { hp: 1000, atk: 5, def: 2, spd: 5 } }); }
 function runFx(id, caster, targets) { return sandbox.applySkillEffects(skill(id), caster, targets, {}); }
 
+/* v2.4.6：`groupUnitTurn` 恢复单一语义 —— **只跑行动阶段**；回合末结算（duration 递减 / 到期
+   onExpire、天赋与状态 onTurnEnd）统一归判定阶段。故这里「一个单位的一整个回合」改为驱动
+   同一套四阶段编排里的两步，而不是再指望 `groupUnitTurn` 一次把两段都跑完
+   （那个以 `gb._roundOpen` 为判据的兼容分支已删除）。
+   ⚠️ 只补「行动 + 判定」两步、**不跑准备阶段**：本套件盯的「蓄力当回合 → 到期 → 下回合释放」
+   链路，失效点在行动阶段（释放）与判定阶段（到期置 `_chargeReady` / 载荷记名），准备阶段不参与；
+   少跑一步也就不会引入额外的随机消耗，原有数值断言保持逐值可比。 */
+function unitTurn(gb, actor) {
+  return sandbox.runUnitActionStep(gb, actor).concat(sandbox.runPhaseJudge(gb) || []);
+}
+
 /* ===== §2.4 火焰啄击：CD 4 → 3 ===== */
 assert('§2.4 火焰啄击冷却=3', skill('p_flamepeck').cooldown === 3);
 assert('§2.4 火焰啄击伤害区间 150~330% 不变', JSON.stringify(skill('p_flamepeck').range.power) === '[150,330]');
@@ -122,12 +133,12 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
   const e1 = foe('e-ch1');
   const gb = sandbox.createGroupBattle({ allies: [caster], enemies: [e1], seed: 3 });
   gb.turn = 1;
-  sandbox.groupUnitTurn(gb, caster);
+  unitTurn(gb, caster);
   assert('§2.1 蓄力当回合：敌方未被削减', !e1._accMod, String(e1._accMod));
   assert('§2.1 蓄力到期：置 _chargeReady 且载荷记名 p_shine',
     caster._chargeReady === true && caster._chargePayload === 'p_shine',
     String(caster._chargeReady) + '/' + caster._chargePayload);
-  sandbox.groupUnitTurn(gb, caster);                   // 下回合：释放
+  unitTurn(gb, caster);                   // 下回合：释放
   assert('§2.1 下回合释放：命中削减落到敌全体（-40%、2 回合）',
     Math.abs(e1._accMod + 0.4) < 1e-9 && e1._hitModTurns === 2,
     String(e1._accMod) + '/' + e1._hitModTurns);
@@ -166,12 +177,12 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     gbRc.rng = function () { return 0.1; };              // 确定性：必中、掷骰固定
     gbRc.turn = 1;
     const hpCharging = rc.hp;
-    const evCharge = sandbox.groupUnitTurn(gbRc, rc);    // 第 1 回合：只进入蓄力
+    const evCharge = unitTurn(gbRc, rc);    // 第 1 回合：只进入蓄力
     assert('§2.7 反冲：蓄力当回合尚未结算伤害，故无反冲（不掉血、无日志）',
       rc.hp === hpCharging && !evCharge.some(e => /反冲/.test(e.msg || '')),
       JSON.stringify({ hp: rc.hp, ev: evCharge.map(e => e.msg) }));
     const hpBefore = rc.hp;
-    const evRel = sandbox.groupUnitTurn(gbRc, rc);       // 第 2 回合：释放 → 伤害 + 反冲
+    const evRel = unitTurn(gbRc, rc);       // 第 2 回合：释放 → 伤害 + 反冲
     const hitEv = evRel.filter(e => /^⚡/.test(e.msg || ''))[0];
     const recEv = evRel.filter(e => /反冲/.test(e.msg || ''))[0];
     const dealt = hitEv ? +(/→ \S+ (\d+) 伤害/.exec(hitEv.msg)[1]) : -1;
@@ -189,9 +200,9 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     const gbT = sandbox.createGroupBattle({ allies: [rcTank], enemies: [eTank], seed: 71 });
     gbT.rng = function () { return 0.1; };
     gbT.turn = 1;
-    sandbox.groupUnitTurn(gbT, rcTank);
+    unitTurn(gbT, rcTank);
     const hpT = rcTank.hp;
-    const evT = sandbox.groupUnitTurn(gbT, rcTank);
+    const evT = unitTurn(gbT, rcTank);
     const dealtT = +(/→ \S+ (\d+) 伤害/.exec(evT.filter(e => /^⚡/.test(e.msg || ''))[0].msg)[1]);
     assert('§2.7 反冲不过自身防御/减伤（直接扣血，与 def 无关）',
       (hpT - rcTank.hp) === Math.floor(dealtT * 0.35) && dealtT === dealt,
@@ -223,10 +234,10 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     const gbO = sandbox.createGroupBattle({ allies: [rcO], enemies: [eO], seed: 71 });
     gbO.rng = function () { return 0.1; };
     gbO.turn = 1;
-    sandbox.groupUnitTurn(gbO, rcO);                     // 第 1 回合：蓄力
+    unitTurn(gbO, rcO);                     // 第 1 回合：蓄力
     eO.hp = 10;                                          // 释放前把目标打到残血 10
     const hpO = rcO.hp;
-    const evO = sandbox.groupUnitTurn(gbO, rcO);          // 第 2 回合：释放
+    const evO = unitTurn(gbO, rcO);          // 第 2 回合：释放
     const hitO = evO.filter(e => /^⚡/.test(e.msg || ''))[0];
     const recO = evO.filter(e => /反冲/.test(e.msg || ''))[0];
     const dealtO = hitO ? +(/→ \S+ (\d+) 伤害/.exec(hitO.msg)[1]) : -1;
@@ -246,10 +257,10 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     const gbM = sandbox.createGroupBattle({ allies: [rcM], enemies: [eM], seed: 71 });
     gbM.rng = function () { return 0.1; };
     gbM.turn = 1;
-    sandbox.groupUnitTurn(gbM, rcM);                     // 蓄力
+    unitTurn(gbM, rcM);                     // 蓄力
     gbM.rng = function () { return 0.99; };              // 命中率 0.95 → 必落空
     const hpM = rcM.hp;
-    const evM = sandbox.groupUnitTurn(gbM, rcM);         // 释放 → 落空
+    const evM = unitTurn(gbM, rcM);         // 释放 → 落空
     const missed = evM.some(e => /落空/.test(e.msg || ''));
     const recM = evM.filter(e => /反冲/.test(e.msg || ''));
     assert('§2.7 落空 / 闪避**不吃**反冲（未命中 → 施法者不掉血、也不写反冲日志）',
@@ -265,12 +276,12 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     const gbW = sandbox.createGroupBattle({ allies: [rcW], enemies: [eW], seed: 71 });
     gbW.rng = function () { return 0.1; };
     gbW.turn = 1;
-    sandbox.groupUnitTurn(gbW, rcW);                     // 蓄力
+    unitTurn(gbW, rcW);                     // 蓄力
     /* 给施法者挂「广域防御」（状态减伤 -40%）：若反冲走受击通道，这里就会被削 —— 必须不被削 */
     sandbox.applyStatus(rcW, { id: 'wideguard', duration: 3, data: { reduce: 0.4 } });
     sandbox.syncStatusDerived(rcW);
     const hpW = rcW.hp;
-    const evW = sandbox.groupUnitTurn(gbW, rcW);
+    const evW = unitTurn(gbW, rcW);
     const dealtW = +(/→ \S+ (\d+) 伤害/.exec(evW.filter(e => /^⚡/.test(e.msg || ''))[0].msg)[1]);
     assert('§2.7 反冲不过自身防御/减伤：状态减伤（广域防御 -40%）也不作用于反冲',
       (hpW - rcW.hp) === Math.floor(dealtW * 0.35),
@@ -283,10 +294,10 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
         const gbS = sandbox.createGroupBattle({ allies: [rcS], enemies: [eS], seed: 71 });
         gbS.rng = function () { return 0.1; };
         gbS.turn = 1;
-        sandbox.groupUnitTurn(gbS, rcS);
+        unitTurn(gbS, rcS);
         rcS._shield = 99999;                             // 开盾（若反冲走受击通道，盾会吃掉它）
         const hpS = rcS.hp;
-        const evS = sandbox.groupUnitTurn(gbS, rcS);
+        const evS = unitTurn(gbS, rcS);
         const dw = +(/→ \S+ (\d+) 伤害/.exec(evS.filter(e => /^⚡/.test(e.msg || ''))[0].msg)[1]);
         return (hpS - rcS.hp) === Math.floor(dw * 0.35) && rcS._shield === 99999;
       })());

@@ -729,6 +729,62 @@ dot 正常结算（实测 0 → 1 次）。
 
 ---
 
+## v2.4.6
+
+Date: 2026-10-03
+
+**🧹 还技术债：`groupUnitTurn` 恢复单一语义（纯重构，线上行为零变化）。**
+
+### 修复 / 重构
+
+**① 删掉「同一函数两种含义」的兼容分支** —— v2.4.5 把回合末结算（dot / duration 递减 / 到期）搬进**判定阶段**后，
+`groupUnitTurn(gb, actor)` 保留了一个隐藏开关（判据 `gb._roundOpen`）：编排内只跑行动阶段，**编排外**
+（单测/调试脚本把它当「一整个单位回合」用）就多跑一遍回合末收尾。本版**删除该分支的全部 7 处**：
+玩家技能回合开始派发、天赋/状态 `onTurnStart` 的三元分流、`tBefore` 慢启动二掷、skip 分支内的就地 `ageStatuses`、
+迷惑三选一、末尾的 `runUnitJudgeTail`。现在它**只有一种含义：只跑行动阶段**，回合末结算一律归判定阶段。
+`runUnitJudgeTail` 同步去掉 `ageFn` 参数（固定走 `ageStatusesInJudge`，只剩 `runPhaseJudge` 一个调用方）。
+`gb._roundOpen` 保留，但用途收敛为**纯粹的编排标记**（`groupBattleStep` 用它区分「新回合第一步」与「同回合后续单步」），已在注释里写明。
+
+**② 两个套件改用正确用法**（第三个本就不需要）——
+- `scripts/test-pet-skills.js`：新增 `unitTurn(gb, actor)` = `runUnitActionStep` + `runPhaseJudge`，14 处调用替换；
+- `scripts/test-status-lifecycle.js`：新增 `unitActionTurn`（行动+判定）与 `unitFullTurn`（准备+行动+判定，
+  只给迷惑三选一用，因为三选一已归准备阶段），15 处调用替换；
+- `scripts/test-talent-growth.js`：**未改** —— 它一直用 `groupBattleStep`（早就是四阶段编排），不存在需要迁移的调用点。
+
+### 验证（决定性证据：线上行为零变化）
+
+本版是**纯重构**，因此验收标准不是「测试过」，而是**「固定种子日志与 v2.4.5 逐字节一致」**：
+
+| 关卡 | worktree bytes | sha256（worktree 与 v2.4.5 基线**相同**） |
+|---|---|---|
+| `g7-10` | 7175 | `ff13e435fe236157f2b9e0ce2cdca2f844921e366a8dcc85dac9f67165a78c91` |
+| `g2-1` | 117 | `08e47692e4dce78f63541b0d12e2e1dd37ad18b745a9dbcc43cb6aa8ddb595fa` |
+| `g12-10` | 7954 | `f0780eda9532955d9c635d9c8795cb0c0e71eb692e33f87adace2e6bd1ba7987` |
+
+- 全量 **58 套件 0 红**；`test-battle-phases` 64/64、`test-group-ui-presentation` 386/386。
+- **断言未弱化**：两个被迁移套件的**断言名集合逐条比对，diff = NONE**（105 → 105、99 → 99），全绿。
+- **变异验证 4 条**（均逐字节还原后复跑全绿）：M1 判定阶段不再递减 duration → status-lifecycle 98/7 红、pet-skills 红；
+  M2 把兼容分支恢复回去 → status-lifecycle 104/1 红（duration 被扣两次）；M3 去掉判定阶段的天赋 `onTurnEnd` 派发 →
+  talent-growth 53/54、battle-phases 63/1 红；M4 判定阶段整体跳过 → 四个套件全红。
+- 源码守卫：`groupUnitTurn` 定义**只有 1 处**，`standalone` **残留 0**。
+
+### 本次修改文件
+
+**新增 / 删除**：无。
+
+| 文件 | 变化 |
+|---|---|
+| `page/battle-group.js` | 1660 → **1638 行**（删除 7 处兼容分支，恢复单一语义） |
+| `scripts/test-pet-skills.js` | 575 → 586 行（新增 `unitTurn` helper，14 处调用迁移） |
+| `scripts/test-status-lifecycle.js` | 584 → 616 行（新增两个 helper，15 处调用迁移） |
+
+> ✅ **技术债结清**：v2.4.5 记录的那条「同一函数两种含义」技术债，本版已还清。
+> 另注：`test-battle-log-audit`（21/21）与 `test-talent-fixation`（78/78）也直接调用 `groupUnitTurn`，
+> 删分支后仍全绿 —— 已核实它们的用例只依赖行动阶段内的派发（嘲讽复位 / 天赋 `onTurnStart` 的非 prepare 分支 /
+> `onBeforeAction` 的 `multiTarget`），可作为「新语义兼容既有调用点」的旁证。
+
+---
+
 ## 架构演化表
 
 | 版本 | JS文件数 | 最大文件 | 备注 |
@@ -765,6 +821,7 @@ dot 正常结算（实测 0 → 1 次）。
 | v2.4.3 | 51 | 2207 行 game-render.js | 🔴 **修敌人辅助技能作用到我方**的真 bug（`selectTargets` 的 `ally1`/`ally2` 写死了玩家方 → 敌方「治愈/强攻/净化」100% 落我方；实测 40/40，19% 关卡受影响）→ 按施法者阵营派生 `mates`/`foes`；新增 12 条选靶断言 + 变异验证；`test-pet-talents` §3.10 口径更新（不再依赖该 bug）。**引擎改动，未做难度补偿**；`battle-group.js` 1306 → 1316 行（最大文件仍是 game-render.js 2207） |
 | v2.4.4 | 51 | 2230 行 game-render.js | 🧹 折叠「蓄力」自相矛盾文案（`gbDropChargeNoise` 纯函数，日志页与战报**共用唯一实现**；不误伤普通 expire、保留下回合释放伤害）；新增 17 条断言（311 → 328）+ 真浏览器验证。**纯展示层，本版提交未改任何引擎文件** |
 | v2.4.5 | 51 | 2353 行 game-render.js | 🔄 **战斗阶段化**（每回合 = 准备 / 行动 / 判定 / 结束）+ 冻结契约（`GB_PHASES` / `gb.phase` / 每条日志带 `phase`）+ 两条推进路径统一（tick 路径补上启风②/冰魄余威/破盾反伤）+ 显示侧阶段分组与徽标 + 战报带阶段。行为变化：跳过行动的回合也结算 dot、回合开始类覆盖整回合（慢受益人 100→120）、末日/遗言 4/7 次（与上一版一致）。`battle-group.js` 1316 → **1660 行**、`game-render.js` 2230 → **2353 行**；新增 `test-battle-phases.js`（64 断言），全量 58 套件 0 红 |
+| v2.4.6 | 51 | 2353 行 game-render.js | 🧹 **还技术债**：删掉 `groupUnitTurn` 的「编排外兼容分支」（7 处），恢复单一语义（只跑行动阶段）；两个套件迁移到四阶段编排（`unitTurn` / `unitActionTurn`·`unitFullTurn`）。**纯重构、线上行为零变化**：固定种子 `gb.log` 与 v2.4.5 逐字节一致（3 关 sha256 相同）、断言集合 diff=NONE、变异验证 4 条。`battle-group.js` 1660 → **1638 行** |
 
 > 「JS文件数」= `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）。
 >
