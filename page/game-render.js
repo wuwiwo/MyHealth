@@ -978,6 +978,43 @@ function renderUnitTalentChips(u){
   }).join('')
 }
 
+/* ============================================================
+   v2.3.3 WP-I：战斗页宠物头像（作者原话「战斗页面，宠物图标也要实装」）
+
+   唯一入口 = pet-ui.js 的 **petIconStageHtml()**（内部即 petIconHtml()）——
+   与宠物列表卡 / 详情页 / 参战芯片 / 对比芯片 / 挑战结算面板同一个入口，
+   这里**不硬拼 <img> 路径**；缺 SVG 时它自己退回阶段 emoji（🐾），
+   既不会出现裂图，也不会返回空串把卡片搞塌陷。
+
+   ⚠️ 尺寸必须是 16 的倍数（图标 16×16 逻辑格、1 格 = 3px），且必须**落在既有行高内**：
+      单位卡名字行实测 21px（`--fs-lg` 17px 的行盒）、血条行 22px、技能行 25px，
+      16 的倍数里只有 **16** 能塞进名字行 → 取 16，整卡高度 0 变化（作者对该页的唯一硬要求：
+      战斗页不得变密）。取 32 会把名字行顶到 32px → 整卡 96.4 → 107.4px（每只 +11.4px）。
+   ⚠️ 只给**我方宠物**（`unit._petSpecies`，pet-codex.js 的 createPetUnit 挂的）：
+      玩家（🧑 你）没有头像槽、敌方走怪物原型线（monster-archetype.js），都不套宠物头像。
+   ============================================================ */
+var GB_PET_ICO_SIZE = 16
+
+/* 我方宠物单位的头像片段（<img> 或 emoji 兜底；非宠物返回 ''）。
+   ⚠️ **不带容器**：单位卡与队伍条芯片的容器要求不同 ——
+      单位卡用 .gb-ico（inline-flex，与怪兽头像同一套）；
+      队伍条芯片用 .has-ico（flex + 定高 16px 的 <img> 直接作 flex item），
+      因为 inline-flex 容器会把行盒按「基线对齐」撑高 3px，把 .gb-order 顶高。 */
+function gbPetIconHtml(u){
+  if(!u||!u._petSpecies)return ''
+  if(typeof petIconStageHtml!=='function')return ''
+  /* 参战前提是「成熟」（canPetBattle），故 stage 恒为 'mature' → 兜底 emoji 为 🐾 */
+  return petIconStageHtml(u._petSpecies,GB_PET_ICO_SIZE,'mature')
+}
+
+/* 同上，但包一层 .gb-ico（单位卡名字行 / 阵亡折叠行用）。
+   这两行都是 flex 行，inline-flex 的容器只会成为一个 16px 高的 flex item，
+   **不参与行盒的基线计算** → 行高不变。 */
+function gbPetIconBoxHtml(u){
+  var s=gbPetIconHtml(u)
+  return s?('<span class="gb-ico">'+s+'</span>'):''
+}
+
 /* 行动顺序条：取当前行动队列，列出接下来最多 5 个出手单位（v2.1.7） */
 var _gbLogAll=false
 function renderGroupOrder(gb){
@@ -989,8 +1026,19 @@ function renderGroupOrder(gb){
   for(var i=idx;i<q.length&&shown<5;i++){
     var u=q[i]
     if(!u||u.hp<=0)continue
-    out+='<span class="gb-order-chip '+u.side+(shown===0?' now':'')+'" role="listitem">'
-      +(shown===0?'▶ ':'')+u.name+'</span>'
+    /* v2.3.3：队伍条小芯片也带宠物头像。芯片文字行盒 16px、原件高 24px；
+       16px 头像作 flex item 后芯片 = 16+8+2 = 26px，与「当前行动」芯片（带 ▶，26px）等高
+       → **.gb-order 容器高度 38px 不变**（取 32px 才会把整条抬到 54px）。
+       头像放在芯片**最左**且不套 .gb-ico 容器：这样「▶ 名字」保持连续文本 → 只吃 1 个
+       gap(4px)，头像净占 20px；若插在「▶」与名字之间则要 2 个 gap（净占 24px），
+       360px 视口下会把 .gb-order 撑出横向滚动（实测 368 > 360）。
+       只在真有 SVG 时加 .has-ico（emoji 兜底走原行内排版，芯片高度不变）。 */
+    var pIco=gbPetIconHtml(u)
+    /* 行内排版的 emoji 兜底要自己带空格（img 走 flex gap，不需要） */
+    var icoPre=(pIco.indexOf('<img')===0)?pIco:(pIco?pIco+' ':'')
+    out+='<span class="gb-order-chip '+u.side+(shown===0?' now':'')
+      +(pIco.indexOf('<img')===0?' has-ico':'')+'" role="listitem">'
+      +icoPre+(shown===0?'▶ ':'')+u.name+'</span>'
     shown++
   }
   out+='</div>'
@@ -1026,9 +1074,13 @@ function renderGroupUnit(u,side){
      折叠后只留「💀 名字 · 已阵亡」；卡片仍是 role=button 且内层行锁在 --touch-min(44px)，
      热区不缩水，点开仍能看到详情的属性/技能/天赋。 */
   if(dead){
+    /* v2.3.3：宠物阵亡后仍保留头像（折叠行自身 min-height:44px，16px 头像塞得下 → 高度不变），
+       否则「哪只宠物没了」只能靠读名字。非宠物（玩家/敌人）不加。 */
+    var deadIco=gbPetIconBoxHtml(u)
     return '<div class="'+cls+'" data-uid="'+u.id+'" role="button" tabindex="0" aria-label="'+escHtml(u.name)+' 已阵亡 详情">'
       +'<div class="gb-dead-line">'
       +'<span aria-hidden="true">💀</span>'
+      +deadIco
       +'<span class="gb-dead-name">'+escHtml(u.name)+'</span>'
       /* 不再渲染「▶ 行动中」：阵亡单位不可能再行动；自身反冲致死等场景下
          _groupActing 仍指向它，两个标签同屏会自相矛盾。 */
@@ -1073,10 +1125,14 @@ function renderGroupUnit(u,side){
      不会出现空图标。**带存在性守卫**：monster-archetype.js 未加载时退化为原样。 */
   var unitIco = (side !== 'ally' && typeof monsterIconHtmlByName === 'function')
     ? monsterIconHtmlByName(u.name, u._tier === 'boss', 32) : '';
+  /* v2.3.3：我方**宠物**的头像（16px，塞在既有名字行内 —— 见 GB_PET_ICO_SIZE 的说明）。
+     只认 unit._petSpecies：玩家没有头像槽（保持现状）、敌人走上面的怪物原型线。 */
+  var petIco = gbPetIconBoxHtml(u);
   return '<div class="'+cls+'" data-uid="'+u.id+'" role="button" tabindex="0" aria-label="'+escHtml(u.name)+' 详情"'+(acting?' aria-current="true"':'')+'>'
-    // 第一行：名称 + 行动标记 + 状态
+    // 第一行：名称 + 行动标记 + 状态（宠物头像与名称同行、共用既有行高，不新增行）
     +'<div class="gb-row1">'
     +(unitIco ? '<span class="gb-ico">'+unitIco+'</span>' : '')
+    +petIco
     +'<span class="gb-name" style="color:'+color+'">'+escHtml(u.name)+'</span>'
     +(acting?'<span class="gb-acting-tag">▶ 行动中</span>':'')
     +statusHtml+scared
