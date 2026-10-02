@@ -341,6 +341,145 @@ Date: 2026-10-02
 
 ---
 
+## v2.4.2
+
+Date: 2026-10-02
+
+**群战战场化重构：从「垂直卡片列表」到「上下对阵舞台」+ 技能专属特效。纯展示层 —— 引擎文件零改动。**
+
+作者核心诊断（原文）：「这本质上还是一个"垂直铺开的卡片列表"，而不是一个"战斗舞台"……技能和天赋标签直接铺在卡片上，
+信息密度太高，导致它看起来依然像"带游戏皮肤的表格"」。本版把**战斗舞台**与**信息面板**彻底分开。
+
+### 新增功能
+
+**① 对阵舞台（三区）** —— `renderGroupBattlePane` 重写：`#gbArena` = `#gbArenaEnemy` → `#gbArenaMid` → `#gbArenaAlly`，
+顺序固定不可换（敌方在上，空间上就是「对阵」）。行动顺序条从 `#gbPane` 内移到舞台顶部。
+舞台**放在 `#gbPane` 之外**、且 `.gb-arena{overflow:hidden}` —— 这是「行动者放大不会撑出横向滚动条」的前提：
+v2.4.0 已实测，把放大放进 `overflow-y:auto` 的滚动裁剪容器必然溢出。
+
+**② 战场芯片只留 4 件信息** —— `renderGroupUnit` 改为 `.gb-unit.gb-arena-unit`：**头像 / 名字 / 血条 / 状态**。
+技能名、天赋名、攻防速魂数字**全部移出战场**；芯片内 `.gb-chip` / `.gb-stats` / `.gb-row1` / `.gb-row4` **零出现**
+（真渲染断言 + 源码守卫双重把关）。头像优先级：敌方 → 怪物原型 SVG（32px）；我方宠物 → `petIconStageHtml`；玩家 → 名字前导 emoji。
+名字 ≤4 字、超出省略，**完整名留在 `data-name` / `title` / `aria-label`**（`data-name` 同时是场地事件反查的唯一依据）。
+状态最多 3 个图标 + `+N`；阵亡 = 同一芯片加 `.gb-dead`（灰化 + 名字删除线，**仍保留头像**，不再折叠成 `gb-dead-line`）。
+
+**③ 行动焦点** —— 行动者 `transform:scale(1.1)` + `transform-origin:50% 100%` + 光环 + `::before` 左侧强调条 + `z-index:2`；
+其余单位 `opacity:.5`。`.gb-focus` 由 `#gbPane` 迁到 `#gbArena`（芯片都在舞台里）。
+
+**④ 技能专属特效（复用既有 48 枚图标）** —— 技能身份**不用猜**：引擎每次施法都有一条 `type=bubble` 事件、**带精确 `skillId`**
+（实测：本场 10/10 条带 id；8 大关 × 末关 × 3 种子共 94/94 条带 id；**非 bubble 事件 0 条带 id**）。
+`gbShowSkillCast` 直接 `skillIconHtml(skillId, 48, …)` 出图标 + 技能名 + 阵营色光环，锚在中央特效区。
+玩家攻击技能当前不产生 bubble（`castSkill` 才是唯一产生点），故 `isPlayer=true` 目前不可达 —— 按契约实现、按防御处理。
+
+**⑤ 中央特效区** —— 伤害/治疗飘字与技能名一律锚 `#gbArenaMid`，并**上下分层**：施法特效取 0.28 高、飘字取 0.80 高
+（两者同锚中心会互压 —— 中央区只有 15vh，放不下「48px 图标 + 上升 34px 数字」）。同一步多条飘字按 4 个槽位错开。
+`gbFxFloat(card,text,color,big,slot)` 的签名与函数体内的 `getBoundingClientRect()` 原样保留（有测试守卫）。
+**×4/×8 降级**：只留图标闪现、不渲染文字行（步进只有 87~112ms，文字必被下一发盖掉、只会叠成一团）。
+
+**⑥ 单位详情面板补齐** —— 从战场移出的信息进 `renderGroupDetail`：头像（同芯片优先级）+ 血条 + `当前/上限` +
+攻/防/速/魂攻/魂防（沿用 `effectiveStat` / `effectiveSpeed` 与既有 ▲▼ 修正标记）。点芯片 → 详情；返回后回到战场。
+
+**⑦ 日志抽屉** —— 默认收起（**战斗进行时不展示日志**），展开占 **52vh**（战斗 Tab 的面板只有约 25vh → 仍是「更大占比」）；
+战场常驻可见。日志页本身的筛选 / 分色 / 复制逻辑**一行未动**。
+
+**⑧ 开场刷屏收口（作者点名）** —— 开战钩子（`player-skill-hooks.js` 的 `onBattleStart` 金身护盾）**给每个队友各推一条**
+`🛡️ <队友名> 金身护盾 +733（…）` → 5 个我方单位就是 5 条同技能事件，且 `opening` 条目**没有 bubble**（中央区覆盖不到）→
+由战斗页那一行文本压成一句：`🛡️ 开场：金身护盾 → 我方 5 人（合计 +3665）`。
+**口径**：只认 `🛡️ <名> <技能名> +<数字>` 这一族、按技能名归组、≥2 条才压；人数与合计都是实测值；
+**不写「你 对全队施加了 X」** —— `opening` 条目的 `unit` 就是「开场」，日志里没有施法者身份，据实写「我方 N 人」而不猜。
+
+### 修复
+
+**① 场地事件「反查失联」（P0）** —— `gbCardForEvent` 的文案回退分支用 `textContent.indexOf(完整名)` 匹配，
+而芯片名已截断成 ≤4 字 → 实测 `精英·狂战`（显示「精英·狂」）与 `Boss·混沌魔`（显示「Boss」）**双双落空**；
+后果是场地伤害（`受碎石伤害` / `被闪电击中`，日志**没有 `targetId`**）不再有受击高亮与飘字。
+改为按 **`data-name` 完整名**精确匹配（两侧都先剥前导 emoji —— 场地文案抠出的名字不带 emoji）。
+
+**② 飘字与施法特效互压** —— 两者都锚中央区中心（分别由两个任务指定），而中央区只有 15vh → 数字压在图标上。
+改为上下分层（0.28 / 0.80），并加 `.gb-fx-float{z-index:2}` 兜底可读性。
+
+**③ 极密阵裁切（真机实测 37px）** —— 5 我 + 3 敌 = 8 芯片时，360×640 下**我方第二行被 `.gb-arena` 的 `overflow:hidden` 裁掉 37px**。
+根因：行高写成 `min-height:var(--gb-arena-h)`（20vh），矮屏上把 3 行硬撑到 384px，而舞台只有约 450px。
+修法：行高改 **`max-height`**（以内容高度为基准、有空间才长到 20vh）+ 芯片总数 ≥7 时挂 **`.gb-arena-dense`**（芯片 72→56px、头像 32→24px）。
+
+**④ 日志抽屉展开时裁切 + 特效骑在日志上** —— 抽屉 58vh 时舞台只剩 185px，而「顺序条 + 敌行 + 我一行」需要约 194px →
+**我方芯片被裁 30px**；同时飘字/施法特效画在日志正文上。修法：抽屉 **58 → 52vh** + 抽屉态复用极密阵尺寸 + 收紧行内边距 +
+**抽屉展开时主动跳过飘字与施法特效**（防御式判断：测试桩无 `classList` 时不误伤）。
+
+**⑤ 芯片名字被档位前缀吞掉** —— 名字上限 4 字，而引擎敌人名带档位前缀：`Boss·混沌魔` → 显示 `Boss`、`精英·狂战` → `精英·狂`，
+**同档位多个单位会显示成同一个词**（全是 `Boss`），芯片丧失辨识度。修法：`gbUnitShortName()` 先剥前导 emoji、再剥
+`Boss·` / `精英·` / `杂兵·` / `护卫·` / `首领·` 前缀，最后截 4 字（前缀信息由**怪物头像与阵营色**承载）；
+完整名仍原样进 `data-name` / `title` / `aria-label`。
+
+### UI 调整
+
+- 新增 `:root` 令牌：`--gb-arena-h:20vh` / `--gb-mid-h:15vh` / `--gb-arena-h-s:14vh` / `--gb-mid-h-s:8vh` / `--gb-unit-w:72px` / `--gb-unit-ico:32px`。
+- **移除卡片外壳语汇**：`.gb-unit` 的 border / border-radius / background / padding，以及 `.gb-dead-line` / `.gb-dead-name` /
+  `.gb-dead-tag` / `.gb-acting-tag` / `.gb-row1` / `.gb-hp-row` / `.gb-row4` / `.gb-stats` / `.gb-stat.soul` 全部删除或改写为芯片语汇。
+- 新增：`.gb-arena-wrap` / `.gb-arena` / `.gb-arena-row` / `.gb-arena-mid` / `.gb-arena-dense` / `.gb-arena-unit` / `.gb-arena-ico` /
+  `.gb-arena-st(-more/-i)` / `.gb-skill-cast*`（`@keyframes gbCastFade` 只动 opacity）/ `.gb-lineup-open` / `.det-unit`；
+  血条合成 5px 细条（`.gb-hp-wrap` / `.gb-hp-fill` 的 transition 保留）。
+- **保留**（有测试依赖）：`.gb-ico`（无 height）、`.gb-chip`、`.gb-chip-ico`、`.gb-order-chip.has-ico`、`.gb-banner*`（max-height 44px / nowrap+ellipsis）、
+  `.gb-ctrl{padding-top:calc(6px + var(--sat))}`、`.gb-pane{overflow-x:hidden}`、`.gb-fx-float` / `@keyframes floatUpC`、
+  日志页 `.gb-log-*`、结算面板 `.gb-res-*`。`@keyframes bubblePop` 已无消费者但按边界保留（+注释说明）。
+
+### 测试与验证（主控亲自执行，不采信执行者自述）
+
+- **全量 57 套件全绿**；`test-group-ui-presentation` 从 283 增到 **311 断言**（新增第 13/14 节：中央特效区 / `data-name` 命中 /
+  档位前缀 / 开场一句话 / 技能名兜底；另外把「禁止一切 scale」的旧守卫**改判**为「只允许 `.gb-arena-unit.gb-acting` 放大」——
+  旧守卫按字面 `.gb-unit` 匹配，换类名后会**静默空转**，比报红更危险）。
+- **确定性硬证据**：与 **v2.4.1 提交（`d5a7ec0`）导出的 `page/` 基线**逐字节对拍，三个关卡全部一致 ——
+  `g7-10` 6644 字节 / `g2-1` 104 字节 / `g12-10` 7562 字节，sha256 分别 `60e4aef1…` / `f3790b51…` / `7374f6fd…`。
+  本版 `git diff` 里**一个引擎文件都没有** —— 这就是「战斗逻辑完全没动」的可验证形式。
+- **浏览器实测**（自建 CDP 驱动：Node 24 内置 `fetch` + `WebSocket` 直连 Chrome DevTools Protocol；headless Chrome +
+  独立 `--user-data-dir`，**不碰用户自己的 Chrome**；`agent-browser` 本轮会话卡死已弃用）：
+  - 三区顺序 `["enemy","mid","ally"]`；行动者 `scaleX=1.1`、其余 `opacity=0.5`；`.gb-focus` 挂在 `#gbArena` 而**不在** `#gbPane`；
+  - 芯片禁类名（`.gb-chip` / `.gb-stats` / `.gb-row1` / `.gb-row4`）**0 命中**；芯片含头像 / 名字 / 血条 / 状态 4 件；
+  - **最坏阵型 5 我 + 3 敌 = 8 芯片**：360×640 与 390×844 **均 `clipped=[]`**、`docH=false`（无横向滚动条）；
+  - **日志抽屉展开态**：`clipped=[]`（修完抽屉高度后）；
+  - **`skillId → 图标` 逐步对照**：`blizzard → media/skills/blizzard.svg`、`spikes → spikes.svg`、`stardust → stardust.svg`、
+    `cleanse → cleanse.svg`，与一句话（「Boss·混沌魔 使用了 暴风雪」等）逐步一致；×4/×8 只剩图标、无文字行；
+  - 详情面板：点芯片 → `hasBack` / `hasIco` / `hasHp` 全真，正文含 `敌方 · Lv5`、`1679/1679`、`⚔️ 攻 248`、`🛡️ 防 126`、
+    `💨 速 12`、`👻 魂攻 99`、`🔮 魂防 74`；返回后战场恢复；
+  - 开场一句话真渲染：`🛡️ 开场：金身护盾 → 我方 5 人（合计 +3665）`。
+- ⚠️ **对比度实测（`.5` 压暗的代价，如实披露）**：按祖先链取真实底色做 alpha 合成后计算 WCAG 比值 ——
+  **非行动者名字 2.50:1**（浅色主题红字 / 深色主题红字**都是 2.50:1**；AA 正文需 4.5:1）；
+  行动者名 4.80:1（浅）/ 10.81:1（深）✓；非行动者状态 3.32:1（浅）/ 4.95:1（深）；未压暗的阵容速览 7.30:1 / 12.68:1 ✓。
+  `.5` 是**作者规格明确指定**的值，故本版**保留**；要合规只需把它提到 **`.75`（约 4.8:1，一行 CSS）**。
+
+### 已知取舍（如实记录）
+
+- **`.5` 压暗的可读性代价**：见上（2.50:1）。改动点唯一：`index.css` 的
+  `.gb-focus .gb-arena-unit:not(.gb-acting):not(.gb-dead){opacity:.5}`。
+- **日志抽屉展开时中央区高度让位为 0**：舞台空间全部让给日志（52vh 仍是日志优先），此时飘字与施法特效**主动跳过**
+  （否则会骑在日志正文上）。
+- **`isPlayer=true` 当前不可达**：bubble 只由 `castSkill` 产生，玩家单位没有 `.skills`（玩家技能走 `playerAttackSkill` 且不产生 bubble），
+  故技能图标一律走 `isPlayer=false`；实施上按契约写好分支，并对未知 id 选择「整条不渲染」（宁缺勿错，不留空壳）。
+- **同名单位只能命中第一个**：日志没有 `unitId`，场地事件反查按名字匹配 —— 与 `gbUnitIndex` 既有口径一致
+  （旧分支同样只能命中第一个，且对截断名恒落空；不是本版引入的回归）。
+- **开场一句话的前提**：它只压「同一开战护盾技能 ≥2 条」这一族；若将来有其它族也在开场逐条刷屏，需要按同样方式扩展正则族。
+
+### 本次新增 / 修改文件
+
+**新增**：无（`scripts/test-group-ui-presentation.js` 是 v2.4.0 新增的，本版在其内追加第 13/14 节）。
+
+| 文件 | 变化 |
+|---|---|
+| `page/game-render.js` | 1949 → **2207 行**（战场三区 / 芯片化 / 中央特效区 / 技能特效 / 开场一句话 / 详情补齐 / 4 处缺陷修复） |
+| `page/index.css` | 战场与芯片样式、去卡片外壳、`.gb-arena-dense`、抽屉态（52vh） |
+| `scripts/test-battle-pet-icons.js` | 按新契约改写（三行卡 → 芯片；触控 44px、头像必须在 `.gb-arena-ico` 槽内等断言保留） |
+| `scripts/test-group-ui-presentation.js` | 追加第 13/14 节 + 尺度守卫改判（只允许 `.gb-arena-unit.gb-acting` 放大） |
+
+> ✅ **本版未改动任何引擎文件**：`battle-group.js` / `unit.js` / `talent.js` / `skill.js` / `status-defs.js` / `affix.js` /
+> `battle.js` / `terrain.js` / `ai.js` / `group-levels.js` / `group-progress.js` / `enemy.js` 逐字节未变；
+> 展示数据仍只来自 `gb.log` / `gb.units` / `gb.allies` / `gb.enemies` / `gb.turn` / `gb.winner` / `gb.terrain`。
+>
+> 📌 **方法学留档**：本轮的浏览器验证放弃 `agent-browser`（其 CLI 在会话中途卡在等一个不会来的握手），改为
+> **自建 CDP 驱动**（`fetch` + `WebSocket` + `Page.captureScreenshot`）—— 只有 eval / 截图 / 视口三件事，CDP 全覆盖，
+> 且能保证「绝不动用户自己的 Chrome」。
+
+---
+
 ## 架构演化表
 
 | 版本 | JS文件数 | 最大文件 | 备注 |
@@ -373,6 +512,7 @@ Date: 2026-10-02
 | v2.3.3 | 50 | 1348 行 game-render.js | **战斗页实装宠物头像**（作者：「战斗页面，宠物图标也要实装」）：战斗 overlay 新增 `gbPetIconHtml(u)`，**走既有唯一入口 `petIconStageHtml()`**（未另写口径），尺寸走单一常量 `GB_PET_ICO_SIZE`；落在**单位卡**与**行动/队伍条**两处；尺寸遵守头像评审结论**只用 16 的倍数**（逻辑格 3px → 16/32/48 描边才落整数像素；24/40 会 1·2px、2·3px 混排）；玩家与敌方**不给头像**（敌方属另一条线的怪物图，玩家无现成槽，未发明）；**缺图回退 emoji**、卡片不塌陷。新增 `test-battle-pet-icons`，全量 **56 套件 / 3682 断言**。⚠️ 待处理：本版记录写入 `doc/changelog-v2.3.md`，而 **v2.3.0/v2.3.1 两节仍在 `changelog-v2.2.md`** → 需迁移；另**版本号出现重复**（本线 v2.3.1 与另一线 `3dcf671` 的 v2.3.1 撞车）→ 建议后续由主控统一发号 |
 | v2.4.0 | 51 | 1949 行 game-render.js | 群战 UI 战斗表现重构（行动横幅 / 行动焦点 / 打击飘字 / 结算统计 / 日志筛选 / 布局收口），纯展示层，引擎零改动 |
 | v2.4.1 | 51 | 1949 行 game-render.js | 🔧 修 `group-levels.js` 的 `SKILLS_LOW` **死池**（补杂兵分支：50% 概率带 1 个低级技能，走关卡既有 `rng`，种子确定性不变）；**本版未改 `game-render.js` / `enemy.js`** —— 该行行数按**本版实测**复核为 **1949**（同表 v2.4.0 行记的 1813 是当时的记录值，历史行不改写，差异见下方说明） |
+| v2.4.2 | 51 | 2207 行 game-render.js | ⚔️ **群战战场化重构**（垂直卡片列表 → 上下对阵舞台）+ 技能专属特效（`bubble.skillId` → 既有 48 枚图标）+ 中央特效区（飘字与技能名上下分层）+ 日志抽屉（52vh、可隐藏）+ 开场刷屏一句话；**纯展示层，引擎零改动**，固定种子 `gb.log` 与 v2.4.1 基线逐字节一致 |
 
 > 「JS文件数」= `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）。
 >

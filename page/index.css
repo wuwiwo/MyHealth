@@ -56,6 +56,13 @@
   --ease-std:ease;--ease-out:cubic-bezier(.22,.61,.36,1);--ease-spring:cubic-bezier(.34,1.56,.64,1);
   /* ---- 布局 ---- */
   --mw:500px;--tabbar-h:48px;--touch-min:44px;--pad-screen:16px;
+  /* ---- v2.4.2 群战「战场化」布局 ----
+     广场（上下对阵舞台）的行高 / 中央留白 / 芯片宽度与头像尺寸。
+     为什么会有一组 -s（snapshot）：日志抽屉打开时广场压到快照高度，
+     用令牌表达「压缩态」而不是在规则里写死 vh。
+     芯片最小宽度/高度另有 52px / --touch-min 兜底（触摸目标不可缩水）。 */
+  --gb-arena-h:20vh;--gb-mid-h:15vh;--gb-arena-h-s:14vh;--gb-mid-h-s:8vh;
+  --gb-unit-w:72px;--gb-unit-ico:32px;
   --font:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
 }
 [data-theme="light"] {
@@ -524,24 +531,51 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
   25%{opacity:1;transform:translateX(-50%) translateY(0) scale(1.12)}
   100%{opacity:0;transform:translateX(-50%) translateY(-34px) scale(1)}
 }
-/* 飘字本体：只由 game-render.js 的 gbFxFloat() 生成，挂在 #gbFx（fixed 全屏层）里 */
-.gb-fx-float{position:absolute;transform:translateX(-50%);font-weight:900;font-variant-numeric:tabular-nums;
+/* 飘字本体：只由 game-render.js 的 gbFxFloat() 生成，挂在 #gbFx（fixed 全屏层）里。
+   v2.4.2：飘字与施法特效**锚在同一个点**（#gbArenaMid 中心），而施法元素是后插入的
+   （DOM 靠后 → 后画，会盖住数字）。数字被 48px 图标盖住就白飘了，故给飘字抬一层
+   z-index：两者都在 #gbFx 这个定位层里，比较有效。 */
+.gb-fx-float{position:absolute;transform:translateX(-50%);z-index:2;font-weight:900;font-variant-numeric:tabular-nums;
   white-space:nowrap;pointer-events:none;text-shadow:0 2px 6px rgba(0,0,0,.65);animation:floatUpC .9s var(--ease-out) forwards}
 .gb-fx-float.big{letter-spacing:-.5px}
+/* v2.4.2 技能施法特效（中央特效区）：由 game-render.js 的 gbShowSkillCast() 生成，
+   同样挂在常驻层 #gbFx 里，坐标来自 #gbArenaMid 的 getBoundingClientRect()。
+   ⚠️ 居中靠 transform:translate(-50%,-50%)，故配套关键帧**只动 opacity**：
+      任何一帧写 transform 都会把居中定位覆盖掉（与 floatUpC 是同一个坑，见上一节）。
+   光环/描边取**阵营色**（友方绿 / 敌方红），不按「技能来源」上色。 */
+.gb-skill-cast{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;
+  align-items:center;gap:2px;max-width:76vw;pointer-events:none;animation:gbCastFade .9s var(--ease-out) forwards}
+.gb-skill-cast-ico{display:block;width:48px;height:48px;padding:4px;border-radius:var(--rad-full);
+  background:rgba(15,23,42,.72);border:2px solid var(--cast-tone);box-shadow:0 0 12px var(--cast-tone)}
+.gb-skill-cast.tone-ally{--cast-tone:var(--green)}
+.gb-skill-cast.tone-enemy{--cast-tone:var(--red)}
+.gb-skill-cast-name{font-size:var(--fs-md);font-weight:800;color:#fff;white-space:nowrap;
+  text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.75)}
+/* 只在 opacity 上淡入淡出（生存期 = GB_FX_LIFE=900ms，与动画时长对齐） */
+@keyframes gbCastFade{0%{opacity:0}18%{opacity:1}70%{opacity:1}100%{opacity:0}}
+/* ⚠️ @keyframes bubblePop 已无消费者：旧 showSkillBubble 在 v2.4.2 并入 gbShowSkillCast，
+   这里**刻意保留定义不删**（本轮只新增/微调特效规则，不做与特效无关的删除）。 */
 @keyframes bubblePop{0%{opacity:0;transform:translateX(-50%) scale(.85)}60%{opacity:1;transform:translateX(-50%) scale(1.04)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
 @keyframes gbHit{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}45%{transform:translateX(5px)}70%{transform:translateX(-3px)}}
 @keyframes gbLowPulse{0%,100%{opacity:1}50%{opacity:.5}}
 @keyframes gbWin{0%{opacity:0;transform:scale(.9)}100%{opacity:1;transform:scale(1)}}
-/* v2.1.7 群战单位卡：状态用类名表达，便于统一维护与无障碍 */
-.gb-unit{position:relative;transition:border-color var(--dur-1) var(--ease-std),box-shadow var(--dur-1) var(--ease-std)}
+/* v2.1.7 群战单位：状态用类名表达，便于统一维护与无障碍。
+   v2.4.2：这里只剩「芯片底座」——不再有卡片外壳（无边框、无卡片底、无内边距），
+   外壳语汇已迁到 .gb-arena-unit（见下方「战场化布局」一节）。 */
+.gb-unit{position:relative;transition:transform var(--dur-2) var(--ease-out),box-shadow var(--dur-1) var(--ease-std)}
 .gb-unit.gb-hit{animation:gbHit .4s var(--ease-std)}
 .gb-unit.gb-low .gb-hp-fill{animation:gbLowPulse 1.2s ease-in-out infinite}
-/* 阵亡用灰度 + 删除线，不用低透明度（opacity 会让文字低于对比度要求） */
+/* 阵亡用灰度 + 删除线，不用低透明度（opacity 会让文字低于对比度要求）；
+   v2.4.2：阵亡**不再折叠成一行**，就是同一枚芯片加 .gb-dead —— 头像仍保留，
+   否则「哪只宠物/哪个敌人没了」只能靠读名字。 */
 .gb-unit.gb-dead{filter:grayscale(1)}
 .gb-unit.gb-dead .gb-name{text-decoration:line-through;color:var(--text3)}
-.gb-hp-wrap{height:16px;background:var(--surface-3);border-radius:var(--rad-full);overflow:hidden;position:relative;margin-bottom:6px}
+/* 血条：v2.4.2 起是芯片底部的细长条（16px 粗条 → 5px），类名保持不变
+   （.gb-hp-wrap / .gb-hp-fill 是既有契约，.gb-hp-fill 的 transition 必须保留）。
+   详情面板里复用的那条更粗（见 .det-unit .gb-hp-wrap），数字写在条内。 */
+.gb-hp-wrap{height:5px;width:100%;background:var(--surface-3);border-radius:var(--rad-full);overflow:hidden;position:relative}
 .gb-hp-fill{height:100%;border-radius:var(--rad-full);transition:width var(--dur-2) var(--ease-out)}
-.gb-hp-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:600;color:var(--text)}
+.gb-hp-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:600;color:var(--text);white-space:nowrap}
 .gb-badge{font-size:var(--fs-2xs);padding:2px 6px;border-radius:var(--rad-full);background:var(--surface-2);border:1px solid var(--bd);white-space:nowrap}
 .gb-badge.cd{color:var(--orange);border-color:var(--orange)}
 .gb-badge.ready{color:var(--green);border-color:var(--green)}
@@ -587,46 +621,19 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-tag{font-size:var(--fs-3xs);padding:1px 6px;border-radius:var(--rad-full);background:var(--surface-2)}
 .gb-tag.pet{color:var(--purple)}
 .gb-hint{margin-top:var(--sp-3);font-size:var(--fs-2xs);color:var(--text3);text-align:center}
-/* 单位卡（原先是内联样式，v2.1.14 收进 CSS 便于加行动者态） */
-.gb-unit{position:relative;border:1px solid var(--bd);border-radius:var(--rad-lg);padding:8px 12px;margin-bottom:6px;background:var(--surface);cursor:pointer;text-align:left;-webkit-tap-highlight-color:transparent;transition:border-color var(--dur-1) var(--ease-std),box-shadow var(--dur-1) var(--ease-std)}
-.gb-unit.gb-hit{animation:gbHit .4s var(--ease-std)}
-.gb-unit.gb-low .gb-hp-fill{animation:gbLowPulse 1.2s ease-in-out infinite}
-/* 阵亡用灰度 + 删除线，不用低透明度（opacity 会让文字低于对比度要求） */
-.gb-unit.gb-dead{filter:grayscale(1)}
-.gb-unit.gb-dead .gb-name{text-decoration:line-through;color:var(--text3)}
-/* v2.2.27 WP-I：阵亡单位折叠成一行 —— 此前 5 个阵亡单位各占 ~125px（血条/属性/技能全在），
-   一屏全是"已阵亡"。折叠后只留「💀 名字 · 已阵亡」，卡片自身仍是 role=button，
-   故整卡高度锁在 --touch-min(44px)：padding 归零、内层行自带 44px 最小高度。 */
-.gb-unit.gb-dead{padding:0}
-.gb-dead-line{display:flex;align-items:center;gap:8px;min-height:var(--touch-min);padding:0 12px}
-.gb-dead-name{flex:1;min-width:0;font-size:var(--fs-base);font-weight:700;color:var(--text3);text-decoration:line-through;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gb-dead-tag{flex-shrink:0;font-size:var(--fs-2xs);color:var(--text3);border:1px solid var(--bd);border-radius:var(--rad-full);padding:1px 8px}
-/* 当前行动者：左侧强调条 + 呼吸高亮 + 文字标签（三重表达，不靠颜色单独传达）。
-   v2.4.0 改造 2：补 z-index:2，让行动卡压在相邻卡之上（光环不被邻居的圆角切掉）。
-   ⚠️ 这里**不用** transform:scale() 放大 —— #gbPane 是 overflow-y:auto 的滚动裁剪容器，
-      放大后卡片会横向溢出并顶出横向滚动条（实测）。 */
-.gb-unit.gb-acting{border-color:var(--orange);background:rgba(var(--brand-rgb),.08);box-shadow:0 0 0 1px var(--orange),0 0 14px rgba(var(--brand-rgb),.28);z-index:2}
-.gb-unit.gb-acting::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 4px 4px 0;background:var(--orange);animation:gbActingPulse 1.1s ease-in-out infinite}
+/* 单位底座（v2.4.2）：.gb-unit 现在只是「可点的战场芯片」——
+   卡片外壳（border / border-radius / background / padding / margin-bottom）全部删除，
+   芯片语汇见下方「v2.4.2 战场化布局」一节（.gb-arena-unit）。
+   留着 .gb-unit 这个类名是因为详情点击绑定与 .gb-hit 动画都按它选择（既有契约）。 */
+.gb-unit{cursor:pointer;text-align:left;-webkit-tap-highlight-color:transparent}
 @keyframes gbActingPulse{0%,100%{opacity:1}50%{opacity:.3}}
-.gb-acting-tag{font-size:var(--fs-3xs);font-weight:800;color:var(--orange);border:1px solid var(--orange);border-radius:var(--rad-full);padding:1px 7px;white-space:nowrap}
-.gb-row1{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
-.gb-name{flex:1;min-width:0;font-size:var(--fs-lg);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* v2.2.27 WP-I：血条行与属性行合并成一行（此前是两行：血条 16px + 属性 17px）。
-   血条 flex:1 占满剩余宽度，属性靠右；属性过宽时整组换到下一行（flex-wrap），
-   血条有 min-width 兜底（≥104px），「当前/上限」数值不会被挤到条外。 */
-.gb-hp-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:4px}
-.gb-hp-wrap{flex:1 1 104px;min-width:104px;height:16px;background:var(--surface-3);border-radius:var(--rad-full);overflow:hidden;position:relative}
-.gb-hp-fill{height:100%;border-radius:var(--rad-full);transition:width var(--dur-2) var(--ease-out)}
-.gb-hp-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:600;color:var(--text);white-space:nowrap}
-.gb-stats{display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);flex-wrap:wrap;flex:0 1 auto;min-width:0}
-.gb-stat.soul{color:var(--purple)}
-/* v2.1.15：属性修正标记 —— 状态修正真正生效后，卡片要能看出哪一项被改了 */
+/* 芯片名字：最多 4 字（JS 已截断），CSS 省略号兜底；完整名字在 title / aria-label 里 */
+.gb-name{max-width:100%;font-size:var(--fs-xs);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* v2.1.15：属性修正标记 —— 属性只在详情面板显示，详情沿用同一套 ▲▼ 语汇 */
 .gb-mod{font-size:var(--fs-3xs);font-weight:700;margin-left:2px}
 .gb-mod.up{color:var(--green)}
 .gb-mod.down{color:var(--red)}
 .gb-dim{font-size:var(--fs-xs);color:var(--text3)}
-/* 技能 / 天赋标签行（原先是「⏳最小冷却」+「✨×N」） */
-.gb-row4{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px}
 .gb-chip{font-family:inherit;font-size:var(--fs-2xs);line-height:1.4;padding:4px 8px;border-radius:var(--rad-full);border:1px solid var(--bd);background:var(--surface-2);color:var(--text2);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .gb-chip:active{transform:scale(.96)}
 .gb-chip.sk.ready{border-color:var(--green);color:var(--green)}
@@ -648,11 +655,9 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-ovw-side.ally .gb-ovw-bar>i{background:var(--green)}
 .gb-ovw-side.enemy .gb-ovw-bar>i{background:var(--red)}
 
-/* ========== v2.4.0 改造 1 / 2：行动横幅 · 行动焦点 ==========
-   横幅是吸顶区第二行（.gb-ctrl 之后、.gb-tabs 之前，**不在** #gbPane 滚动容器内）。
-   硬性约束：单行 nowrap + 省略号、整条高度 ≤44px（否则 360px 首屏只剩 1 张单位卡）。
-   行动焦点：只暗化**非行动者**，上限 0.75（依据既有决策：更低的透明度会让 12px 弱化文字
-   跌破 WCAG AA 对比度）；行动者本身靠既有光环 + ::before 强调条表达，不做放大。 */
+/* ========== v2.4.0 改造 1：行动横幅 ==========
+   横幅是吸顶区第二行（.gb-ctrl 之后、.gb-arena-wrap 与 .gb-tabs 之前，**不在** #gbPane 内）。
+   硬性约束：单行 nowrap + 省略号、整条高度 ≤44px（否则 360px 首屏只剩一行芯片）。 */
 .gb-banner{flex-shrink:0;display:flex;align-items:center;gap:8px;min-height:32px;max-height:44px;padding:2px 0 6px;overflow:hidden}
 .gb-banner-chip{flex-shrink:0;width:4px;height:20px;border-radius:var(--rad-full);background:var(--text3)}
 .gb-banner.tone-ally .gb-banner-chip{background:var(--green)}
@@ -660,7 +665,84 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-banner.tone-terrain .gb-banner-chip{background:var(--purple)}
 .gb-banner.tone-opening .gb-banner-chip{background:var(--yellow)}
 .gb-banner-text{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.gb-focus .gb-unit:not(.gb-acting):not(.gb-dead){opacity:.75}
+
+/* ========== v2.4.2 战场化布局：上下对阵舞台（广场常驻 + 日志抽屉） ==========
+   DOM 顺序（自上而下）：
+     .gb-ctrl → .gb-banner → .gb-arena-wrap(.gb-arena) → .gb-tabs → .gb-pane
+   广场**必须**在 #gbPane 之外：.gb-pane 是 overflow-y:auto 的滚动裁剪容器，
+   芯片的行动者放大 transform:scale(1.1) 放在里面会横向溢出、顶出横向滚动条
+   （v2.4.0 实测踩过这个坑），而 .gb-arena 是 overflow:hidden —— 放大被它安静裁掉。
+   行动焦点 .gb-focus 也随之从 #gbPane 迁到 #gbArena（JS 侧同步）。 */
+.gb-arena-wrap{flex:0 1 auto;display:flex;flex-direction:column;min-height:0}
+.gb-arena{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:2px}
+/* ⚠️ 为什么行高是 max-height 而不是 min-height（v2.4.2 实测修正）：
+   原写法 min-height:20vh 会在**矮屏 + 密阵**下把 3 行硬撑到 3×128=384px（360×640 时广场只有 ~450px 可用，
+   加上中央区 96px 就超出），`.gb-arena{overflow:hidden}` 直接把**最后一行（我方）裁掉** ——
+   实测 5 我 + 3 敌时 `inj3` 芯片被裁 37px。
+   现在：行以**内容高度**为基准、在有空间时长到约 20vh（max-height 封顶），矮屏时自动只占内容高度 → 一个都不裁。 */
+.gb-arena-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;padding:6px 10px;flex:1 1 auto;max-height:var(--gb-arena-h)}
+/* 阵营小标题占满一整行（作为 row 的第一行），语义标签「🔴 敌方」「🟢 我方 / 🐾 宠物 ×N」保留 */
+.gb-arena-row .gb-side-hdr{flex-basis:100%;justify-content:center;margin:0}
+.gb-arena-row .gb-side-hdr.enemy{margin-top:0}
+.gb-arena-mid{height:var(--gb-mid-h);position:relative}
+/* 焦点只作用于广场里的芯片：暗化非行动者（行动者另有光环 + 强调条 + 放大） */
+.gb-focus .gb-arena-unit:not(.gb-acting):not(.gb-dead){opacity:.5}
+/* 当前行动者：放大 + 光环 + 左侧强调条（三重表达，不靠颜色单独传达）。
+   ⚠️ 放大只在 .gb-arena（overflow:hidden）内 —— 见本节开头，
+      绝不能迁进 .gb-pane，否则必然出现横向滚动条（v2.4.0 实测）。 */
+.gb-unit.gb-arena-unit.gb-acting{transform:scale(1.1);transform-origin:50% 100%;z-index:2;
+  box-shadow:0 0 0 1px var(--orange),0 0 14px rgba(var(--brand-rgb),.28)}
+.gb-unit.gb-arena-unit.gb-acting::before{content:'';position:absolute;left:-2px;top:6px;bottom:6px;width:3px;
+  border-radius:0 3px 3px 0;background:var(--orange);animation:gbActingPulse 1.1s ease-in-out infinite}
+/* 战场芯片：只有「头像 / 名字 / 血条 / 状态」四件信息。
+   无卡片外壳（无边框、无卡片底、小圆角、紧凑内边距）；
+   触摸目标不可缩水：min-width:52px + min-height:var(--touch-min)=44px。 */
+.gb-arena-unit{display:flex;flex-direction:column;align-items:center;gap:2px;
+  width:var(--gb-unit-w);min-width:52px;min-height:var(--touch-min);padding:4px 2px;
+  border-radius:var(--rad-sm);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.gb-arena-unit .gb-arena-ico{display:inline-flex;align-items:center;justify-content:center;
+  width:var(--gb-unit-ico);height:var(--gb-unit-ico);flex-shrink:0;font-size:var(--fs-lg);line-height:1}
+/* 宠物图标由 JS 按 16px 生成（GB_PET_ICO_SIZE，见 v2.3.3 一节），
+   芯片里放大到 --gb-unit-ico(32px) —— 2 倍整数缩放 + .pet-ico 的 image-rendering:pixelated，
+   不会糊；改这里不影响行动顺序条（那条不套 .gb-arena-ico）。 */
+.gb-arena-ico .pet-ico{width:var(--gb-unit-ico);height:var(--gb-unit-ico)}
+.gb-arena-ico-txt{font-weight:800}
+.gb-arena-unit .gb-hp-wrap{width:100%;height:5px;flex:0 0 auto}
+/* 状态区：最多 3 个图标 + 「+N」，高度留 14px 免得状态增减时芯片抖动 */
+.gb-arena-st{display:flex;align-items:center;justify-content:center;gap:2px;min-height:14px;font-size:var(--fs-2xs);line-height:1}
+.gb-arena-st-more{color:var(--text3);font-weight:700}
+/* 敌我名字各用自己的阵营色（旧实现是内联 style，v2.4.2 收进 CSS） */
+.gb-arena-enemy .gb-arena-unit .gb-name{color:var(--red)}
+.gb-arena-ally .gb-arena-unit .gb-name{color:var(--green)}
+/* 极密阵（芯片总数 ≥7，最多就是 5 我 + 3 敌 —— 实测 240 个小关敌人最多 3 个）：
+   芯片与头像各缩一档，保证 360×640 上 8 个芯片也一个不裁。类名由 renderGroupBattlePane 按总数挂。 */
+.gb-arena-dense{--gb-unit-w:56px;--gb-unit-ico:24px}
+.gb-arena-dense .gb-arena-unit{padding:3px 1px}
+.gb-arena-dense .gb-arena-st{min-height:12px}
+/* 战斗页下方那一行：阵容速览（提示沿用既有 .gb-hint） */
+.gb-lineup{font-size:var(--fs-xs);color:var(--text2);text-align:center;font-variant-numeric:tabular-nums}
+/* v2.4.2：开场刷屏的「一句话」（见 gbOpeningSummary）—— 把 5 条同技能的开场事件压成一行，
+   用紫色与阵容速览区分（它讲的是「开场发生过什么」，不是人数）。 */
+.gb-lineup-open{margin-top:2px;color:var(--purple)}
+/* 日志抽屉打开态：日志面板吃 58vh，广场压到快照高度（--gb-arena-h-s / --gb-mid-h-s）。
+   ⚠️ .gb-arena-wrap 允许收缩（flex-shrink:1）—— 58vh + 压缩后的广场 + 控制条/横幅/页签
+      在窄屏上会超出视口，广场自带 overflow:hidden，让它先让位才能保证日志面板完整可用。 */
+/* 日志抽屉打开态：日志面板吃 52vh（v2.4.2 实测从 58vh 收到 52vh —— 58vh 时广场只剩 185px，
+   而「行动顺序条 + 敌方行 + 我方行」需要 ~194px → 我方芯片被裁 20px；52vh 留出余量后一个都不裁）。
+   ⚠️ .gb-arena-wrap 允许收缩（flex-shrink:1）—— 抽屉 + 压缩后的广场 + 控制条/横幅/页签在窄屏会超视口，
+      广场自带 overflow:hidden，让它先让位才能保证日志面板完整可用。 */
+.battle-overlay.gb-log-open .gb-pane{flex:0 0 auto;height:52vh}
+.battle-overlay.gb-log-open .gb-arena-row{max-height:var(--gb-arena-h-s)}
+/* 抽屉展开时广场只剩 ~190px（58vh 归日志）：两行芯片 + 顺序条需要 ~215px → 实测**我方被裁 30px**。
+   故抽屉态直接复用极密阵的芯片尺寸（56/24），并把行的内边距收紧，保证抽屉开着也一个芯片都不裁。
+   中央区此时被压到 0（空间全让给日志）—— 特效已由 gbShowSkillCast / playAttackFeedback 主动跳过。 */
+.battle-overlay.gb-log-open .gb-arena{--gb-unit-w:56px;--gb-unit-ico:24px}
+.battle-overlay.gb-log-open .gb-arena-row{padding:3px 8px;gap:8px}
+.battle-overlay.gb-log-open .gb-arena-mid{flex-basis:auto}
+.battle-overlay.gb-log-open .gb-arena-mid{height:var(--gb-mid-h-s)}
+/* 详情面板（v2.4.2 从芯片移出的信息在这里补齐）：头像 + 血条 +「当前/上限」数字 */
+.det-unit{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2)}
+.det-unit .gb-hp-wrap{flex:1;min-width:0;height:18px}
 /* 行动顺序条：一眼看清接下来谁出手 */
 .gb-order{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:6px 2px;margin-bottom:8px;-webkit-overflow-scrolling:touch}
 .gb-order-chip{flex-shrink:0;font-size:var(--fs-2xs);padding:4px 8px;border-radius:var(--rad-full);background:var(--surface-2);border:1px solid var(--bd);white-space:nowrap}

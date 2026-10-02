@@ -540,11 +540,11 @@ function _groupStep(){
   // 攻击反馈动画：解析本次行动的日志，高亮受击目标 + 伤害飘字
   if (step.unit) playAttackFeedback(_groupBattle, step)
   if(_groupBattle.done){_groupDone();return}
-  // 技能气泡
+  // 技能气泡 → v2.4.2 起并入中央特效区的施法特效（图标 + 一句话），见 gbShowSkillCast
   var lastLog = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1] : null
   var bubble = lastLog ? lastLog.events.find(function(e){ return e.type==='bubble'; }) : null
   if (bubble) {
-    showSkillBubble(bubble)
+    gbShowSkillCast(_groupBattle, bubble)
     if (_groupMode==='manual') return
     _groupTimer=setTimeout(_groupStep,900/_groupSpeed)   // 气泡停顿
     return
@@ -639,9 +639,11 @@ function gbFxLayer(){
   document.body.appendChild(el)
   return el
 }
-/* 清空特效层（#gbClose 与 _groupDone 都调 —— 否则打完还飘着上一场的数字） */
+/* 清空特效层（#gbClose 与 renderGroupOverlay 都调 —— 否则打完还飘着上一场的数字）
+   v2.4.2：施法特效也挂在 #gbFx 上，只清 innerHTML 会漏掉对它的引用（见 gbCastClear）。 */
 function gbFxClear(){
   var el=(typeof document!=='undefined')?document.getElementById('gbFx'):null
+  gbCastClear()
   if(el)el.innerHTML=''
 }
 
@@ -670,7 +672,18 @@ function gbEventTargetName(e){
   return null
 }
 
-/* 事件 → 单位卡（优先 targetId；场地事件退回文案里的名字） */
+/* 事件 → 单位卡（优先 targetId；场地事件退回文案里的名字）
+
+   v2.4.2 修复一个**已实际失效**的回退分支：
+   旧实现用 `cards[i].textContent.indexOf(name)` 去匹配，而芯片名字现在最多显示 4 字
+   （`精英·狂战` → 芯片文字 `精英·狂`、`Boss·暗龙` → `Boss`）→ 完整名永远 indexOf 不到，
+   场地事件（`受碎石伤害` / `被闪电击中`，日志里**没有 targetId**）因此不再有受击高亮。
+   现在按**完整名字**精确匹配：芯片在 renderGroupUnit 里带了 `data-name="完整名"`。
+   ⚠️ 两个细节不能省：
+     ① 两边都要 gbStripLeadEmoji —— 场地事件文案里抠出来的名字**不带**前导 emoji
+        （`🪨 🧑 你 受碎石伤害 40` → 抠出 `你`），而 data-name 是 `🧑 你`；
+        这与 gbUnitIndex 的 byShort 索引是同一套口径。
+     ② 不要再退回「拿显示文字 indexOf」—— 显示文字是截断后的，判据本身就是错的。 */
 function gbCardForEvent(ov, gb, e){
   if(!ov)return null
   if(e&&e.targetId){
@@ -679,37 +692,73 @@ function gbCardForEvent(ov, gb, e){
   }
   var name=gbEventTargetName(e)
   if(!name)return null
+  var key=gbStripLeadEmoji(name)
   var cards=ov.querySelectorAll('.gb-unit')
   for(var i=0;i<cards.length;i++){
-    if(cards[i].textContent.indexOf(name)>-1)return cards[i]
+    var el=cards[i]
+    var full=(el.getAttribute&&el.getAttribute('data-name'))||''
+    if(full&&(full===name||full===key||gbStripLeadEmoji(full)===key))return el
+    /* 兜底：万一将来有别的渲染路径产出不带 data-name 的 .gb-unit。
+       ⚠️ 完整名的 title 在**子元素 .gb-name** 上（根节点只有 aria-label="<完整名> 详情"），
+          读根节点的 title 会恒为空 —— 这里必须下钻一层。 */
+    var nmEl=(el.querySelector?el.querySelector('.gb-name'):null)
+    var tt=(nmEl&&nmEl.getAttribute&&nmEl.getAttribute('title'))||''
+    if(tt&&(tt===name||tt===key||gbStripLeadEmoji(tt)===key))return el
   }
   return null
 }
 
-/* 飘字：居中定位（left/top 已含 translateX(-50%) 的对齐基准，见 .gb-fx-float 与 floatUpC） */
-function gbFxFloat(card, text, color, big){
+/* 飘字：居中定位（left/top 已含 translateX(-50%) 的对齐基准，见 .gb-fx-float 与 floatUpC）
+
+   v2.4.2：第一个参数 el 的语义从「单位卡」变成「**中央特效区元素**」（#gbArenaMid）——
+   ⚠️ 函数签名与「函数体内出现 getBoundingClientRect」都是既有断言，不得改名/不得换写法。
+   第 5 参 slot 是**同一步内多条飘字的错位槽位**（0/1/2/3）：
+   同一步的几条飘字锚在**同一个**中央区矩形上，不错位就会完全叠成一坨
+   （×1 时步间隔 700ms、飘字生存期 900ms —— 上一条还没飞完，下一条就落下来了）。
+   ⚠️ 不传 slot（或传 0）时行为与加槽位之前**逐像素一致**（测试只查签名，不受影响）。
+   ⚠️ 错位只能用 left/top 表达：transform 已被 floatUpC 的每一帧占用（见 index.css 的说明），
+      用 transform 错位会被关键帧覆盖掉。 */
+var GB_FX_SLOT_OFF=[[0,0],[-46,-18],[46,-18],[0,-36]]   /* 中 / 左上 / 右上 / 正上 —— 对称铺开 */
+function gbFxFloat(card, text, color, big, slot){
   var layer=gbFxLayer()
   if(!layer||!card||typeof card.getBoundingClientRect!=='function')return
   var r
   try{ r=card.getBoundingClientRect() }catch(e){ console.warn('[group] 飘字定位失败',e); return }
   if(!r||!r.width)return
+  var off=GB_FX_SLOT_OFF[(typeof slot==='number'&&slot>0)?(slot%4):0]
   var el=document.createElement('div')
   el.className='gb-fx-float'+(big?' big':'')
   el.textContent=text
-  el.style.cssText='left:'+Math.round(r.left+r.width/2)+'px;top:'+Math.round(r.top+r.height/2)+'px'
+  /* v2.4.2：飘字与施法特效同在中央区，会互压（--gb-mid-h 只有 15vh）→ 上下分层：
+     施法特效占中央区**上 28%**、飘字占**下 80%**（都按中央区自身 rect 取比例，日志展开
+     压成 8vh 时按比例一起缩，不会跑到区外）。留白硬约束见 gbShowSkillCast。 */
+  el.style.cssText='left:'+Math.round(r.left+r.width/2+off[0])+'px;top:'+Math.round(r.top+r.height*0.8+off[1])+'px'
     +';color:'+color+';font-size:'+(big?'var(--fs-3xl)':'var(--fs-2xl)')
   layer.appendChild(el)
   setTimeout(function(){ if(el&&el.parentNode&&el.parentNode.removeChild)el.parentNode.removeChild(el) },GB_FX_LIFE)
 }
 
-/* 攻击反馈动画：解析本次行动的日志，受击目标闪烁 + 伤害/治疗飘字（全部挂 #gbFx） */
+/* 攻击反馈动画：解析本次行动的日志，受击目标闪烁 + 伤害/治疗飘字（全部挂 #gbFx）
+
+   v2.4.2：飘字锚点从「单位芯片」改成**中央特效区** `#gbArenaMid`（数字不再贴在芯片旁边）；
+   但「谁挨打了」不能丢 —— 受击目标**仍然闪芯片**（.gb-hit），只是不再在芯片旁出数字。
+   中央区理论上必然存在（renderGroupBattlePane 固定产出）；真缺了就如实告警并**不出飘字**，
+   绝不因此抛错中断战斗推进（这条路径在自动推进里，抛错会直接卡死整场）。 */
 function playAttackFeedback(gb, step) {
   var ov = document.getElementById('battleOverlay')
   if (!ov) return
+  /* 日志抽屉展开时不飘字（也不放施法特效，见 gbShowSkillCast）：
+     两者都锚在中央特效区，而抽屉展开后中央区被压到 8vh，特效会直接画在日志正文上（实测截图）。
+     打日志就是在复盘，不需要打击反馈；受击闪烁也一并跳过（它同样是为了「看战斗」）。
+     ⚠️ 写成防御式：测试桩的 #battleOverlay 没有 classList（见 test-group-ui-presentation §13）。 */
+  if (ov.classList && typeof ov.classList.contains === 'function' && ov.classList.contains('gb-log-open')) return
+  var mid = (typeof document!=='undefined') ? document.getElementById('gbArenaMid') : null
+  if (!mid) console.warn('[group] 找不到中央特效区 #gbArenaMid —— 本步只闪芯片、不出飘字')
   var logs = (gb && gb.log) ? gb.log : []
   var lastLog = logs.length ? logs[logs.length-1] : null
   if (!lastLog) return
   var evs = lastLog.events || []
+  var slot = 0     /* 本步飘字的错位槽位：每出一条 +1（见 gbFxFloat 第 5 参） */
   evs.forEach(function(e, i){
     /* 暴击判定靠**紧邻的前一个**事件（伤害文案里没有「暴击」二字） */
     var hit = gbParseHit(e, i > 0 ? evs[i-1] : null)
@@ -719,26 +768,138 @@ function playAttackFeedback(gb, step) {
       card.classList.add('gb-hit')
       setTimeout(function(){ card.classList.remove('gb-hit') }, 500)
     }
+    if (!mid) return
     var color = (hit.kind === 'heal') ? 'var(--green)' : gbHitColor(gb, e, hit.amount)
     var text = (hit.kind === 'heal' ? '+' : '-') + hit.amount
     if (hit.crit) text = '💥' + text
-    gbFxFloat(card, text, color, hit.crit)
+    gbFxFloat(mid, text, color, hit.crit, slot)
+    slot++
   })
 }
 
-/* 技能对话气泡（停顿效果） */
-function showSkillBubble(bubble) {
-  var ov = document.getElementById('battleOverlay')
-  if (!ov) return
-  var old = document.getElementById('skillBubble')
-  if (old) old.remove()
-  var el = document.createElement('div')
-  el.id = 'skillBubble'
-  el.style = 'position:absolute;left:50%;top:38%;transform:translateX(-50%);background:rgba(15,23,42,.92);border:2px solid var(--orange);border-radius:16px;padding:10px 18px;font-size:var(--fs-md);font-weight:600;color:#fff;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.3);animation:bubblePop .3s ease;max-width:80%;text-align:center;pointer-events:none'
-  el.innerHTML = bubble.text
-  ov.appendChild(el)
-  // 气泡自动消失（3 秒）
-  setTimeout(function(){ if (el && el.parentNode) el.remove() }, 2600)
+/* ============================================================
+   v2.4.2 技能施法特效：中央区的「图标 + 一句话」
+
+   为什么把旧的 showSkillBubble（把 #skillBubble 追加进 #battleOverlay 并写死 top:38%）
+   整体并入这里：气泡本来就是「施法停顿」的视觉表达，而中央特效区 #gbArenaMid 正是
+   舞台化布局留出来的落点 —— 两套并存会出现「气泡浮在广场上方 + 特效另有其一」的重复表达。
+
+   技能身份**唯一权威来源**是 `bubble.skillId`（主控实测：每次施法都带、非 bubble 事件 0 条带），
+   不解析文案、也不按技能名反查 —— 名字是展示层文案，id 才是稳定键。
+
+   ⚠️ 元素必须挂**常驻层 #gbFx**（与飘字同一层），只用 #gbArenaMid 的 rect 取坐标：
+      renderGroupOverlay 每步 innerHTML 重建整个 overlay，挂进 #gbArenaMid 当子节点会被直接冲掉。
+   ============================================================ */
+var _gbCastEl=null    /* 上一条施法特效元素：新施法必须先清掉（#gbFx 是常驻层，不清会叠字） */
+
+/* 只摘掉施法特效（保留飘字）—— 供 gbShowSkillCast 的新旧交替与 gbFxClear 复用 */
+function gbCastClear(){
+  if(_gbCastEl&&_gbCastEl.parentNode&&_gbCastEl.parentNode.removeChild)_gbCastEl.parentNode.removeChild(_gbCastEl)
+  _gbCastEl=null
+}
+
+/* 技能中文名：先查 SKILLS（含 p_ 前缀的宠物技能），查不到再兜底查玩家技能表。
+   两条都拿不到就返回空串 —— 宁可只显示图标，也不编造名字
+   （玩家技能注册在 PLAYER_SKILLS、不在 SKILLS；v2.4.0 的玩家攻击技能路径目前不产生
+     bubble，故这条兜底当前不可达，属防御性写法）。 */
+function gbSkillName(skillId){
+  if(!skillId)return ''
+  var d=(typeof SKILLS!=='undefined'&&SKILLS)?SKILLS[skillId]:null
+  if(d&&d.name)return String(d.name)
+  if(typeof getPlayerSkill==='function'){
+    try{
+      var p=getPlayerSkill(skillId)
+      if(p&&p.name)return String(p.name)
+    }catch(e){ console.warn('[group] 玩家技能名兜底查询失败（忽略，只显示图标）',e) }
+  }
+  return ''
+}
+
+/* 施法者单位：bubble 里只有行动者**名字**（引擎日志没给 id）→ 走 gbUnitIndex 的
+   byName / byShort 反查（byShort 是剥掉前导 emoji 的索引，与场地事件同一套口径）。
+   查不到返回 null —— 调用方按「非玩家技能 / 我方绿」处理，不猜。 */
+function gbCastActor(gb, bubble){
+  if(!gb||!bubble||!bubble.unit)return null
+  var idx=gbUnitIndex(gb)
+  return idx.byName[bubble.unit]||idx.byShort[gbStripLeadEmoji(bubble.unit)]||null
+}
+
+/* 本步的事件数组（bubble 与它的结算事件在**同一条日志条目**的同一个 events 里）。
+   gbShowSkillCast 的外部调用方只传 (gb, bubble) → 由这里兜底取「最后一条日志」。 */
+function gbStepEvents(gb){
+  var logs=(gb&&gb.log)||[]
+  var last=logs.length?logs[logs.length-1]:null
+  return (last&&last.events)||[]
+}
+
+/* 一句话概括本步（纯函数，不碰 DOM；便于直测）
+
+   ⚠️ 只用**数据派生**的句子，禁止编造动词/数值：
+     多目标 + buff/status/heal  → 「<行动者> 对全队施加了 <技能名>」
+     多目标 + 伤害类            → 「<行动者> 对 <N> 个目标使用了 <技能名>」
+     单目标（或查不到目标）      → 「<行动者> 使用了 <技能名>」
+   为什么单目标不返回空串（任务书允许二选一）：空串会让调用方退回「只有技能名」，
+   把行动者上下文丢掉；而中央区的一句话正是用来交代「谁在做什么」的，
+   且这句只用了「使用了」这类**不引入新事实**的表述，不比技能名多说什么。
+   ⚠️ 目标数只数**不同 targetId**（同一目标被多段命中仍算 1 个）；
+      bubble 事件本身没有 targetId，天然不参与计数。
+   ⚠️ 混合型（既有 buff/status/heal 又有伤害）走伤害分支：伤害是更硬的事实。 */
+function gbStepSummary(gb, evs, bubble){
+  if(!bubble||!bubble.skillId)return ''
+  var nm=gbSkillName(bubble.skillId)
+  if(!nm)return ''      /* 拿不到技能名：宁可不说，也不编造 */
+  var actor=gbStripLeadEmoji(bubble.unit||'')||String(bubble.unit||'')
+  var seen={}, n=0, hasApply=false, hasDmg=false
+  ;(evs||[]).forEach(function(e){
+    if(!e||!e.targetId||e.type==='bubble')return
+    if(!seen[e.targetId]){ seen[e.targetId]=1; n++ }
+    var t=e.type||''
+    if(t==='buff'||t==='status'||t==='heal')hasApply=true
+    else if(t==='damage'||t==='dot'||t==='terrain')hasDmg=true
+  })
+  if(n<2)return actor+' 使用了 '+nm
+  if(hasApply&&!hasDmg)return actor+' 对全队施加了 '+nm
+  return actor+' 对 '+n+' 个目标使用了 '+nm
+}
+
+/* 渲染一次施法特效（图标 + 一句话）到中央特效区。
+   evs 可选：不传则取最后一条日志的事件（见 gbStepEvents）。 */
+function gbShowSkillCast(gb, bubble, evs){
+  if(!bubble)return
+  var layer=gbFxLayer()
+  var mid=(typeof document!=='undefined')?document.getElementById('gbArenaMid'):null
+  /* 日志抽屉展开时不放施法特效：中央区被压到 8vh，48px 图标会骑在日志正文上（实测）。
+     防御式写法：测试桩的 #battleOverlay 没有 classList。 */
+  var ov=(typeof document!=='undefined')?document.getElementById('battleOverlay'):null
+  if(ov&&ov.classList&&typeof ov.classList.contains==='function'&&ov.classList.contains('gb-log-open'))return
+  if(!layer||!mid){ console.warn('[group] 施法特效缺少锚点（#gbFx / #gbArenaMid），本次跳过'); return }
+  var r
+  try{ r=mid.getBoundingClientRect() }catch(e){ console.warn('[group] 施法特效定位失败',e); return }
+  if(!r||!r.width)return
+  var id=bubble.skillId
+  var actor=gbCastActor(gb,bubble)
+  /* isPlayer 只决定**查哪张图标表**（skillIconKnown 的 false 分支同时吃敌方表与宠物表）：
+     我方且非宠物 = 玩家技能通道；敌方与宠物都传 false；查不到单位也传 false。 */
+  var isPlayer=!!(actor&&actor.side==='ally'&&!actor._petSpecies)
+  var ico=(id&&typeof skillIconHtml==='function')?skillIconHtml(id,48,'gb-skill-cast-ico',isPlayer):''
+  /* 未知 id（或图标模块未加载）→ 不拼 404、不留一个空壳光环，直接不渲染（宁缺勿错） */
+  if(!ico)return
+  gbCastClear()     /* 每次新施法先清上一条：不清就会在常驻层上叠字 */
+  /* 光环色按**阵营**取（友方绿 / 敌方红），不按 isPlayer ——
+     宠物技能 isPlayer=false，但宠物是我方单位，用 isPlayer 上色会把自家宠物标成敌方红。
+     查不到单位时按我方（绿）渲染：绿是中性/己方，不会把自家单位误标成敌。 */
+  var tone=(actor&&actor.side==='enemy')?'enemy':'ally'
+  var el=document.createElement('div')
+  el.className='gb-skill-cast tone-'+tone
+  /* 文案行：数据派生的一句话（多目标时把逐条刷屏压成一句）优先，退回技能名。
+     ×4 及以上不渲染文字：步进只有 87~112ms，字还没看清就被下一发盖掉，只会叠成一团。 */
+  var line=''
+  if(_groupSpeed<4)line=gbStepSummary(gb, evs||gbStepEvents(gb), bubble)||gbSkillName(id)
+  el.innerHTML=ico+(line?'<span class="gb-skill-cast-name">'+escHtml(line)+'</span>':'')
+  el.style.cssText='left:'+Math.round(r.left+r.width/2)+'px;top:'+Math.round(r.top+r.height*0.28)+'px'
+  layer.appendChild(el)
+  _gbCastEl=el
+  setTimeout(function(){ if(el&&el.parentNode&&el.parentNode.removeChild)el.parentNode.removeChild(el) },GB_FX_LIFE)
 }
 
 /* 群战结束 */
@@ -1122,15 +1283,24 @@ function renderGroupOverlay(show){
     +'</div>'
   /* v2.4.0 改造 1：行动横幅 —— 吸顶区（.gb-ctrl 之后、.gb-tabs 之前，绝不在 #gbPane 内） */
   h+=renderGroupActionBanner(gb)
-  // v2.1.14 双 Tab（战斗 / 日志）
+  /* v2.4.2 战场化：广场（上下对阵舞台）常驻在 #gbPane **之外**。
+     为什么必须在外：.gb-pane 是 overflow-y:auto 的滚动裁剪容器，行动者芯片的
+     transform:scale(1.1) 一旦发生在里面就会横向溢出、顶出横向滚动条（v2.4.0 实测踩过）；
+     广场自带 overflow:hidden，放大被它安静地裁掉。 */
+  h+='<div class="gb-arena-wrap">'+renderGroupBattlePane(gb)+'</div>'
+  // v2.1.14 双 Tab（战斗 / 日志）—— v2.4.2 起它同时是「日志抽屉」的把手
   h+='<div class="gb-tabs" role="tablist" aria-label="战斗视图">'
     +'<button class="gb-tab'+(_gbTab==='battle'?' active':'')+'" data-gbtab="battle" role="tab" aria-selected="'+(_gbTab==='battle')+'">⚔️ 战斗</button>'
     +'<button class="gb-tab'+(_gbTab==='log'?' active':'')+'" data-gbtab="log" role="tab" aria-selected="'+(_gbTab==='log')+'">📜 日志<span class="gb-tab-n">'+gbLogEntries(gb).length+'</span></button>'
     +'</div>'
-  // 页签内容（各自独立滚动，日志页不再挤在 300px 里）
+  /* 页签内容（各自独立滚动）：战斗页只留「一行阵容速览 + 提示」——单位芯片已上移到广场；
+     日志页铺满抽屉。⚠️ 战斗进行时**不自动**切到日志页（_gbTab 只由用户点击改变）。 */
   h+='<div class="gb-pane" id="gbPane">'
-    +(_gbTab==='log' ? renderGroupLogPane(gb) : renderGroupBattlePane(gb))
+    +(_gbTab==='log' ? renderGroupLogPane(gb) : gbLineupHtml(gb))
     +'</div>'
+  /* v2.4.2 日志抽屉：打开态挂在 overlay **根**上 —— CSS 用它把日志面板拉到 58vh、
+     广场压到快照高度（--gb-arena-h-s / --gb-mid-h-s）；关掉时同步摘掉该类。 */
+  if(ov.classList)ov.classList.toggle('gb-log-open', _gbTab==='log')
   ov.innerHTML=h
   // 事件绑定
   var closeBtn=document.getElementById('gbClose')
@@ -1168,11 +1338,12 @@ function renderGroupOverlay(show){
   var copyBtn=document.getElementById('gbCopyLog')
   // v2.1.14：滚动容器由 #gbLogBox 换成页签容器 #gbPane（日志页铺满整屏，不再挤在 300px 内）
   var pane = document.getElementById('gbPane')
-  /* v2.4.0 改造 2：行动焦点 —— 有行动者且未结束才挂 .gb-focus。
-     CSS 只做 opacity .75 的暗化（上限 0.75：既有决策见 index.css 的「低透明度会破坏对比度」），
-     行动者靠既有 box-shadow 光环 + ::before 强调条 + z-index:2 凸显，
-     **不用 transform:scale()** —— .gb-pane 是滚动裁剪容器，放大一定会溢出/出横向滚动条。 */
-  if (pane && pane.classList) pane.classList.toggle('gb-focus', !!(_groupActing && !gb.done))
+  /* v2.4.2：行动焦点从 #gbPane 迁到 #gbArena —— 只有广场里的芯片参与暗化/放大，
+     与下方的日志抽屉互不干扰（抽屉打开时广场被压缩，焦点仍只作用于广场）。
+     放大（transform:scale）由 CSS 挂在 .gb-arena-unit.gb-acting 上，
+     只在 .gb-arena 的 overflow:hidden 里生效 —— 见 index.css 的说明。 */
+  var arena = document.getElementById('gbArena')
+  if (arena && arena.classList) arena.classList.toggle('gb-focus', !!(_groupActing && !gb.done))
   if (pane && _gbTab==='log') pane.scrollTop = pane.scrollHeight
   if(copyBtn)copyBtn.addEventListener('click',function(){
     var gb2=_groupBattle
@@ -1296,21 +1467,94 @@ function logEventClass(e){
   return ''
 }
 
-/* 战斗页：行动顺序 + 我方 + 敌方 */
+/* ============================================================
+   v2.4.2 战场化：广场（上下对阵舞台）+ 下方那一行速览
+
+   为什么把单位从「垂直卡片列表」改成「上下对阵」：
+     · 对阵关系（我方在下、敌方在上）用空间位置直接表达，不用读名字就知道谁打谁；
+     · 旧卡片每张 ~125px，5 个敌人就把整屏填满，看不到战场全貌；
+     · 卡片里嵌技能/天赋按钮 → axe 的 nested-interactive 违规（点卡片 vs 点标签）。
+   广场**必须**待在 #gbPane 之外：.gb-pane 是 overflow-y:auto 的滚动裁剪容器，
+   芯片的行动者放大 transform:scale(1.1) 放在里面会横向溢出并顶出横向滚动条
+   （v2.4.0 实测过这个坑），而 .gb-arena 是 overflow:hidden → 放大被安静裁掉。
+   ============================================================ */
+
+/* 战斗页（广场）：行动顺序 + 三区（敌方 → 中央 → 我方），顺序固定不可调换。
+   ⚠️ 本函数体内**不得**出现行动横幅（横幅归 renderGroupOverlay 的吸顶区），
+      也**不得**再渲染 gb-hint 长提示（提示归下方 #gbPane）—— 有测试按源码断言。 */
 function renderGroupBattlePane(gb){
-  var h=renderGroupOrder(gb)
   var petCount=0
   gb.allies.forEach(function(u){ if(u._petSpecies) petCount++ })
-  h+='<div class="gb-side-hdr ally"><span>🟢 我方</span>'
-  /* v2.2.27 WP-I：此前按宠物数逐个渲染「🐾 宠物」标签（4 只宠 → 同一标签重复 4 次，
-     挤占头部宽度）。合并为一个「🐾 宠物 ×N」，信息不减、标签数 4 → 1。 */
-  if(petCount)h+='<span class="gb-tag pet">🐾 宠物 ×'+petCount+'</span>'
-  h+='</div>'
-  gb.allies.forEach(function(u){h+=renderGroupUnit(u,'ally')})
-  h+='<div class="gb-side-hdr enemy"><span>🔴 敌方</span></div>'
+  /* v2.4.2 实测收口：芯片总数 ≥7（最坏 = 5 我 + 3 敌；实测 240 关敌人最多 3 个）时挂 gb-arena-dense，
+     把芯片 72→56px、头像 32→24px —— 否则 360×640 上我方第二行会被 .gb-arena 的 overflow:hidden 裁掉
+     （实测 inj3 芯片越界 37px）。判据是**数据总数**，纯展示、不影响任何战斗逻辑。 */
+  var totalChips=((gb&&gb.allies)||[]).length+((gb&&gb.enemies)||[]).length
+  var h='<div class="gb-arena'+(totalChips>=7?' gb-arena-dense':'')+'" id="gbArena">'
+  /* 行动顺序条复用既有 renderGroupOrder(gb)（自带 overflow-x:auto，不参与放大） */
+  h+=renderGroupOrder(gb)
+  /* 敌方在上（对阵舞台的空间隐喻） */
+  h+='<div class="gb-arena-row gb-arena-enemy" id="gbArenaEnemy">'
+    +'<div class="gb-side-hdr enemy"><span>🔴 敌方</span></div>'
   gb.enemies.forEach(function(u){h+=renderGroupUnit(u,'enemy')})
-  h+='<div class="gb-hint">👆 点单位卡看完整属性 · 点技能/天赋标签看详细说明</div>'
+  h+='</div>'
+  /* 中央留空区：特效（飘字 / 技能名）的落点，纯占位、不放内容 */
+  h+='<div class="gb-arena-mid" id="gbArenaMid"></div>'
+  /* 我方在下；「🐾 宠物 ×N」沿用 v2.2.27 的合并口径（4 只宠不再印 4 个标签） */
+  h+='<div class="gb-arena-row gb-arena-ally" id="gbArenaAlly">'
+    +'<div class="gb-side-hdr ally"><span>🟢 我方</span>'
+    +(petCount?'<span class="gb-tag pet">🐾 宠物 ×'+petCount+'</span>':'')
+    +'</div>'
+  gb.allies.forEach(function(u){h+=renderGroupUnit(u,'ally')})
+  h+='</div>'
+  h+='</div>'
   return h
+}
+
+/* 开场刷屏的「一句话」收口。
+   起因（作者点名）：开战钩子（player-skill-hooks.js 的 onBattleStart，金身护盾）**给每个队友各推一条**
+   `🛡️ <队友名> 金身护盾 +733（吸收伤害…）` → 5 个我方单位就是 5 条同技能事件，全在 `opening` 条目里。
+   为什么走这里而不是中央区：`opening` 条目**没有 bubble 事件**，而中央区只在有施法的步渲染
+   （gbShowSkillCast 由 bubble 驱动）→ 开头这段只能由战斗页那一行文本兜住；日志页保持逐条原样（复盘需要全量）。
+
+   口径（纯数据派生，**不编造**）：
+     · 只认 `🛡️ <名> <技能名> +<数字>` 这一族（开战护盾），按**技能名**归组；
+     · 同一技能名出现 ≥2 次才输出（1 条就不必压）；
+     · 输出 `🛡️ 开场：<技能名> → 我方 N 人（合计 +S）`，N 与 S 都是**实测值**；
+     · **不写「你 对全队施加了 X」**：opening 条目的 `unit` 就是「开场」，日志里没有施法者身份，
+       据实写成 `我方 N 人` 而不是猜一个施法者。 */
+var GB_OPEN_SHIELD_RX=/^🛡️\s*(.+?)\s+(\S+?)\s*\+\s*(\d+)/
+function gbOpeningSummary(gb){
+  var logs=(gb&&gb.log)||[]
+  var entry=null
+  for(var i=0;i<logs.length;i++){ if(logs[i]&&logs[i].opening){ entry=logs[i]; break } }
+  if(!entry)return ''
+  var groups={}, order=[]
+  ;(entry.events||[]).forEach(function(e){
+    var m=(e&&e.msg)?GB_OPEN_SHIELD_RX.exec(e.msg):null
+    if(!m)return
+    var k=m[2]
+    if(!groups[k]){ groups[k]={n:0,sum:0}; order.push(k) }
+    groups[k].n++; groups[k].sum+=Number(m[3])||0
+  })
+  if(!order.length)return ''
+  var k=order[0], g=groups[k]
+  if(g.n<2)return ''
+  return '🛡️ 开场：'+escHtml(k)+' → 我方 '+g.n+' 人（合计 +'+g.sum+'）'
+}
+
+/* 广场下方那一行：阵容速览 + 开场一句话 + 操作提示（单位芯片已上移，这里不重复渲染任何芯片）。
+   为什么留这一行：广场是 overflow:hidden 的舞台，人数、开场情况与操作方式需要一个**可读的文本**出口。 */
+function gbLineupHtml(gb){
+  var allies=(gb&&gb.allies)||[]
+  var foes=(gb&&gb.enemies)||[]
+  var petCount=0
+  allies.forEach(function(u){ if(u._petSpecies) petCount++ })
+  var open=gbOpeningSummary(gb)
+  return '<div class="gb-lineup">🟢 我方 '+allies.length+' 人'
+    +(petCount?'（🐾 宠物 ×'+petCount+'）':'')
+    +' · 🔴 敌方 '+foes.length+' 人</div>'
+    +(open?'<div class="gb-lineup gb-lineup-open">'+open+'</div>':'')
+    +'<div class="gb-hint">👆 点单位看完整属性 · 技能与天赋在详情里</div>'
 }
 
 /* ============================================================
@@ -1517,106 +1761,100 @@ function intimidatePct(u){
   return Math.round(d*100)
 }
 
-/* 渲染单个群战单位（可点击：详情；触摸区 ≥44px）
-   信息层次：名称/行动标记/血条/属性/状态/技能冷却/天赋
-   v2.1.14 三处升级：
-     1) 行动者标识由「内联边框色」升级为 gb-acting 类（左侧强调条 + 呼吸动画 + 文字标签）
-     2) 技能从「一个 ⏳最小冷却」改为逐技能标签（敌人 u.skills + 玩家 _playerSkills，各带冷却）
-     3) 天赋从「✨×N」改为显示天赋名，且可点击看详情 */
+/* 取名字的**前导 emoji**（`🧑 你` → `🧑`）。
+   ⚠️ 与 gbStripLeadEmoji 是同一套「剥到第一个像文字的字符为止」判据，
+   但那个函数被行动横幅 / 日志徽章共用（特效组的范围），故这里**另起一个**、
+   不去改它 —— 两者口径要一起改时请同步，否则玩家头像会与横幅的取名口径分叉。 */
+function gbLeadEmoji(s){
+  var t=String(s==null?'':s)
+  var i=0
+  while(i<t.length){
+    var c=t.charCodeAt(i)
+    var isWord=(c>=0x30&&c<=0x39)     // 0-9
+      ||(c>=0x41&&c<=0x5A)            // A-Z
+      ||(c>=0x61&&c<=0x7A)            // a-z
+      ||(c>=0x4E00&&c<=0x9FFF)        // CJK 统一表意
+      ||(c>=0x3400&&c<=0x4DBF)        // CJK 扩展 A
+      ||(c>=0xF900&&c<=0xFAFF)        // CJK 兼容表意
+    if(isWord)break
+    i++
+  }
+  return t.slice(0,i).trim()
+}
+
+/* 芯片上的显示名（≤4 字）：先剥前导 emoji、再剥**档位前缀**，最后截断。
+   为什么必须剥前缀：名字上限 4 字，而引擎的敌人名带档位前缀（`Boss·混沌魔` / `精英·狂战` /
+   `杂兵·弓`）→ 直接截断会把「Boss·混沌魔」显示成 `Boss`、把「精英·狂战」显示成 `精英·狂`，
+   关键是**同一档位下多个单位会显示成同一个词**（全是 `Boss`），芯片就丧失了辨识度。
+   剥掉前缀后：`混沌魔` / `狂战` / `弓` —— 前缀信息由**头像（怪物原型）与阵营色**承载。
+   完整名字仍原样进 data-name / title / aria-label（场地事件反查与读屏都用它，见 gbCardForEvent）。 */
+function gbUnitShortName(name){
+  var s=gbStripLeadEmoji(name)
+  s=s.replace(/^(?:BOSS|Boss|boss|BOSS·)\s*[·:：\-]\s*/,'')
+     .replace(/^(?:精英|杂兵|护卫|首领|头目)\s*[·:：\-]\s*/,'')
+  return s.slice(0,4)||String(name==null?'':name).slice(0,4)
+}
+
+/* 渲染单个群战单位 —— v2.4.2 起是**战场芯片**（不再是整张卡）。
+   芯片里只留 4 件信息：头像 / 名字 / 血条 / 状态。
+   攻防速魂、技能冷却、天赋名一律移入详情面板（点芯片打开）：
+     · 旧卡片实测 ~125px 高，5 个敌人就能填满广场，看不出对阵关系；
+     · 卡片里嵌技能/天赋 button 会被 axe 判 nested-interactive（role=button 里套 button），
+       芯片内**不含任何可聚焦子元素**，该违规随之消失。
+   ⚠️ 函数名与第二个参数 side 是既有契约（测试按函数名 + 字符窗口断言
+      `side !== 'ally'` 与 monsterIconHtmlByName 调用），不得改名、不得换等价写法。 */
 function renderGroupUnit(u,side){
   var hpPct=u.hp<=0?0:Math.round(u.hp/u.base.hp*100)
-  var color=side==='ally'?'var(--green)':'var(--red)'
   var dead=u.hp<=0
   var low=!dead&&hpPct<=25
   var acting=(_groupActing===u.id)
-  var cls='gb-unit'+(dead?' gb-dead':'')+(low?' gb-low':'')+(acting?' gb-acting':'')
+  var cls='gb-unit gb-arena-unit'+(acting?' gb-acting':'')+(dead?' gb-dead':'')+(low?' gb-low':'')
   var barColor=dead?'var(--text3)':hpPct>50?'var(--green)':hpPct>25?'var(--orange)':'var(--red)'
-  /* v2.2.27 WP-I：阵亡单位**折叠成一行**。
-     此前阵亡卡片与存活卡片同高（血条 + 属性 + 技能/天赋标签一应俱全，约 125px），
-     5 个阵亡单位就把一屏填满，而它们的信息量已降为 0（血量恒 0、冷却/状态已无意义）。
-     折叠后只留「💀 名字 · 已阵亡」；卡片仍是 role=button 且内层行锁在 --touch-min(44px)，
-     热区不缩水，点开仍能看到详情的属性/技能/天赋。 */
-  if(dead){
-    /* v2.3.3：宠物阵亡后仍保留头像（折叠行自身 min-height:44px，16px 头像塞得下 → 高度不变），
-       否则「哪只宠物没了」只能靠读名字。非宠物（玩家/敌人）不加。 */
-    var deadIco=gbPetIconBoxHtml(u)
-    return '<div class="'+cls+'" data-uid="'+u.id+'" role="button" tabindex="0" aria-label="'+escHtml(u.name)+' 已阵亡 详情">'
-      +'<div class="gb-dead-line">'
-      +'<span aria-hidden="true">💀</span>'
-      +deadIco
-      +'<span class="gb-dead-name">'+escHtml(u.name)+'</span>'
-      /* 不再渲染「▶ 行动中」：阵亡单位不可能再行动；自身反冲致死等场景下
-         _groupActing 仍指向它，两个标签同屏会自相矛盾。 */
-      +'<span class="gb-dead-tag">已阵亡</span>'
-      +'</div>'
-      +'</div>'
+  var full=escHtml(u.name==null?'':u.name)
+  /* 头像优先级（三选一，一律包进 .gb-arena-ico）：
+       敌方 → 怪物原型头像（32px，与 16 的倍数契约一致；名字匹配不上时映射内部兜底，
+              不会出现空图标）
+       我方宠物 → gbPetIconBoxHtml(u)（内部即 petIconHtml，带 .pet-ico 与 alt=""，
+              无 SVG 时退回 🐾 —— 不套 <img> 就不会有裂图）
+       玩家 → 名字的前导 emoji（🧑），没有 emoji 时退回首字
+     `side !== 'ally'` 这个写法本身是测试断言的字符窗口契约。 */
+  var ico=''
+  if(side !== 'ally' && typeof monsterIconHtmlByName === 'function'){
+    ico=monsterIconHtmlByName(u.name, u._tier === 'boss', 32)
   }
-  // 状态徽章（图标 + 剩余回合；title 用中文名而非英文 id）
-  var statusHtml=(u.statuses||[]).map(function(s){
-    var ic=statusIcon(s.id)
-    if(!ic)return ''
-    var d=(s.duration!=null&&s.duration>0)?s.duration:''
-    var nm=(typeof getStatusName==='function')?getStatusName(s.id):s.id
-    return '<span class="gb-badge st" title="'+escHtml(nm)+'">'+ic+(d?' '+d:'')+'</span>'
-  }).join('')
-  // 威吓标记（此前被威吓的单位在界面上完全看不出来；v2.2.22 幅度如实显示，不再写死 -40%）
-  var scared=u._intimidated?'<span class="gb-badge scared" title="被威吓：攻击 -'+intimidatePct(u)+'%">😱 攻-'+intimidatePct(u)+'%</span>':''
-  var skillChips=renderUnitSkillChips(u)
-  var talentChips=renderUnitTalentChips(u)
-  /* v2.1.15：属性显示改为「有效值 + 修正箭头」。
-     状态修正（破甲/潮湿/减速/攻击提升）现在真的生效了，继续显示裸属性会让人
-     看不出身上到底发生了什么 —— 破甲 6 层防御砍掉 60%，卡片上却还是原值。 */
-  var effOf = function (key) {
-    return (typeof effectiveStat === 'function') ? effectiveStat(u, key) : (u.base[key] || 0);
-  };
-  var statCell = function (icon, key, forced) {
-    var base = u.base[key] || 0;
-    var v = (forced == null) ? effOf(key) : forced;
-    var mark = '';
-    if (v !== base) {
-      mark = '<span class="gb-mod ' + (v > base ? 'up' : 'down') + '" title="基础 ' + base + '">' + (v > base ? '▲' : '▼') + '</span>';
+  if(!ico&&u._petSpecies)ico=gbPetIconBoxHtml(u)
+  if(!ico){
+    var raw=String(u.name==null?'':u.name)
+    ico='<span class="gb-arena-ico-txt">'+escHtml(gbLeadEmoji(raw)||raw.slice(0,1))+'</span>'
+  }
+  /* 名字：只显示前 4 字（超出靠 CSS text-overflow:ellipsis 兜底），
+     完整名字进 title 与 aria-label —— 截断只影响观感，不影响可读性与读屏。
+     v2.4.2：完整名字**另存一份 data-name** —— 场地事件（受碎石伤害/被闪电击中）没有 targetId，
+     只能靠文案里的名字反查芯片，而显示文字已截断成 ≤4 字、匹配不上（见 gbCardForEvent）。
+     data-name 是那次反查的唯一依据，不得删。 */
+  var short=gbUnitShortName(u.name)
+  /* 状态：最多 3 个图标，多出的折成 +N；阵亡单位不渲染状态
+     （血量恒 0，冷却/状态已无意义 —— 阵亡靠 .gb-dead 灰化 + 名字删除线表达）。 */
+  var st=''
+  if(!dead){
+    var sts=u.statuses||[]
+    var shown=0
+    for(var i=0;i<sts.length&&shown<3;i++){
+      var ic=statusIcon(sts[i].id)
+      if(!ic)continue
+      st+=ic
+      shown++
     }
-    return '<span>' + icon + ' <b>' + v + '</b>' + mark + '</span>';
-  };
-  var effSoulAtk = effOf('soulAtk');
-  var effSoulDef = effOf('soulDef');
-  var soulTxt = (effSoulAtk > 0 || effSoulDef > 0)
-    ? '<span class="gb-stat soul">👻' + effSoulAtk + ' 🔮' + effSoulDef + '</span>' : '';
-  /* v2.3.1：敌群单位卡头像 —— **只给敌方单位**（我方是玩家与宠物，各有自己的形象，
-     给它们套怪物头像会语义错乱）。`side` 由 renderGroupUnit 的第二个参数传入。
-     单位名与头像走同一套「名字 → 原型」映射；名字匹配不上时映射内部会退回兜底原型，
-     不会出现空图标。**带存在性守卫**：monster-archetype.js 未加载时退化为原样。 */
-  var unitIco = (side !== 'ally' && typeof monsterIconHtmlByName === 'function')
-    ? monsterIconHtmlByName(u.name, u._tier === 'boss', 32) : '';
-  /* v2.3.3：我方**宠物**的头像（16px，塞在既有名字行内 —— 见 GB_PET_ICO_SIZE 的说明）。
-     只认 unit._petSpecies：玩家没有头像槽（保持现状）、敌人走上面的怪物原型线。 */
-  var petIco = gbPetIconBoxHtml(u);
-  return '<div class="'+cls+'" data-uid="'+u.id+'" role="button" tabindex="0" aria-label="'+escHtml(u.name)+' 详情"'+(acting?' aria-current="true"':'')+'>'
-    // 第一行：名称 + 行动标记 + 状态（宠物头像与名称同行、共用既有行高，不新增行）
-    +'<div class="gb-row1">'
-    +(unitIco ? '<span class="gb-ico">'+unitIco+'</span>' : '')
-    +petIco
-    +'<span class="gb-name" style="color:'+color+'">'+escHtml(u.name)+'</span>'
-    +(acting?'<span class="gb-acting-tag">▶ 行动中</span>':'')
-    +statusHtml+scared
-    +'</div>'
-    // 第二行（v2.2.27 WP-I：血条与属性合并同行，此前是「血条 16px」+「属性 17px」两行）
-    +'<div class="gb-hp-row">'
-    +'<div class="gb-hp-wrap">'
-    +'<div class="gb-hp-fill" style="width:'+hpPct+'%;background:'+barColor+'"></div>'
-    /* 血条内只留「当前/上限」：百分比文字与条长完全重复，去掉后宽属性单位（敌群敌人数值大）
-       也不会把数值挤出条外（详情页仍显示精确 HP）。 */
-    +'<span class="gb-hp-text" title="'+hpPct+'%">'+Math.max(0,u.hp)+'/'+u.base.hp+'</span>'
-    +'</div>'
-    +'<div class="gb-stats">'
-    +statCell('⚔️', 'atk')
-    +statCell('🛡️', 'def')
-    +statCell('💨', 'spd', (typeof effectiveSpeed === 'function') ? effectiveSpeed(u) : (u.base.spd || 0))
-    +soulTxt
-    +'</div>'
-    +'</div>'
-    // 第三行：技能冷却 + 天赋
-    +((skillChips||talentChips)?'<div class="gb-row4">'+skillChips+talentChips+'</div>':'')
+    if(sts.length>shown)st+='<span class="gb-arena-st-more">+'+(sts.length-shown)+'</span>'
+    /* 威吓标记：芯片里只留一个 😱（幅度属「攻」数字，按契约移出芯片 ——
+       具体 -N% 在详情面板里如实显示，见 renderGroupDetail 的威吓行） */
+    if(u._intimidated)st+='<span class="gb-arena-st-i" title="被威吓中：攻击下降（点开看幅度）">😱</span>'
+  }
+  return '<div class="'+cls+'" data-uid="'+u.id+'" data-name="'+full+'" role="button" tabindex="0" aria-label="'+full+' 详情"'+(acting?' aria-current="true"':'')+'>'
+    +'<span class="gb-arena-ico" aria-hidden="true">'+ico+'</span>'
+    +'<span class="gb-name" title="'+full+'">'+escHtml(short)+'</span>'
+    +'<div class="gb-hp-wrap"><div class="gb-hp-fill" style="width:'+hpPct+'%;background:'+barColor+'"></div></div>'
+    +'<div class="gb-arena-st">'+st+'</div>'
     +'</div>'
 }
 
@@ -1625,6 +1863,9 @@ function renderGroupUnit(u,side){
 function renderGroupDetail(u){
   var ov=document.getElementById('battleOverlay')
   if(!ov)return
+  /* v2.4.2：详情是**整屏替换** overlay 内容，日志抽屉的 58vh 规则若还挂在根上，
+     详情页会被压到 58vh —— 打开详情即摘掉该类（返回时 renderGroupOverlay 会按 _gbTab 重挂）。 */
+  if(ov.classList)ov.classList.remove('gb-log-open')
   var h='<div class="det-hdr">'
     +'<button class="speed-btn" id="gbDetailBack">← 返回</button>'
     +'<span class="det-title">'+escHtml(u.name||'单位')+'</span>'
@@ -1633,6 +1874,23 @@ function renderGroupDetail(u){
   // 属性
   h+='<div class="det-card">'
   h+='<div class="det-h">📊 属性</div>'
+  /* v2.4.2：芯片只留「头像 / 名字 / 血条 / 状态」4 件信息，被移出的信息在这里补齐 ——
+     头像（优先级与芯片完全一致：敌方怪物原型 → 我方宠物图标 → 玩家前导 emoji）
+     + 血条 +「当前/上限」数字。攻/防/速/魂攻/魂防仍在下面那行（有效值 + ▲▼ 差额）。 */
+  var dHpPct=(u.base&&u.base.hp>0)?Math.max(0,Math.round(u.hp/u.base.hp*100)):0
+  var dBar=u.hp<=0?'var(--text3)':dHpPct>50?'var(--green)':dHpPct>25?'var(--orange)':'var(--red)'
+  var dIco=''
+  if(u.side!=='ally'&&typeof monsterIconHtmlByName==='function')dIco=monsterIconHtmlByName(u.name,u._tier==='boss',32)
+  if(!dIco&&u._petSpecies)dIco=gbPetIconBoxHtml(u)
+  if(!dIco){
+    var dRaw=String(u.name==null?'':u.name)
+    dIco='<span class="gb-arena-ico-txt">'+escHtml(gbLeadEmoji(dRaw)||dRaw.slice(0,1))+'</span>'
+  }
+  h+='<div class="det-unit">'
+    +'<span class="gb-arena-ico" aria-hidden="true">'+dIco+'</span>'
+    +'<div class="gb-hp-wrap"><div class="gb-hp-fill" style="width:'+dHpPct+'%;background:'+dBar+'"></div>'
+    +'<span class="gb-hp-text">'+Math.max(0,u.hp)+'/'+u.base.hp+'</span></div>'
+    +'</div>'
   // 属性（v2.1.15：显示有效值，被状态改动过时附上差额）
   var dEff = function (k) { return (typeof effectiveStat === 'function') ? effectiveStat(u, k) : (u.base[k] || 0); };
   var dCell = function (label, key, forced) {

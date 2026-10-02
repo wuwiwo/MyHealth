@@ -13,9 +13,12 @@
       dot 单列不计 MVP、场地单列。
    5) 日志筛选 —— 过滤必须发生在「仅最近 8 条」**截断之前**（构造一条「heal 全在 8 条之外」
       的日志，若先截断就必然取不到）；空态文案；徽章语义 = 筛选后条数。
-   6) 源码守卫 —— 禁 `!important` 压血条、禁 `transform:scale()` 放大行动者、
-      `_groupStep` 内不得有 DOM 操作、新增字号必须走令牌、居中飘字必须自带
+   6) 源码守卫 —— 禁 `!important` 压血条；**放大只允许出现在非滚动的对阵舞台里的行动芯片**
+      （`.gb-arena-unit.gb-acting`，v2.4.x 舞台化后的新契约；滚动容器 `.gb-pane` 内的舞台单位
+      仍禁放大）；`_groupStep` 内不得有 DOM 操作、新增字号必须走令牌、居中飘字必须自带
       `translateX(-50%)` 的专用关键帧（复用 floatUp 会把定位覆盖掉、数字跳左边缘）。
+   7) v2.4.x 舞台化守卫 —— `renderGroupBattlePane` 返回的对阵舞台必须是
+      敌方 → 中央 → 我方 三区；单位芯片的信息密度守卫（真渲染，不得回流旧三行卡片类名）。
 
    Run: node scripts/test-group-ui-presentation.js */
 'use strict';
@@ -83,6 +86,18 @@ function mkGb(allies, enemies, log, winner, turn) {
 }
 const E = (msg, type, targetId) => ({ msg: msg, type: type, targetId: targetId });
 const L = (unit, events, extra) => Object.assign({ turn: 1, unit: unit, events: events }, extra || {});
+
+/* 真宠物单位（走 pet-codex.js 的 createPetUnit，别手搓对象）——
+   §12 的阵亡芯片必须验「仍带头像」，故这里要有真 _petSpecies */
+function realPetUnit(speciesId) {
+  const c = sb.getPetCodex(speciesId) || {};
+  return sb.createPetUnit({ speciesId: speciesId, rarity: c.rarity, name: c.name,
+    refineLevel: 0, refineStats: {}, skillLevels: {}, orbs: {} });
+}
+/* 某个 class 是否出现在某个 class 属性里（首类，或空白分隔；后接空白或结束引号）——
+   与 scripts/test-battle-pet-icons.js 同一套判据（口径同源） */
+function clsRx(c) { return new RegExp('class="(?:[^"]*\\s)?' + c + '(?=[\\s"])'); }
+function hasClass(html, c) { return clsRx(c).test(html); }
 
 /* ============ 1. 速查表：每种文案的数字提取 ============ */
 console.log('--- 1. 引擎日志速查表：数字提取与类型 ---');
@@ -339,21 +354,68 @@ ok(hpFillRules.length > 0, 'index.css 里能找到 .gb-hp-fill 规则');
 ok(hpFillRules.every(r => r.indexOf('!important') < 0), '.gb-hp-fill 规则里没有 !important（血条宽度是内联样式）');
 ok(hpFillRules.some(r => /transition\s*:/.test(r)), '.gb-hp-fill 只调 transition（不碰 width 权重）');
 
-/* 2) 禁 transform:scale() 放大行动者（.gb-pane 是滚动裁剪容器）
-   ⚠️ 判据要排掉 `filter:grayscale(1)` —— 它里面也有 "scale(" 字样，但它不是放大。 */
+/* 2) 放大只允许出现在**非滚动的对阵舞台**里的行动芯片上（.gb-pane 仍是滚动裁剪容器）
+   ⚠️ 判据要排掉 `filter:grayscale(1)` —— 它里面也有 "scale(" 字样，但它不是放大。
+   ⚠️ v2.4.x 舞台化改判：旧决策「.gb-unit 一律禁 transform:scale()」是**三行卡片时代**的结论
+      （卡片在 .gb-pane 里滚动，放大就溢出/出横向滚动条）。新契约把卡片换成舞台芯片
+      `.gb-arena-unit`，并把它放进**不滚动**的 `.gb-arena{overflow:hidden}`，行动芯片因此
+      允许 `transform:scale(1.1)`（见 index.css 的 v2.4.2 注释）。判据随之改为三条：
+        ① 舞台芯片规则必须存在；
+        ② 只有 `.gb-arena-unit.gb-acting` 能放大（且必须带 transform-origin）；
+        ③ 除它之外，任何 `.gb-arena-unit` 规则、以及滚动容器 `.gb-pane` 内的舞台单位都不得放大。
+      ⚠️ 旧判据若照旧保留会与契约直接冲突；而旧 `unitRules` 只匹配 `.gb-unit`，
+        新规则若换名就会**静默空转**（集合里根本没有要守的对象）——故下面把 `.gb-unit`
+        这条也保留，作为「旧类名绕过」的兜底（放大仍只允许在 .gb-arena-unit.gb-acting 上）。
+   注意：以下判据都先剥掉 CSS 注释再匹配 —— 契约注释里会写到 `.gb-arena-unit.gb-acting`，
+   不剥注释会让「注释 + 下一条无关规则」拼成一条假规则。 */
 const SCALE_RX = /(^|[^A-Za-z-])scale\(/;
-const unitRules = (css.match(/\.gb-unit[^{]*\{[^}]*\}/g) || []);
+const cssNC = css.replace(/\/\*[\s\S]*?\*\//g, '');
+const arenaRules = (cssNC.match(/\.gb-arena-unit[^{]*\{[^}]*\}/g) || []);
+ok(arenaRules.length > 0, 'index.css 里能找到 .gb-arena-unit 规则（舞台单位芯片）');
+/* 行动芯片规则：兼容 `.gb-arena-unit.gb-acting` 与 `.gb-unit.gb-arena-unit.gb-acting` 两种命名，
+   但**必须带** .gb-arena-unit（只有旧命名 .gb-unit.gb-acting 不算） */
+const actingChipRules = (cssNC.match(/\.[^{}]*\{[^}]*\}/g) || []).filter(function (r) {
+  const sel = r.slice(0, r.indexOf('{'));
+  return /\.gb-arena-unit/.test(sel) && /\.gb-acting/.test(sel);
+});
+ok(actingChipRules.length > 0, 'index.css 里找不到带 .gb-arena-unit + .gb-acting 的规则（放大判据会静默空转）');
+/* 契约把行动芯片的样式写在一条规则里；这里把命中的规则**合并**再判，
+   以免实现把它拆成两条（放大一条、光环一条）时误判为缺失 */
+const actingChip = actingChipRules.join('\n');
+const actingChipBrief = actingChipRules[0] || '';
+ok(/transform\s*:\s*scale\(1\.1\)/.test(actingChip),
+  '行动芯片必须 transform:scale(1.1)（实际：' + actingChipBrief + '）');
+ok(/transform-origin\s*:/.test(actingChip),
+  '行动芯片必须带 transform-origin（默认按中心放大，不像「站到阵前」）：' + actingChipBrief);
+/* ③-a 除 .gb-acting 那条之外，其它 .gb-arena-unit 规则不得含 scale( */
+const otherArena = arenaRules.filter(function (r) { return !/\.gb-acting/.test(r.slice(0, r.indexOf('{'))); });
+ok(otherArena.every(function (r) { return !SCALE_RX.test(r); }),
+  '除行动芯片外，其它 .gb-arena-unit 规则不得放大：'
+  + otherArena.filter(function (r) { return SCALE_RX.test(r); }).join(' | '));
+/* ③-b 滚动容器 .gb-pane 内的舞台单位不得放大 */
+ok(!/\.gb-pane[^{]*\.gb-arena-unit[^{]*\{[^}]*scale\(/.test(cssNC),
+  '.gb-pane（滚动裁剪容器）内的 .gb-arena-unit 不得 scale()（会溢出 / 出横向滚动条）');
+/* ③-c 旧类名兜底：任何 .gb-unit 规则里的放大同样只允许出现在行动芯片那条上 */
+const unitRules = (cssNC.match(/\.gb-unit[^{]*\{[^}]*\}/g) || []);
 ok(unitRules.length > 0, 'index.css 里能找到 .gb-unit 规则');
-ok(unitRules.every(r => !SCALE_RX.test(r)), '.gb-unit 相关规则无 transform:scale()（会溢出/出横向滚动条）');
-ok(/\.gb-unit\.gb-acting\{[^}]*z-index:2/.test(css), '行动者 z-index:2');
-ok(/box-shadow/.test((css.match(/\.gb-unit\.gb-acting\{[^}]*\}/) || [''])[0]), '行动者保留既有 box-shadow 光环');
-ok(/\.gb-unit\.gb-acting::before\{/.test(css), '行动者保留 ::before 强调条');
+ok(unitRules.every(function (r) {
+  return !SCALE_RX.test(r) || (/\.gb-arena-unit/.test(r) && /\.gb-acting/.test(r));
+}), '.gb-unit 规则里的 scale() 只允许出现在 .gb-arena-unit.gb-acting 上：'
+  + unitRules.filter(function (r) { return SCALE_RX.test(r); }).join(' | '));
+/* 行动芯片的既有视觉语言（光环 / 强调条）随类名迁移后必须仍在 */
+ok(/z-index:2/.test(actingChip), '行动芯片保留 z-index:2（压在相邻芯片之上，光环不被圆角切掉）');
+ok(/box-shadow/.test(actingChip), '行动芯片保留既有 box-shadow 光环');
+ok(/::before\s*\{/.test(actingChip), '行动芯片保留 ::before 强调条');
 
-/* 3) 行动焦点：上限 0.75，且只暗化非行动者 */
-const focusRule = (css.match(/\.gb-focus[^{]*\{[^}]*\}/) || [''])[0];
-ok(/opacity\s*:\s*\.75|opacity\s*:\s*0\.75/.test(focusRule), '行动焦点暗化上限 0.75（实际 ' + focusRule + '）');
+/* 3) 行动焦点：上限 0.5（v2.4.x 舞台化把契约值从旧卡片的 0.75 改为 0.5），且只暗化非行动者 */
+const focusRule = (cssNC.match(/\.gb-focus[^{]*\{[^}]*\}/) || [''])[0];
+ok(/opacity\s*:\s*(?:0?\.5)(?![0-9])/.test(focusRule), '行动焦点暗化上限 0.5（实际 ' + focusRule + '）');
 ok(/:not\(\.gb-acting\)/.test(focusRule) && /:not\(\.gb-dead\)/.test(focusRule), '暗化排除行动者与阵亡单位');
-ok(/\.gb-focus/.test(fnBody(grSrc, 'renderGroupOverlay')), 'renderGroupOverlay 里挂/去 .gb-focus');
+/* 焦点态必须是 renderGroupOverlay 挂/去的（不能挪到别的函数里，否则换渲染路径就丢焦点）
+   ⚠️ 判据写成 `\bgb-focus\b`（class 名令牌）而不是 `\.gb-focus`（选择器写法）：
+   旧写法在 HEAD 上其实是靠 renderGroupOverlay 里的一句**注释**「…才挂 .gb-focus」命中的，
+   舞台化重写注释后它就假红了 —— 真正要守的是「这个 class 由 renderGroupOverlay 切换」。 */
+ok(/\bgb-focus\b/.test(fnBody(grSrc, 'renderGroupOverlay')), 'renderGroupOverlay 里挂/去 gb-focus');
 
 /* 4) _groupStep 内不得有 DOM/CSS 操作（统一由 renderGroupOverlay 控制） */
 const stepBody = fnBody(grSrc, '_groupStep');
@@ -424,6 +486,334 @@ const iSync = startBody.indexOf('syncLevel()');
 const iFilter = startBody.indexOf("_gbLogFilter='all'");
 ok(iSync > -1 && iFilter > iSync, "_gbLogFilter='all' 必须排在 syncLevel() 之后（900 字符窗口断言）");
 ok(iFilter - iSync < 900, '重置点落在 syncLevel() 后 900 字符内');
+
+/* ============ 11. v2.4.x 舞台化：上下对阵舞台（敌方 → 中央 → 我方） ============ */
+console.log('--- 11. 对阵舞台三区顺序 ---');
+{
+  const stagePet = realPetUnit('sparkle');
+  const stageFoe = sb.createEnemyUnit({ id: 'e-stage', tier: 'minion', name: '杂兵·弓',
+    base: { hp: 100, atk: 10, def: 5, spd: 8 } });
+  const stageGb = { allies: [mkUnit('s1', '🧑 你', 'ally', 100, 100), stagePet], enemies: [stageFoe],
+    _stepQueue: [stagePet, stageFoe], _stepIdx: 0 };
+  /* 真渲染（不是 grep 源码）：三区的顺序是布局契约本身，只能从返回的 HTML 上量 */
+  const arenaHtml = sb.renderGroupBattlePane(stageGb);
+  const iE = arenaHtml.indexOf('gb-arena-enemy');
+  const iM = arenaHtml.indexOf('gb-arena-mid');
+  const iA = arenaHtml.indexOf('gb-arena-ally');
+  ok(iE > -1 && iM > -1 && iA > -1,
+    '战场三区缺一（敌方 gb-arena-enemy / 中央 gb-arena-mid / 我方 gb-arena-ally）：' + arenaHtml.slice(0, 200));
+  ok(iE > -1 && iE < iM && iM < iA,
+    '战场三区顺序必须 敌方 → 中央 → 我方，实际下标 ' + iE + ' / ' + iM + ' / ' + iA);
+  ok(/id="gbArena"/.test(arenaHtml), '战场容器缺 id="gbArena"（飘字/技能名锚点）');
+  ok(arenaHtml.indexOf('gb-arena-row') > -1, '缺 .gb-arena-row（敌方行 / 我方行）');
+  ok(/class="[^"]*\bgb-order\b/.test(arenaHtml), '行动顺序条 .gb-order 仍在战场里（不得被舞台化顺手删掉）');
+  /* 中央特效锚点：飘字/技能名挂 #gbArenaMid */
+  ok(/gbArenaMid|gb-arena-mid/.test(grSrc), 'game-render.js 里找不到中央特效区锚点（#gbArenaMid / .gb-arena-mid）');
+}
+
+/* ============ 12. 战场单位芯片：信息密度守卫（真渲染） ============ */
+console.log('--- 12. 战场芯片信息密度 ---');
+{
+  /* 我方芯片用**真宠物单位**（带技能与天赋）：旧卡片会因此渲染出 .gb-chip / .gb-row4，
+     信息密度守卫才能在四个类名上都真正咬住，而不是只咬到 gb-stats / gb-row1 */
+  const chipAlly = sb.renderGroupUnit(realPetUnit('sparkle'), 'ally');
+  const chipFoe = sb.renderGroupUnit(sb.createEnemyUnit({ id: 'c2', tier: 'minion', name: '杂兵·弓',
+    base: { hp: 100, atk: 10, def: 5, spd: 8 } }), 'enemy');
+  const chipDead = (function () {
+    const d = realPetUnit('kirin');
+    d.hp = 0;
+    return sb.renderGroupUnit(d, 'ally');
+  })();
+  /* 「不再像表格」的自动化防线：旧三行卡片的类名一个都不许回流 */
+  const OLD_CARD_CLASSES = ['gb-chip', 'gb-stats', 'gb-row1', 'gb-row4'];
+  [['我方芯片', chipAlly], ['敌方芯片', chipFoe], ['阵亡芯片', chipDead]].forEach(function (c) {
+    const nm = c[0], html = c[1];
+    OLD_CARD_CLASSES.forEach(function (bad) {
+      ok(!hasClass(html, bad), nm + ' 出现旧卡片类名 .' + bad + '（信息密度守卫：舞台芯片不得再像表格）');
+    });
+    ok(hasClass(html, 'gb-name'), nm + ' 缺 .gb-name');
+    ok(hasClass(html, 'gb-hp-wrap'), nm + ' 缺 .gb-hp-wrap');
+    ok(html.indexOf('undefined') < 0 && html.indexOf('NaN') < 0, nm + ' HTML 里出现 undefined/NaN');
+  });
+  ok(hasClass(chipDead, 'gb-arena-ico') && /src="media\/pets\/kirin\.svg"/.test(chipDead),
+    '阵亡芯片仍须在 .gb-arena-ico 里保留头像');
+  ok(hasClass(chipDead, 'gb-dead'), '阵亡芯片带 .gb-dead（灰化 + 名字删除线），不再折叠成 gb-dead-line');
+  ok(chipDead.indexOf('gb-dead-line') < 0, '阵亡单位不得再走 gb-dead-line 折叠行');
+  ok(hasClass(chipAlly, 'gb-arena-unit') && hasClass(chipFoe, 'gb-arena-unit'),
+    '敌方/我方单位都应是 .gb-arena-unit 芯片（renderGroupUnit 的两种 side 同构）');
+}
+
+/* ============ 13. v2.4.2 技能特效 + 中央飘字 + 场地事件命中（新增一节） ============
+
+   本节补的是 v2.4.2「技能特效 + 中央特效区」的四件事，全部**真断言**：
+     a) 场地事件（`受碎石伤害` / `被闪电击中`，日志里**没有 targetId**）必须能命中芯片 ——
+        芯片名字已被截断成 ≤4 字，旧的 `textContent.indexOf(完整名)` 分支必然落空，
+        故改用 `data-name="完整名"` 精确匹配（本节的桩芯片刻意用「显示文字不含完整名」的形态）。
+     b) 飘字锚 **#gbArenaMid**（不是芯片旁），同一步多条按槽位错位、互不重叠。
+     c) `gbShowSkillCast` 的 skillId → 图标 src 真的接上了（跑真 skill-icon.js，不靠名字猜），
+        元素挂常驻层 `#gbFx` 而**不是** #gbArenaMid 的子节点，新施法先清上一条。
+     d) `gbStepSummary` 纯函数：多目标 → 一句话，单目标 → 中性句，拿不到技能名 → 空串。
+
+   为什么自建沙箱 + DOM 桩：沙箱的 document.getElementById 只认 panelOverlay，
+   而本节要验的正是「锚 #gbArenaMid / 挂 #gbFx / 受击闪芯片」这些**真实定位与清理**行为 ——
+   只能造一个可观测的桩，逐项量 left/top 与子节点数。 */
+console.log('--- 13. v2.4.2 中央特效区：施法特效 / 飘字错位 / data-name 命中 ---');
+{
+  const sb2 = makeSandbox();
+  /* 图标唯一入口：必须真加载 skill-icon.js，否则「skillId → src」会被 typeof 守卫降级成空串，
+     断言变成「什么都没渲染」的假绿。 */
+  vm.runInContext(load('skill-icon.js'), sb2);
+
+  /* --- DOM 桩：只做两件事 —— 记录子节点、按 fixed 层坐标语义返回 rect --- */
+  const layer = {
+    children: [],
+    appendChild(el) { el.parentNode = this; this.children.push(el); return el; },
+    removeChild(el) { const i = this.children.indexOf(el); if (i >= 0) this.children.splice(i, 1); el.parentNode = null; return el; },
+    get innerHTML() { return ''; },
+    set innerHTML(v) { if (!v) this.children.length = 0; }
+  };
+  const midEl = { childCount: 0, appendChild() { this.childCount++; },
+    getBoundingClientRect: () => ({ left: 100, top: 500, width: 200, height: 100 }) };
+  const hitLog = [];
+  function chipStub(uid, name, display) {
+    return {
+      uid: uid, name: name, display: display, parentNode: null,
+      classList: { add(c) { hitLog.push(uid + ':' + c); }, remove() {}, toggle() {} },
+      getAttribute(k) { return k === 'data-uid' ? uid : (k === 'data-name' ? name : null); },
+      querySelector(sel) { return sel === '.gb-name' ? { getAttribute: k => (k === 'title' ? name : null) } : null; },
+      get textContent() { return display; }
+    };
+  }
+  /* 桩芯片刻意用**截断后的显示文字**（`Boss·混沌魔` → `Boss`）：这正是旧分支落空的形态 */
+  const chips = [chipStub('enemy-0', 'Boss·混沌魔', 'Boss'),
+    chipStub('enemy-1', '精英·狂战', '精英·狂'), chipStub('player', '🧑 你', '你')];
+  const ovStub = {
+    querySelector(sel) {
+      const m = /data-uid="([^"]+)"/.exec(sel);
+      return m ? (chips.filter(c => c.uid === m[1])[0] || null) : null;
+    },
+    querySelectorAll(sel) { return sel === '.gb-unit' ? chips : []; }
+  };
+  let midMissing = false;
+  const doc = sb2.document;
+  doc.getElementById = id => {
+    if (id === 'battleOverlay') return ovStub;
+    if (id === 'gbArenaMid') return midMissing ? null : midEl;
+    return id === 'gbFx' ? layer : null;
+  };
+  doc.createElement = () => ({ style: {}, classList: { add() {}, remove() {} },
+    setAttribute() {}, innerHTML: '', textContent: '', className: '', parentNode: null });
+  const posOf = el => ((/left:(-?\d+)px;top:(-?\d+)px/.exec(el.style.cssText) || [, '?', '?']).slice(1).join(','));
+
+  /* --- (a) 场地事件（无 targetId）命中芯片 --- */
+  eq((sb2.gbCardForEvent(ovStub, null, { msg: '🪨 精英·狂战 受碎石伤害 40', type: 'terrain' }) || {}).uid,
+    'enemy-1', '场地事件（无 targetId）按完整名命中芯片');
+  ok(chips[1].textContent.indexOf('精英·狂战') < 0,
+    '前提：该芯片显示文字确实被截断（旧 textContent.indexOf 分支必然落空）—— 实际 "'
+    + chips[1].textContent + '"');
+  eq((sb2.gbCardForEvent(ovStub, null, { msg: '🪨 🧑 你 受碎石伤害 40', type: 'terrain' }) || {}).uid,
+    'player', '场地事件抠出的名字不带前导 emoji，仍能命中带 emoji 的芯片（两边都剥）');
+  eq(sb2.gbCardForEvent(ovStub, null, { msg: '🪨 查无此人 受碎石伤害 40', type: 'terrain' }),
+    null, '查不到的单位返回 null（不得错配到别的芯片）');
+  eq((sb2.gbCardForEvent(ovStub, null, { msg: '⚡ 剑士 攻击 Boss·混沌魔 → 77 伤害', type: 'damage' }) || {}).uid,
+    'enemy-0', '普攻文案（名字在箭头前）同样按完整名命中');
+  ok(fnBody(grSrc, 'gbCardForEvent').indexOf('textContent') < 0,
+    'gbCardForEvent 不得再用截断后的显示文字（textContent）做匹配 —— 那是 v2.4.2 修掉的 bug');
+  ok(/data-name="'\+full\+'"/.test(fnBody(grSrc, 'renderGroupUnit')),
+    'renderGroupUnit 的芯片必须带 data-name="完整名"（场地事件反查的唯一依据）');
+  /* 显示文字不得为「修匹配」而改回完整名（信息密度契约） */
+  const chipReal = sb.renderGroupUnit(mkUnit('z1', '精英·狂战', 'enemy', 100, 100), 'enemy');
+  ok(chipReal.indexOf('data-name="精英·狂战"') > -1, '真渲染的芯片带完整名 data-name');
+  const shown = (/<span class="gb-name"[^>]*>([^<]*)<\/span>/.exec(chipReal) || [, ''])[1];
+  ok(shown.length > 0 && shown.length <= 4 && shown !== '精英·狂战',
+    '芯片显示文字仍 ≤4 字（不得为了修匹配把显示文字改回完整名）：' + shown);
+
+  /* --- (b) 飘字锚中央区 + 槽位错位 --- */
+  layer.children.length = 0;
+  sb2.gbFxFloat(midEl, '-40', 'var(--red)', false);
+  sb2.gbFxFloat(midEl, '-55', 'var(--red)', false, 1);
+  sb2.gbFxFloat(midEl, '-7', 'var(--red)', false, 2);
+  sb2.gbFxFloat(midEl, '+120', 'var(--green)', false, 3);
+  eq(layer.children.length, 4, '四条飘字都挂到 #gbFx 常驻层');
+  const pos = layer.children.map(posOf);
+  /* 中央区 rect = (100,500,200,100)：施法特效占上部 0.28、飘字占下部 0.8（v2.4.2 收口，
+     两者同区会互压）。默认飘字 Y = 500 + 100*0.8 = 580；槽位偏移见 GB_FX_SLOT_OFF */
+  eq(pos.join(' | '), '200,580 | 154,562 | 246,562 | 200,544',
+    '同一步 4 条飘字按槽位错位（不传 slot 的默认位与旧行为一致）');
+  ok(pos.every(p => { const q = p.split(',').map(Number); return q[0] >= 100 && q[0] <= 300 && q[1] >= 500 && q[1] <= 600; }),
+    '所有飘字都落在中央区 rect 内（不是跑到舞台/芯片上去）：' + pos.join(' | '));
+  ok(fnBody(grSrc, 'gbFxFloat').indexOf('*0.8') > -1,
+    '飘字锚点用中央区高度的 0.8（下部）—— 源码守卫，防悄悄改回中心与施法特效互压');
+  ok(new Set(pos).size === pos.length, '4 条飘字位置互不相同（否则叠成一坨）');
+  ok(layer.children.every(e => e.className.indexOf('gb-fx-float') > -1), '飘字仍用 .gb-fx-float 类名（既有契约）');
+  eq(midEl.childCount, 0, '飘字不是 #gbArenaMid 的子节点（overlay 每步 innerHTML 重建会冲掉）');
+
+  /* --- (b2) playAttackFeedback：受击仍闪芯片，数字锚中央区 --- */
+  layer.children.length = 0; hitLog.length = 0;
+  const gbTerrain = { units: [], log: [{ turn: 2, unit: '🪨 场地',
+    events: [{ msg: '🪨 精英·狂战 受碎石伤害 40', type: 'terrain' }] }] };
+  sb2.playAttackFeedback(gbTerrain, null);
+  eq(layer.children.length, 1, '场地事件出一条飘字');
+  eq(layer.children[0].textContent, '-40', '飘字文案 = 场地伤害数值');
+  eq(hitLog.join(','), 'enemy-1:gb-hit', '受击闪烁仍落在正确 data-uid 上（「谁被打」不丢）');
+  eq(posOf(layer.children[0]), '200,580', '飘字锚在 #gbArenaMid 的**下部**（0.8 高），而不是单位芯片旁');
+  /* 兜底：中央区缺失 → 不抛错、不出飘字、如实告警、受击闪烁仍在 */
+  const savedConsole = sb2.console;
+  const warns = [];
+  sb2.console = { warn: m => warns.push(String(m)), log() {}, error() {} };
+  layer.children.length = 0; hitLog.length = 0; midMissing = true;
+  let threw = false;
+  try { sb2.playAttackFeedback(gbTerrain, null); } catch (e) { threw = true; }
+  ok(!threw, '#gbArenaMid 缺失时 playAttackFeedback 不得抛错（自动推进会因此卡死）');
+  eq(layer.children.length, 0, '#gbArenaMid 缺失时不出飘字（兜底）');
+  ok(warns.join(' ').indexOf('gbArenaMid') > -1, '兜底路径必须 console.warn 如实告警');
+  eq(hitLog.join(','), 'enemy-1:gb-hit', '兜底时受击闪烁仍保留');
+  midMissing = false;
+  sb2.console = savedConsole;
+
+  /* --- (c) gbShowSkillCast：skillId → 图标 src（真跑 skillIconHtml） --- */
+  eq(sb2.SKILLS['spikes'] && sb2.SKILLS['spikes'].name, '地刺', '前提：SKILLS.spikes 有中文名（名字行的唯一来源）');
+  const castFoe = mkUnit('e-m', '👹 魔像', 'enemy', 100, 1000);
+  const bubble = { type: 'bubble', unit: '👹 魔像', skillId: 'spikes' };
+  const gbCast = { units: [castFoe], allies: [castFoe], enemies: [castFoe], log: [{ turn: 2, unit: '👹 魔像',
+    events: [bubble, { msg: '⚡ 魔像 地刺 → 你 100 伤害', type: 'damage', targetId: 'player' }] }] };
+  sb2._groupSpeed = 1;
+  layer.children.length = 0; midEl.childCount = 0;
+  sb2.gbShowSkillCast(gbCast, bubble);
+  eq(layer.children.length, 1, '一次施法渲染一个特效元素');
+  const castHtml = layer.children[0].innerHTML;
+  ok(castHtml.indexOf('src="media/skills/spikes.svg"') > -1,
+    'skillId → 图标 src 真的接上了（不是靠技能名猜）：' + castHtml.slice(0, 120));
+  ok(/class="sk-ico gb-skill-cast-ico"/.test(castHtml), '图标走 skillIconHtml 的类名契约（sk-ico + gb-skill-cast-ico）');
+  ok(castHtml.indexOf('gb-skill-cast-name') > -1 && castHtml.indexOf('地刺') > -1,
+    '名字行来自 SKILLS[skillId].name（地刺）');
+  ok(layer.children[0].className.indexOf('tone-enemy') > -1, '敌方施法 → 敌方红光环');
+  eq(midEl.childCount, 0, '特效**不是** #gbArenaMid 的子节点（每步 innerHTML 重建会把它冲掉）');
+  eq(posOf(layer.children[0]), '200,528', '施法特效锚在中央区**上部**（0.28 高），与飘字上下分层不互压');
+  { const c = posOf(layer.children[0]).split(',').map(Number);
+    ok(c[0] >= 100 && c[0] <= 300 && c[1] >= 500 && c[1] <= 600, '施法特效落在中央区 rect 内：' + c.join(','));
+    ok(c[1] < 544, '施法特效在飘字最低位（544 = 0.8 高 + 最大负偏移 -36）之上 —— 两者几何上不重叠'); }
+  ok(fnBody(grSrc, 'gbShowSkillCast').indexOf('*0.28') > -1,
+    '施法特效锚点用中央区高度的 0.28（上部）—— 源码守卫');
+  /* 新的施法必须先清掉上一条（#gbFx 是常驻层，不清就叠字） */
+  sb2.gbShowSkillCast(gbCast, { type: 'bubble', unit: '👹 魔像', skillId: 'cleanse' });
+  eq(layer.children.length, 1, '每次新施法先清掉上一条特效');
+  ok(layer.children[0].innerHTML.indexOf('cleanse.svg') > -1, '留下的是新那一条（净化）');
+  /* gbFxClear 必须同时清掉施法元素（#gbClose / _groupDone 的调用点靠它兜底） */
+  sb2.gbFxClear();
+  eq(layer.children.length, 0, 'gbFxClear() 同时清掉施法特效');
+  ok(fnBody(grSrc, 'gbFxClear').indexOf('gbCastClear') > -1, 'gbFxClear 体内确实清施法元素（否则退出战斗后残留）');
+  /* 未知 skillId：不拼 404、不留空壳 */
+  layer.children.length = 0;
+  sb2.gbShowSkillCast(gbCast, { type: 'bubble', unit: '👹 魔像', skillId: 'no_such_skill' });
+  eq(layer.children.length, 0, '未知 skillId 不渲染（宁缺勿错，不拼必然 404 的路径）');
+  /* isPlayer 决定查哪张图标表：goldshield 只在玩家表里 */
+  layer.children.length = 0;
+  const hero = mkUnit('hero', '🧑 你', 'ally', 100, 100);
+  const gbHero = { units: [hero], allies: [hero], enemies: [], log: [] };
+  sb2.gbShowSkillCast(gbHero, { type: 'bubble', unit: '🧑 你', skillId: 'goldshield' });
+  eq(layer.children.length, 1, '我方非宠物施法 → isPlayer=true，走玩家图标表');
+  ok(layer.children[0].innerHTML.indexOf('goldshield.svg') > -1, '玩家技能图标 src 正确');
+  ok(layer.children[0].className.indexOf('tone-ally') > -1, '我方施法 → 友方绿光环');
+  /* 宠物技能：isPlayer=false（走敌方/宠物合并表），但阵营是我方 → 仍是绿光环 */
+  layer.children.length = 0;
+  const petA = mkUnit('pet1', '🐾 星尘', 'ally', 100, 100);
+  petA._petSpecies = 'sparkle';
+  const gbPet = { units: [petA], allies: [petA], enemies: [], log: [] };
+  sb2.gbShowSkillCast(gbPet, { type: 'bubble', unit: '🐾 星尘', skillId: 'p_shine' });
+  eq(layer.children.length, 1, '宠物技能 isPlayer=false 也能出图标（false 分支同时吃敌方表与宠物表）');
+  ok(layer.children[0].innerHTML.indexOf('p_shine.svg') > -1, '宠物技能图标 src 正确');
+  ok(layer.children[0].className.indexOf('tone-ally') > -1,
+    '宠物是我方 → 光环按**阵营**取绿（不得按 isPlayer 上色，否则自家宠物被标成敌方红）');
+  /* 高倍速降级：≥×4 不渲染文字行（步进 87~112ms，字还没看清就被盖掉） */
+  layer.children.length = 0;
+  sb2._groupSpeed = 4;
+  sb2.gbShowSkillCast(gbCast, bubble);
+  eq(layer.children.length, 1, '×4 仍出特效（只降级文字，不降级图标）');
+  ok(layer.children[0].innerHTML.indexOf('gb-skill-cast-name') < 0, '×4 及以上不渲染技能名文字行');
+  ok(layer.children[0].innerHTML.indexOf('spikes.svg') > -1, '×4 仍渲染图标');
+  sb2._groupSpeed = 1;
+  sb2.gbFxClear();
+  layer.children.length = 0;
+
+  /* --- (d) gbStepSummary：纯函数 --- */
+  const bubDmg = { type: 'bubble', unit: '👹 魔像', skillId: 'blizzard' };
+  const bubHeal = { type: 'bubble', unit: '👹 魔像', skillId: 'heal' };
+  eq(sb2.gbStepSummary(null, [{ type: 'damage', targetId: 'a' }, { type: 'damage', targetId: 'b' },
+    { type: 'damage', targetId: 'c' }], bubDmg), '魔像 对 3 个目标使用了 暴风雪', '伤害类多目标 → 对 N 个目标使用了');
+  eq(sb2.gbStepSummary(null, [{ type: 'heal', targetId: 'a' }, { type: 'heal', targetId: 'b' }], bubHeal),
+    '魔像 对全队施加了 治愈', 'buff/status/heal 多目标 → 对全队施加了');
+  eq(sb2.gbStepSummary(null, [{ type: 'damage', targetId: 'a' }], bubDmg), '魔像 使用了 暴风雪', '单目标 → 中性句');
+  eq(sb2.gbStepSummary(null, [{ type: 'damage', targetId: 'a' }, { type: 'damage', targetId: 'a' }], bubDmg),
+    '魔像 使用了 暴风雪', '同一目标被多段命中只算 1 个（按不同 targetId 计数）');
+  eq(sb2.gbStepSummary(null, [{ type: 'status', targetId: 'a' }, { type: 'status', targetId: 'b' },
+    { type: 'damage', targetId: 'c' }], bubDmg), '魔像 对 3 个目标使用了 暴风雪', '混合型走伤害分支（伤害是更硬的事实）');
+  eq(sb2.gbStepSummary(null, [], { type: 'bubble', unit: '👹 魔像', skillId: 'no_such_skill' }), '',
+    '拿不到技能名 → 返回空串（不得编造技能名）');
+  eq(sb2.gbStepSummary(null, [{ type: 'damage', targetId: 'a' }, { type: 'damage', targetId: 'b' }], null), '',
+    '没有 bubble 就没有句子（技能身份的唯一来源是 bubble）');
+  ok(fnBody(grSrc, 'gbStepSummary').indexOf('document') < 0, 'gbStepSummary 是纯函数（不碰 DOM）');
+  /* 句子里的技能名必须来自 SKILLS 表（换一个 id 名字要跟着换） */
+  eq(sb2.gbStepSummary(null, [{ type: 'damage', targetId: 'a' }, { type: 'damage', targetId: 'b' }],
+    { type: 'bubble', unit: '👹 魔像', skillId: 'spikes' }), '魔像 对 2 个目标使用了 地刺',
+    '技能名随 skillId 变（来自 SKILLS，不是写死的模板）');
+}
+
+/* ============ 14. v2.4.2 收口：显示名剥档位前缀 / 开场刷屏一句话 / 技能名兜底 ============
+
+   三件都是「主控收口」时补的行为，各有明确的失败形态：
+     a) 名字上限 4 字 + 敌人名带档位前缀 → `Boss·混沌魔` 直接截断会变成 `Boss`，
+        同档位多个单位**全部显示成同一个词**，芯片丧失辨识度 → 剥前缀再截断。
+     b) 开战钩子（player-skill-hooks.js 的 onBattleStart 金身护盾）**给每个队友各推一条**，
+        5 个我方单位 = 5 条同技能事件，且 `opening` 条目**没有 bubble**（中央区覆盖不到）
+        → 由战斗页那一行文本压成一句（作者点名的「开场刷屏」）。
+     c) 玩家技能注册在 PLAYER_SKILLS、不在 SKILLS → 技能名兜底再查一次，仍拿不到就返回空串。 */
+console.log('--- 14. 收口：档位前缀 / 开场一句话 / 技能名兜底 ---');
+{
+  const sb3 = makeSandbox();
+  /* (a) gbUnitShortName */
+  eq(sb3.gbUnitShortName('Boss·混沌魔'), '混沌魔', 'Boss 前缀被剥掉（否则同档位多个单位都显示 Boss）');
+  eq(sb3.gbUnitShortName('精英·狂战'), '狂战', '精英· 前缀被剥掉');
+  eq(sb3.gbUnitShortName('杂兵·弓'), '弓', '杂兵· 前缀被剥掉');
+  eq(sb3.gbUnitShortName('🧑 你'), '你', '玩家：剥前导 emoji 后显示「你」');
+  eq(sb3.gbUnitShortName('熔岩巨兽'), '熔岩巨兽', '无前缀时按 4 字截断（不误伤正常名字）');
+  eq(sb3.gbUnitShortName('万古长夜守望者'), '万古长夜', '超长名截断到前 4 字');
+  /* 真渲染：芯片显示名不得再是 "Boss"，同时完整名仍留在 data-name / title */
+  const foe = { id: 'e0', side: 'enemy', name: 'Boss·混沌魔', level: 1, hp: 100,
+    base: { hp: 100, atk: 1, def: 1, spd: 1 }, statuses: [] };
+  const chipHtml = sb3.renderGroupUnit(foe, 'enemy');
+  const shownName = (/<span class="gb-name"[^>]*>([^<]*)<\/span>/.exec(chipHtml) || [, ''])[1];
+  eq(shownName, '混沌魔', '真渲染：Boss·混沌魔 的芯片显示「混沌魔」而不是「Boss」');
+  ok(chipHtml.indexOf('data-name="Boss·混沌魔"') > -1, '完整名仍进 data-name（场地事件反查的唯一依据）');
+  ok(chipHtml.indexOf('title="Boss·混沌魔"') > -1, '完整名仍进 title（悬停/读屏）');
+
+  /* (b) gbOpeningSummary：5 条同技能开场事件 → 一行 */
+  const shield = n => ({ msg: '🛡️ ' + n + ' 金身护盾 +733（吸收伤害；盾存在期间免疫普通~高级负面）' });
+  const openEntry = { turn: 0, unit: '开场', opening: true, events: [
+    shield('🧑 你'), shield('闪闪星'), shield('冰晶'), shield('熔岩'), shield('疾风'),
+    { msg: '💢 某单位 的 威吓 触发强化（本次伤害 +50%）' }] };
+  const openGb = { units: [], allies: [{}, {}, {}, {}, {}], enemies: [{}], log: [openEntry] };
+  const sum = sb3.gbOpeningSummary(openGb);
+  ok(sum.indexOf('金身护盾') > -1, '开场一句话点出技能名：' + sum);
+  ok(sum.indexOf('5 人') > -1, '人数取实测值（5 个我方单位）');
+  ok(sum.indexOf('3665') > -1, '合计取实测值（733×5）');
+  eq(sum.split('金身护盾').length - 1, 1, '技能名只出现一次（这就是「不刷屏」的判据）');
+  eq(sb3.gbOpeningSummary({ units: [], log: [{ turn: 0, unit: '开场', opening: true, events: [shield('你')] }] }),
+    '', '只有 1 条时不必压（返回空串）');
+  eq(sb3.gbOpeningSummary({ units: [], log: [] }), '', '没有开场条目 → 空串（不渲染空壳）');
+  ok(sb3.gbLineupHtml(openGb).indexOf('gb-lineup-open') > -1, '战斗页那一行渲染出开场一句话');
+  ok(sb3.gbLineupHtml({ units: [], allies: [{}], enemies: [{}], log: [] }).indexOf('gb-lineup-open') < 0,
+    '没有开场事件时不渲染那一行');
+  ok(css.indexOf('.gb-lineup-open{') > -1, 'CSS 有 .gb-lineup-open 规则（否则是裸文本）');
+  /* 纯函数：不得碰 DOM（否则会被 _groupStep 的重建节奏牵连） */
+  ok(fnBody(grSrc, 'gbOpeningSummary').indexOf('document') < 0, 'gbOpeningSummary 是纯函数（不碰 DOM）');
+  ok(fnBody(grSrc, 'gbUnitShortName').indexOf('document') < 0, 'gbUnitShortName 是纯函数（不碰 DOM）');
+
+  /* (c) gbSkillName：SKILLS 优先，查不到 → 空串 */
+  eq(sb3.gbSkillName('spikes'), '地刺', 'SKILLS 里的技能名优先');
+  eq(sb3.gbSkillName('__no_such_skill__'), '', '两条表都查不到 → 空串（宁可只显示图标，不编造）');
+  eq(sb3.gbSkillName(''), '', '空 id → 空串');
+}
 
 /* ---------- 汇总 ---------- */
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
