@@ -150,6 +150,72 @@ assert('天赋池与注册表一致（id 全部存在、无宠物专属天赋）
   return ok;
 })());
 
+// ---- 3.9 v2.4.1：SKILLS_LOW 死池修复（可达性 / 确定性 / 概率区间）----
+// 🔴 此前 group-levels.js 的技能派发只有 Boss 与 精英 两条分支：
+//    `var sp = (… ? SKILLS_HIGH : SKILLS_LOW).slice()` 在杂兵身上把 SKILLS_LOW 赋给 sp 之后，
+//    两个分支都进不去 → sp 从未被消费 → 这 6 条低级技能在 240 个关卡里一次都不会发动
+//    （实测：杂兵 238 个技能槽位，携带技能 0 个）。
+//    v2.4.1 补上杂兵分支：50% 概率带 1 个低级技能，仍走本小关的 rng()。
+const lowSkillIds = sandbox.SKILLS_LOW || [];
+assert('SKILLS_LOW 池可读且非空（' + lowSkillIds.length + ' 条：' + lowSkillIds.join('/') + '）', lowSkillIds.length > 0);
+const lowHit = {};
+lowSkillIds.forEach(function (id) { lowHit[id] = 0; });
+let minionSlots = 0, minionWithSkill = 0, minionMulti = [], minionForeign = [];
+groupKeys.forEach(function (k) {
+  (gl[k].stages || []).forEach(function (s) {
+    (s.enemies || []).forEach(function (e, i) {
+      if (e.tier !== 'minion') return;
+      minionSlots++;
+      const sk = e.skills || [];
+      if (sk.length) {
+        minionWithSkill++;
+        if (sk.length > 1) minionMulti.push(s.id + '#' + i + '=' + sk.length);
+      }
+      sk.forEach(function (id) {
+        if (lowSkillIds.indexOf(id) >= 0) lowHit[id]++;
+        else minionForeign.push(s.id + '#' + i + ':' + id);
+      });
+    });
+  });
+});
+const lowMissed = lowSkillIds.filter(function (id) { return !lowHit[id]; });
+assert('SKILLS_LOW 全员可达 ' + (lowSkillIds.length - lowMissed.length) + '/' + lowSkillIds.length + ' 命中'
+  + '（逐条 ' + lowSkillIds.map(function (id) { return id + '=' + lowHit[id]; }).join(' ') + '）',
+  lowSkillIds.length > 0 && lowMissed.length === 0, '未出场：' + (lowMissed.join('/') || '无'));
+assert('杂兵携带技能数 ≤ 1（' + minionSlots + ' 个杂兵槽位）', minionMulti.length === 0, minionMulti.slice(0, 5).join(','));
+assert('杂兵技能全部来自 SKILLS_LOW（不得出现 SKILLS_HIGH 成员）', minionForeign.length === 0, minionForeign.slice(0, 5).join(','));
+/* 回归守卫：50% 是**概率**，不是「恒有」也不是「恒无」。
+   把概率写成 0 / 1 时这条必须红 —— 否则「概率形同虚设」没人会发现。 */
+const minionRate = minionSlots ? minionWithSkill / minionSlots : 0;
+assert('杂兵带技能比例落在 20%~80%（实测 ' + (minionRate * 100).toFixed(1) + '% = ' + minionWithSkill + '/' + minionSlots + '）',
+  minionRate > 0.2 && minionRate < 0.8);
+console.log('   [v2.4.1] SKILLS_LOW 死池修复：命中 ' + (lowSkillIds.length - lowMissed.length) + '/' + lowSkillIds.length
+  + '，杂兵带技能 ' + minionWithSkill + '/' + minionSlots + ' = ' + (minionRate * 100).toFixed(1) + '%');
+assert('杂兵技能抽取是确定性的：同一 (大关,小关,槽位) 两次生成结果完全一致', (function () {
+  for (let lg = 1; lg <= nameCount; lg++) {
+    for (let st = 1; st <= 10; st++) {
+      for (let slot = 0; slot < 3; slot++) {
+        const a = JSON.stringify(sandbox.genEnemyCfg(lg, st, slot, false, false));
+        const b = JSON.stringify(sandbox.genEnemyCfg(lg, st, slot, false, false));
+        if (a !== b) return false;
+      }
+    }
+  }
+  return true;
+})());
+assert('关卡既有 rng 入口可复现：同一种子重建两次，序列逐位一致', (function () {
+  for (let lg = 1; lg <= nameCount; lg++) {
+    for (let st = 1; st <= 10; st++) {
+      for (let slot = 0; slot < 3; slot++) {
+        const seed = sandbox.groupHash(lg, st, slot) + 303;   // 303 = 杂兵分支的 tier 偏移
+        const r1 = sandbox.groupRng(seed), r2 = sandbox.groupRng(seed);
+        for (let n = 0; n < 4; n++) if (r1() !== r2()) return false;
+      }
+    }
+  }
+  return true;
+})());
+
 // ---- 4. 难度递增 ----
 const g1Atk = gl.g1.stages[0].enemies[0].base.atk;
 const g6Atk = gl.g6.stages[9].enemies[0].base.atk;

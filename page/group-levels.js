@@ -309,6 +309,19 @@ function genEnemyCfg(lg, st, slot, isElite, isBoss) {
   } else if (isElite || tier === 'elite1') {
     skills.push(sp[Math.floor(rng() * sp.length)]);
     if (isElite && rng() < 0.5) skills.push('spikes');
+  } else {
+    /* v2.4.1：杂兵分支 —— SKILLS_LOW **死池**修复。
+       为什么以前不生效：上面两个分支（Boss / 精英）之前，杂兵没有任何分支消费 `sp`
+       （对杂兵即 SKILLS_LOW），它只被赋给局部变量就再无下文 →
+       bite 咬击 / snowball 雪球 / shrink 变小 / yawn 哈欠 / drench 打湿 / surprise 击掌奇袭
+       这 6 条低级技能在全部 240 个关卡里**一次都不会发动**
+       （实测：杂兵 238 个技能槽位，携带技能 0 个）。
+       现在：50% 概率带 1 个低级技能。仍走本小关的 rng()（与属性 / 词条 / 天赋同源），
+       种子确定性与「同一关永远同一套配置」的性质不变。
+       ⚠️ 这个 else 恰好只覆盖 tier === 'minion'：tier 由上面第 264 行派生，
+          isBoss → 'boss'、isElite → 'elite2'，其余只有 'elite1'（st 为 3 的倍数）与 'minion'，
+          而 'elite1' 已被上一分支接住。池为空时不 push（也不消耗 rng）。 */
+    if (sp.length && rng() < 0.5) skills.push(sp[Math.floor(rng() * sp.length)]);
   }
   if (skills.length) cfg.skills = skills;
 

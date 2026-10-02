@@ -225,12 +225,19 @@ assert('同一槽位天赋不重复',
       值取自固化前的采集结果（page/group-levels.js 的天赋抽取放在词条/技能之后）
    ============================================================ */
 const SENTINEL = {
-  'g3-4': [{ tier: 'minion', affixes: [], skills: [] }, { tier: 'minion', affixes: [], skills: [] }],
+  /* v2.4.1 重采基线说明（只动**杂兵 skills** 一项）：
+     本节守的是「词条 + 技能的**随机流**不被天赋固化扰动」。
+     v2.4.1 给杂兵补了 `SKILLS_LOW` 分支（50% 概率带 1 个低级技能，走关卡既有 `rng()`，
+     见 doc/changelog-v2.4.md 的 v2.4.1）→ 杂兵的 skills 由「恒空」变为**有意为之**的取值，
+     故 `g3-4` / `g7-5` 两个含杂兵的哨兵按新实现重采。
+     ⚠️ 非杂兵槽位的 skills 与**全部 affixes 逐字保留旧值** —— 它们仍是本节的回归面：
+     若这次杂兵抽样真的污染了后面的随机流，affixes / elite2 / boss 的取值会立刻对不上。 */
+  'g3-4': [{ tier: 'minion', affixes: [], skills: ['shrink'] }, { tier: 'minion', affixes: [], skills: [] }],
   'g6-10': [{ tier: 'boss', affixes: ['cut_boss', 'extra_act', 'aoe_guard'], skills: ['doom', 'drainbuff'] },
     { tier: 'elite2', affixes: ['cut_elite', 'skill_guard'], skills: ['empower'] },
     { tier: 'elite2', affixes: ['cut_elite', 'extra_act'], skills: ['empower'] }],
   'g7-5': [{ tier: 'elite2', affixes: ['cut_elite', 'aoe_guard'], skills: ['clearfog', 'spikes'] },
-    { tier: 'minion', affixes: [], skills: [] }, { tier: 'minion', affixes: [], skills: [] }],
+    { tier: 'minion', affixes: [], skills: [] }, { tier: 'minion', affixes: [], skills: ['shrink'] }],
   'g12-10': [{ tier: 'boss', affixes: ['cut_boss', 'extra_act', 'grow_def'], skills: ['spikes', 'bulwark'] },
     { tier: 'elite2', affixes: ['cut_elite', 'doom_call'], skills: ['clearfog', 'spikes'] },
     { tier: 'elite2', affixes: ['cut_elite', 'extra_act'], skills: ['taunt', 'spikes'] }],
