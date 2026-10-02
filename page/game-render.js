@@ -444,6 +444,10 @@ function startGroupTrial(groupId){
   var stats=getGameStats()
   /* WP-G：角色等级系统 —— 开战前先结算季度/周（幂等），再取等级效果 */
   if (typeof syncLevel === 'function') syncLevel()
+  /* v2.4.0 改造 5：日志类型筛选每次开战重置为「全部」。
+     ⚠️ 插入位置必须在 syncLevel() **之后** —— scripts/test-level-system.js 有一条
+        「startGroupTrial 900 字符窗口内必须出现 syncLevel()」的源码级断言。 */
+  _gbLogFilter='all'
   // v2.1.10：敌群是独立属性空间 —— 玩家只继承一定比例，避免裸属性把敌人压成 1 点
   var gs=(typeof inheritGroupStats==='function')?inheritGroupStats(stats):stats
   /* WP-G 落点：等级效果属**基础属性**加成，加在敌群继承（GROUP_INHERIT）**之后** →
@@ -550,51 +554,175 @@ function _groupStep(){
   _groupTimer=setTimeout(_groupStep,700/_groupSpeed)
 }
 
-/* 攻击反馈动画：解析本次行动日志，受击目标闪烁 + 伤害飘字 */
+/* ============================================================
+   v2.4.0 改造 3：打击特效（#gbFx 特效层 + 飘字解析）
+
+   为什么不把飘字挂在单位卡上（旧实现就是这么干的）：
+   `renderGroupOverlay()` 每步 `innerHTML` 重建整个 overlay，而飘字生存期 900ms——
+   ×1 步间隔 700ms 就已经会把它清掉，×4/×8 只有 175/87ms，**必然被清掉**。
+   故特效只挂固定层 `#gbFx`（fixed + pointer-events:none），用卡片的
+   `getBoundingClientRect()` 取屏幕坐标定位 —— 卡片重建不影响已生成的飘字。
+
+   解析口径**唯一来源**是任务书第 2 节的「引擎日志速查表」（禁凭想象造句）：
+     damage  → `→ N 伤害` / `→ N 魂伤害`（普攻/技能/蓄力/魂攻）、`反伤 N`、`反冲 -N`、`牺牲自我 -N`
+     dot     → `-N`（中毒 / 附身侵蚀 / 末日 / 遗言）
+     terrain → `受碎石伤害 N` / `被闪电击中 N`
+     heal    → `+N`（治疗 / 技能吸血 / 自愈 / 战意吸血 / 睡眠回复）
+     status  → 护盾吸收等一律**不出飘字**（吸收不是伤害）
+   暴击判定：文案里没有「暴击」二字，故只能看**同一 events 数组里紧邻的前一个**事件
+   （引擎写日志的顺序固定为「先 💥 暴击！×N，再写伤害事件」）。
+   ============================================================ */
+var GB_FX_LIFE=900   /* 飘字生存期（ms）——与 @keyframes floatUpC 的 .9s 对齐 */
+
+/* 引擎日志正则（改引擎文案必须同步改这里；纯函数 gbParseHit 是唯一消费点）
+   ⚠️ 伤害数字必须取**最后一组**：`dmg` 的 `(.+?)` 是目标名，数字在 `(\d+)`。
+      两种句式都要吃 ——
+        · 普攻/魂攻：目标在箭头**前**  `⚔️ 剑士 攻击 魔像 → 1218 伤害`（箭头后直接是数字）
+        · 技能/蓄力：目标在箭头**后**  `⚡ Boss 暴风雪 → 🧑 你 189 伤害`
+      只写任务书速查表那一条 `→\s+(.+?)\s+(\d+)\s+伤害` 会**漏掉全部普攻与魂攻**
+      （实测：`攻击 魔像 → 1218 伤害` 与 `魂攻击 B → 88 魂伤害` 都不匹配）。 */
+var GB_HIT_RX={
+  dmgSkill:/→\s+(.+?)\s+(\d+)\s+(?:魂)?伤害/,        /* 技能/蓄力：数字在目标名之后（取 group 2） */
+  dmgPlain:/→\s+(\d+)\s+(?:魂)?伤害/,                 /* 普攻/魂攻：数字紧跟箭头（取 group 1） */
+  rock:/受碎石伤害\s+(\d+)/,                          /* 🪨 B 受碎石伤害 40 */
+  bolt:/被闪电击中\s+(\d+)/,                          /* ⚡ B 被闪电击中 55 */
+  reflect:/反伤\s+(\d+)/,                             /* 🩸 B 粗糙皮肤 → A 反伤 5 */
+  reflectNamed:/反伤\s+\S+\s+(\d+)/,                  /* 🛡️ 金身护盾被击破 → 反伤 A 12（带名字的变体） */
+  recoil:/反冲\s+-(\d+)/,                             /* 💥 A 三连 反冲 -30（…） */
+  selfsac:/牺牲自我\s+-(\d+)/,                        /* 🌀 A 迷惑 → 牺牲自我 -12 */
+  dot:/-(\d+)\s*$/,                                   /* ☠️ 中毒: -12 */
+  heal:/\+\s*(\d+)/,                                  /* 💚 A → B 治疗 +120 / 🩸 技能吸血 +30 */
+  shield:/护盾吸收\s+(\d+)/                           /* 🛡️ B 护盾吸收 30（不计伤害、不出飘字） */
+}
+
+/* 单条事件 → {amount, kind, crit}；不是可飘字事件返回 null。
+   ⚠️ **按 e.type 分派**，不是只认 damage —— dot / terrain / heal 全在别的 type 上。 */
+function gbParseHit(e, prevEvent){
+  if(!e||!e.msg)return null
+  var t=e.type||'', m=e.msg, r
+  if(t==='heal'){
+    r=GB_HIT_RX.heal.exec(m)
+    return r?{amount:Number(r[1]),kind:'heal',crit:false}:null
+  }
+  if(t==='terrain'){
+    r=GB_HIT_RX.rock.exec(m)||GB_HIT_RX.bolt.exec(m)
+    return r?{amount:Number(r[1]),kind:'terrain',crit:false}:null
+  }
+  if(t==='dot'){
+    r=GB_HIT_RX.dot.exec(m)
+    return r?{amount:Number(r[1]),kind:'dot',crit:false}:null
+  }
+  if(t!=='damage')return null
+  if(GB_HIT_RX.shield.test(m))return null      /* 护盾吸收：不是伤害 */
+  var crit=!!(prevEvent&&prevEvent.msg&&/暴击/.test(prevEvent.msg))
+  r=GB_HIT_RX.reflect.exec(m)||GB_HIT_RX.reflectNamed.exec(m)
+  if(r)return {amount:Number(r[1]),kind:'reflect',crit:crit}
+  r=GB_HIT_RX.recoil.exec(m)||GB_HIT_RX.selfsac.exec(m)
+  if(r)return {amount:Number(r[1]),kind:'recoil',crit:crit}
+  /* 技能/蓄力先试（数字在名字之后），再试普攻/魂攻（数字紧跟箭头） */
+  r=GB_HIT_RX.dmgSkill.exec(m)
+  if(r)return {amount:Number(r[2]),kind:'dmg',crit:crit}
+  r=GB_HIT_RX.dmgPlain.exec(m)
+  if(r)return {amount:Number(r[1]),kind:'dmg',crit:crit}
+  return null
+}
+
+/* 特效层（懒建、挂 body；fixed + inset:0 → 子元素坐标即视口坐标） */
+function gbFxLayer(){
+  var el=(typeof document!=='undefined')?document.getElementById('gbFx'):null
+  if(el)return el
+  if(typeof document==='undefined'||!document.body||typeof document.createElement!=='function')return null
+  el=document.createElement('div')
+  el.id='gbFx'
+  el.setAttribute('aria-hidden','true')
+  el.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:56'
+  document.body.appendChild(el)
+  return el
+}
+/* 清空特效层（#gbClose 与 _groupDone 都调 —— 否则打完还飘着上一场的数字） */
+function gbFxClear(){
+  var el=(typeof document!=='undefined')?document.getElementById('gbFx'):null
+  if(el)el.innerHTML=''
+}
+
+/* 伤害色阶：按**目标最大生命**百分比（目标取 e.targetId → gb.units）
+   <5% 白 --text / 5%~20% 黄 --yellow / >20% 红 --red；字号 --fs-2xl，暴击再上一档 --fs-3xl */
+function gbHitColor(gb, e, amount){
+  var u=null
+  if(e&&e.targetId&&gb&&gb.units){
+    for(var i=0;i<gb.units.length;i++){ if(gb.units[i].id===e.targetId){u=gb.units[i];break} }
+  }
+  var maxHp=(u&&u.base&&u.base.hp)?u.base.hp:0
+  if(!(maxHp>0))return 'var(--red)'      /* 目标查不到（场地事件无 targetId）→ 按重击处理 */
+  var pct=Number(amount)/maxHp
+  if(pct<0.05)return 'var(--text)'
+  if(pct<=0.20)return 'var(--yellow)'
+  return 'var(--red)'
+}
+
+/* 从事件文案里抠受击目标名（场地事件没有 targetId，只能从文案取） */
+function gbEventTargetName(e){
+  if(!e||!e.msg)return null
+  var m=/攻击\s+(.+?)\s*→/.exec(e.msg)||/→\s+(.+?)\s+\d+\s+(?:魂)?伤害/.exec(e.msg)
+  if(m)return m[1].trim()
+  var t=/(?:受碎石伤害|被闪电击中)/.exec(e.msg)
+  if(t){var pre=gbStripLeadEmoji(e.msg.slice(0,t.index));if(pre)return pre}
+  return null
+}
+
+/* 事件 → 单位卡（优先 targetId；场地事件退回文案里的名字） */
+function gbCardForEvent(ov, gb, e){
+  if(!ov)return null
+  if(e&&e.targetId){
+    var c=ov.querySelector('.gb-unit[data-uid="'+e.targetId+'"]')
+    if(c)return c
+  }
+  var name=gbEventTargetName(e)
+  if(!name)return null
+  var cards=ov.querySelectorAll('.gb-unit')
+  for(var i=0;i<cards.length;i++){
+    if(cards[i].textContent.indexOf(name)>-1)return cards[i]
+  }
+  return null
+}
+
+/* 飘字：居中定位（left/top 已含 translateX(-50%) 的对齐基准，见 .gb-fx-float 与 floatUpC） */
+function gbFxFloat(card, text, color, big){
+  var layer=gbFxLayer()
+  if(!layer||!card||typeof card.getBoundingClientRect!=='function')return
+  var r
+  try{ r=card.getBoundingClientRect() }catch(e){ console.warn('[group] 飘字定位失败',e); return }
+  if(!r||!r.width)return
+  var el=document.createElement('div')
+  el.className='gb-fx-float'+(big?' big':'')
+  el.textContent=text
+  el.style.cssText='left:'+Math.round(r.left+r.width/2)+'px;top:'+Math.round(r.top+r.height/2)+'px'
+    +';color:'+color+';font-size:'+(big?'var(--fs-3xl)':'var(--fs-2xl)')
+  layer.appendChild(el)
+  setTimeout(function(){ if(el&&el.parentNode&&el.parentNode.removeChild)el.parentNode.removeChild(el) },GB_FX_LIFE)
+}
+
+/* 攻击反馈动画：解析本次行动的日志，受击目标闪烁 + 伤害/治疗飘字（全部挂 #gbFx） */
 function playAttackFeedback(gb, step) {
   var ov = document.getElementById('battleOverlay')
   if (!ov) return
-  var lastLog = gb.log.length ? gb.log[gb.log.length-1] : null
+  var logs = (gb && gb.log) ? gb.log : []
+  var lastLog = logs.length ? logs[logs.length-1] : null
   if (!lastLog) return
-  // 找本次行动的伤害事件（v2.1.14 起日志统一为「… → [目标] N 伤害」）
-  lastLog.events.forEach(function(e){
-    // 用惰性 .*? 取伤害数字：单位名可能含空格（如「👹 熔岩巨兽」），不能按 \S+ 切
-    var m = /→\s+.*?(\d+)\s+(?:魂)?伤害/.exec(e.msg)
-    if (!m) {
-      // 场地伤害（沙暴碎石 / 雨天闪电）也飘字，格式没有箭头
-      var t2 = /(?:受碎石伤害|被闪电击中)\s+(\d+)/.exec(e.msg)
-      if (t2) m = [t2[0], t2[1]]
+  var evs = lastLog.events || []
+  evs.forEach(function(e, i){
+    /* 暴击判定靠**紧邻的前一个**事件（伤害文案里没有「暴击」二字） */
+    var hit = gbParseHit(e, i > 0 ? evs[i-1] : null)
+    if (!hit) return
+    var card = gbCardForEvent(ov, gb, e)
+    if (card) {
+      card.classList.add('gb-hit')
+      setTimeout(function(){ card.classList.remove('gb-hit') }, 500)
     }
-    if (!m) return
-    var dmgNum = m[1]
-    // 受击目标：优先用事件里的 targetId（引擎侧保证伤害事件都带）
-    var targetCard = null
-    if (e.targetId) {
-      targetCard = ov.querySelector('.gb-unit[data-uid="'+e.targetId+'"]')
-    }
-    if (!targetCard) {
-      // 兜底：从文案里抠目标名（「A 攻击 B →」「→ B N 伤害」两种句式，允许名字带空格）
-      var nm = /攻击\s+(.+?)\s*→/.exec(e.msg) || /→\s+(.+?)\s+\d+\s+(?:魂)?伤害/.exec(e.msg)
-      var name = nm ? nm[1] : null
-      if (name) {
-        var cards = ov.querySelectorAll('.gb-unit')
-        for (var i=0;i<cards.length;i++){
-          if (cards[i].textContent.indexOf(name) > -1){ targetCard = cards[i]; break }
-        }
-      }
-    }
-    // 受击闪烁 + 飘字（追加到卡片内部，绝对定位跟随卡片）
-    if (targetCard) {
-      targetCard.classList.add('gb-hit')
-      setTimeout(function(){ targetCard.classList.remove('gb-hit') }, 500)
-      var float = document.createElement('div')
-      float.textContent = '-' + dmgNum
-      float.style = 'position:absolute;top:4px;right:10px;color:var(--red);font-size:var(--fs-xl);font-weight:800;z-index:5;pointer-events:none;animation:floatUp 0.8s ease forwards;text-shadow:0 2px 4px rgba(0,0,0,.5)'
-      // 卡片需相对定位
-      targetCard.style.position = 'relative'
-      targetCard.appendChild(float)
-      setTimeout(function(){ float.remove() }, 900)
-    }
+    var color = (hit.kind === 'heal') ? 'var(--green)' : gbHitColor(gb, e, hit.amount)
+    var text = (hit.kind === 'heal' ? '+' : '-') + hit.amount
+    if (hit.crit) text = '💥' + text
+    gbFxFloat(card, text, color, hit.crit)
   })
 }
 
@@ -627,6 +755,7 @@ function _groupDone(){
   _groupRewarded=true
   _groupActing=null        // v2.1.14：战斗结束不再残留「行动中」高亮
   _groupPaused=false
+  gbFxClear()              // v2.4.0：清掉本场残留飘字（否则结算面板后面还飘着旧数字）
   renderGroupOverlay(false)
   if(w==='ally'){
     // 记录敌群通关（解锁下一关）
@@ -661,6 +790,10 @@ function _groupDone(){
     } catch (e) { console.warn('[group] 受伤判定失败', e); }
     toast(msg0, 'e')
   }
+  /* v2.4.0 改造 4：结算统计面板 —— 统计**只算一次**（在这里算好传进去），
+     且必须排在既有副作用（通关标记 / 奖励 / 宠物受伤 / 小关列表）**之后**，顺序不动。
+     面板走 #panelOverlay（z-index 52 > 战斗层 50），不新建 overlay。 */
+  if(_groupBattle)showGroupResultPanel(_groupBattle, groupBattleStats(_groupBattle))
 }
 
 /* 敌群胜利奖励：技能点（基数 4 点/胜，与挑战数值独立）+ 材料掉落
@@ -717,6 +850,245 @@ function gbSideHpPct(units){
   return max>0?Math.round(cur/max*100):0
 }
 
+/* ============================================================
+   v2.4.0 改造 4：结算统计 + 战报文本（纯函数，只读 gb.log / gb.units / gb.winner / gb.turn）
+
+   归因口径（任务书 §3 改造 4 的表，逐条落地）：
+     · 造成伤害 ← `l.unit`（行动者）  damage 族（普攻/技能/蓄力/魂攻/反伤/反冲）
+     · 治疗量   ← `l.unit`（施放者），目标取 `e.targetId`
+     · 施加状态 ← `l.unit`，type=status 且文案匹配 /(施加|刷新)【/
+     · 承受伤害 ← `e.targetId` → 单位（damage 族 + dot + terrain）
+     · 场地伤害 ← 单列「🌍 场地」行（terrain）
+   ⚠️ `gb.log` **没有 unitId**（只有 `l.unit` 名字）→ 必须建「名字 → 单位」映射；
+      同名单位按 gb.units 顺序加后缀（`宠物A#2`）**如实显示、不静默合并**，
+      但日志侧只能把该名字归到**首个**同名单位（引擎没给 id，这一点在面板里明说）。
+   ⚠️ dot（中毒/附身/末日/遗言）**没有攻击者**：单列一行、不计入任何人造成伤害、不参与 MVP，
+      但**计入承受伤害**（事件带 targetId）。
+   ============================================================ */
+function gbUnitIndex(gb){
+  var seen={}, byName={}, byShort={}, list=[], dup=false
+  ;((gb&&gb.units)||[]).forEach(function(u){
+    var base=u.name||'单位'
+    seen[base]=(seen[base]||0)+1
+    if(seen[base]>1)dup=true
+    var key=seen[base]>1?(base+'#'+seen[base]):base
+    list.push({key:key,unit:u})
+    if(!byName[base])byName[base]=u
+    /* 场地事件的 targetId 缺失，只能从文案里抠名字，而文案里的名字**没有前导 emoji**
+       （`🪨 🧑 你 受碎石伤害 40` → 抠出 `你`）→ 需要一份「剥 emoji 后」的索引。 */
+    var short=gbStripLeadEmoji(base)
+    if(short&&!byShort[short])byShort[short]=u
+  })
+  return {byName:byName,byShort:byShort,list:list,dup:dup}
+}
+
+function groupBattleStats(gb){
+  var idx=gbUnitIndex(gb)
+  var rows=[], byId={}
+  ;((gb&&gb.allies)||[]).forEach(function(u){
+    var r={id:u.id,name:u.name,key:u.name,dealt:0,taken:0,healed:0,status:0,alive:u.hp>0,mvp:false}
+    byId[u.id]=r
+    rows.push(r)
+  })
+  /* 同名单位在表内如实加后缀（只改显示 key，归因仍按首个个体的 id） */
+  idx.list.forEach(function(e){ if(byId[e.unit.id])byId[e.unit.id].key=e.key })
+  var terrain=0,dot=0,shield=0,unit=null
+  ;((gb&&gb.log)||[]).forEach(function(l){
+    if(!l||!l.events)return
+    var actor=(l.unit&&idx.byName[l.unit])||null
+    var actorRow=(actor&&byId[actor.id])||null
+    var evs=l.events
+    for(var i=0;i<evs.length;i++){
+      var e=evs[i]
+      if(!e||!e.msg||e.type==='bubble')continue
+      var t=e.type||''
+      /* 承受伤害落点：优先 e.targetId；场地事件没有 targetId → 退回文案里的名字 */
+      var victimRow=null
+      if(e.targetId&&byId[e.targetId])victimRow=byId[e.targetId]
+      else if(t==='terrain'){
+        var vn=gbEventTargetName(e)
+        var vu=(vn&&(idx.byName[vn]||idx.byShort[vn]))||null
+        if(vu&&byId[vu.id])victimRow=byId[vu.id]
+      }
+      if(t==='heal'){
+        var hm=GB_HIT_RX.heal.exec(e.msg)
+        if(hm&&actorRow)actorRow.healed+=Number(hm[1])
+        continue
+      }
+      if(t==='status'){
+        if(GB_HIT_RX.shield.test(e.msg)){
+          var sm=GB_HIT_RX.shield.exec(e.msg)
+          shield+=Number(sm[1])
+        } else if(/(施加|刷新)【/.test(e.msg)&&actorRow){
+          actorRow.status++
+        }
+        continue
+      }
+      var hit=gbParseHit(e,i>0?evs[i-1]:null)
+      if(!hit)continue
+      if(victimRow)victimRow.taken+=hit.amount
+      if(t==='terrain'){ terrain+=hit.amount; continue }   /* 场地伤害单列 */
+      if(hit.kind==='dot'){ dot+=hit.amount; continue }    /* 无攻击者：单列，不计 MVP */
+      if(actorRow)actorRow.dealt+=hit.amount
+    }
+  })
+  /* MVP：伤害最高 → 并列看治疗 → 再并列按 gb.units 顺序（rows 就是 gb.allies 顺序）。
+     全员 0 伤害（例如开场被秒）时不给 MVP —— 给个 0 伤害的「最有价值」是误导。 */
+  var mvp=null
+  rows.forEach(function(r){
+    if(!mvp){ mvp=r; return }
+    if(r.dealt>mvp.dealt)mvp=r
+    else if(r.dealt===mvp.dealt&&r.healed>mvp.healed)mvp=r
+  })
+  if(mvp&&mvp.dealt>0)mvp.mvp=true
+  else mvp=null
+  return {rows:rows,mvp:mvp,terrain:terrain,dot:dot,shield:shield,
+    rounds:(gb&&gb.turn)||0,winner:gb?gb.winner:null,dup:idx.dup,
+    logs:((gb&&gb.log)||[]).length}
+}
+
+/* 战报文本：**唯一来源** —— 日志页「📋 复制」与结算面板「📋 复制战报」共用（禁两处各写一套） */
+function groupLogText(gb){
+  if(!gb||!gb.log)return ''
+  return gb.log.map(function(l){
+    var head='【'+(l.turn===0?'开场':'回合 '+l.turn)+'】'+(l.unit||'')
+    var body=(l.events||[]).filter(function(e){return e&&e.msg&&e.type!=='bubble'})
+      .map(function(e){return e.msg}).join('；')
+    return head+': '+body
+  }).join('\n')
+}
+
+/* 复制文本（日志页与结算面板共用；剪贴板不可用时退回 execCommand，失败要如实告知） */
+function gbCopyText(text){
+  if(typeof text!=='string'||!text)return
+  try{
+    if(typeof navigator!=='undefined'&&navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){toast('📋 战报已复制','s')},function(err){
+        console.warn('[group] clipboard 被拒，走兜底',err); gbCopyFallback(text)
+      })
+      return
+    }
+  }catch(e){ console.warn('[group] clipboard 不可用，走兜底',e) }
+  gbCopyFallback(text)
+}
+function gbCopyFallback(text){
+  try{
+    var ta=document.createElement('textarea')
+    ta.value=text
+    if(document.body&&document.body.appendChild)document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    if(ta.parentNode&&ta.parentNode.removeChild)ta.parentNode.removeChild(ta)
+    toast('📋 战报已复制','s')
+  }catch(e){ console.warn('[group] 复制失败',e); toast('复制失败，请手动选择文本','e') }
+}
+
+/* 结算面板：复用 #panelOverlay（z-index 52 > 战斗层 50），不新建 overlay。
+   ⚠️ restore 里**只**关掉战斗 overlay，不能走 resumeGroupBattle()
+      —— 那会再次进入 _groupDone（本函数正是从 _groupDone 里调起的）。 */
+function showGroupResultPanel(gb, stats){
+  if(!gb||!stats)return
+  var win=gb.winner==='ally'
+  var h='<div class="det-hdr">'
+    +'<button class="speed-btn" id="detailClose">✕</button>'
+    +'<span class="det-title">'+(win?'🏆 胜利':'💀 失败')+'</span>'
+    +'<span class="det-sub">共 '+stats.rounds+' 回合</span>'
+    +'</div>'
+  h+='<div class="det-card">'
+  h+='<div class="det-h">📊 我方战报</div>'
+  stats.rows.forEach(function(r){
+    h+='<div class="gb-res-row">'
+      +'<span class="gb-res-name">'+escHtml(r.key||r.name||'单位')
+      +(r.mvp?' <b class="gb-res-mvp">👑 MVP</b>':'')+'</span>'
+      +'<span class="gb-res-cells">'
+      +'<i>⚔️ '+r.dealt+'</i><i>🛡️ '+r.taken+'</i><i>💚 '+r.healed+'</i><i>🌀 '+r.status+'</i>'
+      +'<i>'+(r.alive?'✅ 存活':'💀 阵亡')+'</i>'
+      +'</span>'
+      +'</div>'
+  })
+  if(!stats.rows.length)h+='<div class="det-dim">（本场没有我方单位数据）</div>'
+  h+='</div>'
+  h+='<div class="det-card">'
+  h+='<div class="det-h">🌍 其他来源</div>'
+  h+=detRow('🌍 场地伤害（单列）',String(stats.terrain))
+  h+=detRow('☠️ 持续伤害（无攻击者，不计 MVP）',String(stats.dot))
+  h+=detRow('🛡️ 护盾吸收（不计入造成伤害）',String(stats.shield))
+  h+='</div>'
+  if(stats.dup){
+    h+='<div class="det-card"><div class="det-line dim">⚠️ 本场存在同名单位：表格按 gb.units 顺序加后缀区分（如「宠物A#2」）；'
+      +'但 gb.log 只记行动者名字、没有 id，日志归因只能落到**首个**同名单位。</div></div>'
+  }
+  h+='<button class="speed-btn" id="gbCopyReport">📋 复制战报</button>'
+  _openDetailPanel(h, function(){
+    var bo=document.getElementById('battleOverlay')
+    if(bo)bo.classList.remove('open')
+  })
+  var cb=document.getElementById('gbCopyReport')
+  if(cb)cb.addEventListener('click',function(){ gbCopyText(groupLogText(gb)) })
+}
+
+/* ============================================================
+   v2.4.0 改造 1：行动横幅（#gbActionBanner）
+
+   位置：`.gb-ctrl` **之后**、`.gb-tabs` **之前**，同属**吸顶区**。
+   ⚠️ 绝不能放进 `#gbPane` —— 那是唯一的滚动容器（`.gb-pane{overflow-y:auto}`），
+      放进去横幅会随日志/单位卡一起滚走，等于白做。
+
+   内容**全部从数据派生**（禁写死模板句）：
+     · 左色块：行动者取 `_groupActing` → `gb.units` → side（绿 / 红）；
+       该条日志是场地事件 → 紫；是开场事件 → `--yellow`。
+     · 正文：行动者名字 + 该条日志（`gb.log` 末条）**首个非 bubble 事件**的 msg，
+       两侧都先剥前导 emoji 与多余空格（见 gbStripLeadEmoji）。
+     · 无 `_groupActing` 且战斗已结束 → `⏸ 战斗结束`；既无行动者又没结束（开战瞬间）
+       → 整条隐藏，不占吸顶区高度。
+
+   ⚠️ 只在 renderGroupOverlay() 里重绘：`_groupStep()` 不得新增任何 DOM 操作。
+   a11y：`aria-hidden="true"`（可读记录以日志 Tab 为准），**不加 aria-live**
+       —— 自动模式每秒重绘好几次，读屏会被刷屏。
+   ============================================================ */
+function renderGroupActionBanner(gb){
+  if(!gb)return ''
+  var logs=(gb.log&&gb.log.length)?gb.log:[]
+  var l=logs.length?logs[logs.length-1]:null
+  var unit=null
+  if(_groupActing&&gb.units){
+    for(var i=0;i<gb.units.length;i++){
+      if(gb.units[i].id===_groupActing){unit=gb.units[i];break}
+    }
+  }
+  if(!unit&&!gb.done)return ''      // 开战瞬间 / 无行动者：隐藏
+  var tone
+  if(!unit)tone='none'              // 战斗结束：中性色块
+  else if(l&&l.terrain)tone='terrain'
+  else if(l&&l.opening)tone='opening'
+  else tone=(unit.side==='ally'?'ally':'enemy')
+  var evText=''
+  if(l&&l.events){
+    for(var j=0;j<l.events.length;j++){
+      var e=l.events[j]
+      if(e&&e.type!=='bubble'&&e.msg){evText=gbStripLeadEmoji(e.msg);break}
+    }
+  }
+  var text
+  if(!unit)text='⏸ 战斗结束'
+  else{
+    var nm=gbStripLeadEmoji(unit.name)
+    /* ⚠️ 引擎事件里**绝大多数**已经带了行动者名（`⚔️ 🧑 你 攻击 Boss·暗龙 → …`），
+       直接拼会得到「你 你 攻击…」。故 msg 以行动者名开头时把它摘掉再拼 ——
+       首行仍是「<名字> + 事件文案」，只是不会把一个名字印两遍（纯字符串派生，非模板句）。 */
+    if(nm&&evText.indexOf(nm)===0){
+      var rest=evText.slice(nm.length)
+      if(rest===''||/^[\s·，,、:：]/.test(rest))evText=rest.replace(/^[\s·，,、:：]+/,'')
+    }
+    text=nm&&evText?(nm+' '+evText):(nm||evText)
+  }
+  if(!text)return ''
+  return '<div id="gbActionBanner" class="gb-banner tone-'+tone+'" aria-hidden="true" title="'+escHtml(text)+'">'
+    +'<span class="gb-banner-chip"></span>'
+    +'<span class="gb-banner-text">'+escHtml(text)+'</span>'
+    +'</div>'
+}
+
 /* 渲染群战 overlay：手动/自动 + 调速 + 单位 + 动画 + 详情 + 日志 */
 function renderGroupOverlay(show){
   var ov=document.getElementById('battleOverlay')
@@ -748,10 +1120,12 @@ function renderGroupOverlay(show){
     +'<span class="gb-ovw-side enemy">🔴 敌方<span class="gb-ovw-bar"><i style="width:'+foePct+'%"></i></span>'+foePct+'%</span>'
     +'</div>'
     +'</div>'
+  /* v2.4.0 改造 1：行动横幅 —— 吸顶区（.gb-ctrl 之后、.gb-tabs 之前，绝不在 #gbPane 内） */
+  h+=renderGroupActionBanner(gb)
   // v2.1.14 双 Tab（战斗 / 日志）
   h+='<div class="gb-tabs" role="tablist" aria-label="战斗视图">'
     +'<button class="gb-tab'+(_gbTab==='battle'?' active':'')+'" data-gbtab="battle" role="tab" aria-selected="'+(_gbTab==='battle')+'">⚔️ 战斗</button>'
-    +'<button class="gb-tab'+(_gbTab==='log'?' active':'')+'" data-gbtab="log" role="tab" aria-selected="'+(_gbTab==='log')+'">📜 日志<span class="gb-tab-n">'+((gb.log&&gb.log.length)||0)+'</span></button>'
+    +'<button class="gb-tab'+(_gbTab==='log'?' active':'')+'" data-gbtab="log" role="tab" aria-selected="'+(_gbTab==='log')+'">📜 日志<span class="gb-tab-n">'+gbLogEntries(gb).length+'</span></button>'
     +'</div>'
   // 页签内容（各自独立滚动，日志页不再挤在 300px 里）
   h+='<div class="gb-pane" id="gbPane">'
@@ -760,7 +1134,7 @@ function renderGroupOverlay(show){
   ov.innerHTML=h
   // 事件绑定
   var closeBtn=document.getElementById('gbClose')
-  if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;_groupPaused=false;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}})
+  if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;_groupPaused=false;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}gbFxClear()})
   // v2.1.22：场地胶囊 → 场地介绍弹层
   var terrBtn=document.getElementById('gbTerrain')
   if(terrBtn)terrBtn.addEventListener('click',function(){showTerrainDetail(gb.terrain)})
@@ -794,21 +1168,17 @@ function renderGroupOverlay(show){
   var copyBtn=document.getElementById('gbCopyLog')
   // v2.1.14：滚动容器由 #gbLogBox 换成页签容器 #gbPane（日志页铺满整屏，不再挤在 300px 内）
   var pane = document.getElementById('gbPane')
+  /* v2.4.0 改造 2：行动焦点 —— 有行动者且未结束才挂 .gb-focus。
+     CSS 只做 opacity .75 的暗化（上限 0.75：既有决策见 index.css 的「低透明度会破坏对比度」），
+     行动者靠既有 box-shadow 光环 + ::before 强调条 + z-index:2 凸显，
+     **不用 transform:scale()** —— .gb-pane 是滚动裁剪容器，放大一定会溢出/出横向滚动条。 */
+  if (pane && pane.classList) pane.classList.toggle('gb-focus', !!(_groupActing && !gb.done))
   if (pane && _gbTab==='log') pane.scrollTop = pane.scrollHeight
   if(copyBtn)copyBtn.addEventListener('click',function(){
     var gb2=_groupBattle
     if(!gb2)return
-    var text=gb2.log.map(function(l){
-      // v2.1.14：带上行动者（l.unit）与开场/回合标题，气泡事件不入文本（已在战斗页弹过）
-      var head='【'+(l.turn===0?'开场':'回合 '+l.turn)+'】'+(l.unit||'')
-      var body=(l.events||[]).filter(function(e){return e&&e.msg&&e.type!=='bubble'}).map(function(e){return e.msg}).join('；')
-      return head+': '+body
-    }).join('\n')
-    try{
-      navigator.clipboard.writeText(text).then(function(){toast('📋 日志已复制','s')})
-    }catch(e){
-      var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('📋 日志已复制','s')
-    }
+    /* v2.4.0：文本拼接抽成 groupLogText()（唯一来源）—— 结算面板的「📋 复制战报」共用同一函数 */
+    gbCopyText(groupLogText(gb2))
   })
   // v2.1.7：日志展开/收起
   var logToggle=document.getElementById('gbLogToggle')
@@ -817,6 +1187,15 @@ function renderGroupOverlay(show){
     renderGroupOverlay(false)
     var p2=document.getElementById('gbPane')
     if(p2)p2.scrollTop=p2.scrollHeight
+  })
+  /* v2.4.0 改造 5：日志类型筛选按钮（统一由 renderGroupOverlay 绑定/重绘，_groupStep 不碰 DOM） */
+  ov.querySelectorAll('[data-gblogfilter]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var f=btn.getAttribute('data-gblogfilter')
+      if(f===_gbLogFilter)return
+      _gbLogFilter=f
+      renderGroupOverlay(false)
+    })
   })
   // 单位点击：看详情（v2.1.14：先暂停推进，否则自动模式会把详情页刷掉）
   ov.querySelectorAll('.gb-unit').forEach(function(el){
@@ -870,6 +1249,36 @@ function escHtml(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
 }
 
+/* ============================================================
+   v2.4.0 共用：剥掉文案**前导** emoji / 符号与多余空格（行动横幅 + 日志徽章共用）
+
+   为什么不能用 /^\p{Extended_Pictographic}/ 一把梭：本文件刻意保持 ES5 风格
+   （var + function，无 ?. / no 解构 —— 见 renderGroupOverlay 之外的一贯写法），
+   而 `\p{...}` 需要 u 标志；更稳的判据是「从头上一直剥到第一个**像文字**的字符为止」：
+   汉字 / 拉丁字母 / 数字都算文字，其余（emoji、代理对半、箭头、空格、零宽连接符）一律算前导噪声。
+
+   ⚠️ 引擎文案里 emoji 与名字之间有一个空格（`👹 熔岩巨兽`），代理对的两个 code unit
+      都是非文字码点 → 循环会一路吃掉 emoji + 空格，落到「熔」上才停 —— 这正是徽章取
+      前 2 字所依赖的前提（否则「👹 熔岩巨兽」只能取到一个 emoji）。
+   ============================================================ */
+function gbStripLeadEmoji(s){
+  var t=String(s==null?'':s)
+  var i=0
+  while(i<t.length){
+    var c=t.charCodeAt(i)
+    var isWord=(c>=0x30&&c<=0x39)     // 0-9
+      ||(c>=0x41&&c<=0x5A)            // A-Z
+      ||(c>=0x61&&c<=0x7A)            // a-z
+      ||(c>=0x4E00&&c<=0x9FFF)        // CJK 统一表意
+      ||(c>=0x3400&&c<=0x4DBF)        // CJK 扩展 A
+      ||(c>=0xF900&&c<=0xFAFF)        // CJK 兼容表意
+    if(isWord)break
+    i++
+  }
+  /* 中段多余空格压成一个：`⚔️ 剑士  攻击 魔像` → `剑士 攻击 魔像` */
+  return t.slice(i).replace(/\s+/g,' ').trim()
+}
+
 /* 日志行配色：按事件类型上色，一眼区分伤害/状态/治疗/场地/天赋 */
 function logEventClass(e){
   var t=(e&&e.type)||''
@@ -904,31 +1313,83 @@ function renderGroupBattlePane(gb){
   return h
 }
 
-/* 日志页：分回合 + 每段标出行动者
+/* ============================================================
+   v2.4.0 改造 5：日志页升级（行动者徽章 / 数字高亮 / 类型筛选）
+   ============================================================ */
+/* 筛选维度（与 logEventClass 的类名对应；terrain 归「伤害」= 场地伤害也是伤害） */
+var GB_LOG_FILTERS=[
+  {k:'all',t:'全部'},{k:'dmg',t:'伤害'},{k:'heal',t:'治疗'},{k:'status',t:'状态'},{k:'talent',t:'天赋'}
+]
+/* 单条事件是否命中当前筛选 */
+function gbLogEvMatch(e,filter){
+  if(!filter||filter==='all')return true
+  var c=logEventClass(e)
+  if(filter==='dmg')return c==='dmg'||c==='terrain'
+  if(filter==='heal')return c==='heal'
+  if(filter==='status')return c==='status'||c==='buff'||c==='warn'
+  if(filter==='talent')return c==='talent'
+  return true
+}
+/* 过滤后的日志条目（**截断之前**先过滤 —— 见 renderGroupLogPane 的只用最近 8 条） */
+function gbLogEntries(gb){
+  var out=[]
+  ;((gb&&gb.log)||[]).forEach(function(l){
+    var evs=((l&&l.events)||[]).filter(function(e){
+      return e&&e.msg&&e.type!=='bubble'&&(_gbLogFilter==='all'||gbLogEvMatch(e,_gbLogFilter))
+    })
+    /* 「全部」保留无事发生的回合（既有「（本回合无事发生）」文案），筛选态则丢掉空条目 */
+    if(_gbLogFilter==='all'||evs.length)out.push({l:l,events:evs})
+  })
+  return out
+}
+/* 行动者徽章：**先剥前导 emoji 再取前 2 字**（否则 `👹 熔岩巨兽` 只剩一个 emoji） */
+function gbActorBadge(l,idx){
+  var nm=gbStripLeadEmoji((l&&l.unit)||'单位')
+  var short=nm.slice(0,2)
+  var u=(l&&l.unit&&idx)?idx.byName[l.unit]:null
+  var tone=(l&&l.terrain)?'terrain':((l&&l.opening)?'opening':(u?(u.side==='ally'?'ally':'enemy'):'none'))
+  return '<span class="gb-log-actor-badge tone-'+tone+'" title="'+escHtml(nm)+'">'+escHtml(short)+'</span>'
+}
+/* 数字高亮：在 escHtml() **之后**做（先转义再插标签，否则标签会被转义掉） */
+function gbLogEvHtml(e){
+  var cls=logEventClass(e)
+  var s=escHtml(e.msg)
+  if(cls==='dmg')s=s.replace(/→\s*(\d+)\s*((?:魂)?伤害)/g,'→ <b class="dmg-num">$1</b> $2')
+  if(cls==='heal')s=s.replace(/\+\s*(\d+)/g,'+<b class="heal-num">$1</b>')
+  return '<div class="gb-log-ev '+cls+'">'+s+'</div>'
+}
+
+/* 日志页：分回合 + 每段标出行动者 + 类型筛选（筛选在「仅最近 8 条」**之前**执行）
    v2.1.14：此前日志只输出裸事件文案，看不出这段是谁的行动；
    场地事件还完全不在 gb.log 里（引擎侧已补）。 */
 function renderGroupLogPane(gb){
-  var allLogs=(gb&&gb.log)||[]
-  var logs=_gbLogAll?allLogs:allLogs.slice(-8)
+  var filtered=gbLogEntries(gb)
+  var logs=_gbLogAll?filtered:filtered.slice(-8)
+  var idx=gbUnitIndex(gb)
   var h='<div class="gb-log-hdr">'
     +'<span class="gb-log-title">📜 战斗日志</span>'
-    +(_gbLogAll?'':'<span class="gb-log-note">仅最近 8 条 · 共 '+allLogs.length+' 条</span>')
+    +(_gbLogAll?'':'<span class="gb-log-note">仅最近 8 条 · 共 '+filtered.length+' 条</span>')
     +'<span style="flex:1"></span>'
-    +(allLogs.length>8?'<button class="speed-btn sm" id="gbLogToggle">'+(_gbLogAll?'🔼 收起':'🔽 展开全部('+allLogs.length+')')+'</button>':'')
+    +(filtered.length>8?'<button class="speed-btn sm" id="gbLogToggle">'+(_gbLogAll?'🔼 收起':'🔽 展开全部('+filtered.length+')')+'</button>':'')
     +'<button class="speed-btn sm" id="gbCopyLog">📋 复制</button>'
     +'</div>'
+  /* 筛选按钮组：单行可横滑、热区 ≥ --touch-min(44px)、aria-pressed 表达选中态 */
+  h+='<div class="gb-log-filters" role="group" aria-label="日志类型筛选">'
+    +GB_LOG_FILTERS.map(function(f){
+      return '<button type="button" class="gb-log-filter'+(f.k===_gbLogFilter?' on':'')+'" data-gblogfilter="'+f.k+'" aria-pressed="'+(_gbLogFilter===f.k)+'">'+f.t+'</button>'
+    }).join('')
+    +'</div>'
   h+='<div id="gbLogBox" class="gb-log-box">'
-  if(!allLogs.length)h+='<div class="gb-log-note">战斗开始…</div>'
-  logs.forEach(function(l){
+  if(!filtered.length)h+='<div class="gb-log-note">'+(_gbLogFilter==='all'?'战斗开始…':'该类型暂无事件')+'</div>'
+  logs.forEach(function(item){
+    var l=item.l
     h+='<div class="gb-log-turn">—— '+(l.turn===0?'开场':'回合 '+l.turn)+' ——</div>'
-    var mark=l.opening?'🎬':(l.terrain?'🌍':'▶')
-    h+='<div class="gb-log-actor'+(l.terrain?' terrain':'')+(l.opening?' opening':'')+'">'+mark+' '+escHtml(l.unit||'单位')+'</div>'
+    h+='<div class="gb-log-actor'+(l.terrain?' terrain':'')+(l.opening?' opening':'')+'">'
+      +gbActorBadge(l,idx)+escHtml(gbStripLeadEmoji(l.unit||'单位'))+'</div>'
     var lines=0
-    ;(l.events||[]).forEach(function(e){
-      if(!e||!e.msg)return
-      if(e.type==='bubble')return   // 气泡已在战斗页弹过，日志里略去以免噪声
+    ;(item.events||[]).forEach(function(e){
       lines++
-      h+='<div class="gb-log-ev '+logEventClass(e)+'">'+escHtml(e.msg)+'</div>'
+      h+=gbLogEvHtml(e)
     })
     if(!lines)h+='<div class="gb-log-ev muted">（本回合无事发生）</div>'
   })
@@ -1017,6 +1478,8 @@ function gbPetIconBoxHtml(u){
 
 /* 行动顺序条：取当前行动队列，列出接下来最多 5 个出手单位（v2.1.7） */
 var _gbLogAll=false
+/* v2.4.0 改造 5：日志类型筛选（与 _gbLogAll 同级；每次开战重置为 'all'，见 startGroupTrial） */
+var _gbLogFilter='all'
 function renderGroupOrder(gb){
   var q = gb && gb._stepQueue
   if(!q || !q.length) return ''

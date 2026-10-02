@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.3.3
+> Personal Health Manager — 个人健身健康管理应用 v2.4.0
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -110,7 +110,7 @@ doc/
 ├── design-v2.0.md          v2.0 玩法设计（玩家技能/宠物/宝珠/多对多敌群）
 ├── 2.0 敌群设计.md          敌群内容层设计（天赋/技能/编成）
 ├── mechanics-biopsy-v2.0.4.md  🔬 机制解构结论（战斗决策数/经济通胀/防御轴失效）
-├── changelog-v1.3 ~ v1.9.md、v1.10、v1.11、v2.0、v2.1.md   版本日志（v2.1 为最新）
+├── changelog-v1.3 ~ v1.9.md、v1.10、v1.11、v2.0、v2.1、v2.2、v2.3、v2.4.md   版本日志（v2.4 为最新）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -370,4 +370,6 @@ Vercel 项目设置：
 
 | **v2.3.3** | **2026-10-01** | **战斗页实装宠物头像**（作者：「战斗页面，宠物图标也要实装」）。战斗 overlay 新增 **`gbPetIconHtml(u)`** —— **走既有唯一入口** `petIconStageHtml()`（内部即 `petIconHtml()`），**没有另写渲染口径**；尺寸走单一常量 **`GB_PET_ICO_SIZE`**。落点两处：**单位卡**与**行动/队伍条**（战斗中最需要"一眼认出是谁"的位置）。尺寸遵守 `doc/plans/WP-I-宠物头像评审.md` 的结论：**只用 16 的倍数**（图标逻辑格 3px，16/32/48 才能让描边落在整数像素上；24 与 40 会出 1/2px、2/3px 混排）。玩家（"你"）与**敌方单位不给头像**（敌方属另一条线的怪物图；玩家无现成头像槽，未发明）→ 如需补另行开单。**缺图兜底**：物种无 SVG 时回退 emoji（沿用既有约定），卡片不塌陷。新增 `scripts/test-battle-pet-icons.js`（头像入口被调用 / 尺寸是 16 的倍数 / 缺图回退 emoji / 单位卡高度不增加 / 无静默 catch 等护栏），全量 **56 套件 / 3682 断言 / 0 失败**；`test-a11y-tokens` 绿；缓存戳递增。⚠️ **待处理两件**：① 本版记录写进 **`doc/changelog-v2.3.md`**（2.3 线的正确落点），但 **v2.3.0 / v2.3.1 两节此前写在 `doc/changelog-v2.2.md`**（当时新文件还没建）→ **需要迁移**；② **版本号出现重复** —— 本线发过 (v2.3.1)「关卡挑战速度修复」，另一条线的 `3dcf671`（怪物头像）也标了 (v2.3.1) → 建议后续**由主控统一发号**或各线用不同尾号段 | `doc/changelog-v2.3.md` |
 
-> 当前版本：**v2.3.3**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.3.md`）
+| **v2.4.0** | **2026-10-02** | **⚔️ 群战 UI 战斗表现重构（布局 / 特效 / 统计）** —— **纯展示层，一行战斗数值都没改，引擎文件零改动**（`battle-group.js` / `unit.js` / `talent.js` / `skill.js` / `status-defs.js` / `affix.js` / `battle.js` / `terrain.js` / `ai.js` / `group-levels.js` / `group-progress.js` 逐字节未变）。**六项重构**：① **行动横幅** `renderGroupActionBanner(gb)` 显示「谁 + 正在做什么」，按阵营配色（友方绿 / 敌方红 / 场地紫 / 开场黄），**剔除引擎消息里重复的施法者名**（原来会印成「你 你 攻击…」），落在吸顶区第二行（**不在 `#gbPane` 内**，否则会随卡片滚走），横幅高度实测 **32px ≤ 44px 上限**；② **行动焦点** `gb-focus` 把当前行动者凸显、**其余单位 `opacity:.75` 压暗**，行动者靠既有光环 + 左侧强调条 + `z-index:2`（**不用 `transform:scale()`** —— 滚动裁剪容器里放大必然溢出），且 **`_groupStep()` 内不得有 DOM 操作**（有测试守卫）→ 横幅/焦点只由 `renderGroupOverlay()` 渲染；③ **打击特效（含飘字）**：引擎日志正则表 **`GB_HIT_RX`** + 纯函数 **`gbParseHit(e, prevEvent)`**，**暴击判定靠同一 `events` 数组里紧邻的上一条事件**（伤害文本本身不含「暴击」二字），特效层 **`#gbFx` 由 JS 懒创建**（`position:fixed;inset:0;pointer-events:none;z-index:56`），飘字按 **`card.getBoundingClientRect()`** 定位到对应单位卡上方，新增 **`@keyframes floatUpC`**（**每一帧都重复 `translateX(-50%)`** —— 复用 `floatUp` 会把居中位移覆盖掉），伤害 / 治疗 / 护盾吸收分别着色，并在 `#gbClose` 与 `_groupDone()` 两处清理特效层；④ **结算统计面板**：纯函数 **`groupBattleStats(gb)`**（造成伤害 ← 日志 `unit`；承受伤害 ← `targetId`，**地形伤害无 `targetId` 时用去 emoji 的名字回落**；治疗 / 状态计数；**护盾吸收单独列出、不计入造成伤害**；**MVP 需造成伤害 > 0**，平局按 造成 → 治疗 → `gb.units` 顺序破平；重名单位加 `#2` 后缀并附注「日志归属会落到同名的第一个单位」），复用既有 `_openDetailPanel(html, restore)`（恢复回调**只摘掉 `#battleOverlay` 的 `open`**，**不能**调 `resumeGroupBattle()`），含 **`#gbCopyReport` 一键复制战报**（文本与日志页复制共用唯一来源 `groupLogText()`）；⑤ **日志页升级**：`[全部][伤害][治疗][状态][天赋]` 五档筛选（`aria-pressed`，热区 ≥44px），**先筛选再做「最近 8 条」截断**，空态文案「该类型暂无事件」，**页签徽标显示筛选后的条数**，单位名徽标按类型着色，伤害 / 治疗数字分别用 **`.dmg-num` / `.heal-num`**；⑥ **布局收口（含刘海安全区）**：`.gb-ctrl` 加 `padding-top:calc(6px + var(--sat))`、`.gb-pane` 加 `overflow-x:hidden`（消除既有的 `gbHit` 抖动导致的横向溢出）、`.gb-unit.gb-acting` 加 `z-index:2`，尺寸**全部走令牌**、**无 `!important`**、**无 `transform:scale()`**。**数据只从 `gb.log`（唯一权威）与 `gb.units` / `gb.allies` / `gb.enemies` / `gb.turn` / `gb.winner` / `gb.terrain` 读**，不新增存档字段与全局状态。新增 **`scripts/test-group-ui-presentation.js`（193 断言 / ALL PASS）**；全量 **57 套件全绿**；**固定种子 `gb.log` 与改前逐字节一致（6644 字节）**；浏览器实测 **360 / 390 两宽度 × ×1 / ×8 两档均无溢出、console 0 error**；缓存戳 **`?v132` → `?v133`**。⚠️ **取舍如实披露（未达成项）**：`gb-focus` 把非行动单位压暗到 `opacity:.75` 后，**axe 实测的对比度告警节点由 5 增至 18**（基线全页 axe 本来就有 3 项告警：`color-contrast` / `nested-interactive` / `region`，其中 `nested-interactive` 是 `renderGroupUnit` 既有的 `role="button"` 卡片内嵌 `.gb-chip` 按钮，**属既有问题、不在本版范围**）→ 因此**「axe 违规 0」在本版未达成**：按规格要求的压暗强度保留 `.75`，如需归零只需把该值提到约 **`.88`（一行 CSS）** | `doc/changelog-v2.4.md` |
+
+> 当前版本：**v2.4.0**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.4.md`）

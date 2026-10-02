@@ -515,6 +515,19 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 @keyframes chPulse{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
 /* v2.1.7 群战动效：补齐 JS 引用但 CSS 从未定义的三个动画（此前飘字/气泡/受击全是"写了没效果"） */
 @keyframes floatUp{0%{opacity:0;transform:translateY(6px) scale(.9)}25%{opacity:1;transform:translateY(0) scale(1.12)}100%{opacity:0;transform:translateY(-26px) scale(1)}}
+/* v2.4.0 改造 3：**居中**飘字专用关键帧。
+   ⚠️ 不能复用 floatUp —— 它的每一帧只写 translateY，会把定位用的 translateX(-50%) 覆盖掉，
+      数字会从卡片中心跳到左边缘（这正是「新增而不是复用」的原因）。
+      故这里把 translateX(-50%) 写进**每一帧**。 */
+@keyframes floatUpC{
+  0%{opacity:0;transform:translateX(-50%) translateY(6px) scale(.9)}
+  25%{opacity:1;transform:translateX(-50%) translateY(0) scale(1.12)}
+  100%{opacity:0;transform:translateX(-50%) translateY(-34px) scale(1)}
+}
+/* 飘字本体：只由 game-render.js 的 gbFxFloat() 生成，挂在 #gbFx（fixed 全屏层）里 */
+.gb-fx-float{position:absolute;transform:translateX(-50%);font-weight:900;font-variant-numeric:tabular-nums;
+  white-space:nowrap;pointer-events:none;text-shadow:0 2px 6px rgba(0,0,0,.65);animation:floatUpC .9s var(--ease-out) forwards}
+.gb-fx-float.big{letter-spacing:-.5px}
 @keyframes bubblePop{0%{opacity:0;transform:translateX(-50%) scale(.85)}60%{opacity:1;transform:translateX(-50%) scale(1.04)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
 @keyframes gbHit{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}45%{transform:translateX(5px)}70%{transform:translateX(-3px)}}
 @keyframes gbLowPulse{0%,100%{opacity:1}50%{opacity:.5}}
@@ -542,8 +555,11 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-win{animation:gbWin .3s var(--ease-out)}
 
 /* ========== v2.1.14 群战 UI 升级：双 Tab / 行动者标识 / 技能天赋标签 / 日志分色 / 详情弹层 ========== */
-/* 控制条：常驻，两个页签下都能调速与退出 */
-.gb-ctrl{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;row-gap:6px;min-height:52px;padding:6px 0 8px;position:sticky;top:0;z-index:6;background:var(--bg)}
+/* 控制条：常驻，两个页签下都能调速与退出。
+   v2.4.0 改造 6：让出刘海安全区 —— .battle-overlay 是 position:fixed;inset:0，
+   内容从屏幕最顶端开始，不补 --sat 时 ✕ / 标题 / 场地胶囊会被刘海与状态栏压住。
+   口径与 .panel-inner 一致（--sat 在 :root 定义），居中的 .gb-pane 不受影响。 */
+.gb-ctrl{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;row-gap:6px;min-height:52px;padding:6px 0 8px;padding-top:calc(6px + var(--sat));position:sticky;top:0;z-index:6;background:var(--bg)}
 .gb-ctrl-title{font-size:var(--fs-base);font-weight:700}
 /* v2.1.22：场地常驻胶囊（可点击看介绍）。场地只在开战时 toast 一次，之后玩家就看不到自己在什么场地里了 */
 .gb-terrain{min-height:var(--touch-min);padding:0 12px;border:1px solid var(--bd-l);border-radius:var(--rad-full);
@@ -559,8 +575,12 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-tab{flex:1;min-height:var(--touch-min);border:none;background:transparent;color:var(--text3);font-family:inherit;font-size:var(--fs-sm);font-weight:700;cursor:pointer;border-bottom:2px solid transparent;transition:color var(--dur-1) var(--ease-std),border-color var(--dur-1) var(--ease-std)}
 .gb-tab.active{color:var(--orange);border-bottom-color:var(--orange);background:rgba(var(--brand-rgb),.05)}
 .gb-tab-n{display:inline-block;margin-left:4px;font-size:var(--fs-3xs);font-weight:600;padding:0 5px;border-radius:var(--rad-full);background:var(--surface-2);color:var(--text3)}
-/* 页签内容：唯一的滚动容器（日志页因此能铺满整屏，不再挤在 300px 里） */
-.gb-pane{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:calc(var(--sp-6) + var(--sab))}
+/* 页签内容：唯一的滚动容器（日志页因此能铺满整屏，不再挤在 300px 里）
+   v2.4.0 改造 6：补 overflow-x:hidden —— 受击抖动动画 gbHit 会把单位卡左右各推 5px，
+   卡片右边界随即越过容器右边界 3px（实测 360px：pane sw340 > cw336），
+   overflow-y:auto 会把 overflow-x 一并算成 auto → 战斗中冒出横向滚动条。
+   容器自身不需要横向滚动（行动顺序条 .gb-order 自带 overflow-x:auto，不受影响）。 */
+.gb-pane{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:calc(var(--sp-6) + var(--sab))}
 .gb-side-hdr{display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);margin:0 0 6px}
 .gb-side-hdr.ally{color:var(--green)}
 .gb-side-hdr.enemy{color:var(--red);margin-top:var(--sp-3)}
@@ -581,8 +601,11 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-dead-line{display:flex;align-items:center;gap:8px;min-height:var(--touch-min);padding:0 12px}
 .gb-dead-name{flex:1;min-width:0;font-size:var(--fs-base);font-weight:700;color:var(--text3);text-decoration:line-through;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gb-dead-tag{flex-shrink:0;font-size:var(--fs-2xs);color:var(--text3);border:1px solid var(--bd);border-radius:var(--rad-full);padding:1px 8px}
-/* 当前行动者：左侧强调条 + 呼吸高亮 + 文字标签（三重表达，不靠颜色单独传达） */
-.gb-unit.gb-acting{border-color:var(--orange);background:rgba(var(--brand-rgb),.08);box-shadow:0 0 0 1px var(--orange),0 0 14px rgba(var(--brand-rgb),.28)}
+/* 当前行动者：左侧强调条 + 呼吸高亮 + 文字标签（三重表达，不靠颜色单独传达）。
+   v2.4.0 改造 2：补 z-index:2，让行动卡压在相邻卡之上（光环不被邻居的圆角切掉）。
+   ⚠️ 这里**不用** transform:scale() 放大 —— #gbPane 是 overflow-y:auto 的滚动裁剪容器，
+      放大后卡片会横向溢出并顶出横向滚动条（实测）。 */
+.gb-unit.gb-acting{border-color:var(--orange);background:rgba(var(--brand-rgb),.08);box-shadow:0 0 0 1px var(--orange),0 0 14px rgba(var(--brand-rgb),.28);z-index:2}
 .gb-unit.gb-acting::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 4px 4px 0;background:var(--orange);animation:gbActingPulse 1.1s ease-in-out infinite}
 @keyframes gbActingPulse{0%,100%{opacity:1}50%{opacity:.3}}
 .gb-acting-tag{font-size:var(--fs-3xs);font-weight:800;color:var(--orange);border:1px solid var(--orange);border-radius:var(--rad-full);padding:1px 7px;white-space:nowrap}
@@ -624,6 +647,20 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .gb-ovw-bar>i{display:block;height:100%;border-radius:var(--rad-full);transition:width var(--dur-2) var(--ease-out)}
 .gb-ovw-side.ally .gb-ovw-bar>i{background:var(--green)}
 .gb-ovw-side.enemy .gb-ovw-bar>i{background:var(--red)}
+
+/* ========== v2.4.0 改造 1 / 2：行动横幅 · 行动焦点 ==========
+   横幅是吸顶区第二行（.gb-ctrl 之后、.gb-tabs 之前，**不在** #gbPane 滚动容器内）。
+   硬性约束：单行 nowrap + 省略号、整条高度 ≤44px（否则 360px 首屏只剩 1 张单位卡）。
+   行动焦点：只暗化**非行动者**，上限 0.75（依据既有决策：更低的透明度会让 12px 弱化文字
+   跌破 WCAG AA 对比度）；行动者本身靠既有光环 + ::before 强调条表达，不做放大。 */
+.gb-banner{flex-shrink:0;display:flex;align-items:center;gap:8px;min-height:32px;max-height:44px;padding:2px 0 6px;overflow:hidden}
+.gb-banner-chip{flex-shrink:0;width:4px;height:20px;border-radius:var(--rad-full);background:var(--text3)}
+.gb-banner.tone-ally .gb-banner-chip{background:var(--green)}
+.gb-banner.tone-enemy .gb-banner-chip{background:var(--red)}
+.gb-banner.tone-terrain .gb-banner-chip{background:var(--purple)}
+.gb-banner.tone-opening .gb-banner-chip{background:var(--yellow)}
+.gb-banner-text{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gb-focus .gb-unit:not(.gb-acting):not(.gb-dead){opacity:.75}
 /* 行动顺序条：一眼看清接下来谁出手 */
 .gb-order{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:6px 2px;margin-bottom:8px;-webkit-overflow-scrolling:touch}
 .gb-order-chip{flex-shrink:0;font-size:var(--fs-2xs);padding:4px 8px;border-radius:var(--rad-full);background:var(--surface-2);border:1px solid var(--bd);white-space:nowrap}
@@ -643,6 +680,31 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
    从 38px 顶到 41px 实测发生）。emoji 兜底时不加该类，走原行内排版，高度不变。 */
 .gb-order-chip.has-ico{display:flex;align-items:center;gap:4px}
 .gb-log-hdr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+/* v2.4.0 改造 5：日志类型筛选 —— 单行可横滑、热区 ≥ --touch-min(44px)（不换行免得吃掉首屏） */
+.gb-log-filters{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:6px;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.gb-log-filter{flex-shrink:0;min-height:var(--touch-min);padding:0 var(--sp-3);border:1px solid var(--bd);border-radius:var(--rad-full);
+  background:var(--surface-2);color:var(--text2);font-family:inherit;font-size:var(--fs-xs);font-weight:700;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.gb-log-filter.on{border-color:var(--orange);color:var(--orange);background:rgba(var(--brand-rgb),.08)}
+/* 行动者徽章：固定 40px 色块（先剥前导 emoji 再取前 2 字，故不会只剩一个 emoji），超长省略 */
+.gb-log-actor-badge{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:40px;height:20px;
+  border-radius:var(--rad-sm);background:var(--surface-3);color:var(--text2);font-size:var(--fs-3xs);font-weight:800;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.gb-log-actor-badge.tone-ally{background:rgba(var(--success-rgb),.18);color:var(--green)}
+.gb-log-actor-badge.tone-enemy{background:rgba(var(--danger-rgb),.18);color:var(--red)}
+.gb-log-actor-badge.tone-terrain{background:rgba(var(--brand-rgb),.12);color:var(--purple)}
+.gb-log-actor-badge.tone-opening{background:rgba(var(--warning-rgb),.15);color:var(--yellow)}
+.gb-log-actor{display:flex;align-items:center;gap:6px}
+/* 日志数字高亮：伤害红、治疗绿（在 escHtml() 之后插标签，故不会被转义） */
+.dmg-num{color:var(--red);font-weight:800;font-size:var(--fs-md)}
+.heal-num{color:var(--green);font-weight:800;font-size:var(--fs-md)}
+/* v2.4.0 改造 4：结算面板「我方战报」行（窄屏也能一行放下 5 个数字：数字组可换行） */
+.gb-res-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:5px 0;border-bottom:1px dashed var(--bd)}
+.gb-res-row:last-child{border-bottom:none}
+.gb-res-name{font-size:var(--fs-sm);font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gb-res-cells{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:var(--fs-xs);color:var(--text2);font-variant-numeric:tabular-nums}
+.gb-res-cells i{font-style:normal}
+.gb-res-mvp{color:var(--yellow);font-weight:800}
 .gb-log-title{font-size:var(--fs-base);font-weight:700}
 .gb-log-note{font-size:var(--fs-2xs);color:var(--text3)}
 .gb-log-box{font-size:var(--fs-xs);line-height:1.7;border:1px solid var(--bd);border-radius:var(--rad-md);padding:10px 12px;background:var(--surface)}
