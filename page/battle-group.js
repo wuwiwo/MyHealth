@@ -1,7 +1,8 @@
 /* ============================================
    MyHealth — Group Battle Engine (M2b-4)
    多 Unit 行动队列战斗。独立于原 battleTick（单敌零回归）。
-   行动队列：按 effectiveSpeed 降序 + 稳定 tie-break（同速我方先手、同方按 id 稳定序）+ 先制度 priority。
+   行动队列：先按**先制度 priority 分档**降序（v2.4.7，见 unitPriorityRank），
+   同档内按 effectiveSpeed 降序 + 稳定 tie-break（同速我方先手、同方按创建序）。
    v2.4.5：**每回合拆成四阶段**（准备 → 行动 → 判定 → 结束），见下方「四阶段」小节；
        两条推进路径（groupBattleTick / groupBattleStep）共用同一组阶段 helper。
    行动阶段（每单位）：天赋/状态 hook → 普攻或技能 → 状态施加；回合末结算统一归判定阶段。
@@ -346,7 +347,10 @@ function createGroupBattle(opts) {
   };
 }
 
-/* 计算单位有效速度（含先制度与状态修正） */
+/* 计算单位有效速度（含状态修正）。
+   ⚠️ v2.4.7：`skill` 这个先制度参数**已不再是出手队列的排序依据** ——
+   先制度改由 unitPriorityRank 作为**独立分档**参与排序（见下，依据「先制度技能不受速度反转影响」）。
+   本参数保留只为不破坏既有调用点/测试的签名（现全部传 null），`priority × 50` 分支实际不可达。 */
 function unitInitiative(u, skill) {
   var spd = effectiveSpeed(u);
   if (skill && SKILLS[skill] && SKILLS[skill].priority) spd += SKILLS[skill].priority * 50;
@@ -354,10 +358,45 @@ function unitInitiative(u, skill) {
   return spd;
 }
 
-/* 构建行动队列：按 initiative 降序，稳定 tie-break（同速我方先手，同方按创建序） */
+/* v2.4.7（§8.5-1）：先制度（priority）真正进出手队列。
+   修前事实：`buildActionQueue` 调 `unitInitiative(u, null)` —— 第二个实参恒为 null，
+   于是 `unitInitiative` 里 `priority × 50` 的分支永不命中；priority 只被 AI 选技评分读到
+   （ai.js），而技能详情 UI 写「出手队列中优先行动」（game-render.js）→「写了不生效」。
+
+   依据 doc/2.0 敌群设计.md：
+     · 先制度写在**技能**上（击掌奇袭 / 冰冻三尺 / 幽魂附身 = 「先制度 +1」）；
+     · 场地「反转场地」写「全场变为速度最低最先行动（**先制度技能不受影响**）」
+       —— 说明先制是与速度**正交**的一档，不是速度加成（故不再沿用 `+priority×50` 的写法）。
+
+   不变式（本实现的口径）：
+     ① 先制度高的单位**先于所有先制度更低的单位**出手（含全部非先制单位）；
+     ② 同一先制度档内仍按 `unitInitiative` 降序（有效速度 + 嘲讽 ×2），
+        既有 tie-break 一字未动（同速我方先手、同方按 gb.units 创建序）；
+     ③ 判据 = 「该单位本回合**可用**的先制技能」（`usableSkills` 口径：未冷却、未附身）。
+        队列在准备阶段建立、选技在行动阶段，静态队列无法预知当回合选技，
+        故用「持有可用的先制技能」近似「本回合会先制出手」；冷却中的技能不算可用 ——
+        否则等于给一个根本放不出来的技能先手权。
+     ④ 本函数**不掷骰**（不消耗 gb.rng），同种子结果必须可复现（test-group-determinism）。
+     ⚠️ 玩家技能表（skills.js）目前没有 `priority` 字段，故这里只扫 `unit.skills`（敌群技能）；
+        将来给玩家技能加先制度时，此处要一并接上。 */
+function unitPriorityRank(u) {
+  if (!u || typeof SKILLS === 'undefined') return 0;   // 未加载技能表的最小沙箱：无先制可言
+  var ids = (typeof usableSkills === 'function') ? usableSkills(u) : (u.skills || []);
+  var rank = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var d = SKILLS[ids[i]];
+    if (d && d.priority > rank) rank = d.priority;
+  }
+  return rank;
+}
+
+/* 构建行动队列：先按**先制度分档**降序（v2.4.7），再按 initiative 降序，
+   稳定 tie-break（同速我方先手，同方按创建序） */
 function buildActionQueue(gb) {
   var queue = gb.units.filter(function (u) { return u.hp > 0; });
   queue.sort(function (a, b) {
+    var pa = unitPriorityRank(a), pb = unitPriorityRank(b);
+    if (pa !== pb) return pb - pa;   // v2.4.7：先制档优先于速度（不变式 ①）
     var ia = unitInitiative(a, null);
     var ib = unitInitiative(b, null);
     if (ia !== ib) return ib - ia;
@@ -465,13 +504,26 @@ function normalAttack(gb, actor, target, dmgMult) {
      全项目没有任何地方读这个标记（等于威吓从未真正生效）。这里在伤害结算前统一削减。
      v2.2.22：幅度读**单位级** `_intimidateDown`（见 intimidateAtkDown 的说明），兜底才是全局常量。 */
   if (actor._intimidated) dmg = Math.max(1, Math.floor(dmg * (1 - intimidateAtkDown(actor))));
-  // 天赋 hook: 利刃加成 / 多目标惩罚 / 末日减半
+  // 天赋 hook: 利刃加成 / 多目标惩罚
   var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: dmg, isPhysical: true, attacker: actor, target: target });
   td.mutations.forEach(function (m) {
     if (m.key === 'dmgBoost') dmg = Math.floor(dmg * (1 + m.value));
     if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
     if (m.key === 'dmgDealtHalf') dmg = Math.floor(dmg / 2);
   });
+  /* v2.4.7（§8.5-13 / §8.6「末日普攻减半口径」）：**攻击方**侧的状态钩子派发。
+     末日「普通攻击造成伤害减半」的产出端是**状态**钩子（status-defs.js 的 doomed.onDamage），
+     而状态钩子此前只在「该单位作为**受击方**」的通道被派发（下面的 td2 / sd 与技能通道）——
+     攻击方通道只派发天赋/词条，于是这条 mutation **没有任何生产路径**（写了不生效）。
+     这里补上攻击方派发，并且**只消费 `dmgDealtHalf`**：
+       · 其余同名 mutation（charging 的 dmgTakenBoost、wideguard/vigil 的 dmgTakenReduce…）
+         语义都属于**受击方**，在攻击方通道消费会把「我受到的修正」错当成「我造成的修正」；
+       · 事件一律丢弃 —— 这是「我方出手」，不是「我方受击」。
+     ⚠️ 副作用边界：status-defs 里唯一带**状态变更**副作用的 onDamage 是 freeze（受击解冻）。
+        冻结单位在行动阶段必然 skip（onBeforeAction → skipAction），走不到普攻；
+        即便如此仍在 freeze 的钩子处加了 `isPlayerAttack` 守卫，杜绝「自己把自己解冻」。 */
+  var asd = dispatch(actor, 'onDamage', { isPlayerAttack: true, amount: dmg, isPhysical: true, isSkill: false, attacker: actor, target: target });
+  asd.mutations.forEach(function (m) { if (m.key === 'dmgDealtHalf') dmg = Math.floor(dmg / 2); });
   var td2 = talentDispatch(target, 'onDamage', { attacker: actor, amount: dmg, isPhysical: true, isPlayerAttack: false, isSkill: false, isAoe: false, fromPlayer: actor.side === 'ally' });
   /* v2.1.15：受击方还要走一遍**状态**钩子（此前只派发天赋）——
      一是让「广域防御」的 dmgTakenReduce 真正生效，
@@ -489,6 +541,10 @@ function normalAttack(gb, actor, target, dmgMult) {
        现改为读 `m.value`（= 减伤比例，消费端语义「×(1 − v)」），与 dmgTakenReduce 同一口径。 */
     if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * (1 - m.value));
     if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));   // 不动如山 / 广域防御
+    /* v2.4.7（§8.5-2）：**懒惰**的受击减伤 —— 放弃行动的回合自身受到伤害降低。
+       生产端 talent.js 的 lazy.onDamage（仅在受击方产出），此前受击方通道不消费该键 → 从未生效。
+       与 dmgTakenReduce 同一口径（×(1 − v)），多种来源叠加时各自连乘。 */
+    if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
   });
   /* v2.3.0（WP-D §3.12-1）：暴击统一走 groupCritMult —— 天赋暴击（斗者本能 30%/150%）与
      玩家/宠物暴击档（玩家 30%/300%、宠物 15%/160%）**分别判定、都触发取最高、只结算一次**。
@@ -534,7 +590,12 @@ function normalAttack(gb, actor, target, dmgMult) {
       attacker: actor, amount: sDmg, isSoul: true, isPhysical: false,
       isPlayerAttack: false, isSkill: false, isAoe: false, fromPlayer: actor.side === 'ally'
     });
-    soulTd.mutations.forEach(function (m) { if (m.key === 'soulDmgReduce') sDmg = Math.floor(sDmg * (1 - m.value)); });
+    soulTd.mutations.forEach(function (m) {
+      if (m.key === 'soulDmgReduce') sDmg = Math.floor(sDmg * (1 - m.value));
+      /* v2.4.7（§8.5-2）：懒惰的受击减伤对**普攻附带的魂伤**这一分量同样生效 ——
+         一次普攻的物理分量与魂伤分量是同一击的两个结算点，减伤口径必须一致。 */
+      if (m.key === 'dmgReduce') sDmg = Math.floor(sDmg * (1 - m.value));
+    });
     var sh2 = absorbShield(target, sDmg);
     if (sh2.absorbed > 0) {
       sDmg = sh2.dmg;
@@ -653,7 +714,12 @@ function castSkill(gb, actor, skillId, opts) {
           var sdg = dispatch(t, 'onDamage', { attacker: actor, amount: dmg, isPhysical: h.dmgType === 'physical', isSkill: true, isAoe: targets.length > 1, fromPlayer: actor.side === 'ally' });
           tdg.mutations = tdg.mutations.concat(sdg.mutations);
           sdg.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: t.id, type: e.type }); });
-          tdg.mutations.forEach(function (m) { if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value)); });
+          tdg.mutations.forEach(function (m) {
+            if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));
+            /* v2.4.7（§8.5-2）：懒惰「放弃行动回合自身受到伤害降低」对**技能伤害**同样生效 ——
+               生产端 lazy.onDamage 只看「本单位是否受击 / 本回合是否放弃行动」，不区分伤害通道。 */
+            if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
+          });
           /* v2.3.0（WP-D §3.12-1 收口）：技能暴击与普攻**同一套判据** —— 走 groupCritMult()
              （天赋「斗者本能」30%/150% × 玩家/宠物暴击档 30%/300%、15%/160%），
              两边各自掷骰、都触发取较高倍率、**只结算一次**。
@@ -1201,7 +1267,10 @@ function runUnitActionStep(gb, actor) {
   if (typeof shieldPreSnapshot === 'function') shieldPreSnapshot(gb);
   var evts = groupUnitTurn(gb, actor);
   if (gb.done) _BATTLE_RNG = null;   // v2.1.27：本场结束，别污染下一场的建场阶段
-  /* v2.1.13 天赋「疾影」：本回合额外行动 1 次（只有这里的 mutations 会被消费） */
+  /* v2.1.13 词条「疾影」：本回合额外行动 1 次。
+     v2.4.7：这是 onAfterAction 的**唯一**派发点（groupUnitTurn 里那次「只取 events」的内层派发已删除，
+     它把 extra_act 的 `_extraCd = 3` 提前置上、导致外层必然冷却早退 → 实测只有 24.75%）。
+     现在掷骰、置冷却、消费 mutation 都在这里一次完成；额外行动**不再**触发第二次派发（不连环叠加）。 */
   var exRes = talentDispatch(actor, 'onAfterAction', { turn: gb.turn });
   var wantExtra = false;
   exRes.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra = true; });
@@ -1491,11 +1560,17 @@ function groupUnitTurn(gb, actor) {
        · duration 递减 + 到期 onExpire（判定阶段用 ageStatusesInJudge：带「准备阶段状态未触发
          前不递减」的例外，理由见其注释）
      旧注释保留在此备查：duration=N 的持续伤害类状态刚好结算 N 次（递减必须晚于 onTurnEnd 钩子）。 */
-  /* 天赋 onAfterAction（**内层**派发）：此处 mutations 被丢弃、只取 events；
-     真正消费 extraAction 的那次派发在两条路径共用的 runUnitActionStep —— 两步的顺序与语义
-     与 v2.4.5 之前完全一致。 */
-  var ae = talentDispatch(actor, 'onAfterAction', {});
-  ae.events.forEach(function (e) { events.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
+  /* v2.4.7（§8.6「onAfterAction 双重派发」一行）：**内层派发已删除**（原为 talentDispatch
+     + 只取 events、丢弃 mutations）。它是历史遗留，而且是「疾影」词条只有 24.75% 的直接原因：
+       · onAfterAction 的唯一生产者 = 词条「疾影」extra_act（affix.js），它在返回 `extraAction`
+         mutation 的**同时**就把 `unit._extraCd` 置 3；
+       · 内层先跑：掷中 → 冷却被置上而 mutation 被丢弃 → 外层（runUnitActionStep）必然冷却早退；
+         掷空（45%）→ 外层才有机会再掷 55% → 实际额外行动率 = 0.45 × 0.55 ≈ 24.75%（定义 55%）；
+       · 内层还额外产出「疾影: 额外行动一次！」文案（假播报：掷空的那次也会播）。
+     现在 onAfterAction **只有 runUnitActionStep 一处派发**（mutations 被消费、events 落日志）：
+     即「每个单位每次行动后派发一次」，额外行动本身不再触发第二次。
+     ⚠️ 事件顺序不变：外层派发的事件仍在同一条 gb.log 里（runPhaseAction / groupBattleStep 都是
+        runUnitActionStep 返回之后才落日志），只是不再有「掷空也播报」的假文案。 */
 
   /* v2.4.6：回合末收尾（playerSkillTurnEnd / 天赋+词条 onTurnEnd / 状态 onTurnEnd / duration 递减）
      一律归**判定阶段**（runPhaseJudge → runUnitJudgeTail），本函数不再就地补跑一份 ——

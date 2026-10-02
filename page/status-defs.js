@@ -34,7 +34,11 @@ defineStatus({
     onBeforeAction: function (unit) {
       return { skipAction: true, events: [{ type: 'skip', statusId: 'freeze', unitId: unit.id, msg: '❄️ 冰冻: 无法行动' }] };
     },
-    onDamage: function (unit, st) {
+    onDamage: function (unit, st, ctx) {
+      /* v2.4.7：本钩子只对「本单位作为**受击方**」生效。
+         攻击方通道（battle-group.js 的普攻，为末日 dmgDealtHalf 而加的**状态**派发）也会走
+         onDamage —— 不设守卫的话，出手者会把自己的冰冻「被自己打解冻」。 */
+      if (ctx && ctx.isPlayerAttack) return;
       // 冰冻被攻击有几率解除（简单处理：受击即解冻）
       clearStatus(unit, 'freeze');
       return { events: [{ type: 'wake', statusId: 'freeze', unitId: unit.id, msg: '受击解冻' }] };
@@ -150,7 +154,9 @@ defineStatus({
    v2.4.5（作者裁定 §10-2 / §10-5）：**诅咒类** —— `onTurnStart`（每回合开始的那次伤害）
    归「准备阶段」统一结算；`onBeforeAction`（技能禁用）与 `onHeal`（治疗阻断）**不受影响**，
    仍留在行动阶段（分类只作用于 onTurnStart，见 battle-group.js 的 dispatchStatusesPhase）。
-   ⚠️ 由此「本回合发动 → 下回合准备阶段才生效」，实测扣血次数见报告（与作者预判 3 次的差异同处说明）。 */
+   ⚠️ 由此「本回合发动 → 下回合准备阶段才生效」，实测扣血次数见报告（与作者预判 3 次的差异同处说明）。
+   v2.4.7（§8.5-13）：四项效果**全部落地** —— 其中「普攻减半」（`onDamage` → `dmgDealtHalf`）
+   此前因消费点只在受击方通道而从未生效，现由普攻的**攻击方**状态派发消费（见下）。 */
 defineStatus({
   id: 'doomed',
   name: '末日',
@@ -169,7 +175,9 @@ defineStatus({
       return { mutations: [{ key: 'skillsDisabled', value: true }] };   // 技能禁用
     },
     onDamage: function (unit) {
-      return { mutations: [{ key: 'dmgDealtHalf', value: true }] };     // 普攻减半
+      /* 普攻减半。v2.4.7（§8.5-13）：消费点在 battle-group.js `normalAttack` 的**攻击方**状态派发
+         （只取 `dmgDealtHalf`）—— 此前状态钩子只在受击方通道派发，这条 mutation 没有生产路径。 */
+      return { mutations: [{ key: 'dmgDealtHalf', value: true }] };
     },
     onHeal: function () {
       return { skipAction: true, events: [{ type: 'block', statusId: 'doomed', msg: '🌑 末日: 无法治疗' }] };

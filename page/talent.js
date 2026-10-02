@@ -471,6 +471,12 @@ registerTalent({
       unit._lazySkip = false;
     },
     onDamage: function (unit, ctx) {
+      /* v2.4.7（§8.5-2 / §8.6「惰性减伤口径」）：`dmgReduce` 的语义是「**本单位受到的**伤害降低」
+         —— 消费点在 battle-group.js 的**受击方** mutation 循环（普攻物理 / 普攻附带魂伤 / 技能）。
+         这里必须只在「本单位是受击方」时产出（`isPlayerAttack === false`，与 affix.js 各减伤词条同一约定）。
+         此前无条件产出、而唯一消费点一度在**攻击方**分支 —— 效果从未生效；
+         若继续无条件产出，攻击方通道又会把「我受到的减伤」当成「我造成的减伤」。 */
+      if (ctx && ctx.isPlayerAttack) return;
       if (unit._lazySkip) {
         return { mutations: [{ key: 'dmgReduce', value: talentValue('lazy', 'dmgReduce', unit, 0.30) }] };
       }
