@@ -204,23 +204,39 @@ registerAffix({
   }
 });
 
-/* 疾影：本回合有 55% 几率额外行动 1 次，冷却 3 回合 */
+/* 疾影（v2.4.8 作者裁定：口径 = **每回合 55%**）
+   修前口径「触发后 `_extraCd = 3`、每回合末 −1」= 触发一次后要等 3 个回合才有下一次机会，
+   于是「每次机会 55%」被摊薄成**每回合约 18%~26%**（v2.4.7 实测 26.21%），与作者要的
+   「每回合 55%」不是一回事。现在**取消跨回合冷却**：每次「本回合行动结束」都以 55% 独立判定。 */
 registerAffix({
   id: 'extra_act',
   name: '疾影',
-  desc: '本回合有 55% 几率额外行动 1 次（冷却 3 回合）',
+  desc: '每回合有 55% 几率额外行动 1 次',
   hooks: {
-    onAfterAction: function (unit) {
-      if ((unit._extraCd || 0) > 0) return;
+    /* 为什么用「本回合已判定过」守卫、而不是直接删掉冷却字段：
+       ① 同一回合若被重复派发（§8.6 那类「onAfterAction 双重派发」历史遗留），
+          守卫保证**只掷一次骰**，不会把概率抬成 1−0.45²=79.75%；
+       ② 额外行动**不再**触发第二次判定（不连环叠加），与 v2.4.7 的「一次机会最多一次」一致。
+       判据用 `ctx.turn`（= gb.turn，由 runUnitActionStep 传入）；拿不到 ctx.turn 时退化为
+       「每次派发都判定」，与修前一样（当前无此调用点）。
+       ⚠️ 隔离核实：`_extraCd` 与 `extraAction` 全项目**只有本词条**写/读
+         （「启风」走的是 `_qifengTurn` / `qifengExtraAttack`，另一条路径；
+           `extraAction` 的唯一消费点是 battle-group.js 的 runUnitActionStep）。
+         本版同时删掉本词条自己的 `onTurnEnd` 冷却递减 —— 改的只是 extra_act 的口径。
+       ⚠️ 口径边界（如实记录，未改）：判定点是「本单位本回合的行动结束」，与修前一致 ——
+         被冰冻/畏缩/慢启动**跳过行动**的单位同样会走到这里，故它也有 55% 的「额外行动」
+         （那一次额外行动仍然什么有效的事都不做，只多一条「无法行动」日志）。 */
+    onAfterAction: function (unit, ctx) {
+      var t = (ctx && ctx.turn != null) ? ctx.turn : null;
+      if (t != null) {
+        if (unit._extraActTurn === t) return;
+        unit._extraActTurn = t;
+      }
       if (battleRnd() >= 0.55) return;
-      unit._extraCd = 3;
       return {
         mutations: [{ key: 'extraAction', value: 1 }],
         events: [{ type: 'affix', affixId: 'extra_act', unitId: unit.id, msg: '疾影: ' + (unit.name || '单位') + ' 额外行动一次！' }]
       };
-    },
-    onTurnEnd: function (unit) {
-      if (unit._extraCd > 0) unit._extraCd--;
     }
   }
 });

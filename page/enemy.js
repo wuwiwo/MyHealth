@@ -17,33 +17,43 @@ var ENEMY_TIERS = {
   boss:    { talent: [1, 4], skill: [2, 3] }      // Boss：1-4天赋 + 额外词条
 };
 
-/* createEnemyUnit({tier, base:{atk,def,hp,spd,soulAtk?,soulDef?}, name?, talents?, skills?})
+/* createEnemyUnit({tier, base:{atk,def,hp,spd,soulAtk?,soulDef?}, name?, talents?, skills?, affixes?, rng?})
    - 不传 talents/skills 时按 tier 从注册表随机抽取
-   - 返回带 _talents/_tier 的 Unit */
+   - 不传 affixes 时按 tier 兜底自动装配（Boss/精英）；传了就用传入的（**不会被清空**）
+   - rng：可选，本函数所有随机都走它（缺省 = battleRnd()，即本场战斗 rng）
+   - 返回带 _talents/_affixes/_tier 的 Unit */
 function createEnemyUnit(opts) {
   opts = opts || {};
   var tier = opts.tier || 'elite1';
   var cfg = ENEMY_TIERS[tier] || ENEMY_TIERS.elite1;
+  /* v2.4.8（§8.5 第 14 条修复的一部分）：**本函数内所有随机走同一个 rng**。
+     修前：天赋/技能/id 走 battleRnd()（本场种子），而兜底的「随机额外词条」走 Math.random
+     （**不在战斗种子体系内**）→ 同种子两次建场可能拿到不同词条，破坏「战斗可复现」。
+     现在：显式 `opts.rng` 优先（建场方可以直接给一个种子 rng），否则 battleRnd()。
+     ⚠️ 真实战斗路径（game-render.js）现在**显式传 affixes**（group-levels.js 的固化词条，
+        唯一权威来源），所以那条路径连一次掷骰都不需要；`rng` 只服务兜底装配路径。 */
+  var rng = (typeof opts.rng === 'function') ? opts.rng
+    : ((typeof battleRnd === 'function') ? battleRnd : Math.random);
 
   // 天赋选择（显式传入优先，否则按 tier 随机）
   var talentIds;
   if (opts.talents) talentIds = opts.talents.slice();
   else {
-    var tCount = cfg.talent[0] + Math.floor(battleRnd() * (cfg.talent[1] - cfg.talent[0] + 1));
-    talentIds = pickRandomTalents(tCount, tier);
+    var tCount = cfg.talent[0] + Math.floor(rng() * (cfg.talent[1] - cfg.talent[0] + 1));
+    talentIds = pickRandomTalents(tCount, tier, rng);
   }
 
   // 技能选择（占位，M2b-2 skill.js 后接入）
   var skillIds;
   if (opts.skills) skillIds = opts.skills.slice();
   else {
-    var sCount = cfg.skill[0] + Math.floor(battleRnd() * (cfg.skill[1] - cfg.skill[0] + 1));
-    skillIds = pickRandomSkills(sCount);
+    var sCount = cfg.skill[0] + Math.floor(rng() * (cfg.skill[1] - cfg.skill[0] + 1));
+    skillIds = pickRandomSkills(sCount, rng);
   }
 
   // 构建 Unit
   var unit = createUnit({
-    id: opts.id || ('enemy-' + Math.floor(battleRnd() * 1e6)),
+    id: opts.id || ('enemy-' + Math.floor(rng() * 1e6)),
     side: 'enemy',
     name: opts.name || '敌人',
     level: opts.level || 1,
@@ -52,10 +62,39 @@ function createEnemyUnit(opts) {
     tags: ['enemy', tier]
   });
   unit._tier = tier;
-  if (!(opts.affixes && opts.affixes.length) && typeof AFFIX_EXTRA !== 'undefined' && typeof attachAffixes === 'function') {
-    var afx = [tier === 'boss' ? AFFIX_BOSS_FIXED : AFFIX_ELITE_FIXED];
-    pickExtraAffixes(afx, 1, Math.random);
-    attachAffixes(unit, afx);
+  /* v2.2.16：敌群 BOSS/精英的「伤害减免」条**
+     v2.4.8（§8.5 第 14 条，作者裁定「修敌人词条死接线」）：**词条只装配一次**。
+       修前这里有两步互相打架：
+         ① `if (!(opts.affixes && opts.affixes.length) ...) { 自动装配 cut_boss/cut_elite + 1 条随机 }`
+         ② 紧接着 `var affixIds = opts.affixes || []; attachAffixes(unit, affixIds)`
+       —— 第 ② 步把第 ① 步的成果**覆盖清空**；而真实建场（game-render.js）从不传 affixes，
+       于是线上 Boss/精英**一件词条都没有**（实测 `createEnemyUnit({tier:'boss'})._affixes === []`）：
+       伤害减免·大/中、抗扩散、抗技法、战意高涨、铁壁、终末宣告、疾影全部不生效。
+     现在的口径：
+       · 显式传入 `opts.affixes`（真实战斗走这条：`group-levels.js` 的固化词条是**唯一权威来源**）
+         → 原样装配，**不再被任何东西清空**；
+       · 未传 → 按 tier 兜底自动装配（仅 **Boss / 精英档**：固定减伤 + 1 条随机额外词条）。
+         ⚠️ 兜底装配的 tier 面与设计一致（`GROUP_AFFIX_FIXED = {boss, elite}`）：
+            杂兵不装配词条。修前这段兜底虽然写了，但结果总被清空，
+            所以「杂兵也给 cut_elite」从来不是可观测行为，本版按设计收窄，不制造新的强度。
+         ⚠️ 这条随机额外词条现在走上面的 `rng`（修前是 `Math.random`）。 */
+  var affixIds;
+  if (opts.affixes) affixIds = opts.affixes.slice();
+  else {
+    affixIds = [];
+    var eliteLike = (tier === 'boss') || (String(tier).indexOf('elite') === 0);
+    if (eliteLike) {
+      var fixed = fixedAffixForTier(tier);
+      if (fixed) affixIds.push(fixed);
+      /* 额外词条池：优先用 group-levels.js 的 pickExtraAffixes（与固化池同一份清单），
+         沙箱只加载到 affix.js 时用 AFFIX_EXTRA；两者都没有就不加（不造假数据）。 */
+      if (typeof pickExtraAffixes === 'function') pickExtraAffixes(affixIds, 1, rng);
+      else {
+        var extraPool = (typeof AFFIX_EXTRA !== 'undefined') ? AFFIX_EXTRA
+          : ((typeof GROUP_AFFIX_EXTRA !== 'undefined') ? GROUP_AFFIX_EXTRA : []);
+        if (extraPool.length) affixIds.push(extraPool[Math.floor(rng() * extraPool.length)]);
+      }
+    }
   }
 
   // 挂天赋（含静态属性修正）
@@ -74,8 +113,8 @@ function createEnemyUnit(opts) {
     }
   }
   attachTalents(unit, talentIds);
-  /* v2.1.25：词条与天赋分开装配 —— 词条是 Boss/精英的额外维度（见 affix.js） */
-  var affixIds = opts.affixes || [];
+  /* v2.1.25：词条与天赋分开装配 —— 词条是 Boss/精英的额外维度（见 affix.js）
+     v2.4.8：装配点**只有这一处**（上面算好的 affixIds），故不可能再被清空。 */
   if (typeof attachAffixes === 'function') attachAffixes(unit, affixIds);
   else unit._affixes = affixIds.slice();   // 未加载 affix.js（部分测试）时也不炸
   unit._affixIds = affixIds.slice();
@@ -87,6 +126,20 @@ function createEnemyUnit(opts) {
   }
 
   return unit;
+}
+
+/* 兜底装配用的「固定减伤」词条 id —— 从**已加载的注册表**里取，不在本文件另写一份清单：
+   affix.js（AFFIX_BOSS_FIXED / AFFIX_ELITE_FIXED）→ group-levels.js（GROUP_AFFIX_FIXED）→
+   字面量兜底（值相同，仅在两个注册表都没加载的最小沙箱里才会走到）。
+   为什么必须做 typeof 判断：有 6 个既有套件只加载到 group-levels.js / enemy.js，不加载 affix.js，
+   直接引用未声明的标识符会 ReferenceError（实测 test-ai / test-pet-store 等曾因此整批炸掉）。 */
+function fixedAffixForTier(tier) {
+  var key = (tier === 'boss') ? 'boss' : 'elite';
+  if (typeof AFFIX_BOSS_FIXED !== 'undefined' && typeof AFFIX_ELITE_FIXED !== 'undefined') {
+    return (tier === 'boss') ? AFFIX_BOSS_FIXED : AFFIX_ELITE_FIXED;
+  }
+  if (typeof GROUP_AFFIX_FIXED !== 'undefined' && GROUP_AFFIX_FIXED && GROUP_AFFIX_FIXED[key]) return GROUP_AFFIX_FIXED[key];
+  return (tier === 'boss') ? 'cut_boss' : 'cut_elite';
 }
 
 /* 从注册表随机抽 N 个不重复天赋（**兜底路径**）
@@ -101,8 +154,10 @@ function createEnemyUnit(opts) {
      精英 / 普通怪恢复可抽 lazy / slowstart（此前 `eliteLike` 连精英一起挡掉了，
      与作者裁决相反；同时 group-levels.js 侧另有 `WEAK_TALENT_CHANCE` 的注入，两处口径一致）。
    @param n    抽取个数
-   @param tier 可选。省略时 = 旧行为（全池，仅排除宠物专属）；'boss' 会额外排除 weak */
-function pickRandomTalents(n, tier) {
+   @param tier 可选。省略时 = 旧行为（全池，仅排除宠物专属）；'boss' 会额外排除 weak
+   @param rng  可选。v2.4.8：与 createEnemyUnit 的 rng 口径统一（缺省走 battleRnd） */
+function pickRandomTalents(n, tier, rng) {
+  var rd = (typeof rng === 'function') ? rng : battleRnd;
   var bossLike = (tier === 'boss');
   // 排除宠物专属天赋（petOnly）——否则敌人会抽到「漆黑之眼」「圣光守护」这类宠物天赋
   var ids = Object.keys(TALENTS).filter(function (id) {
@@ -114,21 +169,23 @@ function pickRandomTalents(n, tier) {
   var picked = [];
   var pool = ids.slice();
   for (var i = 0; i < n && pool.length; i++) {
-    var k = Math.floor(battleRnd() * pool.length);
+    var k = Math.floor(rd() * pool.length);
     picked.push(pool[k]);
     pool.splice(k, 1);
   }
   return picked;
 }
 
-/* 从技能注册表随机抽 N 个（M2b-2 实现 SKILLS 后生效；当前占位返回空） */
-function pickRandomSkills(n) {
+/* 从技能注册表随机抽 N 个（M2b-2 实现 SKILLS 后生效；当前占位返回空）
+   @param rng 可选。v2.4.8：与 createEnemyUnit 的 rng 口径统一（缺省走 battleRnd） */
+function pickRandomSkills(n, rng) {
   if (typeof SKILLS === 'undefined') return [];
+  var rd = (typeof rng === 'function') ? rng : battleRnd;
   var ids = Object.keys(SKILLS);
   var picked = [];
   var pool = ids.slice();
   for (var i = 0; i < n && pool.length; i++) {
-    var k = Math.floor(battleRnd() * pool.length);
+    var k = Math.floor(rd() * pool.length);
     picked.push(pool[k]);
     pool.splice(k, 1);
   }

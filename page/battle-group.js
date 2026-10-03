@@ -1,7 +1,8 @@
 /* ============================================
    MyHealth — Group Battle Engine (M2b-4)
    多 Unit 行动队列战斗。独立于原 battleTick（单敌零回归）。
-   行动队列：先按**先制度 priority 分档**降序（v2.4.7，见 unitPriorityRank），
+   行动队列：先按**先制度 priority 分档**降序（v2.4.7 起；v2.4.8 起判据 =「本回合**声明**要用
+   先制技能」—— 预声明在准备阶段完成，见 predeclareActions），
    同档内按 effectiveSpeed 降序 + 稳定 tie-break（同速我方先手、同方按创建序）。
    v2.4.5：**每回合拆成四阶段**（准备 → 行动 → 判定 → 结束），见下方「四阶段」小节；
        两条推进路径（groupBattleTick / groupBattleStep）共用同一组阶段 helper。
@@ -275,12 +276,25 @@ function groupSnapshot(gb) {
     return {
       turn: gb.turn, done: !!gb.done, winner: gb.winner || null,
       rngState: (gb.rng && gb.rng.getState) ? gb.rng.getState() : null,
+      /* v2.4.8：把「本回合走到哪了」也存进快照 —— 队列（**按单位 id**，单位对象本身不可序列化）
+         + 已推进到的下标 + 编排标记 + 回合级守卫。用途见 groupRestore / groupBattleStep 的 `_resume`：
+         回滚到「回合进行中」的快照后，**续跑本回合剩余的队列**，而不是从头重跑准备阶段。 */
+      queueIds: (gb._stepQueue || []).map(function (u) { return u && u.id; }),
+      queueIdx: gb._stepIdx || 0,
+      roundOpen: !!gb._roundOpen,
+      declaredTurn: (gb._declaredTurn == null) ? null : gb._declaredTurn,
+      qifengTurn: (gb._qifengTurn == null) ? null : gb._qifengTurn,
       units: (gb.units || []).map(_cloneUnit)
     };
   } catch (e) { console.warn('[group] 生成快照失败', e); return null; }
 }
 
-/* 回滚到快照。⚠️ _stepQueue / _stepIdx 必须重置，否则行动队列错乱 */
+/* 回滚到快照。⚠️ _stepQueue / _stepIdx 必须重置，否则行动队列错乱
+   v2.4.8：若快照是在「回合进行中」（_roundOpen 为真）拍的，重置之后把队列位置交给
+   `gb._resume`（**单位 id + 下标**，不是活的单位引用），由下一次 groupBattleStep 还原。
+   为什么要这样：不还原就会**从头重跑本回合的准备阶段**，丢掉「本回合已经行动过谁 / 各单位
+   准备阶段声明的行动 / 回合级守卫」，于是「回滚后重跑 == 首次结果」在多数种子上并不成立
+   （scripts/test-group-determinism 的终点一致性断言会红）。 */
 function groupRestore(gb, snap) {
   if (!gb || !snap || !Array.isArray(snap.units)) return { ok: false, reason: '快照无效' };
   try {
@@ -309,6 +323,13 @@ function groupRestore(gb, snap) {
     /* v2.4.5：_roundOpen 必须一起重置 —— 它与 _stepQueue 是同一件事的两个面
        （队列为空 = 准备阶段待跑），否则回滚后下一次 step 会跳过准备阶段、直接按旧队列跑。 */
     gb._roundOpen = false;
+    /* v2.4.8：回合级守卫与「本回合的位置」一并还原。`_stepQueue` 仍然留空
+       （快照/回滚的既有契约：回滚后不得残留队列引用），位置信息走 `_resume`。 */
+    gb._declaredTurn = (snap.declaredTurn == null) ? null : snap.declaredTurn;
+    gb._qifengTurn = (snap.qifengTurn == null) ? null : snap.qifengTurn;
+    gb._resume = (snap.roundOpen && snap.queueIds && snap.queueIds.length)
+      ? { ids: snap.queueIds.slice(), idx: snap.queueIdx || 0 }
+      : null;
     if (typeof syncStatusDerived === 'function') (gb.units || []).forEach(syncStatusDerived);
     return { ok: true, turn: gb.turn };
   } catch (e) { console.warn('[group] 回滚失败', e); return { ok: false, reason: String(e && e.message) }; }
@@ -379,8 +400,31 @@ function unitInitiative(u, skill) {
      ④ 本函数**不掷骰**（不消耗 gb.rng），同种子结果必须可复现（test-group-determinism）。
      ⚠️ 玩家技能表（skills.js）目前没有 `priority` 字段，故这里只扫 `unit.skills`（敌群技能）；
         将来给玩家技能加先制度时，此处要一并接上。 */
-function unitPriorityRank(u) {
+/* 先制度分档（v2.4.8 起有**两种口径**，见下）—— 本函数不掷骰、不消耗 gb.rng。
+   v2.4.7 口径（held，兜底）：持有**可用**的先制技能即进先制档。
+   v2.4.8 口径（declared，真实战斗）：**本回合真的声明了先制技能**才进先制档。
+   为什么保留两种：出手队列在**准备阶段**建立、选技在**行动阶段**，
+   「声明」是在 v2.4.8 才加进来的（见 predeclareActions）；而 scripts/test-engine-gaps.js
+   等既有断言直接 `buildActionQueue(gb)`（不做准备阶段、没有声明）——
+   那些调用点天然拿不到声明，只能按 v2.4.7 的 held 口径解释，故保留为**兜底**。
+   判据：`gb._declaredTurn === gb.turn`（本回合做过预声明）→ 只看声明；
+   否则回落到 held。真实战斗两条推进路径都在准备阶段做了预声明，故线上恒走 declared。 */
+function priorityRankOfSkill(skillId) {
+  if (typeof SKILLS === 'undefined' || !skillId) return 0;
+  var d = SKILLS[skillId];
+  return (d && d.priority) ? d.priority : 0;
+}
+function unitPriorityRank(u, gb) {
   if (!u || typeof SKILLS === 'undefined') return 0;   // 未加载技能表的最小沙箱：无先制可言
+  /* ① v2.4.8：本回合已预声明 → 只有「声明要用的技能」算先制。
+      声明失效（技能进了冷却 / 声明者被禁技）时这里返回 0：
+      队列已经建好，它这一档的先手权本来就该在「声明那一刻」定 ——
+      行动阶段发现失效会当场重选（见 takeDeclaredAction），重选**不重排队列**（口径见函数注释）。 */
+  if (gb && gb._declaredTurn === gb.turn) {
+    var dec = (u._declaredTurn === gb.turn) ? u._declared : null;
+    return dec ? priorityRankOfSkill(dec.skillId) : 0;
+  }
+  /* ② 兜底（v2.4.7 held 口径）：未做预声明的直接调用方（单测 / 调试脚本自建队列） */
   var ids = (typeof usableSkills === 'function') ? usableSkills(u) : (u.skills || []);
   var rank = 0;
   for (var i = 0; i < ids.length; i++) {
@@ -390,12 +434,121 @@ function unitPriorityRank(u) {
   return rank;
 }
 
+/* ============================================================
+   v2.4.8（作者裁定）：先制度 = 「**本回合真用了先制技能**才先手」（架构级）
+
+   修前（v2.4.7）：按「**持有可用先制技能**即进先制档」实现 —— 因为出手队列在准备阶段建立、
+   选技在行动阶段，静态队列预知不了当回合选什么技能。
+   本版把「本回合要用什么」**提前到准备阶段预声明**：只有真的声明了先制技能的单位才进先制档。
+
+   · **复用同一个 AI 选技函数**：声明直接调 `aiDecide()`（= aiPickSkill + aiPickTarget），
+     **没有另写一套评分**。改动只是「何时决定」从行动阶段提前到准备阶段。
+   · 只对**敌方**单位声明：先制度目前只写在敌群技能上（`page/skills.js` 玩家技能表没有
+     `priority` 字段），且我方行动走 `playerAttackSkillPick` / `pickSkill` 而不是 AI ——
+     给我方也声明会改变我方的行动选择（越权改动），故不做。
+   · 只对**持有可用先制技能**的单位声明：没有先制技能的单位分档恒为 0，声明对队列毫无影响，
+     跳过它才能把 `gb.rng` 的消耗面收窄到「本来就会被先制度影响的那批单位」。
+   · **失效回退**：声明的技能/目标在行动阶段可能已经不可用（技能进冷却、目标阵亡、
+     声明者被禁技等）→ 当场用同一个 `aiDecide` 重选并继续（见 takeDeclaredAction），
+     不卡死、不跳过整回合。
+   · **不额外消耗随机数**：声明把「本来在行动阶段会掷的那几次」提前到准备阶段掷，
+     总次数在「声明有效」时与修前**相同**；只有声明失效时会多掷一次（多出来的那一次 = 回退的代价）。
+     声明不改变出手顺序以外的任何公式；`gb.rng` 的实际消耗次数在报告里逐条给出。
+   ============================================================ */
+
+/* 准备阶段：为「持有可用先制技能」的敌方单位预声明本回合的行动。
+   必须在**准备阶段的回合开始类效果之后**、`refreshAllStatMods` + `buildActionQueue` **之前**调用
+   （声明的技能要参与分档排序）。 */
+function predeclareActions(gb) {
+  if (!gb) return;
+  /* 没有 AI 选择器（最小沙箱）→ 不做声明，`gb._declaredTurn` 保持为空，
+     全队列自动回落到 v2.4.7 的 held 口径（行为与修前一致）。 */
+  if (typeof aiDecide !== 'function') return;
+  var turn = gb.turn;
+  (gb.units || []).forEach(function (u) {
+    if (!u) return;
+    /* 幂等：本回合已经声明过就不再声明（否则同回合重复调用准备阶段会多掷一次骰）。 */
+    if (u._declaredTurn === turn) return;
+    /* 清掉**上一回合**的残留声明：单位阵亡 / 被跳过行动时，旧声明不该一直挂着。 */
+    u._declared = null; u._declaredTurn = null; u._declaredUsed = null; u._declUnused = false;
+    if (u.hp <= 0) return;
+    if (u.side !== 'enemy') return;               // 我方不声明（见上文）
+    if (unitPriorityRank(u, gb) <= 0) return;     // 没有可用先制技能 → 分档无关，不掷骰
+    var d = aiDecide(gb, u);
+    if (!d) return;
+    /* ⚠️ 声明里**只存技能 id 与目标 id**，不存活的单位引用 ——
+       单位上的字段会进 groupSnapshot 的 JSON 克隆，存引用会在回滚后变成「脱离战斗的副本」
+       （AI 会去打一个影子单位），也会破坏「回滚后重跑 == 首次」这条不变式。 */
+    u._declared = { skillId: d.skillId || null, targetIds: declaredTargetIds(d.target) };
+    u._declaredTurn = turn;
+    u._declaredUsed = null;
+    /* `_declUnused` 只服务「声明了但一次都没用上」的统计（例如单位在行动前阵亡），
+       便于报告如实给出「准备阶段看到的状态」与「行动阶段实际状态」的差。 */
+    u._declUnused = true;
+  });
+  gb._declaredTurn = turn;
+}
+
+/* 声明的目标 → id 列表（'all' 类技能的目标是单位数组，单体是单个单位，可能为 null） */
+function declaredTargetIds(t) {
+  if (!t) return [];
+  if (Object.prototype.toString.call(t) === '[object Array]') {
+    return t.filter(function (x) { return x && x.id; }).map(function (x) { return x.id; });
+  }
+  return t.id ? [t.id] : [];
+}
+/* id 列表 → 当前还挂在场上（不管死活）的单位，顺序与 id 列表一致 */
+function declaredTargets(gb, ids) {
+  var out = [];
+  (ids || []).forEach(function (id) {
+    var u = (gb.units || []).find(function (x) { return x.id === id; });
+    if (u) out.push(u);
+  });
+  return out;
+}
+
+/* 行动阶段：取出本回合的有效声明。
+   失效判据（任一命中 → 返回 null，调用方当场用 aiDecide 重选）：
+     ① 没有本回合的声明；
+     ② 声明要用的技能已不在 `usableSkills`（冷却中 / 被幽魂附身禁技 / 已被吞掉）；
+     ③ 声明的目标已阵亡（目标 id 全部解析不到存活单位 —— `all` 类目标要求至少一个还活着）；
+     ④ 本回合已经消费过一次声明（疾影的额外行动**不重复使用**同一声明 ——
+        否则第二次会绕过技能冷却，等于凭空多放一次技能）。
+   注意：声明者已阵亡的情形不会走到这里 —— 行动阶段根本不会给它行动机会
+   （runPhaseAction / groupBattleStep 都先跳过 hp<=0 的单位）。 */
+function declaredActionValid(gb, actor, d) {
+  if (!d) return false;
+  var usable = (typeof usableSkills === 'function') ? usableSkills(actor) : (actor.skills || []);
+  if (d.skillId && usable.indexOf(d.skillId) < 0) return false;
+  var ids = d.targetIds || [];
+  if (ids.length) {
+    var alive = declaredTargets(gb, ids).filter(function (u) { return u.hp > 0; });
+    if (!alive.length) return false;
+  }
+  return true;
+}
+function takeDeclaredAction(gb, actor) {
+  var d = null;
+  if (actor && actor._declaredTurn === gb.turn && actor._declared) d = actor._declared;
+  if (d && actor._declaredUsed !== gb.turn && declaredActionValid(gb, actor, d)) {
+    actor._declaredUsed = gb.turn;   // 一次行动消费一次（额外行动会重选）
+    actor._declUnused = false;
+    var alive = declaredTargets(gb, d.targetIds).filter(function (u) { return u.hp > 0; });
+    return {
+      skillId: d.skillId,
+      target: alive.length > 1 ? alive : (alive.length === 1 ? alive[0] : null),
+      skillDef: d.skillId ? ((typeof SKILLS !== 'undefined' && SKILLS[d.skillId]) || null) : null
+    };
+  }
+  return aiDecide(gb, actor);        // 失效 / 二次行动 → 当场重选（复用同一个 AI 函数）
+}
+
 /* 构建行动队列：先按**先制度分档**降序（v2.4.7），再按 initiative 降序，
    稳定 tie-break（同速我方先手，同方按创建序） */
 function buildActionQueue(gb) {
   var queue = gb.units.filter(function (u) { return u.hp > 0; });
   queue.sort(function (a, b) {
-    var pa = unitPriorityRank(a), pb = unitPriorityRank(b);
+    var pa = unitPriorityRank(a, gb), pb = unitPriorityRank(b, gb);
     if (pa !== pb) return pb - pa;   // v2.4.7：先制档优先于速度（不变式 ①）
     var ia = unitInitiative(a, null);
     var ib = unitInitiative(b, null);
@@ -1030,11 +1183,13 @@ function playerAttackSkillPick(gb, actor) {
      ① 准备（每回合一次，在行动队列建立之前）：开战钩子 / 冰魄余威 / 场地 onTurnStart /
         每回合一次的回合开始类效果（灵感涌动 + 玩家气力恢复·气势如虹·瞩目①·启风①）/
         诅咒类状态的目标结算（哈欠·末日·遗言·幻影之瞳）/ 慢启动·懒惰的「本回合能否行动」/
-        最后才 refreshAllStatMods + buildActionQueue。
+        **v2.4.8：敌方「本回合用什么」的预声明（predeclareActions —— 先制度分档的依据）**，
+       最后才 refreshAllStatMods + buildActionQueue。
      ② 行动（按队列逐个单位）：onBeforeAction（非准备类）、技能/普攻、伤害/治疗/护盾、状态施加、
-        onAfterAction、疾影额外行动、破盾反伤、启风②、蓄力释放（裁定 §10-1：留在行动阶段）。
+        onAfterAction、疾影额外行动、破盾反伤、启风②、蓄力释放（裁定 §10-1：留在行动阶段）；
+        技能选择优先取准备阶段的声明，**声明失效则当场重选**（takeDeclaredAction）。
      ③ 判定（每回合一次，队列跑完之后）：状态 onTurnEnd（中毒·潮湿·睡眠回复）、
-        天赋+词条 onTurnEnd（振翅·再生·灵感涌动收尾·战意高涨·铁壁·终末宣告·疾影冷却）、
+        天赋+词条 onTurnEnd（振翅·再生·灵感涌动收尾·战意高涨·铁壁·终末宣告）、
         玩家技能回合末（瞩目回复）、duration 递减与到期。
      ④ 结束（每回合一次）：场地 onTurnEnd、回合级守卫清理、胜负判定。
 
@@ -1252,6 +1407,11 @@ function runPhasePrepare(gb) {
     u._prepSkipReason = tb.skipAction ? skipReasonText(tb.events) : '';
   });
 
+  /* v2.4.8：**先制度 = 本回合真用了先制技能才先手** —— 在排队之前做「本回合用什么」的预声明。
+     位置必须在 refreshAllStatMods / buildActionQueue **之前**（声明的技能要参与分档），
+     且在回合开始类效果**之后**（声明要看到本回合已落地的属性/状态，决策质量才不退步）。 */
+  predeclareActions(gb);
+
   /* 属性修正重算 + 行动队列（顺序说明见函数头注释） */
   refreshAllStatMods(gb.units);
   return buildActionQueue(gb);
@@ -1308,14 +1468,16 @@ function runPhaseAction(gb, queue) {
 /* ---------- 阶段③：判定（每回合一次，队列跑完之后） ----------
    搬过来的（v2.4.5 之前分散在**每个单位自己**的 onTurnEnd 里，battle-group.js:1093-1105）：
      · 玩家技能回合末（瞩目回复，旧顺序在天赋 onTurnEnd 之前）
-     · 天赋 + 词条 onTurnEnd（振翅 / 再生 / 灵感涌动收尾 / 战意高涨 / 铁壁 / 终末宣告 / 疾影冷却）
+     · 天赋 + 词条 onTurnEnd（振翅 / 再生 / 灵感涌动收尾 / 战意高涨 / 铁壁 / 终末宣告）
      · 状态 onTurnEnd（中毒 / 潮湿 / 睡眠回复）
      · duration 递减与到期（ageStatusesInJudge）
    逐条确认过的「依赖该单位自身状态」的效果（本阶段**逐单位**跑，上下文与旧实现逐字相同）：
      poison（unit.base.hp）/ wet（纯文案）/ sleep（st.data.healPct + unit.base）/ flutter（unit.base.spd）/
      regen（ctx.turn + unit.base.hp）/ inspiration 收尾（ctx.allyUnits）/ grow_atk·grow_def（unit.base）/
-     doom_call（ctx.enemyUnits）/ extra_act（unit._extraCd）/ spotlight（player._spotTauntTurn·_spotHits）/
+     doom_call（ctx.enemyUnits）/ spotlight（player._spotTauntTurn·_spotHits）/
      到期事件（onExpire：charging → _chargeReady 等）。
+     （v2.4.8：extra_act 已**没有** onTurnEnd 钩子 —— 疾影口径改为「每回合 55%」，
+       跨回合冷却连同它的递减点一并删除，故它不再出现在本阶段的依赖清单里。）
    刻意**不搬**的两项（仍在行动阶段 groupUnitTurn 末尾，因为它们与「该单位本回合是否真的行动了」绑定）：
      · tickSkillCooldowns —— 历史上「跳过行动」的单位不减冷却，附身暂停的判据也在那里；
      · _hitModTurns 倒计时（闪耀 / 打湿）。
@@ -1394,6 +1556,7 @@ function finishRound(gb) {
   gb._roundOpen = false;
   gb._stepQueue = null;
   gb._stepIdx = 0;
+  gb._resume = null;
   return { done: !!gb.done, winner: gb.winner || null, phase: gb.phase, events: judgeEvts.concat(endEvts) };
 }
 
@@ -1500,7 +1663,10 @@ function groupUnitTurn(gb, actor) {
   }
   if (!acted && !skillsBlocked) {
     if (actor.side === 'enemy' && typeof aiDecide === 'function') {
-      var ai = aiDecide(gb, actor);
+      /* v2.4.8：优先使用**准备阶段的预声明**（本回合要用什么在准备阶段就定了）；
+         声明失效（技能进冷却 / 目标阵亡 / 本回合已消费过一次）→ takeDeclaredAction
+         内部当场用同一个 aiDecide 重选，不卡死也不跳过整回合。 */
+      var ai = takeDeclaredAction(gb, actor);
       skillId = ai.skillId;
       actTarget = ai.target;
     } else {
@@ -1562,8 +1728,9 @@ function groupUnitTurn(gb, actor) {
      旧注释保留在此备查：duration=N 的持续伤害类状态刚好结算 N 次（递减必须晚于 onTurnEnd 钩子）。 */
   /* v2.4.7（§8.6「onAfterAction 双重派发」一行）：**内层派发已删除**（原为 talentDispatch
      + 只取 events、丢弃 mutations）。它是历史遗留，而且是「疾影」词条只有 24.75% 的直接原因：
-       · onAfterAction 的唯一生产者 = 词条「疾影」extra_act（affix.js），它在返回 `extraAction`
-         mutation 的**同时**就把 `unit._extraCd` 置 3；
+       · onAfterAction 的唯一生产者 = 词条「疾影」extra_act（affix.js），**v2.4.7 及以前**它
+         在返回 `extraAction` mutation 的**同时**就把 `unit._extraCd` 置 3（v2.4.8 起改为
+         「每回合 55%」的回合守卫 `_extraActTurn`，不再有跨回合冷却）；
        · 内层先跑：掷中 → 冷却被置上而 mutation 被丢弃 → 外层（runUnitActionStep）必然冷却早退；
          掷空（45%）→ 外层才有机会再掷 55% → 实际额外行动率 = 0.45 × 0.55 ≈ 24.75%（定义 55%）；
        · 内层还额外产出「疾影: 额外行动一次！」文案（假播报：掷空的那次也会播）。
@@ -1635,6 +1802,9 @@ function dispatchBattleStartTalents(gb) {
 function groupBattleTick(gb) {
   if (gb.done) return;
   _setBattleRng(gb);   // v2.1.27
+  /* v2.4.8：tick 是「整回合」驱动器，不吃 `_resume`（回合中途的位置对整回合推进无意义）——
+     清掉它，避免一次中途回滚留下的位置被后面某次 step 误用。 */
+  gb._resume = null;
   var queue = runPhasePrepare(gb);
   runPhaseAction(gb, queue);
   finishRound(gb);
@@ -1681,6 +1851,20 @@ function groupBattleStep(gb) {
     return { done: true, winner: gb.winner, turnEnd: true, phase: gb.phase, events: fr0.events };
   }
   _setBattleRng(gb);   // v2.1.27：让技能/AI/场地里的随机也走本场种子
+  /* v2.4.8：从「回合进行中」的快照回滚后，先**还原本回合剩余的队列位置**
+     （groupRestore 把位置存在 `_resume`，此时 `_stepQueue` 仍是空的）。
+     `_resume` 存的是单位 id，这里按 id 重新解析成活的单位引用。 */
+  if (gb._resume) {
+    var rq = [];
+    (gb._resume.ids || []).forEach(function (id) {
+      var ru = (gb.units || []).find(function (x) { return x.id === id; });
+      if (ru) rq.push(ru);
+    });
+    gb._stepQueue = rq;
+    gb._stepIdx = Math.min(gb._resume.idx || 0, rq.length);
+    gb._roundOpen = true;
+    gb._resume = null;
+  }
   /* ① 准备阶段（每回合一次，在行动队列建立之前） */
   if (!gb._roundOpen) {
     gb._stepQueue = runPhasePrepare(gb);

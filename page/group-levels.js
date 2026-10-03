@@ -542,7 +542,12 @@ function anchorStageEnemies(groupId, stage, allies) {
 
   return list.map(function (ec) {
     var b = ec.base || {};
+    /* v2.4.8（§8.5 第 14 条）：词条必须**跟着配置一起**传下去。
+       本函数会重建配置对象，修前只搬了 name/tier/talents/skills/base —— 少了 affixes，
+       于是「开着锚定」的建场（debug 体检 / --anchor 模拟）即使拿到固化词条也会丢掉。
+       锚定默认关闭，故这条不影响线上；补上它是为了消灭「同一份配置两条搬运路径口径分叉」。 */
     var out = { name: ec.name, tier: ec.tier, talents: ec.talents, skills: ec.skills, base: {} };
+    if (ec.affixes) out.affixes = ec.affixes;
     ['atk', 'def', 'hp', 'spd', 'soulAtk', 'soulDef'].forEach(function (k) {
       if (b[k] != null) out.base[k] = b[k];
     });

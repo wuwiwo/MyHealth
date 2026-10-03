@@ -481,7 +481,13 @@ function startGroupTrial(groupId){
   // 锚定默认关闭（见 GROUP_ANCHOR.enabled），开启时按我方阵容反推敌人属性
   var cfgList = (typeof groupStageEnemies === 'function') ? groupStageEnemies(anchorG, glv, allies) : glv.enemies
   var enemies=cfgList.map(function(ec,i){
-    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base,level:ec.level})
+    /* v2.4.8（§8.5 第 14 条，作者裁定「修敌人词条死接线」）：**把固化词条真正传进去**。
+       为什么必须在这里传：真实建场是唯一入口，而 `ec.affixes` 是 `group-levels.js` 的
+       genEnemyCfg 按本关种子固化的词条（Boss = cut_boss + 2 条，精英 = cut_elite + 1 条）——
+       它是**唯一权威来源**，此处只做「传递」，不另造一套。
+       修前这一行没有 `affixes` 字段 → createEnemyUnit 走兜底（又被覆盖清空）→
+       线上 Boss/精英 **一件词条都没有**（伤害减免/抗扩散/抗技法/战意高涨/铁壁/终末宣告/疾影全失效）。 */
+    return createEnemyUnit({id:'enemy-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base,level:ec.level,affixes:ec.affixes})
   })
   // v2.1.13 场地：每个大关一个主题场地（g3 起）
   var lgNum = parseInt(String(anchorG).replace(/[^0-9]/g, ''), 10) || 1
@@ -2232,7 +2238,10 @@ function showSkillDetail(skillId, unit){
     h+=detRow('伤害类型', s.dmgType==='soul'?'魂攻（吃目标魂防）':'物理（吃目标防御）')
   }
   h+=detRow('冷却', (s.cooldown||0)+' 回合'+(s.startCooldown?('（开场即进入 '+s.startCooldown+' 回合冷却）'):''))
-  if(s.priority)h+=detRow('先制度', '+'+s.priority+'（出手队列中优先行动）')
+  /* v2.4.8（作者裁定「先制度 = 本回合真用了先制技能才先手」）：文案跟着新口径写准。
+     修前那版写「出手队列中优先行动」，读起来像「只要持有这个技能就先手」——
+     而现在的判据是「本回合**选了**这个技能才进先制档」（准备阶段预声明，见 battle-group.js）。 */
+  if(s.priority)h+=detRow('先制度', '+'+s.priority+'（本回合使用该技能时，出手排在所有非先制单位之前）')
   if(unit)h+=detRow('当前状态', cd>0?('冷却中，还需 '+cd+' 回合'):'就绪')
   h+='</div>'
   h+='<div class="det-card"><div class="det-h">📖 效果说明</div>'
