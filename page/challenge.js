@@ -29,6 +29,31 @@ function applyDropMults(drops){
   })
 }
 
+/* ========== v2.4.10：属性奖励阈值（唯一可调常量） ==========
+   伤害 → 月度属性奖励的除数（除数越小越慷慨）：
+     ⚔️ 攻击 = floor(dmg / atk)   🛡️ 防御 = floor(dmg / def)
+     ❤️ 生命 = floor(dmg / hp) × hpStep
+
+   历史沿革：
+     v2.4.9 及以前 = 2250 / 3375 / 675（hpStep 3）
+     v2.4.10 起倒计时由 **8~12s 缩为 6~8s**（点击量约 −30%）→ 三档等比 **×0.7**
+     目的：让「同等手速拿到的属性奖励」与缩短前持平，本次改动只适配新时长、不改强度。
+
+   ⚠️ def / hp 是**小数**，这是刻意的：0.7 倍后 3375→2362.5、675→472.5 本就不是整数。
+      取整会引入约 0.1% 的**系统性**偏差，随伤害放大（实测 hp 在大伤害下比不取整多漂 15 点）；
+      保留小数后偏差只剩「取整边界效应」最多 1 步（hp = 3 点），量级差 5 倍。
+      同时保住了原设计里「生命奖励速率 = 攻击的 10 倍」（3/472.5 = 1/157.5 = 10/1575）。
+      回归测试：`scripts/test-challenge-tuning.js`（35 断言，含两个反证）。
+
+   ⚠️ 只在本文件 endChallenge() 一处消费。以后调奖励只改这里，别在结算点另写数字。 */
+var CH_REWARD_DIV = { atk: 1575, def: 2362.5, hp: 472.5, hpStep: 3 };
+
+/* ========== v2.4.10：倒计时区间（唯一可调常量，秒） ==========
+   普通挑战 = [min, max] 均匀随机；热血 buff 'timeBonus' 在此区间上叠加
+   「基础时间锁高档 70%~100%」再 ×1.4（见 startHiddenChallenge）。
+   ⚠️ 文案（挑战预览的「倒计时 X-Y 秒」）必须与此处同步，别两处各写一个数。 */
+var CH_DUR_MIN = 6, CH_DUR_MAX = 8;
+
 /* ========== SUMMON LOGIC ========== */
 function getChallenge(){
   var c=store.get('challenge')||{}
@@ -366,7 +391,7 @@ function showChallengePreview(){
     +'<div class="modal-title">🔬 隐藏挑战</div>'
     +'<div class="ch-preview">'
     +  '<div class="ch-preview-title">召唤成功！</div>'
-    +  '<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">倒计时 8-12 秒，疯狂点击攻击按钮造成伤害，伤害将转化为本月属性奖励。</div>'
+    +  '<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:8px">倒计时 '+CH_DUR_MIN+'-'+CH_DUR_MAX+' 秒，疯狂点击攻击按钮造成伤害，伤害将转化为本月属性奖励。</div>'
     +  '<div class="ch-stats" style="grid-template-columns:1fr 1fr 1fr 1fr">'
     +    '<div class="ch-stat">⚔️ <b>'+stats.atk+'</b></div>'
     +    '<div class="ch-stat">👻 <b>'+(stats.soulAtk||0)+'</b></div>'
@@ -403,15 +428,15 @@ function showChallengePreview(){
 /* Step 2: actual minigame — countdown + tap attack */
 function startHiddenChallenge(hotBuff){
   var stats=getGameStats()
-  var baseDur=8+Math.floor(Math.random()*5) // 8-12 seconds
+  var baseDur=CH_DUR_MIN+Math.floor(Math.random()*(CH_DUR_MAX-CH_DUR_MIN+1)) // 6-8 seconds（v2.4.10 前为 8-12）
   var duration=baseDur
   var critRate=0.20
   var critDmg=1.5   // 暴击伤害倍率制：基础 150%
   if(hotBuff==='critRate'){critRate=0.75;critDmg=1.85}  // 暴击率+55% 且 暴击伤害+35%
   if(hotBuff==='critDmg'){critRate=0.35;critDmg=2.7}   // 暴击伤害+120% 且 暴击率+15%
   if(hotBuff==='timeBonus'){
-    // 倒计时+40%：基础时间锁定 70%~100% 高值区间 (10.8~12s) 再 ×1.4
-    baseDur=8+4*(0.7+Math.random()*0.3)
+    // 倒计时+40%：基础时间锁定 70%~100% 高值区间（v2.4.10 起 = 7.4~8s）再 ×1.4 → 10~11s
+    baseDur=CH_DUR_MIN+(CH_DUR_MAX-CH_DUR_MIN)*(0.7+Math.random()*0.3)
     duration=Math.round(baseDur*1.4)
   }
   // 热血 buff 触发：全屏金色闪光（特殊惊艳标识）
@@ -524,11 +549,11 @@ function startHiddenChallenge(hotBuff){
     // v2.1.6：游戏已结束，解除"禁止点背景关闭"标记，让结算界面可正常关闭
     if(modal)delete modal.dataset.noAutoClose
     if(attackBtn)attackBtn.disabled=true
-    // Calculate bonus: total damage → reward
+    // Calculate bonus: total damage → reward（阈值见文件顶部 CH_REWARD_DIV）
     var dmg=state.totalDamage
-    var bonusAtk=Math.floor(dmg/2250)
-    var bonusDef=Math.floor(dmg/3375)
-    var bonusHp=Math.floor(dmg/675)*3
+    var bonusAtk=Math.floor(dmg/CH_REWARD_DIV.atk)
+    var bonusDef=Math.floor(dmg/CH_REWARD_DIV.def)
+    var bonusHp=Math.floor(dmg/CH_REWARD_DIV.hp)*CH_REWARD_DIV.hpStep
     var c=getChallenge()
     c.seasonBonus.atk=(c.seasonBonus.atk||0)+bonusAtk
     c.seasonBonus.def=(c.seasonBonus.def||0)+bonusDef
