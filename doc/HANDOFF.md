@@ -690,6 +690,24 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 - 纯文档改动 = `docs:` 前缀，**不 bump 版本**
 - 提交信息施工用 `feat:`/`fix:`，不留 pending
 
+### 9.1 ⚠️ 版本纪律的自动护栏在沙箱里会失效（2026-10-05 实测）
+
+`scripts/check-release.js`（pre-commit hook）靠 `execSync('git ...')` 读暂存列表。
+**部分沙箱禁止 node spawn 子进程**（`execSync` / `execFileSync` 均抛 `EBUSY`、`stdout` 为空）。
+
+旧实现的 `catch` 把失败**压成空字符串** → 暂存列表恒为空 → 每次都打印
+`✓ pre-commit: utils.js 未变更，跳过版本校验` —— **校验从未执行，输出却像通过**。
+（本项目多个 AI 在沙箱里提交，等于这条护栏长期是失效的。）
+
+**已修（2026-10-05）**：`sh()` 改为返回 `{ok, out}` 显式区分「命令跑了」与「命令没跑起来」，
+并加 `probeGit()` 探测；git 不可用时**大声告警**（明说「未执行 ≠ 通过」）而非静默跳过；
+暂存列表解析统一走 `lines()`（顺带去掉 `core.autocrlf=true` 可能带来的行尾 `\r` —— 那会让
+`page/utils.js\r` 匹配不上 `page/utils.js`，是同一类静默失效）。
+守卫测试：`scripts/test-release-hook.js`（22 断言）。
+
+> 📌 **实操含义**：在沙箱里提交时，**不要**把 hook 的 `✓ 跳过版本校验` 当成「文档已同步」的证据。
+> 改 `APP_VERSION` 时必须**自己**确认 README / changelog / 架构演化表三项都改了。
+
 ---
 
 ## 10. 待办 / 已知问题

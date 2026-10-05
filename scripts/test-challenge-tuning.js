@@ -8,7 +8,10 @@
  *   ③ 热血 buff 'timeBonus' 同步缩放到新基线（保留原有「锁高档 70~100%」机制）
  *
  * 关键不变量（本测试的核心）：
- *     floor(0.7·D / 1575) == floor(D / 2250)     即「伤害打七折，奖励不变」
+ *     floor(0.7·D / 1575) ≈ floor(D / 2250)     即「伤害打七折，奖励基本不变」
+ *   ⚠️ 是「≈」不是「==」：实数上两者相等，但浮点各自舍入，floor 边界上可能差 1 步。
+ *      判据 = **≤1 步**（atk/def 1 点、hp 3 点）；对照的「阈值取整」会系统性漂移多步。
+ *      采样用固定种子 PRNG（mulberry32）保证可复现 —— 本测试曾用 Math.random 而 flaky。
  *
  * Run: node scripts/test-challenge-tuning.js */
 'use strict';
@@ -80,9 +83,20 @@ for (const k of ['atk', 'def', 'hp']) {
 console.log('\n[3] ⭐ 核心不变量：点击量 −30% 后同等手速奖励持平');
 /* 阈值等比 ×0.7 的**唯一目的**：dmg 变成 0.7 倍时，floor(dmg/div) 不变。
    即 floor(0.7·D / 1575) == floor(D / 2250)。 */
+/* 固定种子的 PRNG（mulberry32，与项目其它测试同源）。
+   ⚠️ 必须确定性：本测试曾用 Math.random 采样 4000 点而 **flaky** ——
+   随机点偶尔命中取整边界，让「偏差」从 0 跳到 1，同一份代码时红时绿。 */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rnd = mulberry32(20261005);
 const DMGS = [50000, 100000, 200000, 300000, 500000, 800000, 1200000, 2000000];
-/* 再补一段大范围连续扫描（含随机伤害），确保「严格相等」不是采样点侥幸 */
-for (let i = 0; i < 4000; i++) DMGS.push(1000 + Math.floor(Math.random() * 3000000));
+for (let i = 0; i < 20000; i++) DMGS.push(1000 + Math.floor(rnd() * 3000000));
 let worstAtk = 0, worstDef = 0, worstHp = 0;
 for (const dmg of DMGS) {
   const aOld = Math.floor(dmg / OLD.atk), aNew = Math.floor(0.7 * dmg / D.atk);
@@ -92,11 +106,16 @@ for (const dmg of DMGS) {
   worstDef = Math.max(worstDef, Math.abs(dNew - dOld));
   worstHp = Math.max(worstHp, Math.abs(hNew - hOld));
 }
-assert(`攻击奖励**严格**持平（${DMGS.length} 个采样点，最大偏差 ${worstAtk}）`, worstAtk === 0, 'worst=' + worstAtk);
-assert(`防御奖励**严格**持平（最大偏差 ${worstDef}）`, worstDef === 0, 'worst=' + worstDef);
-/* hp 是 floor(...)×3：任何取整在边界上都会差 1 步（=3 血）。
-   判据用「≤1 步」而不是 0 —— 要区分的是**边界效应（1 步）**与**系统性漂移（多步）**。 */
-assert(`生命奖励偏差 ≤ 1 步（≤3 血，最大 ${worstHp}）`, worstHp <= D.hpStep, 'worst=' + worstHp);
+/* 判据说明（重要，别改回「严格 0」）：
+   `0.7·D/div` 与 `D/旧div` 在实数上**完全相等**，但浮点运算各自舍入，
+   在 `floor()` 的边界上可能差 1 步。这是任何 floor 的固有性质、**不是设计缺陷**。
+   所以正确的判据是「**≤ 1 步**」，而要区分的两件事是：
+     ① 边界效应  → 最多 1 步（atk/def 1 点，hp 3 点）
+     ② 阈值取整  → **系统性漂移**，随伤害增大到多步（实测 hp 15 点 = 5 步）
+   下面同时断言两者，并断言「① 明显小于 ②」。 */
+assert(`攻击奖励偏差 ≤ 1 点（${DMGS.length} 个采样点，最大 ${worstAtk}）`, worstAtk <= 1, 'worst=' + worstAtk);
+assert(`防御奖励偏差 ≤ 1 点（最大 ${worstDef}）`, worstDef <= 1, 'worst=' + worstDef);
+assert(`生命奖励偏差 ≤ 1 步 = 3 血（最大 ${worstHp}）`, worstHp <= D.hpStep, 'worst=' + worstHp);
 
 /* 反证 1：把 hp 阈值取整成 472 会产生**系统性漂移**（多步），远大于边界效应 */
 const driftInt = Math.max(...[1200000, 2000000, 3000000].map(d => Math.abs(Math.floor(0.7 * d / 472) * 3 - Math.floor(d / 675) * 3)));
