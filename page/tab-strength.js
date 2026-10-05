@@ -83,6 +83,7 @@ function renderStr(){
   const d=_strDate;const f=fmtDate(d)
   renderTodaySnapshot()
   renderSummonPanel()
+  renderStrQuickPicks()   // v2.4.9：常用 / 不常用 动作 chips（每次渲染按最新记录重排）
   document.getElementById('strDateMain').textContent=f.main
   document.getElementById('strDateSub').textContent=f.sub
   renderStrDayVol(d)
@@ -111,8 +112,9 @@ function renderStr(){
       /* v2.2.25：条目缺 targetReps（外部同步 / 老存档条目）时不再渲染「目标 undefined 次」；
          与上方 r 的 `e.targetReps>0` 判定同一口径 —— 没有目标就只显示实际值 */
       var tgtTag=e.targetReps>0?'<span class="ec-tgt">目标 '+e.targetReps+' '+unitSuffix+'</span>':''
-      return '<div class="ec '+(d?'done':'')+'">'+volTag+'<div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="strEdit" data-id="'+e.id+'">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt">'+tgtTag+'<span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
-    }).join('')
+      /* v2.4.9：条目上多一个 🔁「再来一组相同」（一键复制任意一组，字段与手输一致） */
+      return '<div class="ec '+(d?'done':'')+'">'+volTag+'<div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="strRepeat" data-id="'+e.id+'" aria-label="再来一组相同" title="再来一组相同">🔁</button><button class="ec-act" data-a="strEdit" data-id="'+e.id+'" aria-label="编辑这条记录">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'" aria-label="删除这条记录">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt">'+tgtTag+'<span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+    }).join('')+strRepeatBarHtml(entries[entries.length-1])
   }
   renderStrStats()
   renderMissed()
@@ -369,8 +371,12 @@ function onStrengthEvent(el,id,act){
       document.getElementById('strAddCard').classList.toggle('open',_strForm);
       if(_strForm){
         var sex=document.getElementById('strExercise');
-        sex.focus();adaptStrForm(sex.value.trim());
+        if(sex&&typeof sex.focus==='function')sex.focus();
+        adaptStrForm(sex.value.trim());
         sex.setAttribute('readonly','readonly');   // 点选弹层选择，不手输
+        /* v2.4.9：打开表单时若已有动作（刚练过的那条），默认带出它的重量/次数 */
+        ensureStrLastHint();
+        if(sex.value.trim())applyStrLastSet(sex.value.trim());
       }
       return true;
     case 'strSubmit':{
@@ -436,34 +442,272 @@ function onStrengthEvent(el,id,act){
     openStrEdit(entry);return true}
   if(act==='strDel'){
     if(confirm('确定删除这条记录？')){delStr(el.dataset.id);renderStr();toast('已删除','s')};return true}
+  /* ---- v2.4.9 新增：常用动作 chips / 分组开关 / 一键再来一组 ---- */
+  if(act==='strPickEx'){pickStrExercise(el.dataset.ex||'');return true}
+  if(act==='strMoreEx'){_strShowAllEx=!_strShowAllEx;renderStrQuickPicks();return true}
+  if(act==='strRepeat'){strRepeatById(el.dataset.id);return true}
+  if(act==='strRepeatLast'){strRepeatLast();return true}
   return false
 }
 
-/* ========== 训练页动作选择弹层（图片 + 中文名） ========== */
+/* ========== 训练页动作选择弹层（图片 + 中文名） ==========
+   v2.4.9：按真实使用频次分成「⭐ 常用 / 其它动作」两段（`strExPickerHtml()`）。
+   两组**都完整渲染**（不折叠），所以"点动作框 → 点动作"这条主路径步数不变。 */
 function openStrExPicker(){
-  var exs=getStrengthExercises();
   var modal=openModal(null,'strExPicker');
-  var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🎯 选择动作</div><div style="max-height:70vh;overflow-y:auto;margin-top:6px">';
-  exs.forEach(function(ex){
-    var linked=(typeof EXD!=='undefined'&&EXD.ready()&&ex.dsId)?EXD.get(ex.dsId):null;
-    var m=linked?EXD.mediaUrls(linked.img):null;
-    h+='<button type="button" class="ec" data-pickex="'+ex.name+'" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer;border:1px solid var(--bd);border-radius:12px;background:var(--bg2)">'
-      +(m?'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:1px solid var(--bd)">':'<div style="width:56px;height:56px;border-radius:10px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl)">💪</div>')
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:var(--fs-base);font-weight:700;color:var(--text1)">'+(linked?linked.zh:ex.name)+'</div>'
-      +(linked?'<div style="margin-top:2px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+tagHtml(linked.target,'cat')+'</div>':'')
-      +'</div>'
-      +'<span style="font-size:var(--fs-3xs);color:var(--text3)"></span>'
-      +'</button>';
-  });
-  h+='</div></div>';
-  modal.innerHTML=h;
+  modal.innerHTML=strExPickerHtml(strCommonSet());
   modal.querySelectorAll('[data-pickex]').forEach(function(btn){
     btn.addEventListener('click',function(){
       var name=btn.getAttribute('data-pickex');
-      var input=document.getElementById('strExercise');
-      if(input){input.value=name;adaptStrForm(name);}
+      pickStrExercise(name);
       modal.remove();
     });
   });
+}
+
+/* ============================================================================
+   v2.4.9 — 训练页两件功能（作者原话）
+   ①「新训练时，将训练列表最常用的和不常用的进行区分」
+      · 口径 = 该用户**真实训练记录**的组数频次（窗口 / 阈值见 STR_FREQ），
+        **不写死**任何"常用动作"清单；换个人用就是另一份常用表。
+      · 呈现 = 「⭐ 常用」单独分组置顶（零操作步数）+「其它动作」默认折叠
+        （点开会话内记忆）+ 弹层里两组**都完整可见**（弹层路径一步未增）。
+      · 兜底 = 无历史时**不谎报**常用，按数据集默认顺序列出全部动作（不空列表）。
+   ②「可以方便将某次训练再次快速训练」（例：二头弯举 12 下·5kg 再来一组）
+      · 条目上的 🔁「再来一组相同」= 一键复制**任意一组**（含重量/加减次数/目标）；
+      · 列表末尾整行「🔁 再来一组相同」= 刚刚那条的一键复制（作者场景的默认落点）；
+      · 表单默认**带出该动作上一次**的重量/次数（同动作连续组），并在表单里
+        用一行灰色提示说明"带出来了什么"，不改变原有录入路径（无新增必填步骤）。
+   ============================================================================ */
+
+var _strShowAllEx=false;   // 「其它动作」是否已在 chips 区展开（会话内记忆）
+
+/* ---------- ① 频次口径（纯函数，无 DOM / 无 store，可单测） ---------- */
+var STR_FREQ={
+  windowDays:30,        // 统计窗口：最近 30 天（含今天）
+  minWindowSets:5,      // 窗口内不足 5 组 → 样本太薄，退化到「全历史最近 30 组」
+  recentSets:30,        // 薄样本退化用的组数
+  minSetsForCommon:2,   // 窗口内 ≥2 组才算「常用」（只练过一次还谈不上常用）
+  maxCommon:6           // 「常用」最多 6 个（一屏可扫完，不必滚动）
+};
+
+function strShiftDate(dateStr,delta){
+  var d=parseDate(dateStr||today());d.setDate(d.getDate()+delta);return toDate(d)
+}
+/* 一条记录的时序键：优先 createdAt，缺字段回落到日期（外部同步 / 老存档可能没有） */
+function strEntryAt(e){
+  if(e&&e.createdAt)return e.createdAt
+  return e&&e.date?parseDate(e.date).getTime():0
+}
+/* 一组 = 一条 strength.entries（不用"动作去重"，次数就是组数） */
+function strFreqStats(entries,todayStr,opt){
+  var o=opt||{}
+  var days=o.windowDays||STR_FREQ.windowDays
+  var minSets=o.minWindowSets||STR_FREQ.minWindowSets
+  var recent=o.recentSets||STR_FREQ.recentSets
+  var t=todayStr||today()
+  var list=(entries||[]).filter(function(e){return e&&e.exercise})
+  var start=strShiftDate(t,-(days-1))
+  var inWin=list.filter(function(e){return e.date>=start&&e.date<=t})
+  var source='window',pool=inWin
+  if(inWin.length<minSets){
+    pool=list.slice().sort(function(a,b){return strEntryAt(a)-strEntryAt(b)}).slice(-recent)
+    source=pool.length?'recent':'none'
+  }
+  var counts={},lastAt={},totalSets=0
+  pool.forEach(function(e){
+    counts[e.exercise]=(counts[e.exercise]||0)+1;totalSets++
+    var at=strEntryAt(e)
+    if(!(e.exercise in lastAt)||at>lastAt[e.exercise])lastAt[e.exercise]=at
+  })
+  return {source:source,counts:counts,lastAt:lastAt,totalSets:totalSets,windowStart:start,inWindow:inWin.length}
+}
+/* 排序：组数降序 → 最近使用降序 → 数据集顺序（同名并列时结果稳定可复现） */
+function strRankExercises(names,stats){
+  return (names||[]).map(function(n,i){
+    return {name:n,idx:i,count:(stats&&stats.counts[n])||0,lastAt:(stats&&stats.lastAt[n])||0}
+  }).sort(function(a,b){return (b.count-a.count)||(b.lastAt-a.lastAt)||(a.idx-b.idx)})
+}
+/* 分组：常用 = 窗口内 ≥2 组且排名前 6；其余进"其它动作"（同样按频次降序） */
+function strSplitCommon(ranked,stats,opt){
+  var o=opt||{}
+  var minSets=o.minSetsForCommon||STR_FREQ.minSetsForCommon
+  var maxCommon=o.maxCommon||STR_FREQ.maxCommon
+  var total=(stats&&stats.totalSets)||0
+  if(!total)return {hasHistory:false,common:[],others:(ranked||[]).slice()}
+  var common=(ranked||[]).filter(function(r){return r.count>=minSets}).slice(0,maxCommon)
+  var picked={};common.forEach(function(r){picked[r.name]=1})
+  return {hasHistory:true,common:common,others:(ranked||[]).filter(function(r){return !picked[r.name]})}
+}
+/* 读库汇总（渲染与测试同一口径） */
+function strCommonSet(todayStr){
+  var t=todayStr||today()
+  var entries=((store.get('strength')||{entries:[]}).entries)||[]
+  var stats=strFreqStats(entries,t)
+  var ranked=strRankExercises(getStrengthExercises().map(function(e){return e.name}),stats)
+  var sp=strSplitCommon(ranked,stats)
+  sp.stats=stats;sp.ranked=ranked
+  return sp
+}
+function strAttr(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')
+}
+function strFreqNote(sp){
+  var s=sp.stats||{}
+  if(!s.totalSets)return '练几次后这里会自动按常用度排序'
+  if(s.source==='recent')return '按最近 '+s.totalSets+' 组统计（近 30 天样本太少）'
+  return '按近 30 天 '+s.totalSets+' 组统计'
+}
+function strExChipHtml(r,isCommon){
+  return '<button type="button" class="ex-chip'+(isCommon?' common':'')+'" data-a="strPickEx" data-ex="'+strAttr(r.name)+'">'+strAttr(r.name)+'</button>'
+}
+/* chips 区（#strSuggest）HTML —— 空列表兜底也在这里 */
+function strSuggestHtml(sp,expanded){
+  var h=''
+  if(!sp.hasHistory){
+    h+='<div class="ex-grp">💪 全部动作<span class="ex-grp-note">'+strFreqNote(sp)+'</span></div>'
+    return h+sp.others.map(function(r){return strExChipHtml(r)}).join('')
+  }
+  h+='<div class="ex-grp">⭐ 常用<span class="ex-grp-note">'+strFreqNote(sp)+'</span></div>'
+  h+=sp.common.map(function(r){return strExChipHtml(r,true)}).join('')
+  if(!sp.others.length)return h
+  if(!expanded){
+    h+='<button type="button" class="ex-more" data-a="strMoreEx">⋯ 其它动作（'+sp.others.length+'）</button>'
+  }else{
+    h+='<div class="ex-grp">其它动作<span class="ex-grp-note">用得较少</span></div>'
+    h+=sp.others.map(function(r){return strExChipHtml(r)}).join('')
+    h+='<button type="button" class="ex-more" data-a="strMoreEx">收起其它动作</button>'
+  }
+  return h
+}
+function renderStrQuickPicks(){
+  var c=document.getElementById('strSuggest');if(!c)return
+  c.innerHTML=strSuggestHtml(strCommonSet(),_strShowAllEx)
+}
+/* 动作选择弹层：常用置顶 + 其它动作（**都不折叠**，进弹层路径与原来一样是 1 次点击） */
+function strExPickCardHtml(ex,isCommon){
+  var linked=(typeof EXD!=='undefined'&&EXD.ready()&&ex.dsId)?EXD.get(ex.dsId):null;
+  var m=linked?EXD.mediaUrls(linked.img):null;
+  return '<button type="button" class="ec" data-pickex="'+strAttr(ex.name)+'" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer;border:1px solid var(--bd);border-radius:12px;background:var(--bg2)">'
+    +(m?'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:1px solid var(--bd)">':'<div style="width:56px;height:56px;border-radius:10px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl)">💪</div>')
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:var(--fs-base);font-weight:700;color:var(--text1)">'+strAttr(linked?linked.zh:ex.name)+(isCommon?'<span class="ex-common-tag">⭐ 常用</span>':'')+'</div>'
+    +(linked?'<div style="margin-top:2px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+tagHtml(linked.target,'cat')+'</div>':'')
+    +'</div>'
+    +'<span style="font-size:var(--fs-3xs);color:var(--text3)"></span>'
+    +'</button>';
+}
+function strExPickerHtml(sp){
+  var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🎯 选择动作</div><div style="max-height:70vh;overflow-y:auto;margin-top:6px">';
+  if(sp.hasHistory&&sp.common.length){
+    h+='<div class="ex-grp">⭐ 常用<span class="ex-grp-note">'+strFreqNote(sp)+'</span></div>';
+    sp.common.forEach(function(r){
+      var ex=getStrengthExercises().find(function(x){return x.name===r.name})
+      h+=strExPickCardHtml(ex||{name:r.name},true)
+    })
+  }
+  h+='<div class="ex-grp">'+(sp.hasHistory&&sp.common.length?'其它动作':'全部动作')+'<span class="ex-grp-note">'+strFreqNote(sp)+'</span></div>';
+  sp.others.forEach(function(r){
+    var ex=getStrengthExercises().find(function(x){return x.name===r.name})
+    h+=strExPickCardHtml(ex||{name:r.name},false)
+  })
+  h+='</div></div>';
+  return h
+}
+/* 选中动作：写值 + 形态适配 + 带出该动作上一次的重量/次数 */
+function pickStrExercise(name){
+  var input=document.getElementById('strExercise');
+  if(input)input.value=name;
+  adaptStrForm(name);
+  ensureStrLastHint();
+  applyStrLastSet(name);
+}
+
+/* ---------- ② 快速复制上一组 ---------- */
+function strSetLabel(e){
+  if(!e)return ''
+  var isSec=e.unit==='sec'
+  var unit=isSec?'秒':'次'
+  var w=e.eqWeight!=null?('⚖️'+e.eqWeight+'kg/'+unit):((e.weight!=null?e.weight:0)+'kg')
+  return e.exercise+' '+w+' × '+e.actualReps+unit
+}
+/* 复制产出的字段**与手输记录完全一致**：
+   手输普通动作 = {date,exercise,targetReps,actualReps,weight}
+   手输等效重量 = {date,exercise,targetReps,actualReps,weight:0,eqWeight,unit}
+   这里逐字段挑，绝不整条 Object.assign（否则会把 id/createdAt 等带进来） */
+function strEntryPayload(src,date){
+  if(!src)return null
+  var p={date:date,exercise:src.exercise,targetReps:src.targetReps,actualReps:src.actualReps}
+  if(src.eqWeight!=null){p.weight=0;p.eqWeight=src.eqWeight;p.unit=src.unit||'rep'}
+  else{p.weight=src.weight!=null?src.weight:0}
+  return p
+}
+function strRepeatById(id){
+  var src=((store.get('strength')||{entries:[]}).entries).find(function(x){return x.id===id})
+  if(!src){toast('这条记录已经不在了','e');return null}
+  var p=strEntryPayload(src,_strDate)
+  addStr(p)
+  toast('🔁 已再来一组：'+strSetLabel(p),'s')
+  renderStr()
+  return p
+}
+/* 列表末尾的整行按钮：复制**当前查看日期**最后一条（作者场景：刚记完就再来一组） */
+function strRepeatLast(){
+  var list=getStr(_strDate)
+  if(!list.length){toast('这一天还没有可复制的记录','e');return null}
+  return strRepeatById(list[list.length-1].id)
+}
+function strRepeatBarHtml(last){
+  if(!last)return ''
+  return '<button class="add-btn repeat" data-a="strRepeatLast" aria-label="再来一组相同">🔁 再来一组相同 · '+strAttr(strSetLabel(last))+'</button>'
+}
+/* 该动作**上一次**的记录（跨日期，按时序取最近；缺 createdAt 用日期回落） */
+function strLastEntryOf(name){
+  var list=((store.get('strength')||{entries:[]}).entries)||[]
+  var hit=null,at=-1
+  list.forEach(function(e){
+    if(!e||e.exercise!==name)return
+    var a=strEntryAt(e)
+    if(a>=at){at=a;hit=e}
+  })
+  return hit
+}
+/* 表单里的"已带出上次"提示行（动态插入 #strAddCard，页面骨架不动） */
+function ensureStrLastHint(){
+  var card=document.getElementById('strAddCard');if(!card)return null
+  var el=document.getElementById('strLastHint')
+  if(!el){
+    var host=card.querySelector('#strSubmit')
+    el=document.createElement('div')
+    el.id='strLastHint';el.className='ex-grp-note'
+    el.style.marginBottom='8px'
+    if(host&&host.parentNode)host.parentNode.insertBefore(el,host)
+    else card.appendChild(el)
+  }
+  return el
+}
+/* 提示行只在真有"上一次"时占位（空串 → 整行隐藏，不凭空多出 8px 空白） */
+function setStrHint(text){
+  var el=ensureStrLastHint();if(!el)return
+  el.textContent=text||''
+  el.style.display=text?'block':'none'
+}
+/* 同动作连续组：默认带出上一次的重量 / 目标次数 / 实际次数（等效重量动作只带次数） */
+function applyStrLastSet(name){
+  var hit=strLastEntryOf(name)
+  if(!hit){setStrHint('');return null}
+  var exDef=getStrengthExercises().find(function(e){return e.name===name})
+  var isEq=!!(exDef&&exDef.eqWeight!=null)
+  if(!isEq&&hit.weight!=null&&COMMON_W.indexOf(hit.weight)>=0){
+    _strSelW=hit.weight
+    var wg=document.getElementById('strWeight')
+    if(wg)buildWtGrid(wg,_strSelW,function(w){_strSelW=w})
+  }
+  var tgt=hit.targetReps>0?hit.targetReps:0
+  var act=hit.actualReps>0?hit.actualReps:tgt
+  var tv=document.getElementById('strTgtVal'),av=document.getElementById('strActVal')
+  if(tv&&tgt>0)tv.textContent=String(tgt)
+  if(av&&act>0)av.textContent=String(act)
+  setStrHint('↩️ 已带出上次：'+strSetLabel(hit)+'（可直接改）')
+  return hit
 }

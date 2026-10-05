@@ -173,6 +173,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .ex-suggest button{min-height:var(--touch-min);padding:0 var(--sp-3);display:inline-flex;align-items:center;border:1px solid var(--bd);background:var(--bg3);color:var(--text2);border-radius:var(--rp);font-size:var(--fs-xs);font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;-webkit-tap-highlight-color:transparent}
 .ex-suggest button:hover{border-color:var(--orange);color:var(--orange);background:rgba(var(--brand-rgb),.1)}
 
+/* ============================================================
+   v2.4.9 训练页两件功能（作者要求）
+   ① 常用 / 不常用动作区分：分组标签 + 常用标记 + 「其它动作」折叠开关
+      —— 零新字号/新颜色，全部走既有令牌；开关沿用 .ex-suggest button 的
+         min-height:var(--touch-min)=44px 热区（不新造尺寸）。
+   ② 快速复制上一组：条目上的 🔁 沿用 .ec-act（44×44），列表末尾整行按钮
+      沿用 .add-btn 的舒适尺寸（14px 内边距 → ~48px 高），只换观感不缩热区。
+   ============================================================ */
+.ex-grp{display:flex;align-items:center;flex-wrap:wrap;gap:6px;width:100%;margin:10px 0 4px;font-size:var(--fs-xs);font-weight:700;color:var(--text2)}
+.ex-grp:first-child{margin-top:0}
+.ex-grp-note{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
+.ex-suggest button.ex-more{border-style:dashed;background:transparent;color:var(--text2)}
+.ex-suggest button.ex-more:hover{border-color:var(--orange);color:var(--orange)}
+.ex-suggest button.ex-chip.common{border-color:var(--orange-g);color:var(--orange)}
+.ex-suggest button.ex-chip.common:hover{background:rgba(var(--brand-rgb),.12)}
+.ex-common-tag{display:inline-flex;align-items:center;gap:2px;margin-left:6px;font-size:var(--fs-xs);font-weight:700;color:var(--orange);background:rgba(var(--brand-rgb),.12);border:1px solid var(--orange-g);border-radius:var(--rp);padding:1px 8px;vertical-align:middle}
+.add-btn.repeat{border-style:solid;border-color:var(--orange-g);color:var(--orange);background:rgba(var(--brand-rgb),.06);margin-bottom:8px}
+.add-btn.repeat:hover{border-color:var(--orange);background:rgba(var(--brand-rgb),.12)}
+
 /* Weight Grid
    WP-I C-07：13 个筹码原来按 flex-wrap 排成 6/6/1，最后一行只剩「25」= 孤立行。
    项集（COMMON_W）在 utils.js，本批不可改，故只改列数：固定 5 列 → 5+5+3，
