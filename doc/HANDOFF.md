@@ -789,6 +789,20 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
   > 覆盖同名文件做 BEFORE，仓库零改动）跑了 390×844 / 360×640 两档、**5 我 3 敌**、12 张截图、
   > 报告 `.workbuddy-ai/tmp/v280-before-report.md`。它的 BEFORE 结论与 Lead 的改动方向一致，
   > 但**量级不同**（见下）——两套数字都保留，不取其一。
+  > 🔁 **可复跑**：`node .workbuddy-ai/tmp/v280-browser-measure.mjs`（默认两视口、测仓库当前代码）；
+  > BEFORE 用
+  > `node .workbuddy-ai/tmp/v280-browser-measure.mjs --src .workbuddy-ai/tmp/v280-before-src --src-rev 445eb8d --vp 390x844,360x640 --tag v280-before --seed 4242 --port 8796 --cdp 9224 --json .workbuddy-ai/tmp/v280-before.json`。
+  > 影子根若被清空，按报告里的 `git show 445eb8d:page/<file>` 循环重建（4 个文件：
+  > `game-render.js`/`index.css`/`index.html`/`utils.js`）。
+  > ⚠️ **两个必踩的坑（子代理已修，后来者注意）**：① **必须先 `switchTab('game')`** ——
+  > `#battleOverlay` 在 `#tabGame` 里，页签未激活时整棵子树 `display:none`，所有 rect/clientHeight 为 0，
+  > `gbFxFloat` 还会因 `!r.width` 直接 return（飘字 0 条）；② **`.gb-hit` 不能按 `data-uid` 配对** ——
+  > 每步重建会把「旧节点被销毁」错配成「新节点加上了类」，量出 0.2ms 的假时长；
+  > 要按**元素自增 pid** 配对（本报告即如此）。
+  > 📌 **额外定位（对 v2.8.1 有用）**：`gbFxFloat` 的槽位实为**4 条道**（实测 `slot4 ≡ slot0`、
+  > `slot5 ≡ slot1`，各 2100px² 完全重合），而真实引擎单步最多出 **10 条**飘字 → 步内重叠是结构性必然；
+  > E 的最差样本是 **5 目标 AOE**（「熔岩巨兽 对 5 个目标使用了 地刺」，castRect
+  > `(83.9,267.5)-(306.1,336.5)` 压住飘字 `-106` → 1737.2px²）。
   1. ✅ **A（HP 过渡）BEFORE 确认缺陷**：`.gb-hp-fill` 有 `transition:width .2s`，但 8/8 探针节点
      跨一次 render **全被替换**（`sameCard=0 sameFill=0`）→ 掉血步 t≈4–8ms 就是终值、200/300ms 不变；
      控制实验（同一常驻节点改 width）证明 transition 本身可用。**v2.8.0 已修**。
