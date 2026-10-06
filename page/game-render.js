@@ -803,20 +803,51 @@ function gbCardForEvent(ov, gb, e){
    ⚠️ 错位只能用 left/top 表达：transform 已被 floatUpC 的每一帧占用（见 index.css 的说明），
       用 transform 错位会被关键帧覆盖掉。 */
 var GB_FX_SLOT_OFF=[[0,0],[-46,-18],[46,-18],[0,-36]]   /* 中 / 左上 / 右上 / 正上 —— 对称铺开 */
-function gbFxFloat(card, text, color, big, slot){
+function gbFxFloat(card, text, color, big, slot, inStep){
   var layer=gbFxLayer()
   if(!layer||!card||typeof card.getBoundingClientRect!=='function')return
   var r
   try{ r=card.getBoundingClientRect() }catch(e){ console.warn('[group] 飘字定位失败',e); return }
   if(!r||!r.width)return
-  var off=GB_FX_SLOT_OFF[(typeof slot==='number'&&slot>0)?(slot%4):0]
+  var i=(typeof slot==='number'&&slot>0)?slot:0
+  var n=(typeof inStep==='number'&&inStep>0)?inStep:1
+  /* v2.8.1（E + C）：**≤4 条且无施法特效时保持 v2.4.2 的原布局**（位置逐像素不变，
+     见 test-group-ui-presentation §13 的坐标断言）；只有下面两种情形才启用新排布：
+       · **本步 >4 条**（独立夹具实测真实引擎单步最多 10 条，而原实现只有 4 条道、
+         `slot4 ≡ slot0` → 步内两两相交 371 对/max 1200px²）→ 改 4 列 × 多行网格：
+         列距 92px > 飘字盒宽（≈70px）、行距 34px > 盒高（≈30px），行**向下**排（远离施法区）。
+       · **有施法特效在场**（`_gbCastEl`）→ 整组下移到特效下方：原实现两者同在中央区
+         （特效占 0.28、飘字占 0.80）而飘字动画还要上浮 34px，实测相交最大 1737px²。 */
+  var off=GB_FX_SLOT_OFF[i%4]
+  var x, y, minY
+  if(n>4){
+    var col=i%4, row=Math.floor(i/4)
+    x=r.left+r.width/2+(col-1.5)*92
+    y=r.top+r.height*0.8+row*34
+    minY=0
+  }else{
+    x=r.left+r.width/2+off[0]
+    y=r.top+r.height*0.8+off[1]
+    minY=-36   /* slot3 的纵向偏移（GB_FX_SLOT_OFF 里最靠上的一档） */
+  }
+  /* 施法特效在场：把**整组**下移（按组内最靠上的那一档算），而不是逐条 max —
+     逐条 max 会让同 x 的 slot0/slot3 collapse 到同一 y 上再叠一次。上浮 34px + 6px 余量 = 40。 */
+  if(_gbCastEl){
+    var cb=null
+    try{ cb=_gbCastEl.getBoundingClientRect() }catch(e2){ cb=null /* 忽略：取不到特效 rect 就按「无施法特效」排布，不阻断飘字 */ }
+    if(cb&&cb.bottom){
+      var need=cb.bottom+40
+      var topMost=r.top+r.height*0.8+minY     /* 组内最靠上那条的 y（未移位前） */
+      if(topMost<need) y+=(need-topMost)      /* 整组按同一量下移，保持组内相对错位 */
+    }
+  }
   var el=document.createElement('div')
   el.className='gb-fx-float'+(big?' big':'')
   el.textContent=text
   /* v2.4.2：飘字与施法特效同在中央区，会互压（--gb-mid-h 只有 15vh）→ 上下分层：
      施法特效占中央区**上 28%**、飘字占**下 80%**（都按中央区自身 rect 取比例，日志展开
      压成 8vh 时按比例一起缩，不会跑到区外）。留白硬约束见 gbShowSkillCast。 */
-  el.style.cssText='left:'+Math.round(r.left+r.width/2+off[0])+'px;top:'+Math.round(r.top+r.height*0.8+off[1])+'px'
+  el.style.cssText='left:'+Math.round(x)+'px;top:'+Math.round(y)+'px'
     +';color:'+color+';font-size:'+(big?'var(--fs-3xl)':'var(--fs-2xl)')
   layer.appendChild(el)
   setTimeout(function(){ if(el&&el.parentNode&&el.parentNode.removeChild)el.parentNode.removeChild(el) },GB_FX_LIFE)
@@ -844,14 +875,19 @@ function playAttackFeedback(gb, step) {
   var evs = lastLog.events || []
   /* v2.8.0：飘字槽位改用**跨步**序号（原先每步从 0 重排 → 连续两步的数字会叠在同一槽）；
      受击闪烁记进 `_gbHitUntil`，由 gbApplyStepTransitions 在每次重建后重新挂类
-     （重建会把类和节点一起丢掉，高速档位下闪烁因此看不见）。 */
+     （重建会把类和节点一起丢掉，高速档位下闪烁因此看不见）。
+     v2.8.1：先过一遍把「本步会出几条飘字」数出来（保持原顺序），传给 gbFxFloat 的第 6 参 ——
+     >4 条时它改用 4 列 × 多行网格（原先只有 4 条道，单步 10 条必然两两相交）。 */
+  var hits = []
+  evs.forEach(function(e, i){
+    var h = gbParseHit(e, i > 0 ? evs[i-1] : null)
+    if (h) hits.push({ e: e, hit: h })
+  })
   var slot = _gbFxSlotSeq
   var flashMs = gbHitFlashMs()
   var nowMs = (typeof Date!=='undefined'&&Date.now)?Date.now():0
-  evs.forEach(function(e, i){
-    /* 暴击判定靠**紧邻的前一个**事件（伤害文案里没有「暴击」二字） */
-    var hit = gbParseHit(e, i > 0 ? evs[i-1] : null)
-    if (!hit) return
+  hits.forEach(function(rec){
+    var e = rec.e, hit = rec.hit
     var card = gbCardForEvent(ov, gb, e)
     if (card) {
       card.classList.add('gb-hit')
@@ -863,7 +899,7 @@ function playAttackFeedback(gb, step) {
     var color = (hit.kind === 'heal') ? 'var(--green)' : gbHitColor(gb, e, hit.amount)
     var text = (hit.kind === 'heal' ? '+' : '-') + hit.amount
     if (hit.crit) text = '💥' + text
-    gbFxFloat(mid, text, color, hit.crit, slot)
+    gbFxFloat(mid, text, color, hit.crit, slot, hits.length)
     slot++
     _gbFxSlotSeq = slot
   })
@@ -956,6 +992,31 @@ function gbStepSummary(gb, evs, bubble){
 
 /* 渲染一次施法特效（图标 + 一句话）到中央特效区。
    evs 可选：不传则取最后一条日志的事件（见 gbStepEvents）。 */
+/* v2.8.1（E）：施法特效是**后于**本步飘字创建的（`_groupStep`：playAttackFeedback → gbShowSkillCast），
+   所以光靠「创建飘字时看 _gbCastEl」无法分层（第一次实测 E 仍相交 1648px²）。
+   这里在特效落地后，把**所有活着的飘字**（含上一步仍在 900ms 生存期内的）整组下移到特效下方：
+   动画上浮 34px + 6px 余量 = 特效底 + 40。**整组按同一量平移**（不逐条 max ——
+   逐条 max 会把同 x 的 slot0/slot3 压到同一 y 上再叠一次）。 */
+function gbFxSinkFloats(castEl, layer){
+  if(!castEl||!layer||typeof layer.querySelectorAll!=='function')return
+  var cb=null
+  try{ cb=castEl.getBoundingClientRect() }catch(e){ cb=null /* 忽略：取不到 rect 就不调整，不阻断特效 */ }
+  if(!cb||!cb.bottom)return
+  var fl=layer.querySelectorAll('.gb-fx-float')
+  if(!fl||!fl.length)return
+  var tops=[]
+  for(var i=0;i<fl.length;i++){ var t=parseFloat(fl[i].style.top); if(!isNaN(t))tops.push(t) }
+  if(!tops.length)return
+  var minTop=Math.min.apply(null,tops)
+  var need=cb.bottom+40
+  if(minTop>=need)return
+  var d=need-minTop
+  for(var j=0;j<fl.length;j++){
+    var v=parseFloat(fl[j].style.top)
+    if(!isNaN(v))fl[j].style.top=(v+d)+'px'
+  }
+}
+
 function gbShowSkillCast(gb, bubble, evs){
   if(!bubble)return
   var layer=gbFxLayer()
@@ -991,6 +1052,7 @@ function gbShowSkillCast(gb, bubble, evs){
   el.style.cssText='left:'+Math.round(r.left+r.width/2)+'px;top:'+Math.round(r.top+r.height*0.28)+'px'
   layer.appendChild(el)
   _gbCastEl=el
+  gbFxSinkFloats(el,layer)   /* v2.8.1(E)：把本步/上一步仍在场上的飘字整组下移到特效下方 */
   setTimeout(function(){ if(el&&el.parentNode&&el.parentNode.removeChild)el.parentNode.removeChild(el) },GB_FX_LIFE)
 }
 

@@ -1209,6 +1209,81 @@ console.log('--- 18. v2.8.0 表现生命周期（HP 补间 / 受击闪烁 / 飘�
   ok(!chip4.classList.contains('gb-hit'), '闪烁窗口过期后不再挂类（不会永久闪烁）');
 }
 
+/* ============ 19. v2.8.1 中央区布局：步内多飘字分道 + 施法文案不压飘字 ============
+   两个缺陷都由独立浏览器夹具实测确认（BEFORE）：
+     · E：施法文案与飘字同处中央区（特效 0.28 / 飘字 0.80），而飘字动画还要上浮 34px
+          → 相交 43 对（390×844，max 1737px²）/ 76 对（360×640，max 1791px²）；
+     · C：`gbFxFloat` 只有 4 条道（`slot4 ≡ slot0`），而真实引擎单步最多 10 条
+          → 步内两两相交 371 对（max 1200px²）。
+   本节用假 DOM 断言**几何不变量**：>4 条时网格两两不叠；有施法特效时整组落到它下方。
+   ⚠️ ≤4 条且无特效时**必须与 v2.4.2 的坐标逐像素一致** —— 那条契约由 §13 的
+   `200,580 | 154,562 | 246,562 | 200,544` 断言继续守着（本版未改默认路径）。 */
+console.log('--- 19. v2.8.1 中央区布局（步内分道 + 施法/飘字分离） ---');
+{
+  const sb8 = makeSandbox();
+  const layer8 = {
+    children: [],
+    appendChild(el) { el.parentNode = this; this.children.push(el); return el; },
+    removeChild(el) { const i = this.children.indexOf(el); if (i >= 0) this.children.splice(i, 1); el.parentNode = null; return el; },
+    get innerHTML() { return ''; },
+    set innerHTML(v) { if (!v) this.children.length = 0; }
+  };
+  const mid8 = { childCount: 0, appendChild() { this.childCount++; },
+    getBoundingClientRect: () => ({ left: 100, top: 500, width: 200, height: 100 }) };
+  const opts = { id: 'gbFx', setAttribute() {}, style: {}, get innerHTML() { return ''; }, set innerHTML(v) { if (!v) layer8.children.length = 0; } };
+  sb8.document.getElementById = id => (id === 'gbFx' ? Object.assign(opts, { appendChild: layer8.appendChild.bind(layer8), removeChild: layer8.removeChild.bind(layer8) }) : null);
+  sb8.document.body = { appendChild() {} };
+  sb8.document.createElement = () => ({ style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, parentNode: null });
+
+  const posOf8 = el => ((/left:(-?\d+)px;top:(-?\d+)px/.exec(el.style.cssText) || [, '?', '?']).slice(1).map(Number));
+  const BOX_W = 70, BOX_H = 30;   /* 与独立夹具实测的飘字盒一致（70×30） */
+  function boxes(ps) { return ps.map(([x, y]) => ({ l: x - BOX_W / 2, r: x + BOX_W / 2, t: y, b: y + BOX_H })); }
+  function intersects(a, b) { return Math.min(a.r, b.r) - Math.max(a.l, b.l) > 0 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 0; }
+  function pairsOverlapping(ps) {
+    const bs = boxes(ps); let n = 0;
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) if (intersects(bs[i], bs[j])) n++;
+    return n;
+  }
+
+  /* (a) C：本步 10 条 → 网格分道后两两不叠 */
+  layer8.children.length = 0;
+  sb8._gbCastEl = null;
+  for (let i = 0; i < 10; i++) sb8.gbFxFloat(mid8, '-' + (10 + i), 'var(--red)', false, i, 10);
+  const ten = layer8.children.map(posOf8);
+  eq(ten.length, 10, '10 条飘字都挂上常驻层');
+  eq(pairsOverlapping(ten), 0, '本步 10 条飘字两两不叠（原先 4 条道 → 实测 371 对相交）：' + JSON.stringify(ten));
+
+  /* (b) 无特效 + ≤4 条：与旧路径一致（默认位 580、槽位偏移原样） */
+  layer8.children.length = 0;
+  sb8.gbFxFloat(mid8, '-40', 'var(--red)', false, 0, 4);
+  sb8.gbFxFloat(mid8, '-55', 'var(--red)', false, 1, 4);
+  eq(layer8.children.map(posOf8).join(' | '), '200,580 | 154,562', '≤4 条且无特效时保持 v2.4.2 坐标（未改默认路径）');
+
+  /* (c) E：有施法特效在场 → 整组落到特效下方（上浮 34px 后也不相交） */
+  layer8.children.length = 0;
+  sb8._gbCastEl = { getBoundingClientRect: () => ({ left: 100, top: 500, width: 200, height: 64, bottom: 564 }) };
+  for (let i = 0; i < 4; i++) sb8.gbFxFloat(mid8, '-' + i, 'var(--red)', false, i, 4);
+  const withCast = layer8.children.map(posOf8);
+  const highest = Math.min.apply(null, withCast.map(p => p[1])) - 34;   /* 动画终点（上浮 34） */
+  ok(highest >= 564 + 4, '有施法特效时飘字整段落在特效下方（最高帧 ' + highest + ' ≥ 特效底 564+4）');
+  ok(new Set(withCast.map(p => p.join(','))).size === 4, '整组下移后 4 条仍互不相同（不是逐条 max 把同 x 的两条压到一起）');
+  /* E 的精确保证：把每条飘字的**整段动画轨迹**（上浮 34 的终点 → 起点+盒高）当作带，
+     与时特效盒 [top,bottom] 求交 —— 必须一个都不相交。 */
+  const castBox = { l: 100, r: 300, t: 500, b: 564 };
+  const swept = withCast.map(([x, y]) => ({ l: x - BOX_W / 2, r: x + BOX_W / 2, t: y - 34, b: y + BOX_H }));
+  eq(swept.filter(s => intersects(s, castBox)).length, 0, '飘字动画轨迹与施法特效盒零相交（BEFORE 实测 43/76 对相交）');
+  /* ⚠️ 已知残留（本版**故意不动**）：≤4 条的默认 4 槽布局自身相邻槽仍有小面积重叠
+     （独立夹具实测 288px²）—— 该布局是 v2.4.2 的逐像素契约（§13 守着）。
+     本版的网格只在**本步 >4 条**时启用，故此处不宣称 4 槽自身零重叠。 */
+  ok(pairsOverlapping(withCast) > 0, '如实记录：4 槽默认布局自身仍有小面积重叠（本版只修 >4 条的步内分道）');
+
+  /* (d) 反向：无特效时**不**下移（否则等于把飘字推出中央区） */
+  layer8.children.length = 0;
+  sb8._gbCastEl = null;
+  sb8.gbFxFloat(mid8, '-9', 'var(--red)', false, 0, 4);
+  eq(posOf8(layer8.children[0]).join(','), '200,580', '无特效时不做任何下移（保底位置不变）');
+}
+
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }
 process.exit(fail === 0 ? 0 : 1);
