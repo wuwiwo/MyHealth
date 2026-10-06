@@ -294,7 +294,17 @@ function playerSkillTurnEnd(gb, player, turn) {
   return events;
 }
 
-/* 攻击技能施放（陨石/冰魄/巨石）：返回 {skillName, events} */
+/* 攻击技能施放（陨石/冰魄/巨石）：返回 {skillName, events}
+   v2.6.0：三个技能的伤害一律走 **`applyPlayerSkillDamage`（唯一入口）**：
+     · 伤害基数读 `effectiveStat(player,'soulAtk')`（不再读裸 `base.soulAtk` —— 状态/天赋修正此前
+       算出来了却对这三个技能完全无效）；
+     · 受击方减伤与护盾真正参与结算（此前是裸扣 HP，护盾/减伤一律被跳过）；
+     · damage 事件带 `type:'damage'` + 稳定 `targetId` + `hpDamage`/`damageType`，
+       战报「承受」列、飘字（`gbParseHit` 只认 type='damage'）与目标芯片因此都看得到；
+     · **目标选择按设计**：陨石「3 敌各 1 次、**无重复命中**」（设计 §1.3-2）、
+       冰魄与巨石**随机 1 名**（此前固定 `enemies[0]`）。
+   ⚠️ 未动：冰魄的「无视魂防」（三技能都是「魂攻 × 倍率」，本就不读目标魂防）与
+   「下回合追加一段」（挂 `_iceFollowUp`，由 `resolveIceFollowUps` 结算，时点不变）。 */
 function playerAttackSkill(gb, player, skillId) {
   var lv = (player._playerSkills || {})[skillId] || 0;
   if (lv < 1) return null;
@@ -302,56 +312,57 @@ function playerAttackSkill(gb, player, skillId) {
   var events = [];
   var enemies = gb.enemies.filter(function (e) { return e.hp > 0; });
   if (!enemies.length) return { name: getPlayerSkill(skillId).name, events: events };
+  var soulRaw = function () { return Math.max(1, Math.floor(effectiveStat(player, 'soulAtk') * eff.power)); };
+  /* 随机 1 名（无放回语义天然成立）：冰魄 / 巨石的目标选择 */
+  var pickOne = function () { return enemies[Math.floor(battleRnd() * enemies.length)]; };
 
   if (skillId === 'meteor') {
-    // 陨石：随机3敌各1次（敌人少则只命中1次）
+    // 陨石：随机 3 敌各 1 次（敌人少则只命中 1 次）；**无放回** —— 同一敌人不会被重复命中
     var hits = Math.min(eff.targets || 3, enemies.length);
+    var pool = enemies.slice();
     for (var i = 0; i < hits; i++) {
-      var t = enemies[Math.floor(battleRnd() * enemies.length)];
-      var dmg = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
-      t.hp = Math.max(0, t.hp - dmg);
-      events.push({ msg: '☄️ ' + player.name + ' 陨石轰炸 → ' + t.name + ' ' + dmg + ' 魂伤害' });
+      var t = pool.splice(Math.floor(battleRnd() * pool.length), 1)[0];
+      var res = applyPlayerSkillDamage(gb, player, t, soulRaw(), '☄️ ' + player.name + ' 陨石轰炸');
+      events = events.concat(res.events);
       /* v2.2 WP-B：受击敌人「接下来 2 回合 攻/魂攻 −15%」（同一目标只记一次） */
       var hasWeak = (t.statuses || []).some(function (s) { return s.id === 'weaken'; });
       applyStatus(t, { id: 'weaken', duration: 2 });
       if (typeof syncStatusDerived === 'function') syncStatusDerived(t);
-      if (!hasWeak) events.push({ msg: '⬇️ ' + t.name + ' 弱化：攻/魂攻 −15%（2 回合）' });
+      if (!hasWeak) events.push({ msg: '⬇️ ' + t.name + ' 弱化：攻/魂攻 −15%（2 回合）', targetId: t.id, type: 'status' });
     }
     return { name: '陨石轰炸', events: events, cd: eff.cd };
   }
   if (skillId === 'icebeam') {
-    // 冰魄：单敌冰冻 + 两段无视魂防伤害
-    var target = enemies[0];
-    var dmg = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
-    target.hp = Math.max(0, target.hp - dmg);
+    // 冰魄：随机 1 敌冰冻 + 两段无视魂防伤害（第二段下回合开始时结算）
+    var target = pickOne();
+    var dmg = soulRaw();
+    var res2 = applyPlayerSkillDamage(gb, player, target, dmg, '❄️ ' + player.name + ' 冰魄光束');
+    events = events.concat(res2.events);
     applyStatus(target, { id: 'freeze', duration: 1 });
     /* v2.1.33：第二段挂起，由 battle-group 的 resolveIceFollowUps 在**下回合开始时**结算
        （设计 §1.3-6 + OQ-12：下回合战斗开始时触发，不占用行动）。
-       此前只打了当回合这一下、第二段从未存在 → 实际输出只有设计的一半。 */
+       挂起的是**结算前的伤害基数**：第二段沿用同一口径（两段数值相等），其扣血时点不在本入口。 */
     player._iceFollowUp = { targetId: target.id, dmg: dmg };
-    events.push({ msg: '❄️ ' + player.name + ' 冰魄光束 → ' + target.name + ' ' + dmg + ' 魂伤害（冰冻 1 回合，下回合追加一段）' });
+    events.push({ msg: '❄️ ' + player.name + ' 冰魄光束：' + target.name + ' 冰冻 1 回合（下回合追加一段）', targetId: target.id, type: 'status' });
     return { name: '冰魄光束', events: events, cd: eff.cd };
   }
   if (skillId === 'boulder') {
-    // 巨石：单敌魂攻伤害 + 降魂防
-    var t2 = enemies[0];
-    var dmg2 = Math.max(1, Math.floor((player.base.soulAtk || 0) * eff.power));
-    t2.hp = Math.max(0, t2.hp - dmg2);
-    /* v2.1.33：按设计「降魂防 n×1%、可叠加、上限 -60%、直到战斗结束」。
-       此前是 applyStatus(..., {duration: 3}) 直接用 souldown 的**定义值**
-       （固定 -15%、maxStacks 1 不可叠、3 回合）→ 降幅不随等级、不可叠、到期就没了，三项都不符。
+    // 巨石：随机 1 敌魂攻伤害 + 降魂防（**降魂防落在与伤害同一个目标上**）
+    var t2 = pickOne();
+    var res3 = applyPlayerSkillDamage(gb, player, t2, soulRaw(), '🪨 ' + player.name + ' 巨石重压');
+    events = events.concat(res3.events);
+    /* v2.1.33：按设计「降魂防 n×1%、可叠加、上限 -80%、直到战斗结束」。
        改法与「打湿」一致：走**状态实例**的 modsPct（同键实例值覆盖定义值，不会叠成两份），
-       每次施放在已有值上继续下压，夹在 -60% 上限；duration 取极大值表示持续到战斗结束。 */
+       每次施放在已有值上继续下压，夹在 -80% 上限；duration 取极大值表示持续到战斗结束。
+       ⚠️ 规整到 1e-6，避免 0.2 累加出 0.7999999999999999 被 statMods 的 floor 少算 1 点属性。 */
     var down = eff.soulDefDown || 0;
     var prev = null;
     (t2.statuses || []).forEach(function (s) { if (s.id === 'souldown') prev = s; });
-    /* v2.2 WP-B：上限 60% → 80%。⚠️ 规整到 1e-6，避免 0.2 累加出 0.7999999999999999
-       被 statMods 的 floor 少算 1 点属性（实测 1000 魂防会变成 201 而非 200）。 */
     var stacked = Math.min(0.80, ((prev && prev.modsPct && -prev.modsPct.soulDef) || 0) + down);
     stacked = Math.round(stacked * 1e6) / 1e6;
     applyStatus(t2, { id: 'souldown', duration: 999, modsPct: { soulDef: -stacked } });
     if (typeof syncStatusDerived === 'function') syncStatusDerived(t2);
-    events.push({ msg: '🪨 ' + player.name + ' 巨石重压 → ' + t2.name + ' ' + dmg2 + ' 魂伤害（魂防 -' + Math.round(stacked * 100) + '%，持续到战斗结束）' });
+    events.push({ msg: '⬇️ ' + t2.name + ' 魂防 −' + Math.round(stacked * 100) + '%（可叠加，持续到战斗结束）', targetId: t2.id, type: 'status' });
     return { name: '巨石重压', events: events, cd: eff.cd };
   }
   return null;

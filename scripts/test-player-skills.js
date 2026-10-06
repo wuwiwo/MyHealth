@@ -296,5 +296,150 @@ assert('未装配金身护盾的单位不反伤', (function () {
 assert('反伤已接线到群战 tick（源码级）', /shieldReflectAfter\(gb, actor\)/.test(
   fs.readFileSync(path.join(__dirname, '..', 'page', 'battle-group.js'), 'utf8')));
 
+/* ============================================================
+   9. v2.6.0：玩家主动技能的统一伤害入口与事件契约
+   ------------------------------------------------------------
+   旧实现（三个技能各自 `t.hp -= dmg`）：读裸 `base.soulAtk`（不吃 effectiveStat 的状态
+   修正）、**跳过受击方减伤与护盾**、事件既无 `type` 也无 `targetId`（→ 战报「承受」列、
+   飘字、目标芯片都看不到这次结算）；陨石用**有放回**抽取（同一敌人可重复命中，与设计
+   「无重复命中」冲突），冰魄/巨石固定打 `enemies[0]`（设计是随机目标）。本节在旧代码上必红。
+   ============================================================ */
+console.log('\n[9] v2.6.0 玩家主动技能结算契约');
+
+function pSkillPlayer(id) {
+  const p = sb.createUnit({ id: id, side: 'ally', name: id, base: { hp: 5000, atk: 30, def: 20, spd: 5, soulAtk: 100 } });
+  const st = sb.defaultSkillState();
+  st.loadout = ['meteor', 'icebeam', 'boulder'];
+  st.levels = { meteor: 10, icebeam: 10, boulder: 10 };
+  sb.attachPlayerSkills(p, st);
+  return p;
+}
+let pFoeSeq = 0;
+function pSkillFoe(hp, extra) {
+  const base = { hp: hp, atk: 5, def: 2, spd: 1 };
+  if (extra) for (const k in extra) base[k] = extra[k];
+  return sb.createEnemyUnit({ tier: 'minion', name: '靶' + (++pFoeSeq), base: base });
+}
+
+/* ---- 9a. 伤害读 effectiveStat（不再读裸 base.soulAtk） ---- */
+{
+  const pA = pSkillPlayer('p9a'), fA = pSkillFoe(5000);
+  const gbA = sb.createGroupBattle({ allies: [pA], enemies: [fA], seed: 11 });
+  sb.playerAttackSkill(gbA, pA, 'meteor');
+  const dmgA = 5000 - fA.hp;
+  const pB = pSkillPlayer('p9b'), fB = pSkillFoe(5000);
+  sb.applyStatus(pB, { id: 'weaken', duration: 3 });      // 攻/魂攻 −15%
+  sb.syncStatusDerived(pB);
+  const gbB = sb.createGroupBattle({ allies: [pB], enemies: [fB], seed: 11 });
+  sb.playerAttackSkill(gbB, pB, 'meteor');
+  const dmgB = 5000 - fB.hp;
+  assert('9a 陨石伤害 = floor(effectiveStat(魂攻) × 倍率)（吃状态修正）',
+    dmgA === Math.floor(sb.effectiveStat(pA, 'soulAtk') * 2.5)
+    && dmgB === Math.floor(sb.effectiveStat(pB, 'soulAtk') * 2.5) && dmgB < dmgA,
+    JSON.stringify({ effA: sb.effectiveStat(pA, 'soulAtk'), effB: sb.effectiveStat(pB, 'soulAtk'), dmgA: dmgA, dmgB: dmgB }));
+}
+
+/* ---- 9b. 陨石无放回：3 次命中必须落在 3 个不同敌人上（设计「无重复命中」） ---- */
+{
+  const p = pSkillPlayer('p9c');
+  const foes = [pSkillFoe(2000), pSkillFoe(2000), pSkillFoe(2000)];
+  const gb = sb.createGroupBattle({ allies: [p], enemies: foes, seed: 424242 });
+  sb.playerAttackSkill(gb, p, 'meteor');
+  const hit = foes.filter(f => f.hp < 2000).length;
+  const weak = foes.filter(f => sb.hasStatus(f, 'weaken')).length;
+  assert('9b 陨石 3 次命中落在 3 个不同敌人上（无放回，且各获弱化）',
+    hit === 3 && weak === 3, JSON.stringify({ hit: hit, weak: weak, hp: foes.map(f => f.hp) }));
+}
+
+/* ---- 9c. 冰魄按设计随机选目标（旧实现固定 enemies[0]） ---- */
+{
+  const seen = {};
+  for (let seed = 1; seed <= 12; seed++) {
+    const p = pSkillPlayer('p9d' + seed);
+    const foes = [pSkillFoe(9999), pSkillFoe(9999), pSkillFoe(9999)];
+    const gb = sb.createGroupBattle({ allies: [p], enemies: foes, seed: seed });
+    sb.playerAttackSkill(gb, p, 'icebeam');
+    const idx = foes.findIndex(f => sb.hasStatus(f, 'freeze'));
+    seen[idx] = (seen[idx] || 0) + 1;
+  }
+  assert('9c 冰魄随机选目标（12 个种子命中不止一个下标）',
+    Object.keys(seen).length > 1 && !Object.prototype.hasOwnProperty.call(seen, '-1'),
+    JSON.stringify(seen));
+}
+
+/* ---- 9d. 巨石按设计随机选目标，且伤害与降魂防落在**同一目标** ---- */
+{
+  const seen = {};
+  let sameTarget = true, dmgMeta = true;
+  for (let seed = 1; seed <= 12; seed++) {
+    const p = pSkillPlayer('p9e' + seed);
+    const foes = [pSkillFoe(9999, { soulDef: 1000 }), pSkillFoe(9999, { soulDef: 1000 }), pSkillFoe(9999, { soulDef: 1000 })];
+    const gb = sb.createGroupBattle({ allies: [p], enemies: foes, seed: seed });
+    const r = sb.playerAttackSkill(gb, p, 'boulder');
+    const dmgIdx = foes.findIndex(f => f.hp < 9999);
+    const downIdx = foes.findIndex(f => sb.hasStatus(f, 'souldown'));
+    if (dmgIdx < 0 || dmgIdx !== downIdx) sameTarget = false;
+    seen[downIdx] = (seen[downIdx] || 0) + 1;
+    const ev = (r.events || []).find(e => e.type === 'damage');
+    if (!ev || ev.targetId !== foes[downIdx].id) dmgMeta = false;
+  }
+  assert('9d 巨石：伤害与降魂防落在同一目标（且事件 targetId 指向它）', sameTarget && dmgMeta, JSON.stringify(seen));
+  assert('9d 巨石随机选目标（12 个种子命中不止一个下标）', Object.keys(seen).length > 1, JSON.stringify(seen));
+}
+
+/* ---- 9e. 事件契约：type / targetId / hpDamage 与实际结算一致 ---- */
+{
+  const p = pSkillPlayer('p9f');
+  const foes = [pSkillFoe(9999), pSkillFoe(9999)];
+  const gb = sb.createGroupBattle({ allies: [p], enemies: foes, seed: 7 });
+  const before = foes.map(f => f.hp);
+  const r = sb.playerAttackSkill(gb, p, 'meteor');
+  const dmgEvs = (r.events || []).filter(e => e.type === 'damage');
+  const idsOk = dmgEvs.length > 0 && dmgEvs.every(e => !!e.targetId && foes.some(f => f.id === e.targetId)
+    && typeof e.hpDamage === 'number' && e.hpDamage > 0 && e.damageType === 'soul');
+  const sumById = {};
+  dmgEvs.forEach(e => { sumById[e.targetId] = (sumById[e.targetId] || 0) + e.hpDamage; });
+  const actual = {};
+  foes.forEach((f, i) => { actual[f.id] = before[i] - f.hp; });
+  const consistent = foes.every(f => sumById[f.id] === actual[f.id]);
+  assert('9e 伤害事件带 type=damage + 稳定 targetId + hpDamage/damageType', idsOk, JSON.stringify(dmgEvs));
+  assert('9e 事件 hpDamage 之和 = 各目标实际掉血（战报/飘字读到的就是真实结算）', consistent,
+    JSON.stringify({ sumById: sumById, actual: actual }));
+  const weakEvs = (r.events || []).filter(e => /弱化/.test(e.msg || ''));
+  assert('9e 弱化（状态）事件同样带 targetId', weakEvs.length > 0 && weakEvs.every(e => !!e.targetId),
+    JSON.stringify(weakEvs));
+}
+
+/* ---- 9f. 受击方护盾真的参与玩家技能结算（旧实现完全跳过护盾） ---- */
+{
+  const p = pSkillPlayer('p9g');
+  const foe = pSkillFoe(9999);
+  const gb = sb.createGroupBattle({ allies: [p], enemies: [foe], seed: 3 });
+  const raw = Math.floor(sb.effectiveStat(p, 'soulAtk') * 2.5);
+  foe._shield = 40;
+  const r = sb.playerAttackSkill(gb, p, 'meteor');
+  const shEv = (r.events || []).find(e => /护盾吸收/.test(e.msg || ''));
+  assert('9f 陨石打有盾目标：先扣盾、HP 只掉余量（不再无视护盾）',
+    9999 - foe.hp === raw - 40 && foe._shield === 0 && !!shEv,
+    JSON.stringify({ hp: foe.hp, shield: foe._shield, raw: raw, hasShieldEv: !!shEv }));
+}
+
+/* ---- 9g. 受击方减伤（广域防御 data.reduce）真的参与玩家技能结算 ---- */
+{
+  const p1 = pSkillPlayer('p9h'), f1 = pSkillFoe(9999);
+  const gb1 = sb.createGroupBattle({ allies: [p1], enemies: [f1], seed: 5 });
+  sb.playerAttackSkill(gb1, p1, 'meteor');
+  const plain = 9999 - f1.hp;
+  const p2 = pSkillPlayer('p9i'), f2 = pSkillFoe(9999);
+  sb.applyStatus(f2, { id: 'wideguard', duration: 3, data: { reduce: 0.5 } });
+  sb.syncStatusDerived(f2);
+  const gb2 = sb.createGroupBattle({ allies: [p2], enemies: [f2], seed: 5 });
+  sb.playerAttackSkill(gb2, p2, 'meteor');
+  const reduced = 9999 - f2.hp;
+  assert('9g 陨石打到「广域防御 50% 减伤」目标：伤害按减伤后结算',
+    reduced < plain && Math.abs(reduced - Math.floor(plain * 0.5)) <= 1,
+    JSON.stringify({ plain: plain, reduced: reduced }));
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

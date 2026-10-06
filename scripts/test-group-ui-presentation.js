@@ -1073,6 +1073,61 @@ console.log('--- 16. v2.4.5 四阶段显示（日志页 / 横幅 / 战报） ---
 }
 
 /* ---------- 汇总 ---------- */
+/* ============ 17. v2.6.0 玩家主动技能事件落进真实消费端（飘字 / 战报统计） ============
+   用**真实产出**的技能事件（不是手工合成）验证三件事：
+     · `gbParseHit` 能把 ☄️/❄️/🪨 的伤害解析成飘字 —— 此前这些事件**没有 type**，
+       而 gbParseHit 只认 `type==='damage'`，所以玩家技能从来不出飘字；
+     · `groupBattleStats` 能按 `targetId` 把伤害记到**正确单位**的「承受」列，
+       并把本次伤害计入施放者的「造成」 —— 此前没有 targetId，技能伤害在战报里是隐形的；
+     · 事件里的 `hpDamage` 与真实掉血一致（显示层不用再猜）。 */
+console.log('--- 17. v2.6.0 玩家技能事件：飘字解析与战报归因 ---');
+{
+  const sb6 = makeSandbox();
+  vm.runInContext(load('skills.js'), sb6);
+  vm.runInContext(load('player-skill-hooks.js'), sb6);
+  const p = sb6.createUnit({ id: 'p17', side: 'ally', name: '你', base: { hp: 5000, atk: 30, def: 20, spd: 5, soulAtk: 100 } });
+  p._playerSkills = { meteor: 10 };
+  const foes = [
+    sb6.createEnemyUnit({ tier: 'minion', name: '魔像', base: { hp: 9999, atk: 5, def: 2, spd: 1 } }),
+    sb6.createEnemyUnit({ tier: 'minion', name: '石像', base: { hp: 9999, atk: 5, def: 2, spd: 1 } })
+  ];
+  const gb = sb6.createGroupBattle({ allies: [p], enemies: foes, seed: 21 });
+  const before = {};
+  foes.forEach(f => { before[f.id] = f.hp; });
+  const r = sb6.playerAttackSkill(gb, p, 'meteor');
+  const dmgEvs = (r.events || []).filter(e => e.type === 'damage');
+  const parsed = dmgEvs.map(e => sb6.gbParseHit(e, null));
+  ok(dmgEvs.length === 2 && parsed.every(h => !!h && h.amount > 0),
+    '真实技能伤害事件能被 gbParseHit 解析成飘字（' + JSON.stringify(parsed) + '）');
+  const matchReal = dmgEvs.every(e => {
+    const f = foes.find(x => x.id === e.targetId);
+    return !!f && e.hpDamage === (before[e.targetId] - f.hp);
+  });
+  ok(dmgEvs.length === 2 && matchReal, '事件 hpDamage 与真实掉血一致（逐条，且事件数非空）');
+  const log = [L('你', r.events, { phase: '行动' })];
+  const stats = sb6.groupBattleStats(mkGb([p], foes, log, 'ally', 1));
+  const rowP = stats.rows.find(x => x.id === 'p17');
+  const dealtSum = dmgEvs.reduce((n, e) => n + e.hpDamage, 0);
+  /* 战报「造成」也是走 gbParseHit（`actorRow.dealt += hit.amount`）——
+     旧事件没有 type，所以玩家技能的伤害在结算面板里恒为 0。 */
+  ok(!!rowP && rowP.dealt === dealtSum && dealtSum > 0,
+    '战报「造成」计入本次玩家技能伤害（修前恒 0）：' + (rowP && rowP.dealt) + ' / ' + dealtSum);
+  /* 目标芯片：故意让芯片的 data-name 与文案里的名字**不一致** ——
+     这样只有 `e.targetId` 那条路径能找到它（旧事件没有 targetId → 找不到）。 */
+  const chips = {};
+  foes.forEach(f => { chips[f.id] = { id: f.id, getAttribute: k => (k === 'data-name' ? '不匹配的名字' : null) }; });
+  const fakeOv = {
+    querySelector: sel => {
+      const m = /data-uid="([^"]+)"/.exec(sel || '');
+      return (m && chips[m[1]]) || null;
+    },
+    querySelectorAll: () => []
+  };
+  const chipHits = dmgEvs.map(e => sb6.gbCardForEvent(fakeOv, gb, e));
+  ok(dmgEvs.length === 2 && chipHits.every((c, i) => c && c.id === dmgEvs[i].targetId),
+    '目标芯片按 targetId 命中真实受击单位（data-name 故意不匹配也找得到）');
+}
+
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }
 process.exit(fail === 0 ? 0 : 1);

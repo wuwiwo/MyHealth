@@ -768,6 +768,59 @@ function normalAttack(gb, actor, target, dmgMult) {
   return events;
 }
 
+/* v2.6.0：玩家主动技能（陨石 / 冰魄 / 巨石）的**统一伤害入口**。
+   这三个技能此前各自 `t.hp = Math.max(0, t.hp - dmg)`：读裸 `base.soulAtk`（不吃
+   effectiveStat 的状态修正）、**跳过受击方减伤与护盾**、事件既无 `type` 也无 `targetId`
+   （→ 战报「承受」列 / 飘字 / 目标芯片都读不到这次结算 —— `gbParseHit` 只认 `type:'damage'`，
+   `groupBattleStats` 靠 `e.targetId` 归因）。
+   本入口只做**防守侧结算**：受击方天赋与状态减伤 → 护盾吸收 → 扣 HP，并产出规范事件。
+   ⚠️ 刻意**不进**攻击侧随机通道（命中判定 / 暴击）与 `onAfterDamage`（嗜血·战意）吸血：
+     · 命中/暴击会再改一次伤害与 RNG 序列，超出本版「结算契约」的范围；
+     · 群战吸血基数 U2（raw/final/hpDamage 与 overkill）**仍未裁决** → 按现状隔离，
+       玩家主动技能不接吸血通道，裁决后再统一。
+   三技能的伤害口径保持「魂攻 × 倍率」，即**不读目标魂防**（冰魄的「无视魂防」因此天然成立）。 */
+function applyPlayerSkillDamage(gb, actor, target, rawAmount, label) {
+  var events = [];
+  var raw = Math.max(1, Math.floor(rawAmount || 0));
+  var dmg = raw;
+  var ctx = {
+    attacker: actor, target: target, isSkill: true, isAoe: false,
+    isPhysical: false, isSoul: true, isPlayerAttack: false,
+    fromPlayer: actor.side === 'ally', amount: dmg
+  };
+  /* 受击方天赋 + 状态：与 castSkill 的技能通道同口径，只消费减伤类 mutation
+     （dmgTakenReduce=广域防御/不动如山、dmgReduce=懒惰、soulDmgReduce=魔法盾）。 */
+  var tdg = talentDispatch(target, 'onDamage', ctx);
+  var sdg = dispatch(target, 'onDamage', ctx);
+  tdg.mutations = tdg.mutations.concat(sdg.mutations);
+  sdg.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: target.id, type: e.type }); });
+  tdg.mutations.forEach(function (m) {
+    if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));
+    if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
+    if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * (1 - m.value));
+  });
+  /* 护盾先行吸收（与普攻/技能同一实现） */
+  var absorbed = 0;
+  var sh = absorbShield(target, dmg);
+  if (sh && sh.absorbed > 0) {
+    absorbed = sh.absorbed;
+    dmg = sh.dmg;
+    events.push({
+      msg: '🛡️ ' + target.name + ' 护盾吸收 ' + absorbed + (sh.broke ? '（护盾破碎）' : '（剩余 ' + target._shield + '）'),
+      targetId: target.id, type: 'status'
+    });
+  }
+  var hpBefore = Math.max(0, target.hp);
+  var hpDamage = Math.min(hpBefore, Math.max(0, dmg));
+  target.hp = Math.max(0, hpBefore - hpDamage);
+  events.push({
+    msg: label + ' → ' + hpDamage + ' 魂伤害',
+    targetId: target.id, sourceId: actor.id, type: 'damage', damageType: 'soul',
+    amount: hpDamage, hpDamage: hpDamage, shieldAbsorbed: absorbed, rawDamage: raw
+  });
+  return { hpDamage: hpDamage, shieldAbsorbed: absorbed, rawDamage: raw, events: events };
+}
+
 /* WP-C（§2.14）：战意灌注的**技能吸血** —— 读持有者身上「战意」状态实例的 data.sls（多实例相加）。
    与「吸血」（普攻通道，见状态 warmight.onAfterDamage）分属两条通道。 */
 function warmightSkillLifesteal(unit) {
