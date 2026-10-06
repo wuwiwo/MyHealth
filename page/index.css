@@ -761,6 +761,13 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
    ⚠️ .gb-arena-wrap 允许收缩（flex-shrink:1）—— 抽屉 + 压缩后的广场 + 控制条/横幅/页签在窄屏会超视口，
       广场自带 overflow:hidden，让它先让位才能保证日志面板完整可用。 */
 .battle-overlay.gb-log-open .gb-pane{flex:0 0 auto;height:52vh}
+/* v2.8.0：**短屏专项**。52vh 是 v2.4.2 用较少单位实测的结论；但验收场景是 **5 我 3 敌**，
+   在 360×640 下实测「行动顺序条 + 敌方行 + 我方行」仍差一点 → 我方芯片被裁 **5.4px**
+   （390×844 不裁）。芯片高度由图标 24px + 名字 + 血条 + 状态行决定，压不动；
+   因此让**抽屉**在短屏让位（52vh → 46vh，360×640 下多让出约 39px），保证一个芯片都不裁。 */
+@media (max-height:700px){
+  .battle-overlay.gb-log-open .gb-pane{height:46vh}
+}
 .battle-overlay.gb-log-open .gb-arena-row{max-height:var(--gb-arena-h-s)}
 /* 抽屉展开时广场只剩 ~190px（58vh 归日志）：两行芯片 + 顺序条需要 ~215px → 实测**我方被裁 30px**。
    故抽屉态直接复用极密阵的芯片尺寸（56/24），并把行的内边距收紧，保证抽屉开着也一个芯片都不裁。
@@ -768,6 +775,11 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .battle-overlay.gb-log-open .gb-arena{--gb-unit-w:56px;--gb-unit-ico:24px}
 .battle-overlay.gb-log-open .gb-arena-row{padding:3px 8px;gap:8px}
 .battle-overlay.gb-log-open .gb-arena-mid{flex-basis:auto}
+/* v2.8.0：抽屉打开时中央特效区**没有用途** —— playAttackFeedback 与 gbShowSkillCast 在
+   `gb-log-open` 下都会提前返回（两者都锚在中央区；8vh 时特效会画在日志正文上，v2.4.2 实测）。
+   既然该窗口内不放特效，就把这块高度压到最小、把空间让给单位芯片：
+   实测 **360×640 + 5 我 3 敌**时中央区 8vh(51px) → 我方芯片仍被裁 **5.4px**；
+   压到 2vh 后空出约 38px，芯片不再被裁（390×844 原本就不裁，故本改动只影响短屏）。 */
 .battle-overlay.gb-log-open .gb-arena-mid{height:var(--gb-mid-h-s)}
 /* 详情面板（v2.4.2 从芯片移出的信息在这里补齐）：头像 + 血条 +「当前/上限」数字 */
 .det-unit{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2)}

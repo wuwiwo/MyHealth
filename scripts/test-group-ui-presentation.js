@@ -1128,6 +1128,87 @@ console.log('--- 17. v2.6.0 玩家技能事件：飘字解析与战报归因 ---
     '目标芯片按 targetId 命中真实受击单位（data-name 故意不匹配也找得到）');
 }
 
+/* ============ 18. v2.8.0 表现生命周期：HP 补间 / 受击闪烁 / 飘字槽位（纯展示层） ============
+   三条都是「每步重建 overlay 之后仍要看起来连续」的问题：
+     · `ov.innerHTML=h` 让每个 HP 条都是新节点 → 没有起始值 → `transition:width` 从不补间；
+     · `.gb-hit` 挂在当步的新节点上，下一步重建就没了 → 高速档位（×8 ≈ 87ms/步）看不见闪烁；
+     · 飘字槽位每步从 0 重排 → 连续两步的数字叠在同一槽。
+   本节既查源码级接线，也**行为级**验证补间与重挂（用可控的假 DOM）。 */
+console.log('--- 18. v2.8.0 表现生命周期（HP 补间 / 受击闪烁 / 飘字槽位） ---');
+{
+  const sb7 = makeSandbox();
+  const ovBody = fnBody(grSrc, 'renderGroupOverlay');
+  ok(/gbApplyStepTransitions\(ov,gb\)/.test(ovBody),
+    'renderGroupOverlay 在 ov.innerHTML 之后调用 gbApplyStepTransitions');
+  const applyBody = fnBody(grSrc, 'gbApplyStepTransitions');
+  ok(applyBody.length > 0 && /_gbHpSeen/.test(applyBody) && /offsetWidth/.test(applyBody),
+    'gbApplyStepTransitions：先写回上一帧百分比 + 强制 reflow（恢复 HP 补间的起始值）');
+  const fbBody = fnBody(grSrc, 'playAttackFeedback');
+  ok(/gbHitFlashMs\(\)/.test(fbBody) && /_gbHitUntil\[/.test(fbBody),
+    'playAttackFeedback：闪烁时长随速度档位（gbHitFlashMs）并记入 _gbHitUntil');
+  ok(/_gbFxSlotSeq/.test(fbBody) && /_gbFxSlotSeq=0/.test(fnBody(grSrc, 'gbFxClear')),
+    '飘字槽位跨步累加，且 gbFxClear 复位（槽位/闪烁/HP 记忆）');
+
+  /* 行为级：HP 条先回到上一帧的值，再补间到本帧的值 */
+  function mkFill(initial) {
+    const rec = [];
+    const style = {
+      _w: initial,
+      get width() { return this._w; },
+      set width(v) { rec.push(v); this._w = v; }
+    };
+    return { style: style, offsetWidth: 0, rec: rec };
+  }
+  function mkOv(fill, chip) {
+    return {
+      querySelectorAll: function (sel) {
+        if (sel.indexOf('gb-hp-fill') >= 0) return fill ? [fill] : [];
+        if (sel.indexOf('gb-unit') >= 0) return chip ? [chip] : [];
+        return [];
+      }
+    };
+  }
+  function mkChip(uid) {
+    const cls = {};
+    return {
+      _cls: cls,
+      getAttribute: function (k) { return k === 'data-uid' ? uid : null; },
+      classList: {
+        add: function (c) { cls[c] = 1; },
+        remove: function (c) { delete cls[c]; },
+        contains: function (c) { return !!cls[c]; }
+      }
+    };
+  }
+  /* 第一次：建立「上一帧 = 100%」 */
+  const chip1 = mkChip('t1');
+  const fill1 = mkFill('100%');
+  fill1.parentNode = { parentNode: chip1 };
+  sb7.gbApplyStepTransitions(mkOv(fill1, chip1), null);
+  /* 第二次：模拟「重建后的新节点」，本帧 40% —— 必须先是 100%、再变 40%（这才有补间） */
+  const chip2 = mkChip('t1');
+  const fill2 = mkFill('40%');
+  fill2.parentNode = { parentNode: chip2 };
+  /* 让 rAF 同步执行，便于断言两次赋值 */
+  const rafBackup = sb7.requestAnimationFrame;
+  sb7.requestAnimationFrame = function (cb) { cb(); return 1; };
+  sb7.gbApplyStepTransitions(mkOv(fill2, chip2), null);
+  sb7.requestAnimationFrame = rafBackup;
+  ok(fill2.rec.join(',') === '100%,40%' && fill2.style.width === '40%',
+    'HP 条补间：先赋上一帧 100%，再在下一帧赋本帧 40%（' + fill2.rec.join(',') + '）');
+
+  /* 行为级：仍在时间窗内的受击闪烁，重建后要重新挂到新节点上 */
+  const chip3 = mkChip('t2');
+  sb7._gbHitUntil = { t2: Date.now() + 1000 };
+  sb7.gbApplyStepTransitions(mkOv(null, chip3), null);
+  ok(chip3.classList.contains('gb-hit'), '受击闪烁在重建后仍被重新挂上（_gbHitUntil 时间窗内）');
+  /* 反向：窗口已过 → 不再挂（防止「永远在闪」） */
+  const chip4 = mkChip('t3');
+  sb7._gbHitUntil = { t3: Date.now() - 1 };
+  sb7.gbApplyStepTransitions(mkOv(null, chip4), null);
+  ok(!chip4.classList.contains('gb-hit'), '闪烁窗口过期后不再挂类（不会永久闪烁）');
+}
+
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }
 process.exit(fail === 0 ? 0 : 1);

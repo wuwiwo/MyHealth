@@ -646,11 +646,89 @@ function gbFxLayer(){
   return el
 }
 /* 清空特效层（#gbClose 与 renderGroupOverlay 都调 —— 否则打完还飘着上一场的数字）
-   v2.4.2：施法特效也挂在 #gbFx 上，只清 innerHTML 会漏掉对它的引用（见 gbCastClear）。 */
+   v2.4.2：施法特效也挂在 #gbFx 上，只清 innerHTML 会漏掉对它的引用（见 gbCastClear）。
+   v2.8.0：一并复位「飘字槽位序号」与「受击闪烁记忆」—— 两者都是**跨步**状态，不清会把上一场的
+   槽位/闪烁带到下一场（表现为新战斗开局就带着旧闪光、飘字从第 N 槽开始）。 */
 function gbFxClear(){
   var el=(typeof document!=='undefined')?document.getElementById('gbFx'):null
   gbCastClear()
   if(el)el.innerHTML=''
+  _gbFxSlotSeq=0
+  _gbHitUntil={}
+  _gbHpSeen={}
+}
+
+/* ============================================================
+   v2.8.0：群战表现层的**跨步状态**（纯展示，引擎零影响）
+   ------------------------------------------------------------
+   ① HP 过渡：`renderGroupOverlay` 每步重建 `ov.innerHTML` → 每个 HP 条都是**新节点**，
+      浏览器的 `transition:width` 没有「起始值」可比，于是**从不补间**（一直是跳变）。
+      做法：重建后把每个 HP 条先写回**上一帧的百分比**，强制一次 reflow 让它成为起始状态，
+      再在下一帧改成新值 → CSS 过渡正常补间。节点仍然每步重建，但**视觉上过渡始终可见**。
+   ② 受击闪烁：`.gb-hit` 加在**本步的新节点**上，下一步重建就会把它连同节点一起丢掉 ——
+      速度越高步进越密（×8 ≈ 87ms），闪烁在被看见之前就没了。做法：记住「谁被打了、闪到什么时候」，
+      每次重建后按记忆**重新挂上**该类（时间窗随速度档位放大）。
+   ③ 飘字槽位：原先每步把 slot 从 0 重排 → 连续两步的飘字会叠在同一槽。做法：槽位序号跨步累加，
+      只在清场（gbFxClear）时归零。 */
+var _gbFxSlotSeq=0;      /* ③ 飘字槽位：跨步累加，避免连续两步叠在同一槽 */
+var _gbHitUntil={};      /* ② 受击闪烁：unitId → 到期时间戳（毫秒） */
+var _gbHpSeen={};        /* ① HP 条上一帧百分比：unitId → pct */
+
+/* 闪烁时间窗：至少 300ms，且不短于**当前速度档位下约 3 步**（×8 时约 261ms → 取 300ms；
+   ×1 时 3 步 1800ms，但 300ms 足够看清，故用 max(300, 3×步长) 但上限 900ms）。 */
+function gbHitFlashMs(){
+  var step=(typeof battleStepDelay==='function')?battleStepDelay(600,_groupSpeed):600
+  return Math.max(300,Math.min(900,step*3))
+}
+/* ①+②：一次后处理 —— 让 HP 条从上一帧补间到本帧，并把仍在窗口内的受击闪烁重新挂上 */
+function gbApplyStepTransitions(ov,gb){
+  if(!ov||!ov.querySelectorAll)return
+  var now=(typeof Date!=='undefined'&&Date.now)?Date.now():0
+  /* ① HP 补间（战场芯片 + 顶部总览条） */
+  var fills=ov.querySelectorAll('.gb-unit[data-uid] > .gb-hp-wrap > .gb-hp-fill')
+  for(var i=0;i<fills.length;i++){
+    var fill=fills[i]
+    var chip=fill.parentNode&&fill.parentNode.parentNode
+    var uid=chip&&chip.getAttribute?chip.getAttribute('data-uid'):null
+    if(!uid)continue
+    var newPct=parseFloat(fill.style.width)
+    if(isNaN(newPct))continue
+    var prevPct=_gbHpSeen[uid]
+    if(prevPct!=null&&prevPct!==newPct){
+      fill.style.width=prevPct+'%'        /* 起始状态 = 上一帧 */
+      void fill.offsetWidth               /* 强制 reflow，让浏览器记住这个起点 */
+      var setTo=newPct
+      var f2=fill
+      var raf=(typeof requestAnimationFrame==='function')?requestAnimationFrame:function(cb){return setTimeout(cb,16)}
+      raf(function(){ f2.style.width=setTo+'%' })
+    }
+    _gbHpSeen[uid]=newPct
+  }
+  var ovw=ov.querySelectorAll('.gb-ovw-bar > i')
+  for(var k=0;k<ovw.length;k++){
+    var bar=ovw[k]
+    var key='__ovw'+k
+    var np=parseFloat(bar.style.width)
+    if(isNaN(np))continue
+    if(_gbHpSeen[key]!=null&&_gbHpSeen[key]!==np){
+      bar.style.width=_gbHpSeen[key]+'%'
+      void bar.offsetWidth
+      ;(function(b2,v){var raf=(typeof requestAnimationFrame==='function')?requestAnimationFrame:function(cb){return setTimeout(cb,16)};raf(function(){b2.style.width=v+'%'})})(bar,np)
+    }
+    _gbHpSeen[key]=np
+  }
+  /* ② 受击闪烁：仍在时间窗内 → 在新节点上重新挂类 */
+  var chips=ov.querySelectorAll('.gb-unit[data-uid]')
+  for(var j=0;j<chips.length;j++){
+    var c=chips[j]
+    var id=c.getAttribute?c.getAttribute('data-uid'):null
+    if(!id)continue
+    var until=_gbHitUntil[id]
+    if(until&&until>now){
+      c.classList.add('gb-hit')
+      ;(function(el,left){setTimeout(function(){ if(left>0)return; el.classList.remove('gb-hit') },Math.max(0,until-now))})(c,0)
+    }
+  }
 }
 
 /* 伤害色阶：按**目标最大生命**百分比（目标取 e.targetId → gb.units）
@@ -764,7 +842,12 @@ function playAttackFeedback(gb, step) {
   var lastLog = logs.length ? logs[logs.length-1] : null
   if (!lastLog) return
   var evs = lastLog.events || []
-  var slot = 0     /* 本步飘字的错位槽位：每出一条 +1（见 gbFxFloat 第 5 参） */
+  /* v2.8.0：飘字槽位改用**跨步**序号（原先每步从 0 重排 → 连续两步的数字会叠在同一槽）；
+     受击闪烁记进 `_gbHitUntil`，由 gbApplyStepTransitions 在每次重建后重新挂类
+     （重建会把类和节点一起丢掉，高速档位下闪烁因此看不见）。 */
+  var slot = _gbFxSlotSeq
+  var flashMs = gbHitFlashMs()
+  var nowMs = (typeof Date!=='undefined'&&Date.now)?Date.now():0
   evs.forEach(function(e, i){
     /* 暴击判定靠**紧邻的前一个**事件（伤害文案里没有「暴击」二字） */
     var hit = gbParseHit(e, i > 0 ? evs[i-1] : null)
@@ -772,7 +855,9 @@ function playAttackFeedback(gb, step) {
     var card = gbCardForEvent(ov, gb, e)
     if (card) {
       card.classList.add('gb-hit')
-      setTimeout(function(){ card.classList.remove('gb-hit') }, 500)
+      var cid = card.getAttribute ? card.getAttribute('data-uid') : null
+      if (cid) _gbHitUntil[cid] = nowMs + flashMs
+      setTimeout(function(){ card.classList.remove('gb-hit') }, flashMs)
     }
     if (!mid) return
     var color = (hit.kind === 'heal') ? 'var(--green)' : gbHitColor(gb, e, hit.amount)
@@ -780,6 +865,7 @@ function playAttackFeedback(gb, step) {
     if (hit.crit) text = '💥' + text
     gbFxFloat(mid, text, color, hit.crit, slot)
     slot++
+    _gbFxSlotSeq = slot
   })
 }
 
@@ -1379,6 +1465,10 @@ function renderGroupOverlay(show){
      广场压到快照高度（--gb-arena-h-s / --gb-mid-h-s）；关掉时同步摘掉该类。 */
   if(ov.classList)ov.classList.toggle('gb-log-open', _gbTab==='log')
   ov.innerHTML=h
+  /* v2.8.0：重建后的两件事（纯展示、不改任何战斗状态）——
+     ① 让 HP 条从**上一帧的百分比**补间到本帧（否则新节点没有起始值，transition 永不触发）；
+     ② 把仍在时间窗内的受击闪烁重新挂到新节点上（否则高速档位下闪烁在下一步就被丢掉）。 */
+  gbApplyStepTransitions(ov,gb)
   // 事件绑定
   var closeBtn=document.getElementById('gbClose')
   if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;_groupPaused=false;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}gbFxClear()})
