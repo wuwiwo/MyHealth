@@ -565,7 +565,7 @@ function buildActionQueue(gb) {
      · enemy2  —— 随机最多 2 名敌人各 1 次（§2.8 双撞）
      · enemy12 —— 随机 1~2 名敌人（§2.10 冰晶爆；1 或 2 均匀取）
      · skillDef.wounded —— ally1 只挑**未满血**的友方（§2.11 圣光治愈） */
-function selectTargets(gb, actor, skillDef) {
+function selectTargets(gb, actor, skillDef, forcedTarget) {
   var target = (skillDef && skillDef.target) || 'random1';
   /* 🔴 v2.4.3 修复（真 bug，非设计）：候选名单必须按**施法者阵营**取，不能写死 gb.allies。
      此前 `ally1` / `ally2` 两个分支直接用「玩家方」→ 敌方施放「治愈 / 强攻 / 净化」时
@@ -579,6 +579,24 @@ function selectTargets(gb, actor, skillDef) {
         不要顺手改写别处。 */
   var mates = (actor.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return u.hp > 0; });
   var foes = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; });
+
+  /* v2.7.0：**已声明的目标优先** —— AI 在准备阶段（或行动前当场重选）挑好的目标，此前对
+     **技能路径完全无效**：`groupUnitTurn` 拿到 `actTarget` 后只把它用在普攻，技能则调
+     `castSkill(gb,actor,skillId)` 不带目标 → 技能内部再随机选一次（AI 的嘲讽强制 / 最残血友方 /
+     评分最高敌人全部被丢弃）。这里只在**单体类**规则上采纳声明：
+       · 生效：random1 / enemy1 / ally1
+       · 不生效（规则本身决定目标）：all(AOE) / self / ally2 / enemy2 / enemy12
+       · 数组型声明一律忽略（AOE 类会给出数组，不能把范围技能缩成单体）
+     合法性：单位存在、`hp > 0`、且**阵营与该规则的候选池一致**；不合法就落回原有选择
+     （等价于「声明失效 → 当场重选」，不会空放、不会打尸体、不会打自己人）。 */
+  function forcedOne(wantMate) {
+    if (!forcedTarget) return null;
+    if (Object.prototype.toString.call(forcedTarget) === '[object Array]') return null;
+    if (!forcedTarget.id) return null;
+    if (forcedTarget.hp <= 0) return null;
+    var pool = wantMate ? mates : foes;
+    return pool.indexOf(forcedTarget) >= 0 ? forcedTarget : null;
+  }
 
   if (target === 'self') return [actor];
   if (target === 'all') {
@@ -598,6 +616,15 @@ function selectTargets(gb, actor, skillDef) {
     return picks;
   }
   if (target === 'ally1') {
+    var forcedMate = forcedOne(true);
+    /* `wounded` 类技能（圣光治愈「随机 1 名受伤队友」）：声明目标满血、而另有队友受伤时
+       仍按 wounded 口径改选伤员 —— 「只挑未满血者」属于该技能的合法性约束。 */
+    if (forcedMate) {
+      var woundedNow = mates.filter(function (u) { return u.id !== actor.id && u.hp < u.base.hp; });
+      if (!(skillDef && skillDef.wounded) || forcedMate.hp < forcedMate.base.hp || !woundedNow.length) {
+        return [forcedMate];
+      }
+    }
     var healTargets = mates.filter(function (u) { return u.id !== actor.id; });
     if (!healTargets.length) healTargets = mates;
     /* WP-C（§2.11 圣光治愈「随机 1 名受伤队友」）：只挑未满血者；
@@ -620,9 +647,13 @@ function selectTargets(gb, actor, skillDef) {
     return drawRandom(foes, n);
   }
   if (target === 'enemy1') {
+    var forcedFoe1 = forcedOne(false);
+    if (forcedFoe1) return [forcedFoe1];
     return [foes[Math.floor(gb.rng() * foes.length)]];
   }
-  // random1：嘲讽优先
+  // random1：已声明目标优先；否则嘲讽优先，再随机
+  var forcedFoe = forcedOne(false);
+  if (forcedFoe) return [forcedFoe];
   var pool = foes;
   var t = pool.find(function (u) { return u._taunting && u.hp > 0; });
   if (t) return [t];
@@ -852,7 +883,10 @@ function castSkill(gb, actor, skillId, opts) {
     setSkillCooldown(actor, skillId, def.cooldown || 1);
     return events;
   }
-  var targets = selectTargets(gb, actor, def);
+  /* v2.7.0：把 AI 的已声明目标带进选靶（`opts.forcedTarget`）。
+     此前这一行不带目标 → 技能内部随机重选，AI 的准备阶段决策形同虚设；
+     合法性校验与失效回退都在 `selectTargets` 内完成（不合法即落回原有随机/AOE 选择）。 */
+  var targets = selectTargets(gb, actor, def, opts.forcedTarget);
   // 技能气泡（对话效果：角色施放技能时喊话）
   events.push({ type: 'bubble', unit: actor.name, text: '⚡ ' + (actor.name || '') + '：' + def.name + '！', skillId: skillId });
 
@@ -1777,7 +1811,11 @@ function groupUnitTurn(gb, actor) {
       }
     }
     if (!acted) {
-      var castEvents = castSkill(gb, actor, skillId);
+      /* v2.7.0：把 AI 已声明的目标传给 castSkill（此前**不带**目标 → 技能内部随机重选，
+         AI 的目标决策对所有技能都被丢弃；普攻路径本来就用 actTarget，未改）。
+         `actTarget` 可能是单个单位、数组（AOE 声明）或 null —— 后两者由 selectTargets
+         按规则忽略，合法性校验与失效回退都在那里。 */
+      var castEvents = castSkill(gb, actor, skillId, { forcedTarget: actTarget });
       events = events.concat(castEvents);
       acted = true;
     }

@@ -165,5 +165,102 @@ function sideDist(actorSide, skillId, n) {
     body.indexOf('healTargets = allies') < 0 && !/var pool = actor\.side/.test(body));
 }
 
+/* ============================================================
+   9. v2.7.0：AI 的已声明目标必须真正进入 castSkill
+   ------------------------------------------------------------
+   旧实现：`groupUnitTurn` 从 `takeDeclaredAction` 拿到 `actTarget` 后，**只把它用在普攻路径**；
+   技能路径调 `castSkill(gb, actor, skillId)`（不带目标）→ 技能内部用 `selectTargets` 重新随机选靶。
+   于是 AI 精心选出的目标（嘲讽强制 / 最残血友方 / 评分最高敌人，见 ai.js 的 aiPickTarget）
+   对**所有技能**都被丢弃。本节在旧代码上必红（9a / 9f）。
+   ============================================================ */
+console.log('\n[9] v2.7.0 已声明目标真正进入 castSkill');
+function mk9(id, side, base, extra) {
+  const o = { id: id, side: side, name: id, base: base };
+  if (extra) for (const k in extra) o[k] = extra[k];
+  return sandbox.createUnit(o);
+}
+function hitIds(evs) {
+  return (evs || []).filter(e => e && e.type === 'damage' && e.targetId).map(e => e.targetId);
+}
+
+/* ---- 9a. 单体攻击技能：真实受击者 = 已声明目标 ---- */
+{
+  const a1 = mk9('9a-a1', 'ally', { hp: 900, atk: 5, def: 5, spd: 5 });
+  const a2 = mk9('9a-a2', 'ally', { hp: 900, atk: 5, def: 5, spd: 4 });
+  const e1 = mk9('9a-e1', 'enemy', { hp: 900, atk: 20, def: 5, spd: 9 }, { skills: ['bite'] });
+  e1._accMod = 1;   // 强制命中（见上方注释：避免 5% 未命中污染断言）
+  const gb = sandbox.createGroupBattle({ allies: [a1, a2], enemies: [e1], seed: 99 });
+  const evs = sandbox.castSkill(gb, e1, 'bite', { forcedTarget: a2 });
+  const ids = hitIds(evs);
+  assert('9a 单体技能：真实受击者 = 已声明目标（且另一名友方未受伤）',
+    ids.length === 1 && ids[0] === a2.id && a2.hp < 900 && a1.hp === 900,
+    JSON.stringify({ ids: ids, a1: a1.hp, a2: a2.hp }));
+}
+
+/* ---- 9b. 非法目标（阵营不符 / 已阵亡 / 空）→ 回退到原有随机选靶（不空放、不打尸体） ---- */
+{
+  const a1 = mk9('9b-a1', 'ally', { hp: 900, atk: 5, def: 5, spd: 5 });
+  const a2 = mk9('9b-a2', 'ally', { hp: 900, atk: 5, def: 5, spd: 4 });
+  const e1 = mk9('9b-e1', 'enemy', { hp: 900, atk: 20, def: 5, spd: 9 }, { skills: ['bite'] });
+  e1._accMod = 1;   // 强制命中（见上方注释：避免 5% 未命中污染断言）
+  const mate = mk9('9b-e2', 'enemy', { hp: 900, atk: 5, def: 5, spd: 1 });
+  const gb = sandbox.createGroupBattle({ allies: [a1, a2], enemies: [e1, mate], seed: 7 });
+  const evSame = sandbox.castSkill(gb, e1, 'bite', { forcedTarget: mate });   // 阵营不符（友方）
+  assert('9b 阵营不符的声明目标 → 回退到合法敌人（不会打自己人）',
+    hitIds(evSame).every(id => id === a1.id || id === a2.id) && hitIds(evSame).length === 1,
+    JSON.stringify({ ids: hitIds(evSame), mateHP: mate.hp }));
+  const dead = mk9('9b-dead', 'ally', { hp: 900, atk: 5, def: 5, spd: 1 });
+  dead.hp = 0;
+  const gb2 = sandbox.createGroupBattle({ allies: [a1, a2, dead], enemies: [e1], seed: 7 });
+  const evDead = sandbox.castSkill(gb2, e1, 'bite', { forcedTarget: dead });
+  assert('9b 已阵亡的声明目标 → 回退到存活敌人（不打尸体）',
+    hitIds(evDead).length === 1 && (hitIds(evDead)[0] === a1.id || hitIds(evDead)[0] === a2.id),
+    JSON.stringify({ ids: hitIds(evDead) }));
+  const gb3 = sandbox.createGroupBattle({ allies: [a1, a2], enemies: [e1], seed: 7 });
+  const evNone = sandbox.castSkill(gb3, e1, 'bite', { forcedTarget: null });
+  assert('9b 空声明目标 → 与不传目标完全一致（回退路径不变）',
+    hitIds(evNone).length === 1 && (hitIds(evNone)[0] === a1.id || hitIds(evNone)[0] === a2.id),
+    JSON.stringify({ ids: hitIds(evNone) }));
+}
+
+/* ---- 9c. 数组型声明（AOE 类）不参与「单体强制」 ---- */
+{
+  const a1 = mk9('9c-a1', 'ally', { hp: 900, atk: 5, def: 5, spd: 5 });
+  const a2 = mk9('9c-a2', 'ally', { hp: 900, atk: 5, def: 5, spd: 4 });
+  const e1 = mk9('9c-e1', 'enemy', { hp: 900, atk: 20, def: 5, spd: 9 }, { skills: ['blizzard'] });
+  e1._accMod = 1;   // 强制命中（见上方注释：避免 5% 未命中污染断言）
+  const gb = sandbox.createGroupBattle({ allies: [a1, a2], enemies: [e1], seed: 3 });
+  const evs = sandbox.castSkill(gb, e1, 'blizzard', { forcedTarget: [a1] });
+  const ids = hitIds(evs);
+  assert('9c AOE（target=all）：数组型声明不会把范围技能缩成单体',
+    ids.length === 2 && ids.indexOf(a1.id) >= 0 && ids.indexOf(a2.id) >= 0,
+    JSON.stringify({ ids: ids, a1: a1.hp, a2: a2.hp }));
+}
+
+/* ---- 9d. self 类技能不受声明影响（增益仍落在施法者自己身上） ---- */
+{
+  const a1 = mk9('9d-a1', 'ally', { hp: 900, atk: 5, def: 5, spd: 5 });
+  const e1 = mk9('9d-e1', 'enemy', { hp: 900, atk: 20, def: 5, spd: 9 }, { skills: ['fortify'] });
+  e1._accMod = 1;   // 强制命中（见上方注释：避免 5% 未命中污染断言）
+  const gb = sandbox.createGroupBattle({ allies: [a1], enemies: [e1], seed: 3 });
+  sandbox.castSkill(gb, e1, 'fortify', { forcedTarget: a1 });
+  const selfBuff = (e1.statuses || []).some(s => /fortify|guard|def/i.test(s.id)) || a1.hp === 900;
+  assert('9d self 类技能：声明目标不影响自身增益（不会把自身技能打到敌人身上）',
+    selfBuff && (a1.statuses || []).length === 0, JSON.stringify({ e1st: (e1.statuses || []).map(s => s.id), a1st: (a1.statuses || []).map(s => s.id) }));
+}
+
+/* ---- 9e. 友方技能：声明目标决定治疗对象（旧实现随机选，必红） ---- */
+{
+  const healer = mk9('9e-h', 'enemy', { hp: 900, atk: 5, def: 5, spd: 9 }, { skills: ['heal'] });
+  const m1 = mk9('9e-m1', 'enemy', { hp: 900, atk: 5, def: 5, spd: 1 });
+  const m2 = mk9('9e-m2', 'enemy', { hp: 900, atk: 5, def: 5, spd: 1 });
+  m1.hp = 400; m2.hp = 400; healer.hp = 400;
+  const gb = sandbox.createGroupBattle({ allies: [mk9('9e-a', 'ally', { hp: 900, atk: 5, def: 5, spd: 1 })], enemies: [healer, m1, m2], seed: 5 });
+  sandbox.castSkill(gb, healer, 'heal', { forcedTarget: m1 });
+  assert('9e 友方技能（ally1）：治疗落在已声明目标上（旧实现随机选靶）',
+    m1.hp > 400 && m2.hp === 400,
+    JSON.stringify({ m1: m1.hp, m2: m2.hp, healer: healer.hp }));
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

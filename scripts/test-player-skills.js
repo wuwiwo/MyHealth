@@ -224,9 +224,17 @@ assert('启风②：非全场最快者不触发', sb.qifengExtraAttack(qfGb, qfP
 assert('启风②：伤害按 n×8% 缩放（不传系数 = 旧行为）', (function () {
   const mk = () => sb.createGroupBattle({ allies:[qfPlayer], enemies:[sb.createEnemyUnit({tier:'minion',name:'靶',base:{hp:9999,atk:1,def:0,spd:1}})] });
   const g1 = mk(), g2 = mk();
+  /* v2.7.0：本断言此前隐含依赖「两次普攻都命中」—— 本套件用的是**单条共享种子流**，
+     任何上游改动（v2.7.0 改了 selectTargets 的掷骰次数）都会平移这条流，于是出现
+     「第一次落空、第二次命中」→ 0 < 伤害，断言变红。这里显式强制命中（_accMod 抬高命中率），
+     让断言只测它真正要测的东西：0.8 系数 ≤ 1.0（判据未放宽，反而去掉了无关随机性）。 */
+  const prevAcc = qfPlayer._accMod;
+  qfPlayer._accMod = 1;
   const e1 = sb.normalAttack(g1, qfPlayer, g1.enemies[0]);
   const e2 = sb.normalAttack(g2, qfPlayer, g2.enemies[0], 0.8);
-  return e1.length >= 1 && e2.length >= 1 && (9999 - g2.enemies[0].hp) <= (9999 - g1.enemies[0].hp);
+  qfPlayer._accMod = prevAcc;
+  const d1 = 9999 - g1.enemies[0].hp, d2 = 9999 - g2.enemies[0].hp;
+  return e1.length >= 1 && e2.length >= 1 && d1 > 0 && d2 > 0 && d2 <= d1;
 })(), 'hp=' + qfHp);
 
 /* ---- 10. 宠物共享桥（v2.2.5，推翻 OQ-11：玩家被动共享给宠物）---- */
