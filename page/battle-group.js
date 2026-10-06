@@ -1364,10 +1364,16 @@ function runPhasePrepare(gb) {
 
   /* 冰魄余威：设计上就是「回合开始触发、不占用行动」（OQ-12），故落在准备阶段 */
   resolveIceFollowUps(gb);
-  /* 场地：回合开始结算（放在冰魄之后 —— 与 v2.4.5 之前 step 路径的顺序一致） */
+  /* 场地：回合开始结算（放在冰魄之后 —— 与 v2.4.5 之前 step 路径的顺序一致）。
+     v2.5.0：改走 terrain.js 的 **terrainTurnStart** —— 它除返回事件之外，还会用
+     applyTerrainResult 真正落地 callback 返回的 `damage` / `statusApps`。
+     旧实现直接调 `gb.terrain.onTurnStart(gb)` 且只吞 `events` →
+     天气/场地的开场伤害与状态**被整包丢弃**（对谁都不生效，只剩日志）。
+     因此天气被动从**开战第一个准备阶段**起就对敌我双方生效（钩子本身遍历 gb.units）；
+     而每个钩子只在**本回合自己的时点**跑一次，不会把未来回合的伤害提前到开战瞬间结算。 */
   if (gb.terrain && gb.terrain.onTurnStart) {
-    var ts3 = gb.terrain.onTurnStart(gb);
-    if (ts3 && ts3.events) { gb.events = gb.events.concat(ts3.events); logTerrainEvents(gb, ts3.events); }
+    var ts3 = terrainTurnStart(gb);
+    if (ts3 && ts3.length) { gb.events = gb.events.concat(ts3); logTerrainEvents(gb, ts3); }
   }
 
   (gb.units || []).forEach(function (u) {
@@ -1406,6 +1412,14 @@ function runPhasePrepare(gb) {
     u._prepSkipTurn = gb.turn;
     u._prepSkipReason = tb.skipAction ? skipReasonText(tb.events) : '';
   });
+
+  /* v2.5.0（作者裁决）：**准备阶段结束时若任一方已全灭，立即结束本回合** ——
+     不再建立行动队列，也不让残存方进入行动阶段。
+     准备阶段能打死人的通道到这一行为止都跑完了：场地 onTurnStart / 诅咒类状态
+     （末日·遗言）/ 开战钩子 / 玩家技能的回合开始部分。判据复用 checkGroupWin
+     （与行动、结束阶段同一个函数）—— 双方**同时**灭队时它的既有次序
+     （先「我方全灭 → enemy」、再「敌方全灭 → ally」）给出 winner='ally'，与本次裁决一致。 */
+  if (checkGroupWin(gb)) return [];
 
   /* v2.4.8：**先制度 = 本回合真用了先制技能才先手** —— 在排队之前做「本回合用什么」的预声明。
      位置必须在 refreshAllStatMods / buildActionQueue **之前**（声明的技能要参与分档），
@@ -1525,12 +1539,21 @@ function runPhaseJudge(gb) {
 function runPhaseEnd(gb) {
   enterPhase(gb, '结束');
   var evts = [];
+  /* v2.5.0：改走 terrain.js 的 **terrainTurnEnd** —— 它先 applyTerrainResult
+     （真正扣血 / 落 statusApps）再返回事件。旧实现直接调 `gb.terrain.onTurnEnd(gb)`
+     并且只 log 事件：沙暴碎石 / 酷暑失血 / 雨天闪电**对任何人都不生效**，只有一行日志
+     （与 test-terrain.js 直接调 helper 拿到的结论长期不一致）。
+     ⚠️ 事件文案已由各场地 callback 自己带出（`受碎石伤害 N` 等），故只补「应用」这一步；
+     顺序上先应用、再判胜负（见本函数末尾的 checkGroupWin），避免场地在回合末击杀
+     最后一名敌人后仍停留在「未分胜负」。
+     ⚠️ 每个回合只在这里调用一次（tick 走 finishRound、step 走队列跑完后的 finishRound），
+     不存在 tick/step 双份应用。 */
   if (gb.terrain && gb.terrain.onTurnEnd) {
-    var te = gb.terrain.onTurnEnd(gb);
-    if (te && te.events) {
-      gb.events = gb.events.concat(te.events);
-      logTerrainEvents(gb, te.events);
-      evts = evts.concat(te.events);
+    var te = terrainTurnEnd(gb);
+    if (te && te.length) {
+      gb.events = gb.events.concat(te);
+      logTerrainEvents(gb, te);
+      evts = evts.concat(te);
     }
   }
   /* 回合级「每回合一次」守卫清理。

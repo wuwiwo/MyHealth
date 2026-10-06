@@ -144,6 +144,67 @@ function startBattle(id){
   setTimeout(()=>runBattle(),500)
 }
 
+/* ========== v2.5.0：战斗引擎异常不得伪装成胜利 ==========
+   旧实现（catch 内）：`_battle.enemy.hp=Math.min(hp,0)` + `_battle.winner=true` + `endBattle(true)`
+   —— 引擎一旦抛异常，玩家会**凭空拿到胜利**：本关计入已通关、current 推进到下一关、
+   发放炼化点战利品、播庆祝动画，而真正的原因只留在 console（无任何上下文，无法定位）。
+   现在：不改 HP、不判胜、不发奖、不推进度、不计失败次数；
+   改走 endBattleAborted()，并把 关卡 / 回合 / 双方 HP / 错误消息 / 堆栈 / 时点
+   留在 `_battle.error` 与模块级 `_lastBattleError`（用 getLastBattleError() 读取）。 */
+
+/* 构造可定位的错误上下文（纯函数，便于直接断言字段） */
+function battleErrorContext(err,battle,extra){
+  var b=battle||{}
+  var g=(typeof getGame==='function')?getGame():null
+  var ctx={
+    stage:'battleTick',
+    name:(err&&err.name)?String(err.name):'Error',
+    message:(err&&err.message!=null)?String(err.message):String(err),
+    stack:(err&&err.stack)?String(err.stack):'',
+    level:(g&&g.current)||'',
+    npc:(b.level&&b.level.npc)||'',
+    boss:!!(b.level&&b.level.boss),
+    affix:(b.affix&&b.affix.name)||null,
+    turn:b.turn||0,
+    playerHP:(b.player&&typeof b.player.hp==='number')?b.player.hp:null,
+    enemyHP:(b.enemy&&typeof b.enemy.hp==='number')?b.enemy.hp:null,
+    at:new Date().toISOString()
+  }
+  if(extra)for(var k in extra)ctx[k]=extra[k]
+  return ctx
+}
+var _lastBattleError=null
+/* 最近一次引擎异常的上下文（Debug / 报错反馈用；正常战斗保持 null） */
+function getLastBattleError(){return _lastBattleError}
+
+/* 异常中止：**既不是胜利也不是战败**。只把本场收尾（避免定时器/自动模式继续推进），
+   不动 HP、不发奖、不写通关、不计失败次数，并在界面上如实说明。 */
+function endBattleAborted(err){
+  var ctx=battleErrorContext(err,_battle)
+  _lastBattleError=ctx
+  if(_battle){
+    _battle.done=true
+    _battle.winner=null      // 不判胜；敌方 HP 保留异常发生时的真实值（不伪造成击杀）
+    _battle.aborted=true
+    _battle.error=ctx
+  }
+  _battleAuto=false
+  _battleRunning=false
+  var autoBtn=document.getElementById('battleAuto')
+  if(autoBtn){autoBtn.classList.remove('active');autoBtn.textContent='🔄 自动'}
+  var el=document.getElementById('battleEnd')
+  if(el){
+    el.innerHTML='<div class="be-result be-abort">⚠️ 战斗异常中止</div>'
+      +'<div style="font-size:var(--fs-2xs);color:var(--text3);text-align:center;margin-top:6px">本关不计胜负、不发奖励、不推进进度；异常上下文已记录（关卡 / 回合 / 堆栈）</div>'
+      +'<div class="be-replay"><button class="be-btn be-btn-retry" id="battleAbort">关闭</button></div>'
+  }
+  var abortBtn=document.getElementById('battleAbort')
+  if(abortBtn)abortBtn.addEventListener('click',function(){
+    document.getElementById('battleOverlay').classList.remove('open')
+    if(typeof renderGame==='function')renderGame()
+  })
+}
+
 function runBattle(){
   if(_battle.done||_battleRunning)return
   _battleRunning=true
@@ -153,11 +214,10 @@ function runBattle(){
     try{
       result=battleTick(_battle)
     }catch(err){
-      // 引擎异常兜底：判玩家胜（敌方 HP 已扣减的部分有效），避免战斗永久卡死
+      /* v2.5.0：引擎异常 → 按「异常中止」收尾；不再改 HP、不再判胜、不再走 endBattle(true)
+         发奖并推进关卡。console.error 留在 catch 现场（本项目禁止静默 catch）。 */
       console.error('battleTick error:',err)
-      _battle.enemy.hp=Math.min(_battle.enemy.hp,0)
-      _battle.done=true;_battle.winner=true;_battleRunning=false
-      endBattle(true)
+      endBattleAborted(err)
       return
     }
     _battle.turn=result.turn

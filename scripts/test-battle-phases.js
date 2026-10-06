@@ -555,5 +555,308 @@ console.log('\n[9] step 返回的 phase 始终合法');
     gbS.log.every(function (l) { return sb.GB_PHASES.indexOf(l.phase) >= 0; }));
 }
 
+/* ============================================================
+   10. v2.5.0：Prepare 阶段灭队必须立即终止本回合
+   ------------------------------------------------------------
+   作者裁决：「Prepare 阶段若一方灭队则直接结束，不再让残存方进入行动；双 KO 判我方胜。」
+   本节的场地探针只提供 `onTurnStart`（= 真实的准备阶段入口），
+   全部经 groupBattleTick / groupBattleStep 推进 —— 与线上同一条编排，
+   不是「直接调 terrainTurnStart helper」。
+   ============================================================ */
+console.log('\n[10] Prepare 灭队立即结束（不再进入行动阶段）');
+
+/* 按 unitId 归零的探针场地（只在准备阶段开火） */
+function wipeTerrain(kill, msg) {
+  return {
+    id: 'wipeProbe', name: '灭队探针',
+    onTurnStart: function (g) {
+      return {
+        events: [{ msg: msg || '☠️ 灭队探针结算' }],
+        damage: g.units.filter(function (u) { return u.hp > 0 && kill(u); })
+          .map(function (u) { return { unitId: u.id, amount: u.hp }; })
+      };
+    }
+  };
+}
+/* 统计「真的有单位进入行动阶段」——包住 groupUnitTurn（runUnitActionStep 的唯一单位入口） */
+function countActions(fn) {
+  var n = 0, orig = sb.groupUnitTurn;
+  sb.groupUnitTurn = function (g, a) { n++; return orig(g, a); };
+  try { fn(); } finally { sb.groupUnitTurn = orig; }
+  return n;
+}
+function phaseEntries(gb, phase, turn) {
+  return (gb.log || []).filter(function (l) { return l.phase === phase && (turn == null || l.turn === turn); });
+}
+
+/* ---- 10a. 我方在准备阶段被灭 → 立即判负，敌方不得行动 ---- */
+{
+  var allyA = mk('我方10a', 'ally', { hp: 500, atk: 60, def: 10, spd: 9 });
+  var foeA = mk('敌方10a', 'enemy', { hp: 500, atk: 60, def: 10, spd: 1 });
+  var gbA = sb.createGroupBattle({
+    allies: [allyA], enemies: [foeA],
+    terrain: wipeTerrain(function (u) { return u.side === 'ally'; }, '☠️ 只灭我方')
+  });
+  var actedA = countActions(function () { sb.groupBattleTick(gbA); });
+  assert('10a 我方准备阶段被灭 → 立即判负（winner=enemy）',
+    gbA.done === true && gbA.winner === 'enemy', JSON.stringify({ done: gbA.done, winner: gbA.winner }));
+  assert('10a 准备灭队后没有任何单位行动（groupUnitTurn 调用 0 次）', actedA === 0, 'acted=' + actedA);
+  assert('10a 该回合没有「行动」阶段的日志条目', phaseEntries(gbA, '行动', 1).length === 0,
+    '行动条目=' + phaseEntries(gbA, '行动').length);
+  assert('10a 残存方（敌方）HP 未被本回合的行动改动', foeA.hp === 500, 'foe.hp=' + foeA.hp);
+  assert('10a 本回合立即终止（turn 停在 1，没有继续推进）', gbA.turn === 1, 'turn=' + gbA.turn);
+  assert('10a 收尾契约：done ⟹ phase=结束', gbA.phase === '结束', String(gbA.phase));
+}
+
+/* ---- 10b. 双 KO → 按裁决判我方胜（tick 路径） ---- */
+{
+  var allyB = mk('我方10b', 'ally', { hp: 400, atk: 60, def: 10, spd: 9 });
+  var foeB = mk('敌方10b', 'enemy', { hp: 400, atk: 60, def: 10, spd: 1 });
+  var gbB = sb.createGroupBattle({
+    allies: [allyB], enemies: [foeB],
+    terrain: wipeTerrain(function () { return true; }, '☠️ 双方同时灭队')
+  });
+  var actedB = countActions(function () { sb.groupBattleTick(gbB); });
+  assert('10b 双 KO（tick）→ winner=ally（作者裁决）',
+    gbB.done === true && gbB.winner === 'ally', JSON.stringify({ done: gbB.done, winner: gbB.winner }));
+  assert('10b 双 KO 时双方 HP 都归零', allyB.hp === 0 && foeB.hp === 0, allyB.hp + '/' + foeB.hp);
+  assert('10b 双 KO 后同样没有任何单位行动', actedB === 0, 'acted=' + actedB);
+}
+
+/* ---- 10c. 双 KO 走 step 路径：结论必须一致 ---- */
+{
+  var allyC = mk('我方10c', 'ally', { hp: 400, atk: 60, def: 10, spd: 9 });
+  var foeC = mk('敌方10c', 'enemy', { hp: 400, atk: 60, def: 10, spd: 1 });
+  var gbC = sb.createGroupBattle({
+    allies: [allyC], enemies: [foeC],
+    terrain: wipeTerrain(function () { return true; }, '☠️ 双方同时灭队')
+  });
+  var lastC = null, stepsC = 0, actedC = 0;
+  var origC = sb.groupUnitTurn;
+  sb.groupUnitTurn = function (g, a) { actedC++; return origC(g, a); };
+  while (!gbC.done && stepsC++ < 20) lastC = sb.groupBattleStep(gbC);
+  sb.groupUnitTurn = origC;
+  assert('10c 双 KO（step）→ winner=ally 且一次收尾返回 turnEnd',
+    gbC.done === true && gbC.winner === 'ally' && !!lastC && lastC.turnEnd === true,
+    JSON.stringify({ winner: gbC.winner, steps: stepsC, turnEnd: lastC && lastC.turnEnd }));
+  assert('10c step 路径同样没有单位行动', actedC === 0, 'acted=' + actedC);
+
+  /* tick / step 行为一致（胜负 + 阶段 + 各单位 HP） */
+  var allyD = mk('我方10d', 'ally', { hp: 400, atk: 60, def: 10, spd: 9 });
+  var foeD = mk('敌方10d', 'enemy', { hp: 400, atk: 60, def: 10, spd: 1 });
+  var gbD = sb.createGroupBattle({
+    allies: [allyD], enemies: [foeD],
+    terrain: wipeTerrain(function () { return true; }, '☠️ 双方同时灭队')
+  });
+  var nD = 0; while (!gbD.done && nD++ < 20) sb.groupBattleStep(gbD);
+  assert('10d tick / step 在 Prepare 灭队场景下结论一致（winner+phase+HP）',
+    gbD.winner === gbB.winner && gbD.phase === gbB.phase && allyD.hp === allyB.hp && foeD.hp === foeB.hp,
+    JSON.stringify({ tick: [gbB.winner, gbB.phase, allyB.hp, foeB.hp], step: [gbD.winner, gbD.phase, allyD.hp, foeD.hp] }));
+
+  /* 同一场景（只灭我方）改走 step：结论必须与 tick 完全一致 */
+  var allyS = mk('我方10d2', 'ally', { hp: 500, atk: 60, def: 10, spd: 9 });
+  var foeS = mk('敌方10d2', 'enemy', { hp: 500, atk: 60, def: 10, spd: 1 });
+  var gbS = sb.createGroupBattle({
+    allies: [allyS], enemies: [foeS],
+    terrain: wipeTerrain(function (u) { return u.side === 'ally'; }, '☠️ 只灭我方')
+  });
+  var actedS = 0, nS = 0, origS = sb.groupUnitTurn;
+  sb.groupUnitTurn = function (g, a) { actedS++; return origS(g, a); };
+  while ((!gbS.done || gbS._roundOpen) && nS++ < 20) sb.groupBattleStep(gbS);
+  sb.groupUnitTurn = origS;
+  assert('10d 只灭我方时 step 与 tick 结论一致（winner=enemy / 无单位行动 / 敌方 HP 未动）',
+    gbS.winner === gbA.winner && gbS.phase === gbA.phase && actedS === 0 && foeS.hp === 500,
+    JSON.stringify({ stepWinner: gbS.winner, tickWinner: gbA.winner, acted: actedS, foeHP: foeS.hp }));
+}
+
+/* ---- 10e. 反向对照：准备阶段没灭队时，行动阶段照常推进（防 10a 恒真） ---- */
+{
+  var allyE = mk('我方10e', 'ally', { hp: 500, atk: 60, def: 10, spd: 9 });
+  var foeE = mk('敌方10e', 'enemy', { hp: 500, atk: 60, def: 10, spd: 1 });
+  var gbE = sb.createGroupBattle({
+    allies: [allyE], enemies: [foeE],
+    terrain: {
+      id: 'chipProbe', name: '小伤害探针',
+      onTurnStart: function () { return { events: [{ msg: '🩹 小伤害探针' }], damage: [{ unitId: '我方10e', amount: 1 }] }; }
+    }
+  });
+  var actedE = countActions(function () { sb.groupBattleTick(gbE); });
+  assert('10e 对照：未灭队时行动阶段照常推进（2 个单位各行动一次）', actedE === 2, 'acted=' + actedE);
+  assert('10e 对照：本回合确有「行动」阶段日志且胜负未定', phaseEntries(gbE, '行动', 1).length > 0 && !gbE.done,
+    '行动条目=' + phaseEntries(gbE, '行动', 1).length + ' done=' + gbE.done);
+  assert('10e 对照：准备阶段的伤害仍然照常应用（我方 −1）', allyE.hp < 500, 'hp=' + allyE.hp);
+}
+
+/* ============================================================
+   11. v2.5.0：敌群回合末场地效果必须真实落地（不是只写日志）
+   ------------------------------------------------------------
+   真实入口 = runPhasePrepare 的 onTurnStart / runPhaseEnd 的 onTurnEnd，
+   经由 terrain.js 的 applyTerrainResult（唯一机制），敌我双方同等处理。
+   本节的判别口径：同一种子、同一组单位，**只差一个场地**的两场战斗做差分 ——
+   差值必须正好等于场地伤害，多一分就是重复应用，少一分就是没落地。
+   ============================================================ */
+console.log('\n[11] 回合末场地效果真实落地（应用 → 再判胜负）');
+
+function fixedDmgTerrain(aId, eId, aDmg, eDmg) {
+  return {
+    id: 'fixedDmgProbe', name: '定量伤害探针',
+    onTurnEnd: function () {
+      return {
+        events: [{ msg: '🪨 定量伤害探针' }],
+        damage: [{ unitId: aId, amount: aDmg }, { unitId: eId, amount: eDmg }]
+      };
+    }
+  };
+}
+function tankPair(aId, eId) {
+  return {
+    ally: mk(aId, 'ally', { hp: 100000, atk: 1, def: 99999, spd: 9 }),
+    foe: mk(eId, 'enemy', { hp: 100000, atk: 1, def: 99999, spd: 1 })
+  };
+}
+
+/* ---- 11a. 开战准备阶段启用场地 onTurnStart 结果（敌我全体），且不提前结算未来回合 ---- */
+{
+  var pA = mk('我方11a', 'ally', { hp: 1000, atk: 1, def: 9999, spd: 5 });
+  var pE = mk('敌方11a', 'enemy', { hp: 1000, atk: 1, def: 9999, spd: 1 });
+  var endCalls = 0;
+  var probe = {
+    id: 'openProbe', name: '开场探针',
+    onTurnStart: function () {
+      return {
+        events: [{ msg: '🌦️ 开场探针' }],
+        statusApps: [{ unitId: '我方11a', id: 'poison', duration: 3 }, { unitId: '敌方11a', id: 'poison', duration: 3 }]
+      };
+    },
+    onTurnEnd: function () { endCalls++; return { events: [{ msg: '🪨 开场探针 回合末' }] }; }
+  };
+  var gbP = sb.createGroupBattle({ allies: [pA], enemies: [pE], terrain: probe });
+  sb.groupBattleStep(gbP);   // 第一次 step 只跑「准备阶段 + 一个单位行动」
+  assert('11a 场地 onTurnStart 的 statusApps 经真实准备阶段落地（我方）', sb.hasStatus(pA, 'poison'),
+    JSON.stringify((pA.statuses || []).map(function (s) { return s.id; })));
+  assert('11a 场地 onTurnStart 的结果对敌方同样落地（场地对敌我双方均有效）', sb.hasStatus(pE, 'poison'),
+    JSON.stringify((pE.statuses || []).map(function (s) { return s.id; })));
+  assert('11a 开战准备阶段不提前结算回合末钩子（onTurnEnd 尚未被调用）', endCalls === 0, 'endCalls=' + endCalls);
+  /* 走到本回合收尾：回合末钩子恰好一次 */
+  var guardP = 0;
+  while (!gbP.done && gbP.phase !== '结束' && guardP++ < 20) sb.groupBattleStep(gbP);
+  assert('11a 本回合收尾时回合末钩子恰好调用一次（不重复、不遗漏）', endCalls === 1, 'endCalls=' + endCalls);
+}
+
+/* ---- 11b. 回合末伤害在真实结束阶段落地：双方都掉血且按 unitId 归属 ---- */
+{
+  var t1 = tankPair('我方11b', '敌方11b');
+  var c1 = tankPair('我方11b0', '敌方11b0');
+  var gbT1 = sb.createGroupBattle({ allies: [t1.ally], enemies: [t1.foe], seed: 99, terrain: fixedDmgTerrain('我方11b', '敌方11b', 11, 13) });
+  var gbT0 = sb.createGroupBattle({ allies: [c1.ally], enemies: [c1.foe], seed: 99 });
+  sb.groupBattleTick(gbT1); sb.groupBattleTick(gbT0);
+  assert('11b 回合末场地伤害真的扣血（我方：同种子对照差 = 11）', c1.ally.hp - t1.ally.hp === 11,
+    'delta=' + (c1.ally.hp - t1.ally.hp));
+  assert('11b 伤害按 unitId 归属（敌方差 = 13，我方未替敌方挨这一份）', c1.foe.hp - t1.foe.hp === 13,
+    'delta=' + (c1.foe.hp - t1.foe.hp));
+  assert('11b 场地事件仍照常落日志（修复没有把日志换掉）',
+    entriesInPhase(gbT1, '结束', /🪨 定量伤害探针/).length === 1,
+    JSON.stringify(entriesMatching(gbT1, /定量伤害探针/).map(function (l) { return l.turn + '/' + l.phase; })));
+}
+
+/* ---- 11c. 多回合不重复应用：3 个回合的累计差值 = 3 × 每回合伤害 ---- */
+{
+  var t2 = tankPair('我方11c', '敌方11c');
+  var c2 = tankPair('我方11c0', '敌方11c0');
+  var gbT2 = sb.createGroupBattle({ allies: [t2.ally], enemies: [t2.foe], seed: 4242, terrain: fixedDmgTerrain('我方11c', '敌方11c', 11, 13) });
+  var gbT0b = sb.createGroupBattle({ allies: [c2.ally], enemies: [c2.foe], seed: 4242 });
+  for (var k = 0; k < 3; k++) { sb.groupBattleTick(gbT2); sb.groupBattleTick(gbT0b); }
+  assert('11c 3 回合累计差值 = 33 / 39（每回合恰好应用一次，无重复结算）',
+    c2.ally.hp - t2.ally.hp === 33 && c2.foe.hp - t2.foe.hp === 39,
+    JSON.stringify({ ally: c2.ally.hp - t2.ally.hp, foe: c2.foe.hp - t2.foe.hp, turns: gbT2.turn }));
+  assert('11c 场地回合末日志也恰好 3 条（与回合数一致）',
+    entriesMatching(gbT2, /🪨 定量伤害探针/).length === 3,
+    'n=' + entriesMatching(gbT2, /🪨 定量伤害探针/).length);
+}
+
+/* ---- 11d. 真实注册场地「酷暑」：回合末对敌我双方各扣 maxHP×4% ---- */
+{
+  var t3 = tankPair('我方11d', '敌方11d');
+  var c3 = tankPair('我方11d0', '敌方11d0');
+  var gbT3 = sb.createGroupBattle({ allies: [t3.ally], enemies: [t3.foe], seed: 5, terrain: sb.getTerrain('heat') });
+  var gbT0c = sb.createGroupBattle({ allies: [c3.ally], enemies: [c3.foe], seed: 5 });
+  sb.groupBattleTick(gbT3); sb.groupBattleTick(gbT0c);
+  assert('11d 真实场地「酷暑」经真实回合末对敌我双方各扣 4000（100000×4%）',
+    c3.ally.hp - t3.ally.hp === 4000 && c3.foe.hp - t3.foe.hp === 4000,
+    JSON.stringify({ ally: c3.ally.hp - t3.ally.hp, foe: c3.foe.hp - t3.foe.hp }));
+}
+
+/* ---- 11e. 胜负判定必须发生在场地结果应用之后 ---- */
+{
+  /* ① 场地在回合末击杀最后一名敌人 → 必须判我方胜 */
+  var wA = mk('我方11e', 'ally', { hp: 100000, atk: 1, def: 99999, spd: 9 });
+  var wE = mk('敌方11e', 'enemy', { hp: 600, atk: 1, def: 99999, spd: 1 });
+  var finW = {
+    id: 'finishProbe', name: '终结探针',
+    onTurnEnd: function (g) {
+      return {
+        events: [{ msg: '☠️ 终结探针' }],
+        damage: g.units.filter(function (u) { return u.side === 'enemy' && u.hp > 0; })
+          .map(function (u) { return { unitId: u.id, amount: u.hp }; })
+      };
+    }
+  };
+  var gbW = sb.createGroupBattle({ allies: [wA], enemies: [wE], terrain: finW });
+  sb.groupBattleTick(gbW);
+  assert('11e 场地回合末击杀敌方全员 → 应用后立即判我方胜',
+    gbW.done === true && gbW.winner === 'ally' && wE.hp === 0 && gbW.phase === '结束',
+    JSON.stringify({ done: gbW.done, winner: gbW.winner, hp: wE.hp, phase: gbW.phase }));
+
+  /* ② 反方向：场地回合末击杀我方全员 → 必须判负 */
+  var lA = mk('我方11e2', 'ally', { hp: 600, atk: 1, def: 99999, spd: 9 });
+  var lE = mk('敌方11e2', 'enemy', { hp: 100000, atk: 1, def: 99999, spd: 1 });
+  var finL = {
+    id: 'finishProbe2', name: '终结探针2',
+    onTurnEnd: function (g) {
+      return {
+        events: [{ msg: '☠️ 终结探针2' }],
+        damage: g.units.filter(function (u) { return u.side === 'ally' && u.hp > 0; })
+          .map(function (u) { return { unitId: u.id, amount: u.hp }; })
+      };
+    }
+  };
+  var gbL = sb.createGroupBattle({ allies: [lA], enemies: [lE], terrain: finL });
+  sb.groupBattleTick(gbL);
+  assert('11e 场地回合末击杀我方全员 → 应用后立即判负',
+    gbL.done === true && gbL.winner === 'enemy' && lA.hp === 0,
+    JSON.stringify({ done: gbL.done, winner: gbL.winner, hp: lA.hp }));
+}
+
+/* ---- 11f. 带场地时 tick / step 完全一致（含 HP 与日志） ---- */
+{
+  function buildTerrBattle(seed) {
+    return sb.createGroupBattle({
+      seed: seed,
+      allies: [mk('你', 'ally', { hp: 900, atk: 90, def: 40, spd: 7, soulAtk: 30 })],
+      enemies: [
+        mk('甲', 'enemy', { hp: 300, atk: 30, def: 10, spd: 5 }, { skills: ['charge', 'blackmist'] }),
+        mk('乙', 'enemy', { hp: 200, atk: 20, def: 8, spd: 3 })
+      ],
+      terrain: sb.getTerrain('heat')
+    });
+  }
+  var qT = buildTerrBattle(31337), qS = buildTerrBattle(31337);
+  var nT = 0, nS = 0;
+  while (!qT.done && nT++ < 200) sb.groupBattleTick(qT);
+  /* step 的驱动契约（见 groupBattleStep 函数头）：胜负已分但本回合尚未收尾（_roundOpen）时，
+     还要再走一步把「判定 + 结束」跑掉 —— 否则最后那个回合的场地回合末结算会被漏掉。 */
+  while ((!qS.done || qS._roundOpen) && nS++ < 400) sb.groupBattleStep(qS);
+  assert('11f 带场地时 tick / step 的胜负·回合·各单位 HP 一致',
+    qT.winner === qS.winner && qT.turn === qS.turn &&
+    qT.units.map(function (u) { return u.id + ':' + u.hp; }).join(',') ===
+    qS.units.map(function (u) { return u.id + ':' + u.hp; }).join(','),
+    qT.winner + '/' + qT.turn + ' vs ' + qS.winner + '/' + qS.turn);
+  assert('11f 带场地时 tick / step 的完整日志逐字节一致（无重复应用、无路径分叉）',
+    signature(qT) === signature(qS),
+    'tick ' + qT.log.length + ' 条 / step ' + qS.log.length + ' 条');
+  var heatEnd = entriesMatching(qT, /☀️ 酷暑/).length;
+  assert('11f 酷暑回合末条目数 = 实际回合数（每回合恰好一次）', heatEnd === qT.turn, heatEnd + ' vs turn ' + qT.turn);
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);
