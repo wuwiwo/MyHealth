@@ -646,3 +646,32 @@ var SKILL_DOCS = {
   fortify:    { desc: '自身防御与魂防 +10%，可重复施放叠加（最多 5 层 → +50%），持续到战斗结束。' },
   clearfog:   { desc: '全场普通~高级负面状态全部解除，并使全场「能力变化」归零（攻击/防御/速度的成长与增减益一并还原）。' }
 };
+
+/* ============================================
+   v2.9.1（作者裁决 4，原话：「如果技能有明确"随机"的则无法AI指定，
+   如果无"随机"描述则使用AI智能判断」）
+
+   AI 能否**指定**技能目标，按**技能描述里有没有「随机」**判定：
+     · 描述含「随机」→ 不可指定：按技能自身的随机规则选靶，AI 的声明对它不生效；
+     · 描述不含「随机」→ 可指定：交给 AI 用自己的判断挑目标。
+   ⚠️ **不能按 target 类型一刀切** —— ally1 里两种都有：
+       治愈「使我方**随机** 1 名队友回复…」→ 不可指定；
+       净化「解除我方 1 名队友…」/ 强攻「使我方 1 名角色攻击…」→ 可指定。
+   all（全体）/ self（自身）与「指定」无关 → 返回 false（selectTargets 对它们本来就忽略强制目标，
+   返回什么都不会改变行为，写成 false 只是让语义更清楚）。
+   描述来源与详情面板同源：技能定义上的 desc 优先，其次 SKILL_DOCS[id].desc
+   （核心技能的描述在 SKILL_DOCS；宠物技能部分带在定义上）。 */
+function skillDescOf(id, def) {
+  if (def && typeof def.desc === 'string' && def.desc) return def.desc;
+  if (typeof SKILL_DOCS !== 'undefined' && SKILL_DOCS && SKILL_DOCS[id] && typeof SKILL_DOCS[id].desc === 'string') {
+    return SKILL_DOCS[id].desc;
+  }
+  return '';
+}
+function skillAiCanDesignate(def) {
+  if (!def) return false;
+  var t = def.target || 'random1';
+  if (t === 'all' || t === 'self') return false;          // 与「指定目标」无关
+  if (skillDescOf(def.id, def).indexOf('随机') >= 0) return false;   // 有明确「随机」→ 不可指定
+  return true;
+}

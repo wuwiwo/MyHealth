@@ -183,18 +183,39 @@ function hitIds(evs) {
   return (evs || []).filter(e => e && e.type === 'damage' && e.targetId).map(e => e.targetId);
 }
 
-/* ---- 9a. 单体攻击技能：真实受击者 = 已声明目标 ---- */
+/* ---- 9a. v2.9.1（作者裁决 4）：随机技能**忽略** AI 声明；非随机技能**采纳** ---- */
 {
+  /* (a) 随机技能（咬击描述含「随机」）→ 声明被忽略：多次施放两种目标都必须出现过 */
   const a1 = mk9('9a-a1', 'ally', { hp: 900, atk: 5, def: 5, spd: 5 });
   const a2 = mk9('9a-a2', 'ally', { hp: 900, atk: 5, def: 5, spd: 4 });
-  const e1 = mk9('9a-e1', 'enemy', { hp: 900, atk: 20, def: 5, spd: 9 }, { skills: ['bite'] });
+  const e1 = mk9('9a-e1', 'enemy', { hp: 9000, atk: 20, def: 5, spd: 9 }, { skills: ['bite'] });
   e1._accMod = 1;   // 强制命中（见上方注释：避免 5% 未命中污染断言）
-  const gb = sandbox.createGroupBattle({ allies: [a1, a2], enemies: [e1], seed: 99 });
-  const evs = sandbox.castSkill(gb, e1, 'bite', { forcedTarget: a2 });
-  const ids = hitIds(evs);
-  assert('9a 单体技能：真实受击者 = 已声明目标（且另一名友方未受伤）',
-    ids.length === 1 && ids[0] === a2.id && a2.hp < 900 && a1.hp === 900,
-    JSON.stringify({ ids: ids, a1: a1.hp, a2: a2.hp }));
+  const seen = {};
+  for (let i = 0; i < 24; i++) {
+    const gb = sandbox.createGroupBattle({ allies: [a1, a2], enemies: [e1], seed: 1000 + i });
+    hitIds(sandbox.castSkill(gb, e1, 'bite', { forcedTarget: a2 })).forEach(id => { seen[id] = (seen[id] || 0) + 1; });
+    a1.hp = 900; a2.hp = 900; e1.hp = 9000;
+  }
+  assert('9a 随机技能（咬击）忽略 AI 声明 —— 24 次里两种目标都出现过',
+    seen[a1.id] > 0 && seen[a2.id] > 0, JSON.stringify(seen));
+
+  /* (b) 非随机单体技能：临时注册一个 target=enemy1 且描述**不含「随机」**的技能 → 声明被采纳 */
+  sandbox.registerSkill({ id: 't_lock', name: '锁定击', type: 'attack', target: 'enemy1', power: 100, dmgType: 'physical', cooldown: 0 });
+  if (sandbox.SKILL_DOCS) sandbox.SKILL_DOCS.t_lock = { desc: '对指定 1 名敌人造成攻击×100%的物理伤害。' };
+  const b1 = mk9('9a-b1', 'ally', { hp: 900, atk: 5, def: 5, spd: 5 });
+  const b2 = mk9('9a-b2', 'ally', { hp: 900, atk: 5, def: 5, spd: 4 });
+  const e2 = mk9('9a-e2', 'enemy', { hp: 9000, atk: 20, def: 5, spd: 9 });
+  e2._accMod = 1;
+  let b2Hits = 0, b1Hits = 0;
+  for (let i = 0; i < 8; i++) {
+    const gb = sandbox.createGroupBattle({ allies: [b1, b2], enemies: [e2], seed: 2000 + i });
+    const ids = hitIds(sandbox.castSkill(gb, e2, 't_lock', { forcedTarget: b2 }));
+    if (ids[0] === b2.id) b2Hits++;
+    if (ids[0] === b1.id) b1Hits++;
+    b1.hp = 900; b2.hp = 900; e2.hp = 9000;
+  }
+  assert('9a 非随机单体技能采纳 AI 声明 —— 8 次全部命中被声明的目标',
+    b2Hits === 8 && b1Hits === 0, JSON.stringify({ b2Hits: b2Hits, b1Hits: b1Hits }));
 }
 
 /* ---- 9b. 非法目标（阵营不符 / 已阵亡 / 空）→ 回退到原有随机选靶（不空放、不打尸体） ---- */
@@ -249,17 +270,38 @@ function hitIds(evs) {
     selfBuff && (a1.statuses || []).length === 0, JSON.stringify({ e1st: (e1.statuses || []).map(s => s.id), a1st: (a1.statuses || []).map(s => s.id) }));
 }
 
-/* ---- 9e. 友方技能：声明目标决定治疗对象（旧实现随机选，必红） ---- */
+/* ---- 9e. v2.9.1（裁决 4）：ally1 的两种归类都要成立（不能按 target 一刀切） ---- */
 {
+  /* (a) 治愈（描述含「随机」）→ 声明被忽略：m1 / m2 都会被治到 */
   const healer = mk9('9e-h', 'enemy', { hp: 900, atk: 5, def: 5, spd: 9 }, { skills: ['heal'] });
   const m1 = mk9('9e-m1', 'enemy', { hp: 900, atk: 5, def: 5, spd: 1 });
   const m2 = mk9('9e-m2', 'enemy', { hp: 900, atk: 5, def: 5, spd: 1 });
-  m1.hp = 400; m2.hp = 400; healer.hp = 400;
-  const gb = sandbox.createGroupBattle({ allies: [mk9('9e-a', 'ally', { hp: 900, atk: 5, def: 5, spd: 1 })], enemies: [healer, m1, m2], seed: 5 });
-  sandbox.castSkill(gb, healer, 'heal', { forcedTarget: m1 });
-  assert('9e 友方技能（ally1）：治疗落在已声明目标上（旧实现随机选靶）',
-    m1.hp > 400 && m2.hp === 400,
-    JSON.stringify({ m1: m1.hp, m2: m2.hp, healer: healer.hp }));
+  const al = mk9('9e-a', 'ally', { hp: 9000, atk: 5, def: 5, spd: 1 });
+  const healed = {};
+  for (let i = 0; i < 20; i++) {
+    m1.hp = 400; m2.hp = 400; healer.hp = 400;
+    const gb = sandbox.createGroupBattle({ allies: [al], enemies: [healer, m1, m2], seed: 3000 + i });
+    sandbox.castSkill(gb, healer, 'heal', { forcedTarget: m1 });
+    if (m1.hp > 400) healed.m1 = (healed.m1 || 0) + 1;
+    if (m2.hp > 400) healed.m2 = (healed.m2 || 0) + 1;
+  }
+  assert('9e 随机友方技能（治愈）忽略 AI 声明 —— m1 / m2 都被治过',
+    healed.m1 > 0 && healed.m2 > 0, JSON.stringify(healed));
+
+  /* (b) 强攻（描述**不含**「随机」）→ 声明被采纳：增益必须落在 m1 上 */
+  const hp2 = mk9('9e-h2', 'enemy', { hp: 900, atk: 5, def: 5, spd: 9 }, { skills: ['empower'] });
+  const n1 = mk9('9e-n1', 'enemy', { hp: 900, atk: 5, def: 5, spd: 1 });
+  const n2 = mk9('9e-n2', 'enemy', { hp: 900, atk: 5, def: 5, spd: 1 });
+  let n1b = 0, n2b = 0;
+  for (let i = 0; i < 8; i++) {
+    n1.statuses = []; n2.statuses = [];
+    const gb = sandbox.createGroupBattle({ allies: [al], enemies: [hp2, n1, n2], seed: 4000 + i });
+    sandbox.castSkill(gb, hp2, 'empower', { forcedTarget: n1 });
+    if ((n1.statuses || []).length > 0) n1b++;
+    if ((n2.statuses || []).length > 0) n2b++;
+  }
+  assert('9e 非随机友方技能（强攻）采纳 AI 声明 —— 8 次增益都落在被声明目标上',
+    n1b === 8 && n2b === 0, JSON.stringify({ n1b: n1b, n2b: n2b }));
 }
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');

@@ -589,7 +589,12 @@ function selectTargets(gb, actor, skillDef, forcedTarget) {
        · 数组型声明一律忽略（AOE 类会给出数组，不能把范围技能缩成单体）
      合法性：单位存在、`hp > 0`、且**阵营与该规则的候选池一致**；不合法就落回原有选择
      （等价于「声明失效 → 当场重选」，不会空放、不会打尸体、不会打自己人）。 */
+  /* v2.9.1（作者裁决 4）：**只有描述不含「随机」的技能才允许 AI 指定目标** ——
+     有「随机」的（咬击 / 治愈 / 地刺类随机效果…）一律忽略强制目标、按技能自身规则选靶。
+     判定不在本文件实现（技能语义归 skill.js）；取不到实现时保守放行（沿用 v2.7.0 行为）。 */
+  var canDesignate = (typeof skillAiCanDesignate === 'function') ? skillAiCanDesignate(skillDef) : true;
   function forcedOne(wantMate) {
+    if (!canDesignate) return null;
     if (!forcedTarget) return null;
     if (Object.prototype.toString.call(forcedTarget) === '[object Array]') return null;
     if (!forcedTarget.id) return null;
