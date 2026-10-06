@@ -16,6 +16,11 @@ function mulberry32(seed){
 var _battleRng=Math.random
 function _rng(){return _battleRng()}
 
+/* v2.5.1：单敌 Boss「生命汲取」的唯一结算比例。
+   历史实现先累计伤害 25%，结算时又乘 50%（有效约 12.5%）；按作者裁决恢复为物理伤害 25%。
+   只在 BOSS_AFFIXES 的 onAttack 生产回血量时消费，实际回复与日志共用同一 _heal。 */
+var BOSS_LIFESTEAL_RATE=0.25
+
 var BOSS_AFFIXES=[
   {name:'虚弱诅咒',desc:'你防御低于50时,伤害减少10~20%',
     apply:function(atk,def,isPlayer){
@@ -31,7 +36,7 @@ var BOSS_AFFIXES=[
       return enemyAtk
     }},
   {name:'生命汲取',desc:'每次攻击恢复伤害量25%的生命',
-    onAttack:function(dmg,boss){if(boss&&dmg>0){boss._heal=(boss._heal||0)+Math.floor(dmg*0.25)}return dmg}},
+    onAttack:function(dmg,boss){if(boss&&dmg>0){boss._heal=(boss._heal||0)+Math.floor(dmg*BOSS_LIFESTEAL_RATE)}return dmg}},
   {name:'铁壁护盾',desc:'每3回合获得一个吸收伤害量30%的护盾',
     onTurn:function(turn,enemyAtk,baseAtk,boss){
       if(turn>=3&&turn%3===0&&_rng()<0.5){boss._shield=(boss._shield||0)+Math.floor(baseAtk*0.3)*2;return enemyAtk+Math.floor(baseAtk*0.1)}
@@ -124,6 +129,35 @@ function rollDamage(atk,def,variance){
   return Math.max(1,atk-Math.floor(def/2)+Math.floor(_rng()*variance)+1)
 }
 
+/* 单敌引擎统一应用护盾并记录 actual HP damage。
+   返回事件分开表达 shieldAbsorbed 与 HP damage；`rawDamage` 是护盾前伤害，供荆棘等
+   明确要求使用吸收前数值的规则消费。单敌 shield 包括物理与魂伤。 */
+function applySingleBattleDamage(sourceSide,targetSide,target,rawDamage,damageType,label,note){
+  var raw=Math.max(0,Math.floor(rawDamage||0))
+  var hpBefore=Math.max(0,target&&typeof target.hp==='number'?target.hp:0)
+  var shieldBefore=Math.max(0,target&&typeof target._shield==='number'?target._shield:0)
+  var shieldAbsorbed=Math.min(shieldBefore,raw)
+  var remaining=Math.max(0,raw-shieldAbsorbed)
+  var hpDamage=Math.min(hpBefore,remaining)
+  if(target){
+    target.hp=Math.max(0,hpBefore-hpDamage)
+    if(shieldBefore>0)target._shield=Math.max(0,shieldBefore-shieldAbsorbed)
+  }
+  var events=[]
+  var sourceId=(sourceSide==='enemy')?'enemy':'player'
+  var targetId=(targetSide==='enemy')?'enemy':'player'
+  if(shieldAbsorbed>0){
+    events.push({msg:'🛡️ '+(targetSide==='enemy'?'敌人':'你')+' 护盾吸收 '+shieldAbsorbed+(target._shield===0?'（护盾破碎）':''),
+      type:'shield',sourceId:sourceId,targetId:targetId,sourceSide:sourceSide,targetSide:targetSide,
+      amount:shieldAbsorbed,shieldAbsorbed:shieldAbsorbed,hpDamage:0})
+  }
+  var kind=(damageType==='soul')?' 魂伤害':' 伤害'
+  events.push({msg:label+' → '+hpDamage+kind+(note?'（'+note+'）':''),
+    type:'damage',sourceId:sourceId,targetId:targetId,sourceSide:sourceSide,targetSide:targetSide,
+    damageType:damageType,amount:hpDamage,hpDamage:hpDamage,rawDamage:raw,shieldAbsorbed:shieldAbsorbed})
+  return {rawDamage:raw,hpDamage:hpDamage,shieldAbsorbed:shieldAbsorbed,events:events}
+}
+
 function createBattle(playerStats,enemyStats,levelInfo,affix,rng){
   if(rng)_battleRng=rng
   return{
@@ -156,24 +190,28 @@ function battleTick(b){
     }
   }
 
-  // Player attacks
+  // Player physical attack: shield first, then actual HP damage. `pDmg` remains the
+  // post-affix, pre-shield amount because the author ruling defines thorns on that basis.
   var pDmgBase=rollDamage(b.player.atk,b.enemy.def,4)
   var pDmg=b.affix&&b.affix.apply?b.affix.apply(pDmgBase,b.player.def,true):pDmgBase
-  b.enemy.hp-=pDmg
-  if(b.enemy._shield>0){b.enemy.hp+=Math.min(pDmg,b.enemy._shield);b.enemy._shield=Math.max(0,b.enemy._shield-pDmg);pDmg=Math.max(0,pDmg-(b.enemy._shield>0?pDmg:0))}
-  if(pDmg!==pDmgBase){events.push({msg:'🧑 攻击 → '+pDmgBase+' (被诅咒减免至 '+pDmg+')',type:'dmg'})}
-  else{events.push({msg:'🧑 攻击 → '+pDmg+' 伤害',type:'dmg'})}
+  var pNote=(pDmg!==pDmgBase)?('被诅咒减免至 '+pDmg):''
+  var pHit=applySingleBattleDamage('player','enemy',b.enemy,pDmg,'physical','🧑 攻击',pNote)
+  events=events.concat(pHit.events)
 
-  // Thorns reflect
+  // Thorns: the author explicitly ruled on pre-shield damage, even if the shield absorbs all HP damage.
   if(b.affix&&b.affix.reflect&&pDmg>0){
     var reflectDmg=b.affix.reflect(pDmg,b.player.def)
-    if(reflectDmg>0){b.player.hp-=Math.min(b.player.hp,reflectDmg);events.push({msg:'🩸 荆棘反伤 → '+reflectDmg+' 伤害',type:'e'})}
+    if(reflectDmg>0){
+      var reflected=applySingleBattleDamage('enemy','player',b.player,reflectDmg,'reflect','🩸 荆棘反伤')
+      events=events.concat(reflected.events)
+    }
   }
 
   // Enemy dead?
   if(b.enemy.hp<=0){b.enemy.hp=0;b.done=true;b.winner=true;return{turn:turn,events:events}}
 
-  // Soul attack phase — player soul attacks enemy
+  // Soul attack phase — player soul attacks enemy. Author裁决: single-enemy shield
+  // absorbs soul damage too; the event distinguishes raw, absorbed, and HP damage.
   if(b.player.soulAtk>0){
     var pSoulDmg;
     if(b.enemy.soulDef>0){
@@ -181,16 +219,16 @@ function battleTick(b){
     }else{
       pSoulDmg=b.player.soulAtk // full damage when no soul def
     }
-    b.enemy.hp-=pSoulDmg
-    events.push({msg:'👻 魂攻击 → '+pSoulDmg+' 魂伤害',type:'dmg'})
+    var pSoulHit=applySingleBattleDamage('player','enemy',b.enemy,pSoulDmg,'soul','👻 魂攻击')
+    events=events.concat(pSoulHit.events)
     if(b.enemy.hp<=0){b.enemy.hp=0;b.done=true;b.winner=true;return{turn:turn,events:events}}
   }
 
-  // Enemy attacks
+  // Enemy physical attack
   var eDmgBase=rollDamage(b.enemy.atk,b.player.def,3)
   var eDmg=b.affix&&b.affix.apply&&b.affix.index===0?b.affix.apply(eDmgBase,b.enemy.atk,false):eDmgBase
-  b.player.hp-=eDmg
-  events.push({msg:'👹 '+b.level.npc+' 攻击 → '+eDmg+' 伤害',type:'e'})
+  var eHit=applySingleBattleDamage('enemy','player',b.player,eDmg,'physical','👹 '+b.level.npc+' 攻击')
+  events=events.concat(eHit.events)
 
   // Enemy soul attack
   if(b.enemy.soulAtk>0){
@@ -200,13 +238,19 @@ function battleTick(b){
     }else{
       eSoulDmg=b.enemy.soulAtk
     }
-    b.player.hp-=eSoulDmg
-    events.push({msg:'👻 敌方魂攻击 → '+eSoulDmg+' 魂伤害',type:'e'})
+    var eSoulHit=applySingleBattleDamage('enemy','player',b.player,eSoulDmg,'soul','👻 敌方魂攻击')
+    events=events.concat(eSoulHit.events)
   }
 
-  // Life steal heal
+  // Life steal heal: preserve the existing Boss physical-attack damage basis; the affix
+  // accumulator applies the author-decided 25% once, without a second halving step.
   if(b.affix&&b.affix.onAttack){b.affix.onAttack(eDmg,b.enemy)}
-  if(b.enemy._heal&&b.enemy._heal>0){b.enemy.hp+=Math.floor(b.enemy._heal*0.5);events.push({msg:'💚 Boss 生命汲取, 恢复 '+(b.enemy._heal||0)+' HP',type:'heal'});b.enemy._heal=0}
+  if(b.enemy._heal&&b.enemy._heal>0){
+    var lifeStealHeal=b.enemy._heal
+    b.enemy.hp+=lifeStealHeal
+    events.push({msg:'💚 Boss 生命汲取, 恢复 '+lifeStealHeal+' HP',type:'heal',sourceId:'enemy',targetId:'enemy',sourceSide:'enemy',targetSide:'enemy',amount:lifeStealHeal})
+    b.enemy._heal=0
+  }
 
   // Player dead?
   if(b.player.hp<=0){b.player.hp=0;b.done=true;b.winner=false}

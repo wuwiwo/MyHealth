@@ -205,6 +205,39 @@ function endBattleAborted(err){
   })
 }
 
+/* v2.5.1：单敌 damage event 显式携带 sourceSide / targetSide，UI 不再用旧的
+   `dmg` / `e` 类型猜攻击方向。旧事件只保留最小兼容回退。 */
+function battleEventSides(ev){
+  if(!ev)return null
+  if((ev.sourceSide==='player'||ev.sourceSide==='enemy')
+      &&(ev.targetSide==='player'||ev.targetSide==='enemy')){
+    return {sourceSide:ev.sourceSide,targetSide:ev.targetSide}
+  }
+  if(ev.type==='dmg')return {sourceSide:'player',targetSide:'enemy'}
+  if(ev.type==='e'&&ev.msg&&(/荆棘反伤/.test(ev.msg)||/^👹/.test(ev.msg)||/^👻 敌方魂攻击/.test(ev.msg))){
+    return {sourceSide:'enemy',targetSide:'player'}
+  }
+  return null
+}
+function animateBattleEvent(ev,pEl,eEl){
+  if(!ev||ev.type!=='damage')return
+  var sides=battleEventSides(ev)
+  if(!sides)return
+  /* 反伤是结算结果，不是攻击者发起的一次前冲；只闪目标，避免反伤动画伪装成普通攻击。 */
+  if(ev.damageType==='reflect'){
+    var reflectedTarget=(sides.targetSide==='player')?pEl:eEl
+    if(reflectedTarget){reflectedTarget.classList.remove('hit');void reflectedTarget.offsetWidth;reflectedTarget.classList.add('hit');showImpact(reflectedTarget,ev)}
+    return
+  }
+  if(sides.sourceSide==='player'&&sides.targetSide==='enemy'){
+    if(pEl){pEl.classList.remove('attacking');void pEl.offsetWidth;pEl.classList.add('attacking')}
+    if(eEl){eEl.classList.remove('hit');void eEl.offsetWidth;eEl.classList.add('hit');showImpact(eEl,ev)}
+  }else if(sides.sourceSide==='enemy'&&sides.targetSide==='player'){
+    if(eEl){eEl.classList.remove('attacking-enemy');void eEl.offsetWidth;eEl.classList.add('attacking-enemy')}
+    if(pEl){pEl.classList.remove('hit');void pEl.offsetWidth;pEl.classList.add('hit');showImpact(pEl,ev)}
+  }
+}
+
 function runBattle(){
   if(_battle.done||_battleRunning)return
   _battleRunning=true
@@ -221,22 +254,11 @@ function runBattle(){
       return
     }
     _battle.turn=result.turn
-    result.events.forEach(function(ev){addBattleLog(ev.msg,ev.type)})
+    result.events.forEach(function(ev){addBattleLog(ev.msg,ev.type,ev.targetSide)})
     renderBattleHP()
-    // Attack & hit animations
+    // Attack & hit animations are driven by explicit source/target sides, never by ambiguous type labels.
     var pEl=document.getElementById('battlePlayer'),eEl=document.getElementById('battleEnemy')
-    result.events.forEach(function(ev){
-      if(ev.type==='dmg'){
-        // Player takes damage — enemy attacks
-        if(eEl){eEl.classList.remove('attacking-enemy');void eEl.offsetWidth;eEl.classList.add('attacking-enemy')}
-        if(pEl){pEl.classList.remove('hit');void pEl.offsetWidth;pEl.classList.add('hit');showImpact(pEl,ev)}
-      }
-      if(ev.type==='e'){
-        // Enemy takes damage — player attacks
-        if(pEl){pEl.classList.remove('attacking');void pEl.offsetWidth;pEl.classList.add('attacking')}
-        if(eEl){eEl.classList.remove('hit');void eEl.offsetWidth;eEl.classList.add('hit');showImpact(eEl,ev)}
-      }
-    })
+    result.events.forEach(function(ev){animateBattleEvent(ev,pEl,eEl)})
     if(_battle.done){endBattle(_battle.winner);_battleRunning=false;return}
     /* 间隔 = 基准 ÷ 当前速度档位（每次调度都读 `_battleSpeed`，战斗中改档立即生效） */
     _battleTimer=setTimeout(tick,battleStepDelay(BATTLE_STEP_BASE_MS,_battleSpeed))
@@ -251,18 +273,19 @@ function renderBattleHP(){
   document.getElementById('beHPText').textContent='HP: '+Math.max(0,_battle.enemy.hp)+'/'+_battle.enemy.maxHP
 }
 
-function addBattleLog(msg,type){
+function addBattleLog(msg,type,targetSide){
   const el=document.getElementById('battleLog')
-  const div=document.createElement('div');div.className='bl-entry '+(type==='dmg'?'bl-dmg':type==='e'?'bl-def':'')
+  const cls=type==='damage'?(targetSide==='player'?'bl-def':'bl-dmg'):(type==='dmg'?'bl-dmg':type==='e'?'bl-def':'')
+  const div=document.createElement('div');div.className='bl-entry '+cls
   div.textContent='▸ '+msg;el.appendChild(div);el.scrollTop=el.scrollHeight
 }
 
 function showImpact(targetEl,ev){
   if(!targetEl||!ev.msg)return;
-  var num=ev.msg.replace(/[^0-9\-]/g,'');
-  if(!num)return;
+  var num=(typeof ev.hpDamage==='number')?String(ev.hpDamage):ev.msg.replace(/[^0-9\-]/g,'');
+  if(!num||Number(num)<=0)return;
   var impact=document.createElement('div');impact.className='bc-impact';
-  impact.textContent=(ev.type==='dmg'?'💥':'✨')+num;
+  impact.textContent=(ev.sourceSide==='player'?'💥':'✨')+num;
   impact.style.left='50%';impact.style.top='30%';
   targetEl.appendChild(impact);
   setTimeout(function(){if(impact.parentNode)impact.remove()},600);

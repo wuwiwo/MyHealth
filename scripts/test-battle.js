@@ -200,5 +200,180 @@ function ghRunBattle(host, battle, tickImpl) {
     JSON.stringify({ trackLevel: host.calls.trackLevel, aborted: b.aborted }));
 }
 
+/* ============================================================
+   8. v2.5.1 单敌 Boss 吸血 / 护盾 / 伤害来源与目标口径
+   用户裁决：生命汲取 = 敌方物理 HP 伤害的 25%；单敌魂伤会过护盾；
+   荆棘反伤按护盾吸收前伤害。事件 type='damage' 不编码攻击方向，
+   方向由 sourceSide / targetSide 明确表达，UI 应按这两个字段播放动画。
+   ============================================================ */
+console.log('\n[8] v2.5.1 单敌伤害结算与事件方向');
+
+const lifestealAffix = sandbox.BOSS_AFFIXES.find(a => a.name === '生命汲取');
+assert('8 生命汲取唯一倍率常量 = 25%', sandbox.BOSS_LIFESTEAL_RATE === 0.25,
+  'BOSS_LIFESTEAL_RATE=' + sandbox.BOSS_LIFESTEAL_RATE);
+assert('8 Boss 词条池含唯一生命汲取项', sandbox.BOSS_AFFIXES.filter(a => a.name === '生命汲取').length === 1);
+{
+  const samples = [1, 3, 21, 23, 100, 1001, 10000, 12345];
+  let invariant = true, counterexampleAgainstHalf = false;
+  samples.forEach(function (dmg) {
+    const boss = { hp: 1000000, _heal: 0 };
+    lifestealAffix.onAttack(dmg, boss);
+    if (boss._heal !== Math.floor(dmg * sandbox.BOSS_LIFESTEAL_RATE)) invariant = false;
+    if (dmg === 10000) counterexampleAgainstHalf = boss._heal > Math.floor(dmg * 0.125);
+  });
+  assert('8 25% 不变量：样本回血等于 floor(物理伤害×唯一倍率)', invariant,
+    'rate=' + sandbox.BOSS_LIFESTEAL_RATE);
+  assert('8 反证：保留旧 ×50% 会低于已裁 25%', counterexampleAgainstHalf);
+  const boss = { hp: 100, _heal: 0 };
+  lifestealAffix.onAttack(21, boss);
+  lifestealAffix.onAttack(23, boss);
+  assert('8 多次攻击按逐击 floor 累积 25%（5+5=10）', boss._heal === 10,
+    '_heal=' + boss._heal);
+}
+{
+  /* 真实 battleTick：玩家攻击 1 点（被高防压至最低 1），Boss 物理攻击 21 点，
+     Boss 起始 80 HP → 玩家击后 79 → 按 25% 回 5 → 84。 */
+  const affix = Object.assign({}, lifestealAffix, { index: 3 });
+  const b = sandbox.createBattle(
+    { atk: 1, def: 0, hp: 100, soulAtk: 0, soulDef: 0 },
+    { atk: 20, def: 100, hp: 80, soulAtk: 0, soulDef: 0 },
+    { npc: '吸血测试 Boss', boss: true }, affix, function () { return 0; });
+  const r = sandbox.battleTick(b);
+  const healEvent = r.events.find(e => /Boss 生命汲取/.test(e.msg));
+  assert('8 实战 Boss 每次物理伤害 21 后回复 5 HP', b.enemy.hp === 84,
+    'enemy.hp=' + b.enemy.hp + ' events=' + JSON.stringify(r.events));
+  /* 判据必须是「日志数 = 真实回血数」：旧实现日志写 5、实际只回 2（残留 ×50%），
+     只断言日志文案会放过这个 bug（实测旧代码 enemy.hp=81 → 真实回血 2）。 */
+  const healMsg = healEvent ? /恢复 (\d+) HP/.exec(healEvent.msg) : null;
+  const loggedHeal = healMsg ? Number(healMsg[1]) : NaN;
+  const actualHeal = b.enemy.hp - 79;   // 玩家先打 1 点（80→79），随后才结算汲取
+  assert('8 吸血日志报告实际回复量（日志数 = 真实回血数）',
+    loggedHeal === 5 && actualHeal === loggedHeal,
+    JSON.stringify({ logged: loggedHeal, actualHeal: actualHeal, enemyHP: b.enemy.hp }));
+}
+{
+  /* shield=10；玩家物理攻击=20，HP 实伤=10；荆棘函数收到吸收前的 20。 */
+  let reflectInput = null;
+  const thorns = { index: 1, reflect(dmg) { reflectInput = dmg; return Math.floor(dmg / 2); } };
+  const b = sandbox.createBattle(
+    { atk: 19, def: 0, hp: 100, soulAtk: 0, soulDef: 0 },
+    { atk: 0, def: 0, hp: 100, soulAtk: 0, soulDef: 0 },
+    { npc: '护盾测试 Boss', boss: true }, thorns, function () { return 0; });
+  b.enemy._shield = 10;
+  const r = sandbox.battleTick(b);
+  const hit = r.events.find(e => e.targetSide === 'enemy' && e.type === 'damage');
+  const reflect = r.events.find(e => /荆棘反伤/.test(e.msg));
+  assert('8 护盾吸收 10 后敌方 HP 只扣 10', b.enemy.hp === 90 && b.enemy._shield === 0,
+    JSON.stringify({ hp: b.enemy.hp, shield: b.enemy._shield }));
+  assert('8 伤害事件分开记录来源/目标、hpDamage=10 与 shieldAbsorbed=10', !!hit
+    && hit.sourceSide === 'player' && hit.targetSide === 'enemy'
+    && hit.hpDamage === 10 && hit.shieldAbsorbed === 10,
+    JSON.stringify(hit));
+  assert('8 荆棘反伤事件为敌人→玩家且按吸收前 20 结算', reflectInput === 20
+    && !!reflect && reflect.sourceSide === 'enemy' && reflect.targetSide === 'player'
+    && reflect.rawDamage === 10 && reflect.hpDamage === 10,
+    JSON.stringify({ reflectInput: reflectInput, event: reflect }));
+}
+{
+  /* 物理 1 点先吃盾 1，余盾 9；魂伤 20 再吃盾 9，只扣 HP 11。 */
+  const b = sandbox.createBattle(
+    { atk: 1, def: 0, hp: 100, soulAtk: 20, soulDef: 0 },
+    { atk: 0, def: 100, hp: 100, soulAtk: 0, soulDef: 0 },
+    { npc: '魂伤盾测试 Boss', boss: true }, null, function () { return 0; });
+  b.enemy._shield = 10;
+  const r = sandbox.battleTick(b);
+  const soulHit = r.events.find(e => /魂攻击/.test(e.msg) && e.targetSide === 'enemy');
+  assert('8 单敌魂伤经过护盾：最终 HP=89、护盾=0', b.enemy.hp === 89 && b.enemy._shield === 0,
+    JSON.stringify({ hp: b.enemy.hp, shield: b.enemy._shield }));
+  assert('8 魂伤事件标记玩家→敌人并记录 rawDamage=20 / 护盾吸收 9 / HP 伤害 11', !!soulHit
+    && soulHit.sourceSide === 'player' && soulHit.targetSide === 'enemy'
+    && soulHit.rawDamage === 20 && soulHit.amount === 11 && soulHit.shieldAbsorbed === 9 && soulHit.hpDamage === 11,
+    JSON.stringify(soulHit));
+}
+/* 护盾三种边界 × 物理 / 魂伤（计划 §2 任务 2 的验收项）：
+   逐击「先吃盾、余量扣 HP」，核对 HP / 剩余护盾 / 事件记账与日志。
+   · 物理侧令 atk = raw-1：rng 钉 0 时 rollDamage = atk+1，物理伤害恰好等于 raw；
+   · 魂伤侧物理那一下固定 1 点（atk=0 → rollDamage 下限 1），故通道按 [1, raw] 依次吃盾。
+   期望值由同一模型独立算出，不写死常数。 */
+function shieldSteps(shield, raws) {
+  let s = shield, hpLoss = 0;
+  const steps = raws.map(function (r) {
+    const a = Math.min(s, r); s -= a;
+    const st = { raw: r, shieldAbsorbed: a, hpDamage: r - a, shieldAfter: s };
+    hpLoss += st.hpDamage;
+    return st;
+  });
+  return { steps: steps, shieldAfter: s, hpLoss: hpLoss };
+}
+function shieldBoundary(damageType, raw, shield) {
+  const enemy = { atk: 0, def: 0, hp: 1000, soulAtk: 0, soulDef: 0 };
+  const player = (damageType === 'soul')
+    ? { atk: 0, def: 0, hp: 1000, soulAtk: raw, soulDef: 0 }
+    : { atk: raw - 1, def: 0, hp: 1000, soulAtk: 0, soulDef: 0 };
+  const b = sandbox.createBattle(player, enemy, { npc: '盾边界', boss: false }, null, function () { return 0; });
+  b.enemy._shield = shield;
+  const r = sandbox.battleTick(b);
+  const dmgEvs = r.events.filter(function (e) { return e.targetSide === 'enemy' && e.type === 'damage'; });
+  const shieldEvs = r.events.filter(function (e) { return e.type === 'shield' && e.targetSide === 'enemy'; });
+  return { hp: b.enemy.hp, shield: b.enemy._shield, ev: dmgEvs[dmgEvs.length - 1] || null, shieldEvs: shieldEvs };
+}
+[['physical', 10, 30, '不破'], ['physical', 20, 20, '恰好破'], ['physical', 30, 20, '超量破'],
+ ['soul', 10, 30, '不破'], ['soul', 20, 20, '恰好破'], ['soul', 30, 20, '超量破']
+].forEach(function (cs) {
+  const type = cs[0], raw = cs[1], shield = cs[2], label = cs[3];
+  const kindCn = (type === 'soul' ? '魂伤' : '物理');
+  const chain = shieldSteps(shield, type === 'soul' ? [1, raw] : [raw]);
+  const want = chain.steps[chain.steps.length - 1];
+  const got = shieldBoundary(type, raw, shield);
+  assert('8 护盾边界(' + kindCn + '·' + label + ') HP 只扣余量 ' + chain.hpLoss,
+    got.hp === 1000 - chain.hpLoss, 'hp=' + got.hp + ' want=' + (1000 - chain.hpLoss));
+  assert('8 护盾边界(' + kindCn + '·' + label + ') 剩余护盾 = ' + chain.shieldAfter,
+    got.shield === chain.shieldAfter, 'shield=' + got.shield + ' want=' + chain.shieldAfter);
+  assert('8 护盾边界(' + kindCn + '·' + label + ') 事件记账 rawDamage/shieldAbsorbed/hpDamage 与日志',
+    !!got.ev && got.ev.damageType === type
+    && got.ev.rawDamage === raw
+    && got.ev.shieldAbsorbed === want.shieldAbsorbed
+    && got.ev.hpDamage === want.hpDamage
+    && new RegExp('→ ' + want.hpDamage + (type === 'soul' ? ' 魂伤害' : ' 伤害')).test(got.ev.msg),
+    JSON.stringify(got.ev));
+  const absorbedTotal = chain.steps.reduce(function (n, s) { return n + s.shieldAbsorbed; }, 0);
+  assert('8 护盾边界(' + kindCn + '·' + label + ') 吸收事件条数与吸收量一致（' + absorbedTotal + '）',
+    got.shieldEvs.length === chain.steps.filter(function (s) { return s.shieldAbsorbed > 0; }).length
+    && got.shieldEvs.reduce(function (n, e) { return n + e.amount; }, 0) === absorbedTotal,
+    JSON.stringify(got.shieldEvs.map(function (e) { return e.amount; })));
+});
+
+
+{
+  const host = makeGameBattleSandbox();
+  /* 旧代码没有这两个函数：**必须干净地判失败**，不能让整份套件崩在 TypeError 上
+     （崩掉的结果行缺失，严格运行器只能把它归类为「格式无法识别」，可诊断性差）。 */
+  const sidesFn = (typeof host.sb.battleEventSides === 'function') ? host.sb.battleEventSides : null;
+  const animFn = (typeof host.sb.animateBattleEvent === 'function') ? host.sb.animateBattleEvent : null;
+  const p = ghMakeEl('battlePlayer'), e = ghMakeEl('battleEnemy');
+  assert('8 UI 事件映射函数存在（不再按旧 dmg/e 类型猜方向）', !!sidesFn && !!animFn,
+    JSON.stringify({ sides: !!sidesFn, anim: !!animFn }));
+  const playerHit = { type: 'damage', sourceSide: 'player', targetSide: 'enemy',
+    amount: 10, hpDamage: 10, msg: '玩家攻击敌人 → 10 伤害' };
+  const enemyHit = { type: 'damage', sourceSide: 'enemy', targetSide: 'player',
+    amount: 10, hpDamage: 10, msg: '敌人攻击玩家 → 10 伤害' };
+  assert('8 事件映射显式返回玩家→敌人', !!sidesFn && JSON.stringify(sidesFn(playerHit))
+    === JSON.stringify({ sourceSide: 'player', targetSide: 'enemy' }));
+  assert('8 事件映射显式返回敌人→玩家', !!sidesFn && JSON.stringify(sidesFn(enemyHit))
+    === JSON.stringify({ sourceSide: 'enemy', targetSide: 'player' }));
+  if (animFn) animFn(playerHit, p, e);
+  assert('8 UI：玩家攻击事件使玩家前冲、敌人受击', !!animFn && p.classList.contains('attacking')
+    && e.classList.contains('hit'), JSON.stringify({ player: p.classList._s, enemy: e.classList._s }));
+  const p2 = ghMakeEl('battlePlayer'), e2 = ghMakeEl('battleEnemy');
+  if (animFn) animFn(enemyHit, p2, e2);
+  assert('8 UI：敌人攻击事件使敌人前冲、玩家受击', !!animFn && e2.classList.contains('attacking-enemy')
+    && p2.classList.contains('hit'), JSON.stringify({ player: p2.classList._s, enemy: e2.classList._s }));
+  const p3 = ghMakeEl('battlePlayer'), e3 = ghMakeEl('battleEnemy');
+  if (animFn) animFn({ type: 'damage', damageType: 'reflect', sourceSide: 'enemy', targetSide: 'player',
+    amount: 10, hpDamage: 10, msg: '荆棘反伤 → 10 伤害' }, p3, e3);
+  assert('8 UI：反伤只表现为玩家受击，不伪装成敌方前冲', !!animFn && p3.classList.contains('hit')
+    && !e3.classList.contains('attacking-enemy'), JSON.stringify({ player: p3.classList._s, enemy: e3.classList._s }));
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);
