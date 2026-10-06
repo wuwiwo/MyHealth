@@ -178,9 +178,10 @@ var _lastBattleError=null
 function getLastBattleError(){return _lastBattleError}
 
 /* 异常中止：**既不是胜利也不是战败**。只把本场收尾（避免定时器/自动模式继续推进），
-   不动 HP、不发奖、不写通关、不计失败次数，并在界面上如实说明。 */
-function endBattleAborted(err){
-  var ctx=battleErrorContext(err,_battle)
+   不动 HP、不发奖、不写通关、不计失败次数，并在界面上如实说明。
+   `extra` 用于校正上下文里的 `stage`（v2.5.2：守卫已覆盖渲染段，失败可能不发生在引擎调用里）。 */
+function endBattleAborted(err,extra){
+  var ctx=battleErrorContext(err,_battle,extra)
   _lastBattleError=ctx
   if(_battle){
     _battle.done=true
@@ -241,24 +242,33 @@ function animateBattleEvent(ev,pEl,eEl){
 function runBattle(){
   if(_battle.done||_battleRunning)return
   _battleRunning=true
+  /* v2.5.2：新一场开始即清掉上一场的异常上下文 —— 与 battleErrorContext 上方注释承诺的
+     「正常战斗保持 null」一致（此前只在 endBattleAborted 里赋值，异常后会整会话残留旧错误）。 */
+  _lastBattleError=null
   const tick=()=>{
     if(_battle.done){_battleRunning=false;return}
     var result
+    /* v2.5.2：守卫覆盖**整段 tick**（引擎调用 + 日志/血条/动画渲染）。
+       旧实现的 try 只包 `battleTick` —— 渲染块一旦抛错（畸形返回、缺 DOM 节点）会逃逸出
+       runBattle：`_battleRunning` 卡 true、`done` 仍 false、没有后续计时器、没有提示、
+       也没有错误上下文 = 战斗永久冻结且不可定位。`stage` 记录真正失败在哪一段。 */
+    var stage='battleTick'
     try{
       result=battleTick(_battle)
+      stage='battleRender'
+      _battle.turn=result.turn
+      result.events.forEach(function(ev){addBattleLog(ev.msg,ev.type,ev.targetSide)})
+      renderBattleHP()
+      // Attack & hit animations are driven by explicit source/target sides, never by ambiguous type labels.
+      var pEl=document.getElementById('battlePlayer'),eEl=document.getElementById('battleEnemy')
+      result.events.forEach(function(ev){animateBattleEvent(ev,pEl,eEl)})
     }catch(err){
       /* v2.5.0：引擎异常 → 按「异常中止」收尾；不再改 HP、不再判胜、不再走 endBattle(true)
          发奖并推进关卡。console.error 留在 catch 现场（本项目禁止静默 catch）。 */
-      console.error('battleTick error:',err)
-      endBattleAborted(err)
+      console.error('single battle tick failed ('+stage+'):',err)
+      endBattleAborted(err,{stage:stage})
       return
     }
-    _battle.turn=result.turn
-    result.events.forEach(function(ev){addBattleLog(ev.msg,ev.type,ev.targetSide)})
-    renderBattleHP()
-    // Attack & hit animations are driven by explicit source/target sides, never by ambiguous type labels.
-    var pEl=document.getElementById('battlePlayer'),eEl=document.getElementById('battleEnemy')
-    result.events.forEach(function(ev){animateBattleEvent(ev,pEl,eEl)})
     if(_battle.done){endBattle(_battle.winner);_battleRunning=false;return}
     /* 间隔 = 基准 ÷ 当前速度档位（每次调度都读 `_battleSpeed`，战斗中改档立即生效） */
     _battleTimer=setTimeout(tick,battleStepDelay(BATTLE_STEP_BASE_MS,_battleSpeed))

@@ -1547,8 +1547,14 @@ function runPhaseEnd(gb) {
      顺序上先应用、再判胜负（见本函数末尾的 checkGroupWin），避免场地在回合末击杀
      最后一名敌人后仍停留在「未分胜负」。
      ⚠️ 每个回合只在这里调用一次（tick 走 finishRound、step 走队列跑完后的 finishRound），
-     不存在 tick/step 双份应用。 */
-  if (gb.terrain && gb.terrain.onTurnEnd) {
+     不存在 tick/step 双份应用。
+     v2.5.2：**胜负已在本回合更早的阶段分出时，整段跳过场地结算** —— 与判定阶段自己的策略
+     （runPhaseJudge 开头 `if (gb.done) return`：不在已定残局上继续掉血、改动结算面板血量）
+     以及真实 UI 驱动器 `_groupStep()`（done 即收尾、不再推进）保持一致。
+     修掉两处由此产生的自相矛盾终局：① 胜者在结束阶段被场地扣到 0 血的「0 血胜利」；
+     ② 真实场地在结束阶段把幸存方也打死、却因下面的 `!gb.done` 守卫不再重判而落成
+     winner='enemy' 的「双 KO 判负」（与「双 KO 判我方胜」的裁决不对称）。 */
+  if (gb.terrain && gb.terrain.onTurnEnd && !gb.done) {
     var te = terrainTurnEnd(gb);
     if (te && te.length) {
       gb.events = gb.events.concat(te);
@@ -1572,14 +1578,22 @@ function runPhaseEnd(gb) {
 /* 回合收尾（判定 + 结束），两条路径共用。
    返回本回合「判定 + 结束」两个阶段产出的全部事件 —— step 路径的调用方（动画/单测）
    原本只能从各单位的行动步里拿事件，回合末（dot / 到期 / 天赋 onTurnEnd / 场地）
-   产出的事件此前拿不到，只能去读 gb.log。 */
+   产出的事件此前拿不到，只能去读 gb.log。
+   v2.5.2：**收尾状态的落地放进 finally** —— 某个阶段抛错（例如场地回调抛异常）时，
+   若 `_roundOpen` 残留为 true，下一次 `groupBattleStep` 会跳过准备阶段、把同一回合的
+   「判定 + 结束」**再跑一遍**（重复老化 + 重复应用场地）。异常仍然向上传播（不静默吞掉），
+   只是保证本回合已被标记为收尾。 */
 function finishRound(gb) {
-  var judgeEvts = runPhaseJudge(gb) || [];
-  var endEvts = runPhaseEnd(gb) || [];
-  gb._roundOpen = false;
-  gb._stepQueue = null;
-  gb._stepIdx = 0;
-  gb._resume = null;
+  var judgeEvts = [], endEvts = [];
+  try {
+    judgeEvts = runPhaseJudge(gb) || [];
+    endEvts = runPhaseEnd(gb) || [];
+  } finally {
+    gb._roundOpen = false;
+    gb._stepQueue = null;
+    gb._stepIdx = 0;
+    gb._resume = null;
+  }
   return { done: !!gb.done, winner: gb.winner || null, phase: gb.phase, events: judgeEvts.concat(endEvts) };
 }
 

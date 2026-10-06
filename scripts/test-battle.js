@@ -375,5 +375,59 @@ function shieldBoundary(damageType, raw, shield) {
     && !e3.classList.contains('attacking-enemy'), JSON.stringify({ player: p3.classList._s, enemy: e3.classList._s }));
 }
 
+/* ============================================================
+   9. v2.5.2：异常守卫必须覆盖整段 tick，且错误上下文要能复位
+   ------------------------------------------------------------
+   旧实现的 try 只包 `battleTick`：其后的日志/渲染块一旦抛错（畸形返回、缺 DOM 节点）
+   会**逃逸出 runBattle** → `_battleRunning` 卡 true、`done` 仍 false、无计时器、无提示、
+   无错误上下文 = 永久冻结。本节在旧代码上必红。
+   ============================================================ */
+console.log('\n[9] 异常守卫覆盖整段 tick + 错误上下文复位（v2.5.2）');
+
+/* ---- 9a. 渲染/日志块抛错（畸形返回）不得让战斗冻结 ---- */
+let abortedBattle = null;
+{
+  const host = makeGameBattleSandbox();
+  let escaped = null, b = null;
+  try {
+    b = ghRunBattle(host, ghBattle(), function (bb) { bb.turn = 1; return { turn: 1 }; });  // 缺 events → 渲染块抛 TypeError
+  } catch (e) { escaped = String(e && e.message); }
+  abortedBattle = b;
+  const ctx = (typeof host.sb.getLastBattleError === 'function') ? host.sb.getLastBattleError() : null;
+  const running = (function () { try { return vm.runInContext('_battleRunning', host.sb); } catch (e) { return 'unreadable'; } })();
+  assert('9a 渲染块抛错不会逃逸出 runBattle', escaped === null, String(escaped));
+  assert('9a 战斗被收尾（done+aborted），没有卡在 _battleRunning=true', running === false
+    && !!b && b.done === true && b.aborted === true,
+    JSON.stringify({ running: running, done: b && b.done, aborted: b && b.aborted }));
+  assert('9a 仍然留下可查的错误上下文（stage 能区分是渲染阶段而不是引擎 tick）',
+    !!ctx && ctx.stage === 'battleRender' && /forEach/.test(ctx.message || ''),
+    JSON.stringify(ctx && { stage: ctx.stage, message: ctx.message }));
+  assert('9a 该路径同样不发奖、不推进通关', host.refine.points === 0 && host.game.cleared.length === 0,
+    JSON.stringify({ points: host.refine.points, cleared: host.game.cleared }));
+}
+/* ---- 9b. 新一场战斗开始时清掉上一场的错误上下文 ---- */
+{
+  const host = makeGameBattleSandbox();
+  /* 前置必须用「抛错的 battleTick」：这条路径在旧代码里也会走 endBattleAborted、真的留下上下文；
+     若用渲染块抛错，旧代码会先逃逸掉、上下文恒为 null，后面的复位断言就成了恒真。 */
+  let escaped = null;
+  try {
+    ghRunBattle(host, ghBattle(), function () { throw new Error('boom-9b'); });
+  } catch (e) { escaped = String(e && e.message); }
+  const afterAbort = (typeof host.sb.getLastBattleError === 'function') ? host.sb.getLastBattleError() : null;
+  assert('9b 前置条件：抛错路径确实留下了异常上下文（否则复位断言会恒真）',
+    escaped === null && !!afterAbort && /boom-9b/.test(afterAbort.message || ''),
+    JSON.stringify({ escaped: escaped, ctx: afterAbort && afterAbort.message }));
+  const b2 = ghRunBattle(host, ghBattle(), function (bb) {
+    bb.turn = 1; bb.enemy.hp = 0; bb.done = true; bb.winner = true;
+    return { turn: 1, events: [] };
+  });
+  const afterNormal = (typeof host.sb.getLastBattleError === 'function') ? host.sb.getLastBattleError() : 'MISSING';
+  assert('9b 正常战斗开始后 getLastBattleError() 复位为 null（注释承诺「正常战斗保持 null」）',
+    afterNormal === null, JSON.stringify(afterNormal));
+  assert('9b 复位不影响本场正常结算', b2.winner === true && host.refine.points > 0,
+    JSON.stringify({ winner: b2.winner, points: host.refine.points }));
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

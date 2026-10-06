@@ -1,0 +1,20 @@
+# 行尾策略（v2.5.2）
+#
+# 为什么需要这个文件：本仓库没有 .gitattributes，而开发机/CI 常见 `core.autocrlf=true`。
+# 于是**新检出**会把文本文件转成 CRLF，而 `page/media/**` 的像素图标是按**字节数**校验的
+# 二进制资产（`scripts/test-skill-icons.js` / `test-pet-icons.js` / `test-monster-icons.js`
+# 都断言「每个 SVG < 6KB」）。实测 `page/media/skills/clearfog.svg`：
+#   工作区（LF）6137 B ✅  →  新检出（CRLF）6240 B ❌ 越过 6144 B 硬护栏
+# 结果是同一份提交在「已有工作区」里全绿、在「新克隆/新 worktree」里 990/1 红
+# （该失败在 v2.5.0 的父提交上同样存在 ⇒ 仓库级缺陷，不属于某个版本）。
+#
+# 处理原则：媒体资产一律不做行尾转换（`-text` = 按二进制对待，检出与提交都保持原字节）。
+# 只列媒体扩展名，**不使用 `* text=auto`** —— 那会重规范化全部文本文件、产生大面积无意义 diff。
+
+*.svg  -text
+*.png  -text
+*.jpg  -text
+*.jpeg -text
+*.gif  -text
+*.webp -text
+*.ico  -text

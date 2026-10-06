@@ -855,7 +855,106 @@ function tankPair(aId, eId) {
     signature(qT) === signature(qS),
     'tick ' + qT.log.length + ' 条 / step ' + qS.log.length + ' 条');
   var heatEnd = entriesMatching(qT, /☀️ 酷暑/).length;
-  assert('11f 酷暑回合末条目数 = 实际回合数（每回合恰好一次）', heatEnd === qT.turn, heatEnd + ' vs turn ' + qT.turn);
+  /* v2.5.2 起「已在本回合分出胜负」的那一回合不再跑结束阶段，故条目数允许比总回合数少 1
+     （不重复应用仍由 11f 的逐字节日志相等与 12c 的「未分胜负 = 恰好 3 次」共同锁住）。 */
+  assert('11f 酷暑回合末每回合至多一次，且最多跳过「分出胜负的那一回合」',
+    heatEnd <= qT.turn && heatEnd >= qT.turn - 1, heatEnd + ' vs turn ' + qT.turn);
+}
+
+/* ============================================================
+   12. v2.5.2：胜负已定的残局不得再结算场地
+   ------------------------------------------------------------
+   判定阶段自己就有「胜负已分时不跑本阶段，避免在已定残局上继续掉血、改动结算面板血量」
+   的策略；结束阶段的场地结算此前**没有**这条守卫，于是产生两个自相矛盾的终局：
+     · 「0 血胜利」：胜者在结束阶段被场地扣到 0 血；
+     · 真实场地双 KO 落成 winner='enemy'（与「双 KO 判我方胜」的裁决不对称）。
+   本节的场地只提供 onTurnEnd，全部经真实 groupBattleTick 推进。
+   ============================================================ */
+console.log('\n[12] 胜负已定后不再结算场地（v2.5.2）');
+
+/* 探针：回合末把**所有存活单位**打到 0（定胜负后若仍结算，就会造出上面的两种终局） */
+function finishAllTerrain(msg) {
+  return {
+    id: 'finishAllProbe', name: '终结探针',
+    onTurnEnd: function (g) {
+      return {
+        events: [{ msg: msg || '☠️ 终结探针' }],
+        damage: g.units.filter(function (u) { return u.hp > 0; })
+          .map(function (u) { return { unitId: u.id, amount: u.hp }; })
+      };
+    }
+  };
+}
+
+/* ---- 12a. 行动阶段已分胜负 → 结束阶段不得再扣胜者的血 ---- */
+{
+  var winA = mk('我方12a', 'ally', { hp: 300, atk: 99999, def: 0, spd: 9 });
+  var winE = mk('敌方12a', 'enemy', { hp: 10, atk: 0, def: 0, spd: 1 });
+  var gb12a = sb.createGroupBattle({ allies: [winA], enemies: [winE], terrain: finishAllTerrain('☠️ 12a 终结探针') });
+  sb.groupBattleTick(gb12a);
+  assert('12a 行动阶段已判我方胜 → 胜者 HP 不被结束阶段扣到 0',
+    gb12a.done === true && gb12a.winner === 'ally' && winA.hp > 0,
+    JSON.stringify({ winner: gb12a.winner, allyHP: winA.hp, foeHP: winE.hp }));
+  assert('12a 定胜负后不再产生场地结算日志（也不产生「已应用但没记」的幽灵伤害）',
+    entriesMatching(gb12a, /12a 终结探针/).length === 0,
+    JSON.stringify(entriesMatching(gb12a, /终结探针/).map(function (l) { return l.turn + '/' + l.phase; })));
+}
+
+/* ---- 12b. 真实场地：定胜负后不得再造出「双 KO 判负」的自相矛盾终局 ---- */
+{
+  var loseA = mk('我方12b', 'ally', { hp: 5, atk: 0, def: 0, spd: 1 });
+  var loseE = mk('敌方12b', 'enemy', { hp: 100, atk: 99999, def: 0, spd: 9 });
+  var gb12b = sb.createGroupBattle({ allies: [loseA], enemies: [loseE], terrain: finishAllTerrain('☠️ 12b 终结探针') });
+  sb.groupBattleTick(gb12b);
+  assert('12b 我方在行动阶段阵亡 → 判负，且残存敌方的 HP 不被结束阶段扣掉',
+    gb12b.done === true && gb12b.winner === 'enemy' && loseA.hp === 0 && loseE.hp === 100,
+    JSON.stringify({ winner: gb12b.winner, allyHP: loseA.hp, foeHP: loseE.hp }));
+  assert('12b 因此不再出现「双方 0 血却判负」的矛盾终局',
+    !(loseA.hp === 0 && loseE.hp === 0),
+    JSON.stringify({ allyHP: loseA.hp, foeHP: loseE.hp }));
+}
+
+/* ---- 12c. 逐回合不重复：结束阶段只为「尚未分出胜负」的回合结算 ---- */
+{
+  var tankA = mk('我方12c', 'ally', { hp: 100000, atk: 1, def: 99999, spd: 9 });
+  var tankE = mk('敌方12c', 'enemy', { hp: 100000, atk: 1, def: 99999, spd: 1 });
+  var gb12c = sb.createGroupBattle({ allies: [tankA], enemies: [tankE], terrain: sb.getTerrain('heat') });
+  var endRounds = {};
+  for (var c = 0; c < 3; c++) {
+    sb.groupBattleTick(gb12c);
+    (gb12c.log || []).forEach(function (l) {
+      if (l.phase === '结束' && l.terrain === true) endRounds[l.turn] = 1;
+    });
+  }
+  var heatN = 0;
+  (gb12c.log || []).forEach(function (l) {
+    if (l.terrain === true) { (l.events || []).forEach(function (e) { if (/酷暑/.test(e.msg || '')) heatN++; }); }
+  });
+  assert('12c 未分胜负时每回合恰好结算一次场地（3 回合 = 3 次）', heatN === 3 && Object.keys(endRounds).length === 3,
+    JSON.stringify({ heatEntries: heatN, endRounds: Object.keys(endRounds) }));
+}
+
+/* ---- 12d. 场地回调抛错时，回合仍必须收尾（否则下一步会重跑判定+结束） ---- */
+{
+  var boomA = mk('我方12d', 'ally', { hp: 500, atk: 10, def: 0, spd: 9 });
+  var boomE = mk('敌方12d', 'enemy', { hp: 500, atk: 10, def: 0, spd: 1 });
+  var boomCalls = 0;
+  var boomTerrain = {
+    id: 'boomProbe', name: '抛错探针',
+    onTurnEnd: function () { boomCalls++; throw new Error('terrain boom 12d'); }
+  };
+  var gb12d = sb.createGroupBattle({ allies: [boomA], enemies: [boomE], terrain: boomTerrain });
+  var escaped = null;
+  try { sb.groupBattleTick(gb12d); } catch (e) { escaped = String(e && e.message); }
+  assert('12d 场地回调抛错会向上传播（不静默吞掉）', escaped === 'terrain boom 12d', String(escaped));
+  assert('12d 抛错后本回合仍被标记为已收尾（_roundOpen=false，无残留队列）',
+    gb12d._roundOpen === false && gb12d._stepQueue === null,
+    JSON.stringify({ roundOpen: gb12d._roundOpen, queue: gb12d._stepQueue }));
+  var escaped2 = null;
+  try { sb.groupBattleStep(gb12d); } catch (e2) { escaped2 = String(e2 && e2.message); }
+  assert('12d 下一步不会重跑判定+结束（场地回合末只被调用过 1 次）',
+    boomCalls === 1 && escaped2 === null,
+    JSON.stringify({ boomCalls: boomCalls, escaped: escaped2 }));
 }
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
