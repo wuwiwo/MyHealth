@@ -299,16 +299,21 @@ petOnlyCrit._petShared = { crit: { chance: 0.15, critMult: 1.6 } };   // 只有�
 const petBothCrit = mkUnit('petBothCrit', ['fighter_instinct'], { hp: 100, atk: 100, def: 0, spd: 5 });
 petBothCrit._petShared = { crit: { chance: 0.15, critMult: 1.6 } };
 const skPetOnly = castCharge(petOnlyCrit, always0);
-assert('技能暴击 → 宠物暴击档单独生效（200×1.6=320；改前技能路径不吃宠物档 → 200）',
-  skPetOnly.dmg === 320 && skPetOnly.crits === 1, 'dmg=' + skPetOnly.dmg + ' crits=' + skPetOnly.crits + ' | ' + skPetOnly.txt.slice(0, 160));
+/* v2.9.0（作者裁决 5）：**技能不触发暴击** —— 原先这里验证「技能路径与普攻同一套暴击判据」，
+   该口径已被裁决取消。组合暴击判据（天赋 × 宠物档 → 取较高、只结算一次）的覆盖**未丢失**：
+   仍在上面 groupCritMult 的单测（1.6 / 1.5 / 1.6 / 0）与普攻 E2E（101→161 且只一条暴击日志）里。 */
+assert('技能**不**暴击（裁决 5）→ 宠物暴击档对技能不生效（200，非 320）',
+  skPetOnly.dmg === 200 && skPetOnly.crits === 0, 'dmg=' + skPetOnly.dmg + ' crits=' + skPetOnly.crits + ' | ' + skPetOnly.txt.slice(0, 160));
 const skBoth = castCharge(petBothCrit, always0);
-assert('技能暴击 → 都触发取较高倍率 1.6、只结算一次（200×1.6=320，非 1.5×1.6）',
-  skBoth.dmg === 320 && skBoth.crits === 1, 'dmg=' + skBoth.dmg + ' crits=' + skBoth.crits + ' | ' + skBoth.txt.slice(0, 160));
-/* rng 序列：① 选目标 ② 命中判定 ③ 天赋暴击掷骰 ④ 宠物暴击档掷骰 */
+assert('技能**不**暴击（裁决 5）→ 天赋 + 宠物暴击档都不生效（200，非 320）',
+  skBoth.dmg === 200 && skBoth.crits === 0, 'dmg=' + skBoth.dmg + ' crits=' + skBoth.crits + ' | ' + skBoth.txt.slice(0, 160));
+/* 旧版靠 rng 序列取位验证「只有斗者本能触发 / 都不触发」；裁决 5 起技能链路**不掷暴击骰**，
+   故改用两个极端口径（必暴击档 / 都不暴档）交叉验证「结果与暴击无关」。 */
 const skTalentOnly = castCharge(petBothCrit, seqRng([0, 0, 0.10, 0.50]));
-assert('技能暴击 → 只有斗者本能触发 → 150%（200×1.5=300）', skTalentOnly.dmg === 300, 'dmg=' + skTalentOnly.dmg);
+assert('技能**不**暴击（裁决 5）→ 必暴击档位下仍为 200（非 300）',
+  skTalentOnly.dmg === 200 && skTalentOnly.crits === 0, 'dmg=' + skTalentOnly.dmg + ' crits=' + skTalentOnly.crits);
 const skNone = castCharge(petBothCrit, seqRng([0, 0, 0.50, 0.50]));
-assert('技能暴击 → 都不触发 → 不暴击（200）、无暴击日志', skNone.dmg === 200 && skNone.crits === 0,
+assert('技能**不**暴击（裁决 5）→ 无暴击日志', skNone.dmg === 200 && skNone.crits === 0,
   'dmg=' + skNone.dmg + ' crits=' + skNone.crits);
 
 sandbox.battleRnd = _origBattleRnd;

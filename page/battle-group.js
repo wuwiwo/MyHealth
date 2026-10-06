@@ -733,7 +733,7 @@ function normalAttack(gb, actor, target, dmgMult) {
   /* v2.3.0（WP-D §3.12-1）：暴击统一走 groupCritMult —— 天赋暴击（斗者本能 30%/150%）与
      玩家/宠物暴击档（玩家 30%/300%、宠物 15%/160%）**分别判定、都触发取最高、只结算一次**。
      此前是「playerCritHook 先乘一次 → talentCrit 再乘一次」= 可能双重暴击叠乘。 */
-  var critMult = groupCritMult(gb, actor);
+  var critMult = groupCritMult(gb, actor);   /* v2.9.0：**普攻通道的暴击保留**（裁决 5 只取消技能暴击） */
   if (critMult > 1) {
     dmg = Math.floor(dmg * critMult);
     events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + critMult });
@@ -755,7 +755,14 @@ function normalAttack(gb, actor, target, dmgMult) {
     dmg = sh.dmg;
     events.push({ msg: '🛡️ ' + target.name + ' 护盾吸收 ' + sh.absorbed + (sh.broke ? '（护盾破碎）' : '（剩余 ' + target._shield + '）'), targetId: target.id, type: 'status' });
   }
+  /* v2.9.0（作者裁决 1，原话「1-a」）：吸血的基数改为**目标实际掉的血**，
+     不再用「这一击理论打出的伤害」—— 即**不含 overkill**。
+     实测口径：目标剩 40 HP、一击理论 601 → 旧实现按 601 回血（嗜血 20% ≈ 60），
+     新实现按实际掉血 40 回血（≈ 8）。`actualDealt` 在**魂伤结算之前**取（裁决选 A 而非 C，
+     故魂伤分量不参与吸血，维持既有「只有物理分量吸血」的口径）。 */
+  var hpBefore = target.hp;
   target.hp = Math.max(0, target.hp - dmg);
+  var actualDealt = hpBefore - target.hp;   /* = min(dmg, hpBefore)，护盾吸收/伤害分担的部分不计入 */
   events.push({ msg: '⚔️ ' + (actor.name || '单位') + ' 攻击 ' + target.name + ' → ' + dmg + ' 伤害', targetId: target.id, type: 'damage' });
   /* v2.1.10 魂攻/魂防接入敌群战斗。
      此前 battle-group.js 对 soulAtk / soulDef 是零引用 —— 只有单敌 battle.js 用了，
@@ -789,12 +796,12 @@ function normalAttack(gb, actor, target, dmgMult) {
     events.push({ msg: '👻 ' + (actor.name || '单位') + ' 魂攻击 ' + target.name + ' → ' + sDmg + ' 魂伤害', targetId: target.id, type: 'damage' });
   }
   // 嗜血：造成伤害恢复
-  var bt = talentDispatch(actor, 'onAfterDamage', { dealt: dmg, target: target });
+  var bt = talentDispatch(actor, 'onAfterDamage', { dealt: actualDealt, target: target });   /* v2.9.0 裁决1 */
   bt.events.forEach(function (e) { events.push({ msg: e.msg }); });
   /* WP-C（§2.14）：**状态**侧的同名钩子 —— 「战意」提供的吸血（普攻通道）在这里结算。
      与上面的天赋「嗜血」**叠加**（裁决 §6.3：各自结算、相加，不取最高）。
      此前 onAfterDamage 只派发天赋，状态侧的吸血增益无处落地。 */
-  var sbt = dispatch(actor, 'onAfterDamage', { dealt: dmg, target: target });
+  var sbt = dispatch(actor, 'onAfterDamage', { dealt: actualDealt, target: target });   /* v2.9.0 裁决1 */
   sbt.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: actor.id, type: e.type }); });
   return events;
 }
@@ -933,11 +940,13 @@ function castSkill(gb, actor, skillId, opts) {
       dmgResult.hits.forEach(function (h) {
         var t = gb.units.find(function (u) { return u.id === h.targetId; });
         if (t && t.hp > 0) {
-          // 命中判定（v2.1.5）
-          if (!groupRollHit(gb, actor, t)) {
-            events.push({ msg: '💨 ' + (actor.name || '') + ' 的 ' + def.name + ' 落空（' + t.name + ' 闪避）', targetId: t.id });
-            return;
-          }
+          /* v2.9.0（作者裁决 5，原话「技能不触发暴击，不计算命中，除非该技能视为普攻」）：
+             **技能不做命中判定** —— 原先这里 `groupRollHit` 会掷骰、5% 落空（实测 200 次
+             技能施放有 8 次「落空」）。技能从此**必中**（不吃 5% 基础未命中，也不再受
+             打湿 +30% / 沙暴 -20% 等命中修正影响）。
+             ⚠️ 连带影响（已登记）：沙暴的「全场命中率 -20%」此后只影响普攻。
+             ⚠️ `asNormalAttack:true`（视为普攻，如无影拳）**不在本通道** —— 它在 skill.js
+             开头就改走 `normalAttack`，命中/暴击/闪避照旧（§2.13 互斥裁决）。 */
           // 天赋修正（利刃等）
           var td = talentDispatch(actor, 'onDamage', { isPlayerAttack: true, amount: h.amount, isPhysical: h.dmgType === 'physical', attacker: actor, target: t });
           var dmg = h.amount;
@@ -960,18 +969,14 @@ function castSkill(gb, actor, skillId, opts) {
                生产端 lazy.onDamage 只看「本单位是否受击 / 本回合是否放弃行动」，不区分伤害通道。 */
             if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
           });
-          /* v2.3.0（WP-D §3.12-1 收口）：技能暴击与普攻**同一套判据** —— 走 groupCritMult()
+          /* v2.9.0（作者裁决 5）：**技能不触发暴击** —— 原先这里走 groupCritMult()
              （天赋「斗者本能」30%/150% × 玩家/宠物暴击档 30%/300%、15%/160%），
-             两边各自掷骰、都触发取较高倍率、**只结算一次**。
-             此前技能路径直接走 talentCrit(actor)：宠物带技能出手时**宠物暴击档不生效**
-             （只出天赋的 ×1.5），与普攻路径分叉 —— 同一单位普攻/技能两套暴击口径。
-             ⚠️ 这一步与普攻路径一样会多掷一次 gb.rng()（见 groupCritMult 注释），
-                故技能链路的随机序列随之改变。 */
-          var critMult = groupCritMult(gb, actor);
-          if (critMult > 1) {
-            dmg = Math.floor(dmg * critMult);
-            events.push({ msg: '💥 ' + (actor.name || '') + ' 暴击！×' + critMult });
-          }
+             实测 200 次技能施放出现 **64 次暴击**。裁决落地后本通道不掷暴击骰
+             （也不再因此多掷一次 gb.rng()）。
+             ⚠️ 普攻通道（normalAttack）的暴击**不受影响**；`asNormalAttack:true`（视为普攻）
+             的技能走普攻通道，照旧可暴击（§2.13 互斥裁决）。
+             被移除的旧注释要点保留：技能暴击曾与普攻同一套判据（各自掷骰、取较高倍率、只结算一次），
+             这正是本裁决要取消的口径。 */
           // 圣光守护：队友分担
           dmg = applyAllyDamageShare(gb, t, dmg, events);
           // v2.1.15：护盾吸收

@@ -249,7 +249,11 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
       (recO && recO.msg) + ' || ' + (hitO && hitO.msg));
   }
 
-  /* ---- v2.3.0 作者裁决：**落空 / 闪避不吃反冲** ---- */
+  /* ---- v2.9.0 作者裁决 5：**技能不做命中判定**（原 v2.3.0「落空/闪避不吃反冲」）----
+     旧版用 rng=0.99 强制落空来验证「未命中不吃反冲」。裁决 5 起技能**必中** →
+     技能链路的落空分支不可达，该不变式对技能不再可测；改为断言新契约：
+     即使把 rng 压到旧的必落空档位，技能仍命中并结算反冲（反冲只在**造成伤害**时产生）。 */
+  {
   {
     const rcM = petUnit('p-th-miss', '雷霆犬', SR_BASE, ['pet', 'SR'], ['p_thundercharge'], 60);
     const eM = foe('e-th-miss');
@@ -263,9 +267,9 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     const evM = unitTurn(gbM, rcM);         // 释放 → 落空
     const missed = evM.some(e => /落空/.test(e.msg || ''));
     const recM = evM.filter(e => /反冲/.test(e.msg || ''));
-    assert('§2.7 落空 / 闪避**不吃**反冲（未命中 → 施法者不掉血、也不写反冲日志）',
-      missed && rcM.hp === hpM && recM.length === 0,
-      JSON.stringify({ missed: missed, hp: rcM.hp, rec: recM.map(e => e.msg) }));
+    assert('§2.7 v2.9.0 裁决 5：技能必中（rng=0.99 也不落空）且照常结算反冲',
+      !missed && recM.length > 0, JSON.stringify({ missed: missed, rec: recM.map(e => e.msg) }));
+  }
   }
 
   /* ---- v2.3.0 作者裁决：反冲**不过**自身防御/减伤（再补一条状态减伤通道）---- */
