@@ -774,6 +774,18 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
    中央区此时被压到 0（空间全让给日志）—— 特效已由 gbShowSkillCast / playAttackFeedback 主动跳过。 */
 .battle-overlay.gb-log-open .gb-arena{--gb-unit-w:56px;--gb-unit-ico:24px}
 .battle-overlay.gb-log-open .gb-arena-row{padding:3px 8px;gap:8px}
+/* v2.8.2（作者裁决的 D 修法）：**短屏（≤700px 高）+ 抽屉打开态**再降一档芯片尺寸。
+   抽屉维持 46vh（不动日志可读性），只把芯片压紧换来「一个都不裁」。
+   ⚠️ 位置必须在这几条抽屉规则**之后**：同特异性下后者生效，插到前面的 @media 里会被上面的
+      `--gb-unit-w:56px;--gb-unit-ico:24px` 覆盖（这个坑实测过一次 —— 量出的裁切值完全没变）。
+   触摸目标不缩水：`.gb-arena-unit` 的 `min-height:var(--touch-min)`(44px) 与 `min-width:52px` 都保留，
+   本块只改宽度档位、内边距与状态行高度。 */
+@media (max-height:700px){
+  .battle-overlay.gb-log-open .gb-arena{--gb-unit-w:52px;--gb-unit-ico:20px}
+  .battle-overlay.gb-log-open .gb-arena-unit{padding:1px 1px;gap:0}
+  .battle-overlay.gb-log-open .gb-arena-unit .gb-name{font-size:var(--fs-2xs)}
+  .battle-overlay.gb-log-open .gb-arena-st{min-height:8px}
+}
 .battle-overlay.gb-log-open .gb-arena-mid{flex-basis:auto}
 /* v2.8.0：抽屉打开时中央特效区**没有用途** —— playAttackFeedback 与 gbShowSkillCast 在
    `gb-log-open` 下都会提前返回（两者都锚在中央区；8vh 时特效会画在日志正文上，v2.4.2 实测）。

@@ -1284,6 +1284,28 @@ console.log('--- 19. v2.8.1 中央区布局（步内分道 + 施法/飘字分离
   eq(posOf8(layer8.children[0]).join(','), '200,580', '无特效时不做任何下移（保底位置不变）');
 }
 
+/* ============ 20. v2.8.2 短屏抽屉态芯片尺寸（作者裁决的 D 修法） ============
+   实测：360×640 + 5 我 3 敌 + 抽屉打开时，芯片底部超出 `.gb-arena` 的 overflow:hidden
+   （Lead 夹具 5.4px / 独立夹具 26px→11px）。修法 = **短屏 + 抽屉态再降一档芯片尺寸**，
+   抽屉维持 46vh（不动日志可读性）。
+   ⚠️ 本条最要紧的是**源码顺序**：抽屉芯片规则 `.gb-log-open .gb-arena{--gb-unit-w:56px;--gb-unit-ico:24px}`
+   与短屏覆盖块**特异性相同** → 谁在后面谁生效；第一版把 @media 插在它**前面**，实测裁切值一点没变
+   （这个坑写进断言，防回归）。 */
+console.log('--- 20. v2.8.2 短屏抽屉态芯片尺寸 ---');
+{
+  const shortIdx = css.indexOf('v2.8.2（作者裁决的 D 修法）');
+  ok(shortIdx > -1 && /@media \(max-height:700px\)\{[\s\S]{0,400}--gb-unit-ico:20px/.test(css),
+    '存在短屏（≤700px 高）抽屉态降档规则：--gb-unit-ico:20px');
+  const drawerChipIdx = css.indexOf('.battle-overlay.gb-log-open .gb-arena{--gb-unit-w:56px;--gb-unit-ico:24px}');
+  ok(drawerChipIdx > -1 && shortIdx > drawerChipIdx,
+    '降档块位于抽屉芯片规则**之后**（同特异性下后者生效；插到前面会被覆盖 —— 实测踩过）');
+  ok(/\.gb-arena-unit\{[^}]*min-height:var\(--touch-min\)/.test(css),
+    '触摸目标下限仍在（min-height:var(--touch-min) 未被降档块解除）');
+  const shortBlock = css.slice(shortIdx, css.indexOf('}', css.indexOf('@media (max-height:700px)', shortIdx)) + 1);
+  ok(!/min-height:\s*0|min-height:\s*var\(--touch-min\)/.test(shortBlock.replace(/--gb-unit[^;]*;/g, '')),
+    '降档块自己没有把触摸目标压到 0（只改宽度档位/内边距/状态行）');
+}
+
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }
 process.exit(fail === 0 ? 0 : 1);
