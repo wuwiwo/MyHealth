@@ -667,12 +667,30 @@ function selectTargets(gb, actor, skillDef, forcedTarget) {
 }
 
 /* 普通攻击（无技能时） */
+/* v2.10.0（作者裁决 3）：酷暑「每次普攻后，攻击者失去最大生命值×2%（无视防御/魂防）」。
+   触发面：**普攻**与**视为普攻的技能**（asNormalAttack 的每次命中都走 normalAttack → 多段天然多次）；
+   普通技能不走本函数 → 不触发。**落空也算一次攻击**（作者口径「每次攻击会触发 1 次」；它惩罚的是
+   「在酷暑里出手」，与命中无关）。时点：**晚于**本次普攻伤害（末尾调用；落空分支无伤害可算，故紧跟其后）。
+   对象：**攻击者自己**。数值无视防御与魂防 → 不做任何减免派发（与沙暴/雨天的分档减免刻意区分）。
+   攻击者已阵亡（例如被反冲/荆棘反杀）时不再扣 —— 尸体不再失血。 */
+function heatAfterAttack(gb, actor, events) {
+  if (!gb || !actor || !gb.terrain || gb.terrain.id !== 'heat') return;
+  if (actor.hp <= 0) return;
+  var heatDmg = Math.floor((actor.base && actor.base.hp ? actor.base.hp : 0) * 0.02);
+  if (heatDmg <= 0) return;
+  actor.hp = Math.max(0, actor.hp - heatDmg);
+  events.push({ msg: '☀️ ' + (actor.name || '单位') + ' 受酷暑影响 ' + heatDmg + '（最大生命 2%，无视防御）', targetId: actor.id });
+}
+
 function normalAttack(gb, actor, target, dmgMult) {
   var events = [];
   if (!target || target.hp <= 0) return events;
   // 命中判定（v2.1.5）
   if (!groupRollHit(gb, actor, target)) {
     events.push({ msg: '💨 ' + (actor.name || '单位') + ' 的攻击落空（' + target.name + ' 闪避）', targetId: target.id });
+    /* v2.10.0（作者裁决 3）：「每次攻击会触发 1 次」按**字面**执行 —— 落空也是一次攻击，
+       故酷暑在这里同样结算（它惩罚的是「在酷暑里出手」这件事，与是否命中无关）。 */
+    heatAfterAttack(gb, actor, events);
     return events;
   }
   // 普攻伤害（同原公式）
@@ -808,6 +826,9 @@ function normalAttack(gb, actor, target, dmgMult) {
      此前 onAfterDamage 只派发天赋，状态侧的吸血增益无处落地。 */
   var sbt = dispatch(actor, 'onAfterDamage', { dealt: actualDealt, target: target });   /* v2.9.0 裁决1 */
   sbt.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: actor.id, type: e.type }); });
+  /* v2.10.0（作者裁决 3）：酷暑「每次普攻后」的结算口 —— 见 heatAfterAttack() 的说明。
+     放在函数**末尾**，确保**晚于**本次普攻的物理/魂伤伤害（作者口径：先算普攻，再算酷暑）。 */
+  heatAfterAttack(gb, actor, events);
   return events;
 }
 

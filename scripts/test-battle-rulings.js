@@ -207,5 +207,138 @@ console.log('[3] 裁决 4：随机技能不可 AI 指定');
     empHits.every(x => x === 'mp1'), JSON.stringify(Array.from(new Set(empHits))));
 }
 
+
+/* ============ §4 裁决 2 + 3：场地规则（v2.10.0） ============ */
+console.log('[4] 裁决 2/3：场地分档减免 + 酷暑每次普攻');
+{
+  const U = (id, side, hp, def, soulDef) => sb.createUnit({ id: id, side: side, name: id, base: { hp: hp, atk: 200, def: def, soulDef: soulDef, soulAtk: 0, spd: 5 } });
+
+  /* 实现未落地时也要**干净地红**（不可解析的套件是本项目的硬失败） */
+  const tierOf = (gb, key, hi, lo, mid) => (typeof sb.terrainDefenceTiers === 'function' ? sb.terrainDefenceTiers(gb, key, hi, lo, mid) : undefined);
+
+  /* --- 4a 分档表：按有效防御排名 → 高/低/中间档 --- */
+  {
+    const A = U('t-hi', 'ally', 10000, 300, 0), B = U('t-mid', 'ally', 10000, 200, 0), C = U('t-lo', 'enemy', 10000, 100, 0);
+    const gb = sb.createGroupBattle({ allies: [A, B], enemies: [C], seed: 1 });
+    const tier = tierOf(gb, 'def', 0.50, 0.25, 0.35) || {};
+    assert('4a 分档：防御最高 50% / 其余 35% / 最低 25%',
+      tier['t-hi'] === 0.50 && tier['t-mid'] === 0.35 && tier['t-lo'] === 0.25, JSON.stringify(tier));
+    /* 并列 → 同档 */
+    const D = U('t-hi2', 'ally', 10000, 300, 0);
+    const gb2 = sb.createGroupBattle({ allies: [A, D], enemies: [C], seed: 1 });
+    const t2 = tierOf(gb2, 'def', 0.50, 0.25, 0.35) || {};
+    assert('4a 并列最高 → 两者同吃最高档', t2['t-hi'] === 0.50 && t2['t-hi2'] === 0.50, JSON.stringify(t2));
+    /* 全员同值 → 中间档 */
+    const E = U('t-eq1', 'ally', 10000, 150, 0), F = U('t-eq2', 'enemy', 10000, 150, 0);
+    const gb3 = sb.createGroupBattle({ allies: [E], enemies: [F], seed: 1 });
+    const t3 = tierOf(gb3, 'def', 0.50, 0.25, 0.35) || {};
+    assert('4a 全员同值（最高==最低）→ 一律中间档（不会同单位命中两档）',
+      t3['t-eq1'] === 0.35 && t3['t-eq2'] === 0.35, JSON.stringify(t3));
+    /* 场上仅 1 人 → 中间档 */
+    const G = U('t-solo', 'ally', 10000, 150, 0);
+    const gb4 = sb.createGroupBattle({ allies: [G], enemies: [], seed: 1 });
+    const t4 = tierOf(gb4, 'def', 0.50, 0.25, 0.35) || {};
+    assert('4a 场上仅 1 人 → 中间档', t4['t-solo'] === 0.35, JSON.stringify(t4));
+    /* 死人不参与排名 */
+    const H = U('t-dead', 'enemy', 10000, 9999, 0); H.hp = 0;
+    const gb5 = sb.createGroupBattle({ allies: [A], enemies: [C, H], seed: 1 });
+    const t5 = tierOf(gb5, 'def', 0.50, 0.25, 0.35) || {};
+    assert('4a 阵亡单位不参与排名（防御 9999 的尸体不会抢走最高档）', t5['t-hi'] === 0.50, JSON.stringify(t5));
+  }
+
+  /* --- 4b 沙暴：实际伤害 = round(floor(maxHP×5%) × (1−档位))；雨天看魂防 --- */
+  {
+    const A = U('s-hi', 'ally', 10000, 300, 0), B = U('s-mid', 'ally', 10000, 200, 0), C = U('s-lo', 'enemy', 10000, 100, 0);
+    const gb = sb.createGroupBattle({ allies: [A, B], enemies: [C], seed: 7 });
+    gb.terrain = sb.getTerrain('sandstorm');
+    const before = {}; gb.units.forEach(u => before[u.id] = u.hp);
+    sb.terrainTurnEnd(gb);
+    const tier = { 's-hi': 0.50, 's-mid': 0.35, 's-lo': 0.25 };
+    const wrong = [];
+    gb.units.forEach(u => {
+      const lost = before[u.id] - u.hp;
+      const exp = Math.round(Math.floor(10000 * 0.05) * (1 - tier[u.id]));
+      if (lost !== 0 && lost !== exp) wrong.push({ id: u.id, lost: lost, exp: exp });
+    });
+    const hitCount = gb.units.filter(u => before[u.id] - u.hp > 0).length;
+    assert('4b 沙暴：被砸中的单位各按**自己那一档**减免（500 → 250/325/375）', wrong.length === 0 && hitCount === 2, JSON.stringify({ wrong: wrong, hit: hitCount }));
+
+    /* 雨天：按魂防排名 → 60/45/35 */
+    const D = U('r-hi', 'ally', 10000, 0, 300), E2 = U('r-mid', 'ally', 10000, 0, 200), F2 = U('r-lo', 'enemy', 10000, 0, 100);
+    const gb2 = sb.createGroupBattle({ allies: [D, E2], enemies: [F2], seed: 7 });
+    gb2.terrain = sb.getTerrain('rain');
+    [D, E2, F2].forEach(u => sb.applyStatus(u, { id: 'wet', duration: 2 }));
+    const b2 = {}; gb2.units.forEach(u => b2[u.id] = u.hp);
+    sb.terrainTurnEnd(gb2);
+    const rtier = { 'r-hi': 0.60, 'r-mid': 0.45, 'r-lo': 0.35 };
+    const wrong2 = [];
+    gb2.units.forEach(u => {
+      const lost = b2[u.id] - u.hp;
+      const exp = Math.round(Math.floor(10000 * 0.07) * (1 - rtier[u.id]));
+      if (lost !== exp) wrong2.push({ id: u.id, lost: lost, exp: exp });
+    });
+    assert('4b 雨天：潮湿者被劈且按**魂防**档位减免（700 → 280/385/455）',
+      wrong2.length === 0, JSON.stringify(wrong2));
+    assert('4b 雨天：分档用的是魂防而不是防御（两者刻意取相反值 —— hi 防御 0 魂防 300）',
+      (b2['r-hi'] - D.hp) === Math.round(700 * 0.4), 'lost=' + (b2['r-hi'] - D.hp));
+  }
+
+  /* --- 4c 酷暑：普攻触发、技能不触发、落空也触发、多段多次、晚于普攻伤害 --- */
+  {
+    const hero = U('h-a', 'ally', 10000, 0, 0);
+    hero._accMod = 1;
+    const foe = U('h-e', 'enemy', 100000, 0, 0);
+    const gb = sb.createGroupBattle({ allies: [hero], enemies: [foe], seed: 3 });
+    gb.terrain = sb.getTerrain('heat');
+    const hp0 = hero.hp;
+    const evs = sb.normalAttack(gb, hero, foe);
+    assert('4c 普攻后攻击者失 maxHP×2%（10000 → 9800，无视防御）',
+      hp0 - hero.hp === 200 && /受酷暑影响/.test(msgs(evs)), JSON.stringify({ lost: hp0 - hero.hp }));
+
+    /* 普通技能（非 asNormalAttack）不触发 */
+    const hero2 = U('h-a2', 'ally', 10000, 0, 0);
+    const foe2 = U('h-e2', 'enemy', 100000, 0, 0);
+    const gb2 = sb.createGroupBattle({ allies: [hero2], enemies: [foe2], seed: 3 });
+    gb2.terrain = sb.getTerrain('heat');
+    const hp2 = hero2.hp;
+    const evs2 = sb.castSkill(gb2, hero2, 'charge');
+    assert('4c 普通技能**不**触发酷暑（技能不走普攻通道）',
+      hero2.hp === hp2 && !/受酷暑影响/.test(msgs(evs2)), 'lost=' + (hp2 - hero2.hp));
+
+    /* 落空也触发（作者口径「每次攻击触发 1 次」） */
+    const hero3 = U('h-a3', 'ally', 10000, 0, 0);
+    const foe3 = U('h-e3', 'enemy', 100000, 0, 0);
+    const gb3 = sb.createGroupBattle({ allies: [hero3], enemies: [foe3], seed: 3, rng: function () { return 0.999; } });   // 必落空
+    gb3.terrain = sb.getTerrain('heat');
+    const hp3 = hero3.hp;
+    const evs3 = sb.normalAttack(gb3, hero3, foe3);
+    assert('4c 落空也算一次攻击 → 酷暑照样结算（且确实落空了）',
+      /落空/.test(msgs(evs3)) && hp3 - hero3.hp === 200, JSON.stringify({ miss: /落空/.test(msgs(evs3)), lost: hp3 - hero3.hp }));
+
+    /* 多段（视为普攻）→ 每次命中各触发一次 */
+    const punch = U('h-p', 'ally', 10000, 0, 0);
+    punch._accMod = 1;
+    const foe4 = U('h-e4', 'enemy', 100000, 0, 0);
+    const gb4 = sb.createGroupBattle({ allies: [punch], enemies: [foe4], seed: 3 });
+    gb4.terrain = sb.getTerrain('heat');
+    const hp4 = punch.hp;
+    sb.castSkill(gb4, punch, 'p_shadowfist');   // 无影拳：4 段、asNormalAttack
+    assert('4c 多段普攻（无影拳 4 段）→ 酷暑触发 4 次（4×2% = 800）',
+      hp4 - punch.hp === 800, 'lost=' + (hp4 - punch.hp));
+
+    /* 时点：伤害事件在酷暑事件**之前** */
+    const hero5 = U('h-a5', 'ally', 10000, 0, 0);
+    hero5._accMod = 1;
+    const foe5 = U('h-e5', 'enemy', 100000, 0, 0);
+    const gb5 = sb.createGroupBattle({ allies: [hero5], enemies: [foe5], seed: 3 });
+    gb5.terrain = sb.getTerrain('heat');
+    const evs5 = sb.normalAttack(gb5, hero5, foe5);
+    const list = (evs5 || []).map(e => e.msg || '');
+    assert('4c 时点：先普攻伤害、后酷暑（作者口径明确要求顺序）',
+      list.findIndex(m => /伤害/.test(m)) >= 0 && list.findIndex(m => /受酷暑影响/.test(m)) > list.findIndex(m => /伤害/.test(m)),
+      JSON.stringify(list));
+  }
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

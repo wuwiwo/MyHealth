@@ -781,9 +781,15 @@ function tankPair(aId, eId) {
   var gbT3 = sb.createGroupBattle({ allies: [t3.ally], enemies: [t3.foe], seed: 5, terrain: sb.getTerrain('heat') });
   var gbT0c = sb.createGroupBattle({ allies: [c3.ally], enemies: [c3.foe], seed: 5 });
   sb.groupBattleTick(gbT3); sb.groupBattleTick(gbT0c);
-  assert('11d 真实场地「酷暑」经真实回合末对敌我双方各扣 4000（100000×4%）',
-    c3.ally.hp - t3.ally.hp === 4000 && c3.foe.hp - t3.foe.hp === 4000,
+  /* v2.10.0（作者裁决 3）：酷暑现在**同时**有「回合末 4%」与「每次普攻后 2%」两个分量 ——
+     本场双方各出一次普攻 → 100000×4% + 100000×2% = 6000（旧版只有 4000，本断言随裁决更新）。 */
+  assert('11d 真实场地「酷暑」：回合末 4%（4000）+ 每次普攻 2%（2000）= 与无场地对照各差 6000',
+    c3.ally.hp - t3.ally.hp === 6000 && c3.foe.hp - t3.foe.hp === 6000,
     JSON.stringify({ ally: c3.ally.hp - t3.ally.hp, foe: c3.foe.hp - t3.foe.hp }));
+  /* 逐条核对「每次普攻后」确实写进日志（不是靠别的路径凑出 6000） */
+  var heatKeys = 0;
+  gbT3.log.forEach(function (e) { (e.events || []).forEach(function (ev) { if (/受酷暑影响/.test(ev.msg || '')) heatKeys++; }); });
+  assert('11d 酷暑「每次普攻后」事件写在日志里（双方各 ≥1 条）', heatKeys >= 2, 'n=' + heatKeys);
 }
 
 /* ---- 11e. 胜负判定必须发生在场地结果应用之后 ---- */

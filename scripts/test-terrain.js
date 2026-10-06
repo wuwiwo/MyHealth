@@ -69,7 +69,11 @@ sandbox.applyStatus(a3, { id: 'wet', duration: 2 });
 const a3before = a3.hp;
 const rev = sandbox.terrainTurnEnd(gb3);
 assert('雨天潮湿被闪电', a3.hp < a3before, a3before + '→' + a3.hp);
-assert('闪电伤害 7%', a3before - a3.hp === 7, '扣' + (a3before - a3.hp));
+/* v2.10.0（作者裁决 2）：雨天闪电按**魂防御**分档减免 —— 本场只有 a3/e3 两名存活单位，
+   且两者都没有魂防（0 == 0 → 全员同值）→ 按登记规则取**中间档 45%**：
+   raw = floor(100×7%) = 7 → round(7×0.55) = 4。 */
+assert('闪电伤害 7% 原始 → 魂防分档（全员同值取中间档 45%）后为 4',
+  a3before - a3.hp === 4, '扣' + (a3before - a3.hp));
 
 // ---- 5. 毒气 ----
 const a4 = sandbox.createUnit({ id: 'a4', side: 'ally', base: { hp: 100, atk: 10, def: 5, spd: 3 } });
