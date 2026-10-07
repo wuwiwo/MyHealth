@@ -582,7 +582,13 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
    v2.4.2：这里只剩「芯片底座」——不再有卡片外壳（无边框、无卡片底、无内边距），
    外壳语汇已迁到 .gb-arena-unit（见下方「战场化布局」一节）。 */
 .gb-unit{position:relative;transition:transform var(--dur-2) var(--ease-out),box-shadow var(--dur-1) var(--ease-std)}
-.gb-unit.gb-hit{animation:gbHit .4s var(--ease-std)}
+/* v2.11.1（评审根因 4）：受击反馈从 **keyframes 动画** 改为 **状态高亮**。
+   原因：单位芯片每步 `innerHTML` 重建，动画类挂在新节点上会**从头再播**一遍 ——
+   高速档位（×8 ≈ 88ms/步）下表现为「不断重启 / 一直亮着」，闪烁失去语义。
+   改成 box-shadow + filter 的**状态**（配 transition）：重建后的新节点同样是「亮着」，
+   不重播时间轴；`@keyframes gbHit` 保留（兼容既有引用），只是不再挂在 .gb-hit 上。 */
+.gb-unit.gb-hit{box-shadow:0 0 0 2px var(--red),0 0 12px var(--red);filter:brightness(1.25);
+  transition:box-shadow var(--dur-1) var(--ease-std),filter var(--dur-1) var(--ease-std)}
 .gb-unit.gb-low .gb-hp-fill{animation:gbLowPulse 1.2s ease-in-out infinite}
 /* 阵亡用灰度 + 删除线，不用低透明度（opacity 会让文字低于对比度要求）；
    v2.4.2：阵亡**不再折叠成一行**，就是同一枚芯片加 .gb-dead —— 头像仍保留，

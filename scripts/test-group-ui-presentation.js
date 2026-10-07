@@ -638,8 +638,10 @@ console.log('--- 13. v2.4.2 中央特效区：施法特效 / 飘字错位 / data
   const pos = layer.children.map(posOf);
   /* 中央区 rect = (100,500,200,100)：施法特效占上部 0.28、飘字占下部 0.8（v2.4.2 收口，
      两者同区会互压）。默认飘字 Y = 500 + 100*0.8 = 580；槽位偏移见 GB_FX_SLOT_OFF */
-  eq(pos.join(' | '), '200,580 | 154,562 | 246,562 | 200,544',
-    '同一步 4 条飘字按槽位错位（不传 slot 的默认位与旧行为一致）');
+  /* v2.11.1（残留 A）：四槽横向 ±46→±78、slot3 纵向 -34→-70 —— 原契约下相邻槽必然重叠 288px²，
+     评审要求消除，故坐标契约随更新（本行即新契约）。 */
+eq(pos.join(' | '), '200,580 | 122,562 | 278,562 | 200,510',
+    '同一步 4 条飘字按槽位错位（v2.11.1 加宽版坐标：±78 / slot3 -70）');
   ok(pos.every(p => { const q = p.split(',').map(Number); return q[0] >= 100 && q[0] <= 300 && q[1] >= 500 && q[1] <= 600; }),
     '所有飘字都落在中央区 rect 内（不是跑到舞台/芯片上去）：' + pos.join(' | '));
   ok(fnBody(grSrc, 'gbFxFloat').indexOf('*0.8') > -1,
@@ -1260,7 +1262,7 @@ console.log('--- 19. v2.8.1 中央区布局（步内分道 + 施法/飘字分离
   layer8.children.length = 0;
   sb8.gbFxFloat(mid8, '-40', 'var(--red)', false, 0, 4);
   sb8.gbFxFloat(mid8, '-55', 'var(--red)', false, 1, 4);
-  eq(layer8.children.map(posOf8).join(' | '), '200,580 | 154,562', '≤4 条且无特效时保持 v2.4.2 坐标（未改默认路径）');
+  eq(layer8.children.map(posOf8).join(' | '), '200,580 | 122,562', '≤4 条且无特效时用 v2.11.1 加宽槽位（横向 ±78）');
 
   /* (c) E：有施法特效在场 → 整组落到特效下方（上浮 34px 后也不相交） */
   layer8.children.length = 0;
@@ -1278,7 +1280,8 @@ console.log('--- 19. v2.8.1 中央区布局（步内分道 + 施法/飘字分离
   /* ⚠️ 已知残留（本版**故意不动**）：≤4 条的默认 4 槽布局自身相邻槽仍有小面积重叠
      （独立夹具实测 288px²）—— 该布局是 v2.4.2 的逐像素契约（§13 守着）。
      本版的网格只在**本步 >4 条**时启用，故此处不宣称 4 槽自身零重叠。 */
-  ok(pairsOverlapping(withCast) > 0, '如实记录：4 槽默认布局自身仍有小面积重叠（本版只修 >4 条的步内分道）');
+  /* v2.11.1（残留 A）：槽位加宽后，**四槽默认布局自身也不再重叠**（旧版相邻槽 288px²）。 */
+  eq(pairsOverlapping(withCast), 0, '四槽默认布局自身不再重叠（v2.11.1 加宽槽位后）');
 
   /* (d) 反向：无特效时**不**下移（否则等于把飘字推出中央区） */
   layer8.children.length = 0;
@@ -1466,6 +1469,104 @@ console.log('--- 22. v2.11.0 演出吞吐 + 数字绑定目标 ---');
   ok(/function gbFxPolicy/.test(grSrc), '存在 gbFxPolicy（档位 → 演出窗口/聚合）');
   ok(/gbFxPolicy\(/.test(fnBody(grSrc, 'playAttackFeedback')), 'playAttackFeedback 走策略表');
   ok(/anchorX/.test(fnBody(grSrc, 'gbFxFloat')), 'gbFxFloat 接受显式横向锚点（目标芯片 x）');
+}
+function mid23() { return { appendChild() {}, getBoundingClientRect: () => ({ left: 0, top: 300, width: 390, height: 126 }) }; }
+
+/* ============ 23. v2.11.1：评审根因 3+4 与两处残留 ============
+   ① 根因 3：状态/护盾事件此前**完全不演出**（gbParseHit 对非 damage 返回 null）→ 补即时语义标记；
+   ② 根因 4：受击反馈是**重启关键帧动画**，每步重建都会从头播 → 改为**状态高亮**；
+   ③ 残留 A：四槽横向 ±46 < 盒宽 70 → 默认槽自重叠 288px² → 加宽到 ±78；
+   ④ 残留 B：找不到空位时**驱逐**冲突的旧飘字（新信息优先），保证 0 重叠。 */
+console.log('--- 23. v2.11.1 根因 3+4 与残留 ---');
+{
+  /* (a) 根因 4：受击高亮不再依赖关键帧动画（否则每个重建节点都从头播） */
+  const hitRule = (function () {
+    const i = css.indexOf('.gb-unit.gb-hit{');
+    return i < 0 ? '' : css.slice(i, css.indexOf('}', i) + 1);
+  })();
+  ok(hitRule.length > 0, '存在 .gb-unit.gb-hit 规则');
+  ok(!/animation\s*:/.test(hitRule) && /(box-shadow|outline|filter|background)/.test(hitRule),
+    '受击高亮是**状态**（box-shadow/outline/filter）而不是 keyframes 动画：' + hitRule.slice(0, 90));
+  ok(/@keyframes gbHit\{/.test(css), '@keyframes gbHit 仍保留（既有契约/兼容）');
+
+  /* (b) 根因 3：护盾/状态 → 即时语义标记；无法识别的状态**不**产生标记（防噪声） */
+  function mkSb23() {
+    const sb = makeSandbox();
+    const layer = {
+      children: [],
+      appendChild(el) { el.parentNode = this; this.children.push(el); return el; },
+      removeChild(el) { const i = this.children.indexOf(el); if (i >= 0) this.children.splice(i, 1); el.parentNode = null; return el; },
+      get innerHTML() { return ''; }, set innerHTML(v) { if (!v) this.children.length = 0; }
+    };
+    const chip = { getAttribute(k) { return k === 'data-uid' ? 'uB' : (k === 'data-name' ? '乙' : null); },
+      getBoundingClientRect() { return { left: 240, top: 80, width: 40, height: 40, right: 280, bottom: 120 }; },
+      classList: { _c: {}, add(c) { this._c[c] = 1; }, remove(c) { delete this._c[c]; }, contains(c) { return !!this._c[c]; } } };
+    const ov = { classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} },
+      querySelectorAll(sel) { return sel.indexOf('.gb-unit') >= 0 ? [chip] : []; },
+      querySelector(sel) { return /data-uid="uB"/.test(sel) ? chip : null; } };
+    const mid = { appendChild() {}, getBoundingClientRect: () => ({ left: 0, top: 300, width: 390, height: 126 }) };
+    const opts = { id: 'gbFx', setAttribute() {}, style: {}, get innerHTML() { return ''; }, set innerHTML(v) { if (!v) layer.children.length = 0; } };
+    sb.document.getElementById = id => {
+      if (id === 'gbFx') return Object.assign(opts, { appendChild: layer.appendChild.bind(layer), removeChild: layer.removeChild.bind(layer) });
+      if (id === 'battleOverlay') return ov;
+      if (id === 'gbArenaMid') return mid;
+      return null;
+    };
+    sb.document.body = { appendChild() {} };
+    sb.document.createElement = () => ({ style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, parentNode: null });
+    sb._groupSpeed = 1;
+    sb.gbFxClear();
+    return { sb, layer };
+  }
+  const gbMk = evs => ({ units: [{ id: 'uB', name: '乙', side: 'enemy' }], log: [{ turn: 1, unit: '甲', events: evs }] });
+  {
+    const { sb, layer } = mkSb23();
+    sb.playAttackFeedback(gbMk([{ msg: '🛡️ 乙 护盾吸收 120', type: 'status', targetId: 'uB' }]), null);
+    const txt = layer.children.map(e => e.textContent).join('|');
+    eq(layer.children.length, 1, '护盾吸收产生 1 条即时标记（旧版 0 条）：' + JSON.stringify(txt));
+    ok(/🛡️/.test(txt) && /120/.test(txt), '标记内容含护盾与吸收量：' + JSON.stringify(txt));
+    const first23 = layer.children[0];
+    const x = first23 ? parseFloat((/left:(-?[0-9.]+)px/.exec(first23.style.cssText || '') || [])[1]) : NaN;
+    ok(!!first23 && Math.abs(x - 260) <= 24, '标记锚到目标芯片 x（260）：' + x);
+  }
+  {
+    const { sb, layer } = mkSb23();
+    sb.playAttackFeedback(gbMk([{ msg: '乙 的某个不可识别的状态变化', type: 'status', targetId: 'uB' }]), null);
+    eq(layer.children.length, 0, '无法识别的状态**不**产生标记（不猜、不造噪声）');
+  }
+
+  /* (c) 残留 A：四槽不再自重叠（±78 > 盒宽 70） */
+  const OFF = sb.GB_FX_SLOT_OFF;
+  ok(Array.isArray(OFF) && OFF.length >= 4, 'GB_FX_SLOT_OFF 存在（4 槽）');
+  const boxes = OFF.slice(0, 4).map(([dx, dy]) => ({ l: 200 + dx - 35, r: 200 + dx + 35, t: 580 + dy - 34, b: 580 + dy + 30 }));
+  let pairs = 0;
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const A = boxes[i], B = boxes[j];
+    if (Math.min(A.r, B.r) - Math.max(A.l, B.l) > 0 && Math.min(A.b, B.b) - Math.max(A.t, B.t) > 0) pairs++;
+  }
+  eq(pairs, 0, '四槽默认布局两两不叠（旧版相邻槽 288px²）：' + JSON.stringify(OFF));
+
+  /* (d) 残留 B：无空位时驱逐冲突的旧飘字，保证 0 重叠 */
+  {
+    const { sb, layer } = mkSb23();
+    sb._groupSpeed = 1;
+    sb._gbFxStep = 50;
+    sb.gbFxFloat(mid23(), '-old', 'var(--red)', false, 0, 1);
+    const oldEl = layer.children[0];
+    ok(!!oldEl, '（前置）第一条旧飘字确实挂上了常驻层（否则本段测试无意义）');
+    const oldPos = oldEl ? ((/left:(-?\d+)px;top:(-?\d+)px/.exec(oldEl.style.cssText || '') || [null])[0]) : null;
+    /* 用「无处可去」的极端占位：把登记表塞满 8 行 × 5 列 */
+    const fill = [];
+    for (let c = 0; c < 5; c++) for (let r = 0; r < 9; r++) {
+      const el = { style: { cssText: 'left:' + (195 + (c - 2) * 92) + 'px;top:' + (401 + r * 34) + 'px', left: String(195 + (c - 2) * 92) + 'px', top: String(401 + r * 34) + 'px' }, parentNode: layer, textContent: 'x' };
+      fill.push(el); layer.children.push(el);
+      sb._gbFxLive.push({ el: el, step: 60, until: Date.now() + 5000, w: 70, h: 30 });
+    }
+    sb._gbFxStep = 70;
+    sb.gbFxFloat(mid23(), '-new', 'var(--red)', false, 0, 1);
+    const removed = fill.filter(e => !e.parentNode).length;
+    ok(removed > 0, '无空位时驱逐了冲突的旧飘字（保证零重叠）：removed=' + removed + ' | old=' + oldPos);
+  }
 }
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }

@@ -711,7 +711,23 @@ function _gbFxFindFreeSpot(x0, y0, step, now, w, h) {
       if (!_gbFxCollides({ l: x - w / 2, r: x + w / 2, t: y - 34, b: y + h }, step, now)) return { x: x, y: y };
     }
   }
-  return { x: Math.round(x0), y: Math.round(y0) };
+  return null;   /* v2.11.1：找不到空位 → 交给调用方**驱逐**冲突的旧飘字（新信息优先，保证零重叠） */
+}
+/* 驱逐与该盒相交的**前序步骤**存活飘字（清 DOM + 登记表） */
+function gbFxEvictColliding(box, step, now) {
+  var out = 0;
+  for (var i = _gbFxLive.length - 1; i >= 0; i--) {
+    var e = _gbFxLive[i];
+    if (!e || e.until <= now || e.step === step) continue;
+    var b = (e.el && e.el.parentNode) ? _gbFxBoxOf(e) : null;
+    if (!b) continue;
+    if (Math.min(box.r, b.r) - Math.max(box.l, b.l) > 0 && Math.min(box.b, b.b) - Math.max(box.t, b.t) > 0) {
+      if (e.el.parentNode && e.el.parentNode.removeChild) e.el.parentNode.removeChild(e.el);
+      _gbFxLive.splice(i, 1);
+      out++;
+    }
+  }
+  return out;
 }
 
 function gbFxClear(){
@@ -869,7 +885,9 @@ function gbCardForEvent(ov, gb, e){
    ⚠️ 不传 slot（或传 0）时行为与加槽位之前**逐像素一致**（测试只查签名，不受影响）。
    ⚠️ 错位只能用 left/top 表达：transform 已被 floatUpC 的每一帧占用（见 index.css 的说明），
       用 transform 错位会被关键帧覆盖掉。 */
-var GB_FX_SLOT_OFF=[[0,0],[-46,-18],[46,-18],[0,-36]]   /* 中 / 左上 / 右上 / 正上 —— 对称铺开 */
+/* v2.11.1（残留 A）：横向从 ±46 加宽到 **±78** —— 飘字盒宽 70px，±46 时相邻槽横向只差 46px、
+   必然重叠（独立夹具实测相邻槽 288px²）。±78 > 70 后四槽两两不叠（纵向偏移保留，防同列叠字）。 */
+var GB_FX_SLOT_OFF=[[0,0],[-78,-18],[78,-18],[0,-70]]   /* 中 / 左上 / 右上 / 正上 —— 加宽版（含上浮 34 的占用带要求同列 |Δy| ≥ 64） */
 /* ============================================================
    v2.11.0（评审根因 1+2，见 doc/review-battle-fx-2026-10-07.md）
    ------------------------------------------------------------
@@ -880,6 +898,41 @@ var GB_FX_SLOT_OFF=[[0,0],[-46,-18],[46,-18],[0,-36]]   /* 中 / 左上 / 右上
      · ×2：开始**聚合同目标**同类事件（同一步多次打同一目标 → 一条数字，数值为和）；
      · ×4/×8：生命期收到约 1~2 个步进，受击闪烁也随之收窄到约 1 个窗口。
    ⚠️ 聚合只影响**表现**：引擎的日志/伤害/胜负一字不改（presentation-only，已由固定种子逐字节比对守住）。 */
+/* v2.11.1（评审根因 3）：状态 / 护盾类事件**即时语义标记**。
+   背景：`gbParseHit` 只认 damage/heal/terrain/dot，对 `type:'status'` 直接返回 null →
+   护盾吸收、护盾破碎、破甲、中毒、冰冻、潮湿、睡眠、嘲讽、净化、末日、幽魂附身等**全都没有即时反馈**，
+   玩家只能去战报里找（评审实测确认）。
+   ⚠️ 用**显式小表**匹配已知文案，**匹配不到就什么都不出**（不猜、不造噪声）。
+   标记同样走 gbFxFloat → 一起参与目标锚定、跨步占位与档位生命期。 */
+var GB_FX_MARKS=[
+  [/护盾吸收 (\d+)/, function(m){ return '🛡️' + m[1] }],
+  [/护盾破碎/, function(){ return '🛡️💥' }],
+  [/破甲/, function(){ return '💠' }],
+  [/中毒|☠️/, function(){ return '☠️' }],
+  [/冰冻|❄️/, function(){ return '❄️' }],
+  [/潮湿|变潮湿/, function(){ return '💧' }],
+  [/睡眠|哈欠|😴/, function(){ return '😴' }],
+  [/嘲讽/, function(){ return '😡' }],
+  [/净化|清除迷雾/, function(){ return '✨' }],
+  [/末日|🌑/, function(){ return '🌑' }],
+  [/幽魂附身|👻/, function(){ return '👻' }],
+  [/威吓|😱/, function(){ return '😱' }],
+  [/变小/, function(){ return '🔻' }],
+  [/蓄力/, function(){ return '⏳' }]
+];
+/* 事件 → 标记文本（匹配不到返回 null；已被 gbParseHit 处理的伤害/治疗不再重复出标记） */
+function gbMarkerFor(e, parsed){
+  if (!e || parsed) return null;
+  var msg = e.msg || '';
+  if (!msg) return null;
+  if (e.type && e.type !== 'status' && e.type !== 'talent' && e.type !== 'terrain') return null;
+  for (var i = 0; i < GB_FX_MARKS.length; i++) {
+    var m = GB_FX_MARKS[i][0].exec(msg);
+    if (m) return GB_FX_MARKS[i][1](m);
+  }
+  return null;
+}
+
 function gbFxPolicy(speed) {
   var sp = speed || _groupSpeed || 1;
   var step = (typeof battleStepDelay === 'function') ? battleStepDelay(700, sp) : Math.round(700 / sp);
@@ -918,7 +971,7 @@ function gbFxFloat(card, text, color, big, slot, inStep, anchorX, lifeMs){
   }else{
     x=anchored?baseX:(baseX+off[0])
     y=r.top+r.height*0.8+off[1]
-    minY=-36   /* slot3 的纵向偏移（GB_FX_SLOT_OFF 里最靠上的一档） */
+    minY=-70   /* slot3 的纵向偏移（GB_FX_SLOT_OFF 里最靠上的一档） */
   }
   /* 施法特效在场：把**整组**下移（按组内最靠上的那一档算），而不是逐条 max —
      逐条 max 会让同 x 的 slot0/slot3 collapse 到同一 y 上再叠一次。上浮 34px + 6px 余量 = 40。 */
@@ -944,6 +997,12 @@ function gbFxFloat(card, text, color, big, slot, inStep, anchorX, lifeMs){
      按静态尺寸占位会留下约 108px² 的瞬时残余（独立夹具实测到的那一档）。故统一放大 15%。 */
   var _bw=(big?96:70)*1.15, _bh=(big?40:30)*1.15;
   var _spot=_gbFxFindFreeSpot(x,y,_gbFxStep,_fxNow,_bw,_bh);
+  if (!_spot) {
+    /* v2.11.1（残留 B）：没有任何空位 → **驱逐**与它相交的旧飘字（新信息优先），再落在基准位。
+       这样「两批数字重叠」在构造上不可能发生（独立夹具此前残余 108px²，三次假设均被否证）。 */
+    gbFxEvictColliding({ l: x - _bw / 2, r: x + _bw / 2, t: y - 34, b: y + _bh }, _gbFxStep, _fxNow);
+    _spot = { x: x, y: y };
+  }
   x=_spot.x; y=_spot.y;
   el.style.cssText='left:'+Math.round(x)+'px;top:'+Math.round(y)+'px'
     +';color:'+color+';font-size:'+(big?'var(--fs-3xl)':'var(--fs-2xl)')
@@ -1005,6 +1064,13 @@ function playAttackFeedback(gb, step) {
   } else {
     hits.forEach(function(rec){ render.push({ e: rec.e, hit: rec.hit, count: 1 }) })
   }
+  /* v2.11.1（根因 3）：状态/护盾类事件补**即时语义标记**（匹配不到就不出） */
+  var marks = []
+  evs.forEach(function(e, i){
+    var parsed = gbParseHit(e, i > 0 ? evs[i-1] : null)
+    var mk = gbMarkerFor(e, parsed)
+    if (mk) marks.push({ e: e, text: mk })
+  })
   render.forEach(function(rec){
     var e = rec.e, hit = rec.hit
     var card = gbCardForEvent(ov, gb, e)
@@ -1023,7 +1089,19 @@ function playAttackFeedback(gb, step) {
     if (card && typeof card.getBoundingClientRect === 'function') {
       try { var cr = card.getBoundingClientRect(); if (cr && cr.width) anchorX = cr.left + cr.width / 2 } catch (er) { anchorX = null /* 忽略：取不到芯片 rect 就退回中央区锚点 */ }
     }
-    gbFxFloat(mid, text, color, hit.crit, slot, render.length, anchorX, pol.lifeMs)
+    gbFxFloat(mid, text, color, hit.crit, slot, render.length + marks.length, anchorX, pol.lifeMs)
+    slot++
+    _gbFxSlotSeq = slot
+  })
+  /* 标记：中性色 + 锚到目标芯片（参与同一套占位/生命期） */
+  marks.forEach(function(rec){
+    var e = rec.e
+    var card2 = gbCardForEvent(ov, gb, e)
+    var ax2 = null
+    if (card2 && typeof card2.getBoundingClientRect === 'function') {
+      try { var cr2 = card2.getBoundingClientRect(); if (cr2 && cr2.width) ax2 = cr2.left + cr2.width / 2 } catch (er2) { ax2 = null /* 忽略：取不到芯片 rect 就退回中央区锚点 */ }
+    }
+    gbFxFloat(mid, rec.text, 'var(--text)', false, slot, render.length + marks.length, ax2, pol.lifeMs)
     slot++
     _gbFxSlotSeq = slot
   })
