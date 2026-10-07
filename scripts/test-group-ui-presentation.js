@@ -1375,6 +1375,98 @@ console.log('--- 21. v2.10.1 跨步飘字占位 ---');
   ok(/_gbFxLive/.test(fxBody) && /gbFxFindFreeSpot|gbFxCollides|_gbFxLive/.test(grSrc),
     'gbFxFloat 参与跨步占位登记（源码级）');
 }
+/* ============ 22. v2.11.0 演出吞吐 + 数字绑定目标（评审根因 1+2） ============
+   评审（doc/review-battle-fx-2026-10-07.md）定位：群战飘字/施法固定 900ms，而步进随速度压缩
+   → 同时在场批次 = 900/步进 = ×1 1.29 / ×2 2.57 / ×4 5.14 / ×8 约 9~10 批；且数字统一锚中央线，
+   与「谁挨打」只剩芯片闪烁联系。本节的期望值都是**评审给出的可测口径**。 */
+console.log('--- 22. v2.11.0 演出吞吐 + 数字绑定目标 ---');
+{
+  /* (a) 演出策略表：生命周期随档位收缩、聚合从 ×2 起 */
+  const pol = s2 => (typeof sb.gbFxPolicy === 'function' ? sb.gbFxPolicy(s2) : undefined);
+  const p1 = pol(1), p2 = pol(2), p4 = pol(4), p8 = pol(8);
+  ok(p1 && p2 && p4 && p8, 'gbFxPolicy 存在并给出四档策略（源码级）');
+  ok(p1 && p1.lifeMs >= 800 && p1.aggregate === false,
+    '×1：逐事件、生命期仍接近 900ms（不牺牲慢速观感）：' + JSON.stringify(p1));
+  ok(p2 && p2.aggregate === true && p2.lifeMs < p1.lifeMs,
+    '×2：开始聚合同目标、生命期收缩：' + JSON.stringify(p2));
+  ok(p4 && p4.lifeMs <= 400 && p8 && p8.lifeMs <= 260,
+    '×4/×8：生命期收到约 1 个演出窗口（不再 900ms 堆 5~10 批）：' + JSON.stringify({ x4: p4, x8: p8 }));
+  ok(p8 && p8.lifeMs < p8.stepMs * 3,
+    '×8：生命期 < 3 个步进（评审口径「不超过约 1~2 批」）：' + JSON.stringify(p8));
+
+  /* (b) 集成：同一步 3 次打同一目标 → 聚合为 1 条、数值为和 */
+  const D2 = (uid, name, side) => ({ uid: uid, name: name, side: side });
+  function mkOv22(chips) {
+    return {
+      classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} },
+      querySelectorAll(sel) {
+        if (sel.indexOf('.gb-unit') >= 0) return chips;
+        return [];
+      },
+      querySelector(sel) { const m = /data-uid="([^"]+)"/.exec(sel); return m ? (chips.find(c => c.getAttribute('data-uid') === m[1]) || null) : null; }
+    };
+  }
+  function mkChip22(uid, x) {
+    return {
+      _uid: uid, _x: x,
+      getAttribute(k) { return k === 'data-uid' ? uid : (k === 'data-name' ? uid : null); },
+      getAttributeNames() { return ['data-uid', 'data-name']; },
+      getBoundingClientRect() { return { left: x - 20, top: 80, width: 40, height: 40, bottom: 120, right: x + 20 }; },
+      classList: { _c: {}, add(c) { this._c[c] = 1; }, remove(c) { delete this._c[c]; }, contains(c) { return !!this._c[c]; } }
+    };
+  }
+  const chipA = mkChip22('uA', 120), chipB = mkChip22('uB', 260);
+  const sb22 = makeSandbox();
+  const layer22 = {
+    children: [],
+    appendChild(el) { el.parentNode = this; this.children.push(el); return el; },
+    removeChild(el) { const i = this.children.indexOf(el); if (i >= 0) this.children.splice(i, 1); el.parentNode = null; return el; },
+    get innerHTML() { return ''; }, set innerHTML(v) { if (!v) this.children.length = 0; }
+  };
+  const mid22 = { childCount: 0, appendChild() { this.childCount++; },
+    getBoundingClientRect: () => ({ left: 0, top: 300, width: 390, height: 126 }) };
+  const opts22 = { id: 'gbFx', setAttribute() {}, style: {}, get innerHTML() { return ''; }, set innerHTML(v) { if (!v) layer22.children.length = 0; } };
+  const ov22 = mkOv22([chipA, chipB]);
+  sb22.document.getElementById = id => {
+    if (id === 'gbFx') return Object.assign(opts22, { appendChild: layer22.appendChild.bind(layer22), removeChild: layer22.removeChild.bind(layer22) });
+    if (id === 'battleOverlay') return ov22;
+    if (id === 'gbArenaMid') return mid22;   /* 飘字锚点：缺它 playAttackFeedback 会提前 return（飘字 0 条） */
+    return null;
+  };
+  sb22.document.body = { appendChild() {} };
+  sb22.document.createElement = () => ({ style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, parentNode: null });
+  sb22._groupSpeed = 4;
+  sb22.gbFxClear();
+  const gb22 = { units: [D2('uA', '甲', 'ally'), D2('uB', '乙', 'enemy')], log: [{ turn: 1, unit: '甲', events: [
+    { msg: '⚔️ 甲 攻击 乙 → 100 伤害', type: 'damage', targetId: 'uB' },
+    { msg: '⚔️ 甲 攻击 乙 → 150 伤害', type: 'damage', targetId: 'uB' },
+    { msg: '⚔️ 甲 攻击 乙 → 50 伤害', type: 'damage', targetId: 'uB' }
+  ] }] };
+  sb22.playAttackFeedback(gb22, null);
+  const texts22 = layer22.children.map(e => e.textContent);
+  eq(layer22.children.length, 1, '×4 同目标 3 次伤害聚合成 1 条飘字（旧版 3 条）：' + JSON.stringify(texts22));
+  ok(/^-300$/.test(texts22[0] || ''), '聚合数值 = 三者和（100+150+50=300）：' + JSON.stringify(texts22));
+
+  /* (c) 集成：不同目标 → 飘字横向锚到各自芯片的 x（不再全堆中央线） */
+  layer22.children.length = 0;
+  sb22.gbFxClear();
+  sb22._groupSpeed = 1;   /* ×1 不聚合，便于逐条核对位置 */
+  const gb23 = { units: [D2('uA', '甲', 'ally'), D2('uB', '乙', 'enemy')], log: [{ turn: 1, unit: '甲', events: [
+    { msg: '⚔️ 甲 攻击 乙 → 100 伤害', type: 'damage', targetId: 'uA' },
+    { msg: '⚔️ 甲 攻击 乙 → 100 伤害', type: 'damage', targetId: 'uB' }
+  ] }] };
+  sb22.playAttackFeedback(gb23, null);
+  const xs23 = layer22.children.map(e => parseFloat((/left:(-?[0-9.]+)px/.exec(e.style.cssText || '') || [])[1]));
+  eq(layer22.children.length, 2, '×1 两个目标各出 1 条：' + JSON.stringify(xs23));
+  ok(Math.abs(xs23[0] - 120) <= 24 && Math.abs(xs23[1] - 260) <= 24,
+    '飘字横向锚到目标芯片 x（120 / 260，±24 容差）：' + JSON.stringify(xs23));
+  ok(Math.abs(xs23[0] - xs23[1]) > 60, '两条飘字横向明显分开（旧版都落在中央线 195）：' + JSON.stringify(xs23));
+
+  /* (d) 源码守卫：策略表 + 锚点参数确实接上 */
+  ok(/function gbFxPolicy/.test(grSrc), '存在 gbFxPolicy（档位 → 演出窗口/聚合）');
+  ok(/gbFxPolicy\(/.test(fnBody(grSrc, 'playAttackFeedback')), 'playAttackFeedback 走策略表');
+  ok(/anchorX/.test(fnBody(grSrc, 'gbFxFloat')), 'gbFxFloat 接受显式横向锚点（目标芯片 x）');
+}
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }
 process.exit(fail === 0 ? 0 : 1);

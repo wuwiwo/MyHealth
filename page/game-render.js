@@ -870,7 +870,26 @@ function gbCardForEvent(ov, gb, e){
    ⚠️ 错位只能用 left/top 表达：transform 已被 floatUpC 的每一帧占用（见 index.css 的说明），
       用 transform 错位会被关键帧覆盖掉。 */
 var GB_FX_SLOT_OFF=[[0,0],[-46,-18],[46,-18],[0,-36]]   /* 中 / 左上 / 右上 / 正上 —— 对称铺开 */
-function gbFxFloat(card, text, color, big, slot, inStep){
+/* ============================================================
+   v2.11.0（评审根因 1+2，见 doc/review-battle-fx-2026-10-07.md）
+   ------------------------------------------------------------
+   根因 1：演出生命周期固定（飘字/施法 900ms），而速度档位只压缩**事件间隔** →
+   同时在场批次 = 900 / 步进 = ×1 1.29 / ×2 2.57 / ×4 5.14 / ×8 约 9~10 批（实测口径）。
+   修法：把演出生命周期与**演出窗口**显式绑定，并按档位聚合——
+     · ×1：逐事件、生命期仍接近 900ms（不牺牲慢速观感）；
+     · ×2：开始**聚合同目标**同类事件（同一步多次打同一目标 → 一条数字，数值为和）；
+     · ×4/×8：生命期收到约 1~2 个步进，受击闪烁也随之收窄到约 1 个窗口。
+   ⚠️ 聚合只影响**表现**：引擎的日志/伤害/胜负一字不改（presentation-only，已由固定种子逐字节比对守住）。 */
+function gbFxPolicy(speed) {
+  var sp = speed || _groupSpeed || 1;
+  var step = (typeof battleStepDelay === 'function') ? battleStepDelay(700, sp) : Math.round(700 / sp);
+  if (sp <= 1) return { speed: 1, stepMs: step, lifeMs: 900, aggregate: false, flashMs: 900, castText: true };
+  if (sp <= 2) return { speed: 2, stepMs: step, lifeMs: 700, aggregate: true, flashMs: 600, castText: true };
+  if (sp <= 4) return { speed: 4, stepMs: step, lifeMs: 340, aggregate: true, flashMs: 260, castText: false };
+  return { speed: 8, stepMs: step, lifeMs: 210, aggregate: true, flashMs: 160, castText: false };
+}
+
+function gbFxFloat(card, text, color, big, slot, inStep, anchorX, lifeMs){
   var layer=gbFxLayer()
   if(!layer||!card||typeof card.getBoundingClientRect!=='function')return
   var r
@@ -886,14 +905,18 @@ function gbFxFloat(card, text, color, big, slot, inStep){
        · **有施法特效在场**（`_gbCastEl`）→ 整组下移到特效下方：原实现两者同在中央区
          （特效占 0.28、飘字占 0.80）而飘字动画还要上浮 34px，实测相交最大 1737px²。 */
   var off=GB_FX_SLOT_OFF[i%4]
+  /* v2.11.0（根因 2）：有**显式横向锚点**（目标芯片中心 x）时用它当基线，且**不再叠加横向槽位偏移** ——
+     横向位置从此是「谁挨打」的语义信息，不能再被槽位错位打乱（只保留纵向错位防同目标叠字）。 */
+  var anchored=(typeof anchorX==='number'&&!isNaN(anchorX));
+  var baseX=anchored?anchorX:(r.left+r.width/2);
   var x, y, minY
   if(n>4){
     var col=i%4, row=Math.floor(i/4)
-    x=r.left+r.width/2+(col-1.5)*92
+    x=baseX+(col-1.5)*92
     y=r.top+r.height*0.8+row*34
     minY=0
   }else{
-    x=r.left+r.width/2+off[0]
+    x=anchored?baseX:(baseX+off[0])
     y=r.top+r.height*0.8+off[1]
     minY=-36   /* slot3 的纵向偏移（GB_FX_SLOT_OFF 里最靠上的一档） */
   }
@@ -924,9 +947,11 @@ function gbFxFloat(card, text, color, big, slot, inStep){
   x=_spot.x; y=_spot.y;
   el.style.cssText='left:'+Math.round(x)+'px;top:'+Math.round(y)+'px'
     +';color:'+color+';font-size:'+(big?'var(--fs-3xl)':'var(--fs-2xl)')
+  var life=(typeof lifeMs==='number'&&lifeMs>0)?lifeMs:GB_FX_LIFE;   /* v2.11.0：演出窗口驱动的生命期 */
+  if (el.style) el.style.animationDuration = life + 'ms';            /* 动画与生命期同步，避免被截断 */
   layer.appendChild(el)
-  _gbFxLive.push({ el: el, step: _gbFxStep, until: _fxNow + GB_FX_LIFE, w: _bw, h: _bh })
-  setTimeout(function(){ if(el&&el.parentNode&&el.parentNode.removeChild)el.parentNode.removeChild(el) },GB_FX_LIFE)
+  _gbFxLive.push({ el: el, step: _gbFxStep, until: _fxNow + life, w: _bw, h: _bh })
+  setTimeout(function(){ if(el&&el.parentNode&&el.parentNode.removeChild)el.parentNode.removeChild(el) },life)
 }
 
 /* 攻击反馈动画：解析本次行动的日志，受击目标闪烁 + 伤害/治疗飘字（全部挂 #gbFx）
@@ -960,10 +985,27 @@ function playAttackFeedback(gb, step) {
     if (h) hits.push({ e: e, hit: h })
   })
   _gbFxStep++;   /* v2.10.1（裁决 6）：本步的飘字共享同一 token，故同一步内不参与跨步占位 */
+  /* v2.11.0（根因 1）：演出窗口策略 —— 生命期/聚合/闪烁都随速度档位收缩 */
+  var pol = gbFxPolicy(_groupSpeed)
+  var flashMs = Math.min(gbHitFlashMs(), pol.flashMs)
   var slot = _gbFxSlotSeq
-  var flashMs = gbHitFlashMs()
   var nowMs = (typeof Date!=='undefined'&&Date.now)?Date.now():0
-  hits.forEach(function(rec){
+  /* v2.11.0（根因 1）：×2 起把**同一步内同一目标**的同类事件聚合成一条（数值为和）——
+     这样一步打同一目标 3 次只出 1 个数字，而不是 3 条挤在同一位置。 */
+  var render = []
+  if (pol.aggregate) {
+    var byKey = {}
+    hits.forEach(function(rec){
+      var k = (rec.hit.kind || 'damage') + '|' + (rec.e && rec.e.targetId ? rec.e.targetId : '')
+      if (!byKey[k]) { byKey[k] = { e: rec.e, hit: { kind: rec.hit.kind, amount: 0, crit: false }, count: 0 }; render.push(byKey[k]); }
+      byKey[k].hit.amount += rec.hit.amount
+      if (rec.hit.crit) byKey[k].hit.crit = true
+      byKey[k].count++
+    })
+  } else {
+    hits.forEach(function(rec){ render.push({ e: rec.e, hit: rec.hit, count: 1 }) })
+  }
+  render.forEach(function(rec){
     var e = rec.e, hit = rec.hit
     var card = gbCardForEvent(ov, gb, e)
     if (card) {
@@ -976,7 +1018,12 @@ function playAttackFeedback(gb, step) {
     var color = (hit.kind === 'heal') ? 'var(--green)' : gbHitColor(gb, e, hit.amount)
     var text = (hit.kind === 'heal' ? '+' : '-') + hit.amount
     if (hit.crit) text = '💥' + text
-    gbFxFloat(mid, text, color, hit.crit, slot, hits.length)
+    /* v2.11.0（根因 2）：横向锚到**目标芯片**中心（取不到就退回中央区中心） */
+    var anchorX = null
+    if (card && typeof card.getBoundingClientRect === 'function') {
+      try { var cr = card.getBoundingClientRect(); if (cr && cr.width) anchorX = cr.left + cr.width / 2 } catch (er) { anchorX = null /* 忽略：取不到芯片 rect 就退回中央区锚点 */ }
+    }
+    gbFxFloat(mid, text, color, hit.crit, slot, render.length, anchorX, pol.lifeMs)
     slot++
     _gbFxSlotSeq = slot
   })
