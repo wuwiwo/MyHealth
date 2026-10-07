@@ -649,6 +649,71 @@ function gbFxLayer(){
    v2.4.2：施法特效也挂在 #gbFx 上，只清 innerHTML 会漏掉对它的引用（见 gbCastClear）。
    v2.8.0：一并复位「飘字槽位序号」与「受击闪烁记忆」—— 两者都是**跨步**状态，不清会把上一场的
    槽位/闪烁带到下一场（表现为新战斗开局就带着旧闪光、飘字从第 N 槽开始）。 */
+/* ============================================================
+   v2.10.1（作者裁决 6「做」）：**跨步飘字占位登记**
+   ------------------------------------------------------------
+   v2.8.1 的槽位只保证「下一步不会立刻重用同一槽」，但整组下移/换槽仍可能落进**上一批仍在
+   900ms 生存期内**的飘字带 —— 独立浏览器夹具实测最差 live 重叠 **1136px²**。
+   做法：维护「仍在场的飘字」登记表 `_gbFxLive`（元素 + 步骤号 + 到期时间）；新飘字放置时与
+   **前序步骤**的存活飘字求交，冲突就换位（先原列向下换行，再左右换列）。
+   ⚠️ **同一步内不参与占位** —— 同一步的排布由 §13 的逐像素契约与 §19 的网格负责，
+      跨步占位若也管同一步，会把「4 条槽位错位」的既有坐标改掉（那是明确的契约，不能动）。
+   ⚠️ 占位用的是**整段动画轨迹**（上浮 34px + 盒高 30px），不是只比静态点 —— 数字在上浮过程中
+      穿过别人的位置也算重叠（独立夹具量的就是 live 相交）。 */
+var _gbFxLive = [];   /* [{el, step, until}] —— 仍在场（GB_FX_LIFE 内）的飘字 */
+var _gbFxStep = 0;    /* 当前步骤号：只有**前序**步骤的飘字参与占位 */
+function _gbFxPruneLive(now) {
+  for (var i = _gbFxLive.length - 1; i >= 0; i--) {
+    var e = _gbFxLive[i];
+    if (!e || !e.el || e.until <= now || !e.el.parentNode) _gbFxLive.splice(i, 1);
+  }
+}
+function _gbFxBoxOf(entry) {
+  var el = (entry && entry.el) ? entry.el : entry;
+  if (!el || !el.style) return null;
+  var l = parseFloat(el.style.left), t = parseFloat(el.style.top);
+  /* 真实 DOM 由 cssText 解析出 style.left/top；测试桩只写 cssText，故补一条兜底解析
+     （纯读取，不改变任何行为 —— 也让这条逻辑在无 DOM 的桩里可验证）。 */
+  if (isNaN(l) || isNaN(t)) {
+    var m = /left:(-?[0-9.]+)px;top:(-?[0-9.]+)px/.exec((el.style && el.style.cssText) || '');
+    if (m) { l = parseFloat(m[1]); t = parseFloat(m[2]); }
+  }
+  if (isNaN(l) || isNaN(t)) return null;
+  /* 占用带 = [top − 上浮 34, top + 盒高]。盒尺寸**按条目存**（暴击飘字更大），
+     默认 70×30 来自独立夹具实测；第一条量到 108px² 的残余重叠正是低估暴击盒高所致。 */
+  var w = (entry && entry.w) ? entry.w : 70;
+  var h = (entry && entry.h) ? entry.h : 30;
+  return { l: l - w / 2, r: l + w / 2, t: t - 34, b: t + h };
+}
+function _gbFxCollides(box, step, now) {
+  for (var i = 0; i < _gbFxLive.length; i++) {
+    var e = _gbFxLive[i];
+    if (!e || e.until <= now) continue;
+    if (e.step === step) continue;          /* 同一步内不互斥（见上方说明） */
+    var b = (e.el && e.el.parentNode) ? _gbFxBoxOf(e) : null;
+    if (!b) continue;
+    if (Math.min(box.r, b.r) - Math.max(box.l, b.l) > 0 && Math.min(box.b, b.b) - Math.max(box.t, b.t) > 0) return true;
+  }
+  return false;
+}
+/* 找落点：原列向下换行（行距 34）→ 左右换列（列距 92）→ 兜底回原位 */
+function _gbFxFindFreeSpot(x0, y0, step, now, w, h) {
+  w = w || 70; h = h || 30;
+  var xs = [x0, x0 + 92, x0 - 92, x0 + 184, x0 - 184];
+  var maxY = (typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight - 40 : 1e9;
+  var maxX = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth - 36 : null;
+  for (var xi = 0; xi < xs.length; xi++) {
+    var x = Math.round(xs[xi]);
+    if (maxX !== null) x = Math.max(36, Math.min(maxX, x));
+    for (var r = 0; r < 8; r++) {
+      var y = Math.round(y0 + r * 34);
+      if (y > maxY) break;
+      if (!_gbFxCollides({ l: x - w / 2, r: x + w / 2, t: y - 34, b: y + h }, step, now)) return { x: x, y: y };
+    }
+  }
+  return { x: Math.round(x0), y: Math.round(y0) };
+}
+
 function gbFxClear(){
   var el=(typeof document!=='undefined')?document.getElementById('gbFx'):null
   gbCastClear()
@@ -656,6 +721,8 @@ function gbFxClear(){
   _gbFxSlotSeq=0
   _gbHitUntil={}
   _gbHpSeen={}
+  _gbFxLive=[]
+  _gbFxStep=0
 }
 
 /* ============================================================
@@ -847,9 +914,18 @@ function gbFxFloat(card, text, color, big, slot, inStep){
   /* v2.4.2：飘字与施法特效同在中央区，会互压（--gb-mid-h 只有 15vh）→ 上下分层：
      施法特效占中央区**上 28%**、飘字占**下 80%**（都按中央区自身 rect 取比例，日志展开
      压成 8vh 时按比例一起缩，不会跑到区外）。留白硬约束见 gbShowSkillCast。 */
+  /* v2.10.1（裁决 6）：与**前序步骤**仍在场的飘字求交，冲突就换位（同一步内不动） */
+  var _fxNow=(typeof Date!=='undefined'&&Date.now)?Date.now():0;
+  _gbFxPruneLive(_fxNow);
+  /* 盒尺寸按**动画最大时刻**取：floatUpC 的 25% 帧有 scale(1.12)，live 盒比静态大 12% ——
+     按静态尺寸占位会留下约 108px² 的瞬时残余（独立夹具实测到的那一档）。故统一放大 15%。 */
+  var _bw=(big?96:70)*1.15, _bh=(big?40:30)*1.15;
+  var _spot=_gbFxFindFreeSpot(x,y,_gbFxStep,_fxNow,_bw,_bh);
+  x=_spot.x; y=_spot.y;
   el.style.cssText='left:'+Math.round(x)+'px;top:'+Math.round(y)+'px'
     +';color:'+color+';font-size:'+(big?'var(--fs-3xl)':'var(--fs-2xl)')
   layer.appendChild(el)
+  _gbFxLive.push({ el: el, step: _gbFxStep, until: _fxNow + GB_FX_LIFE, w: _bw, h: _bh })
   setTimeout(function(){ if(el&&el.parentNode&&el.parentNode.removeChild)el.parentNode.removeChild(el) },GB_FX_LIFE)
 }
 
@@ -883,6 +959,7 @@ function playAttackFeedback(gb, step) {
     var h = gbParseHit(e, i > 0 ? evs[i-1] : null)
     if (h) hits.push({ e: e, hit: h })
   })
+  _gbFxStep++;   /* v2.10.1（裁决 6）：本步的飘字共享同一 token，故同一步内不参与跨步占位 */
   var slot = _gbFxSlotSeq
   var flashMs = gbHitFlashMs()
   var nowMs = (typeof Date!=='undefined'&&Date.now)?Date.now():0
@@ -1014,6 +1091,24 @@ function gbFxSinkFloats(castEl, layer){
   for(var j=0;j<fl.length;j++){
     var v=parseFloat(fl[j].style.top)
     if(!isNaN(v))fl[j].style.top=(v+d)+'px'
+  }
+  /* v2.10.1（裁决 6）补充：整组下移**也要**过一遍跨步占位 —— 下移只按施法特效算，
+     若正好压到上一批仍在场的飘字上，就逐条再找落点（下移后的位置优先，找不到才换列）。 */
+  if (typeof _gbFxFindFreeSpot === 'function' && typeof _gbFxLive !== 'undefined') {
+    var n2 = (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0;
+    _gbFxPruneLive(n2);
+    for (var j2 = 0; j2 < fl.length; j2++) {
+      var e2 = fl[j2];
+      var t2 = parseFloat(e2.style.top), l2 = parseFloat(e2.style.left);
+      if (isNaN(t2) || isNaN(l2)) continue;
+      var entry = null;
+      for (var q = 0; q < _gbFxLive.length; q++) { if (_gbFxLive[q].el === e2) { entry = _gbFxLive[q]; break; } }
+      var bw2 = entry ? entry.w : 70, bh2 = entry ? entry.h : 30;
+      if (!_gbFxCollides({ l: l2 - bw2 / 2, r: l2 + bw2 / 2, t: t2 - 34, b: t2 + bh2 }, entry ? entry.step : _gbFxStep, n2)) continue;
+      var spot2 = _gbFxFindFreeSpot(l2, t2, entry ? entry.step : _gbFxStep, n2, bw2, bh2);
+      e2.style.left = spot2.x + 'px';
+      e2.style.top = spot2.y + 'px';
+    }
   }
 }
 

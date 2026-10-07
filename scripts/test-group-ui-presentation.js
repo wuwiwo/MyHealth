@@ -649,7 +649,10 @@ console.log('--- 13. v2.4.2 中央特效区：施法特效 / 飘字错位 / data
   eq(midEl.childCount, 0, '飘字不是 #gbArenaMid 的子节点（overlay 每步 innerHTML 重建会冲掉）');
 
   /* --- (b2) playAttackFeedback：受击仍闪芯片，数字锚中央区 --- */
-  layer.children.length = 0; hitLog.length = 0;
+  /* v2.10.1：清场要走**生产路径** gbFxClear()（它同时复位跨步占位登记表）——
+     桩里直接 layer.children.length=0 不会把子节点的 parentNode 置空，登记表会以为它们还活着。 */
+  if (typeof sb2.gbFxClear === 'function') sb2.gbFxClear(); else layer.children.length = 0;
+  hitLog.length = 0;
   const gbTerrain = { units: [], log: [{ turn: 2, unit: '🪨 场地',
     events: [{ msg: '🪨 精英·狂战 受碎石伤害 40', type: 'terrain' }] }] };
   sb2.playAttackFeedback(gbTerrain, null);
@@ -1306,6 +1309,72 @@ console.log('--- 20. v2.8.2 短屏抽屉态芯片尺寸 ---');
     '降档块自己没有把触摸目标压到 0（只改宽度档位/内边距/状态行）');
 }
 
+/* ============ 21. v2.10.1 跨步飘字占位（作者裁决 6） ============
+   背景：v2.8.1 的槽位只保证「下一步不会立刻重用同一槽」，但整组下移/换槽仍可能落进
+   **上一批仍在 900ms 生存期内**的飘字带 —— 独立浏览器夹具实测最差 live 重叠 **1136px²**。
+   修法：维护「仍在场的飘字」登记表，新飘字与**前序步骤**的存活飘字求交并自动换位；
+   **同一步内不改**（那部分由 §13 的逐像素契约与 §19 的网格负责）。 */
+console.log('--- 21. v2.10.1 跨步飘字占位 ---');
+{
+  const sb9 = makeSandbox();
+  const layer9 = {
+    children: [],
+    appendChild(el) { el.parentNode = this; this.children.push(el); return el; },
+    removeChild(el) { const i = this.children.indexOf(el); if (i >= 0) this.children.splice(i, 1); el.parentNode = null; return el; },
+    get innerHTML() { return ''; },
+    set innerHTML(v) { if (!v) layer9.children.length = 0; }
+  };
+  const mid9 = { childCount: 0, appendChild() { this.childCount++; },
+    getBoundingClientRect: () => ({ left: 100, top: 500, width: 200, height: 100 }) };
+  const opts9 = { id: 'gbFx', setAttribute() {}, style: {}, get innerHTML() { return ''; }, set innerHTML(v) { if (!v) layer9.children.length = 0; } };
+  sb9.document.getElementById = id => (id === 'gbFx' ? Object.assign(opts9, { appendChild: layer9.appendChild.bind(layer9), removeChild: layer9.removeChild.bind(layer9) }) : null);
+  sb9.document.body = { appendChild() {} };
+  sb9.document.createElement = () => ({ style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, parentNode: null });
+  const pos9 = el => ((/left:(-?\d+)px;top:(-?\d+)px/.exec(el.style.cssText) || [, '?', '?']).slice(1).map(Number));
+  const W = 70, H = 30, RISE = 34;   /* 与独立夹具实测口径一致：盒 70×30、动画上浮 34 */
+  const box9 = ([x, y]) => ({ l: x - W / 2, r: x + W / 2, t: y - RISE, b: y + H });
+  const hit9 = (a, b) => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 0 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 0;
+
+  /* (a) 跨步同标称位置 → 第二条必须被挪开 */
+  layer9.children.length = 0;
+  if (sb9._gbFxLive) sb9._gbFxLive.length = 0;
+  sb9._gbFxStep = 1;
+  sb9.gbFxFloat(mid9, '-100', 'var(--red)', false, 0, 1);
+  sb9._gbFxStep = 2;
+  sb9.gbFxFloat(mid9, '-200', 'var(--red)', false, 0, 1);
+  const p9 = layer9.children.map(pos9);
+  eq(p9.length, 2, '两条飘字都挂上常驻层');
+  ok(p9[0] && p9[1] && !hit9(box9(p9[0]), box9(p9[1])),
+    '跨步同标称位置 → 第二条自动换位（两盒不相交）：' + JSON.stringify(p9));
+
+  /* (b) 同步内两条同标称位置 → 保持 v2.4.2 行为（同一步内不参与占位） */
+  layer9.children.length = 0;
+  if (sb9._gbFxLive) sb9._gbFxLive.length = 0;
+  sb9._gbFxStep = 7;
+  sb9.gbFxFloat(mid9, '-1', 'var(--red)', false, 0, 1);
+  sb9.gbFxFloat(mid9, '-2', 'var(--red)', false, 0, 1);
+  const same9 = layer9.children.map(pos9);
+  eq(same9[0] && same9[1] && same9[0].join(',') === same9[1].join(','), true,
+    '同一步内不受跨步占位影响（保持既有契约）：' + JSON.stringify(same9));
+
+  /* (c) 生存期过后登记失效 → 同一位置可再用 */
+  layer9.children.length = 0;
+  if (sb9._gbFxLive) sb9._gbFxLive.length = 0;
+  sb9._gbFxStep = 11;
+  sb9.gbFxFloat(mid9, '-a', 'var(--red)', false, 0, 1);
+  const first9 = pos9(layer9.children[0]);
+  /* 把登记表里的到期时间推到过去（模拟 900ms 已过） */
+  if (sb9._gbFxLive) sb9._gbFxLive.forEach(e => { e.until = 0; });
+  sb9.gbFxFloat(mid9, '-b', 'var(--red)', false, 0, 1);
+  const second9 = pos9(layer9.children[1]);
+  eq(second9.join(','), first9.join(','),
+    '生存期已过 → 登记失效，同一位置可再用：' + JSON.stringify({ first: first9, second: second9 }));
+
+  /* (d) 源码守卫：登记表 + 求交换位确实接在 gbFxFloat 里 */
+  const fxBody = fnBody(grSrc, 'gbFxFloat');
+  ok(/_gbFxLive/.test(fxBody) && /gbFxFindFreeSpot|gbFxCollides|_gbFxLive/.test(grSrc),
+    'gbFxFloat 参与跨步占位登记（源码级）');
+}
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }
 process.exit(fail === 0 ? 0 : 1);
