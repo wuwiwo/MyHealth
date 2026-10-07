@@ -711,23 +711,7 @@ function _gbFxFindFreeSpot(x0, y0, step, now, w, h) {
       if (!_gbFxCollides({ l: x - w / 2, r: x + w / 2, t: y - 34, b: y + h }, step, now)) return { x: x, y: y };
     }
   }
-  return null;   /* v2.11.1：找不到空位 → 交给调用方**驱逐**冲突的旧飘字（新信息优先，保证零重叠） */
-}
-/* 驱逐与该盒相交的**前序步骤**存活飘字（清 DOM + 登记表） */
-function gbFxEvictColliding(box, step, now) {
-  var out = 0;
-  for (var i = _gbFxLive.length - 1; i >= 0; i--) {
-    var e = _gbFxLive[i];
-    if (!e || e.until <= now || e.step === step) continue;
-    var b = (e.el && e.el.parentNode) ? _gbFxBoxOf(e) : null;
-    if (!b) continue;
-    if (Math.min(box.r, b.r) - Math.max(box.l, b.l) > 0 && Math.min(box.b, b.b) - Math.max(box.t, b.t) > 0) {
-      if (e.el.parentNode && e.el.parentNode.removeChild) e.el.parentNode.removeChild(e.el);
-      _gbFxLive.splice(i, 1);
-      out++;
-    }
-  }
-  return out;
+  return { x: Math.round(x0), y: Math.round(y0) };   /* v2.11.2 回退：找不到空位就落回基准位（不驱逐） */
 }
 
 function gbFxClear(){
@@ -997,12 +981,10 @@ function gbFxFloat(card, text, color, big, slot, inStep, anchorX, lifeMs){
      按静态尺寸占位会留下约 108px² 的瞬时残余（独立夹具实测到的那一档）。故统一放大 15%。 */
   var _bw=(big?96:70)*1.15, _bh=(big?40:30)*1.15;
   var _spot=_gbFxFindFreeSpot(x,y,_gbFxStep,_fxNow,_bw,_bh);
-  if (!_spot) {
-    /* v2.11.1（残留 B）：没有任何空位 → **驱逐**与它相交的旧飘字（新信息优先），再落在基准位。
-       这样「两批数字重叠」在构造上不可能发生（独立夹具此前残余 108px²，三次假设均被否证）。 */
-    gbFxEvictColliding({ l: x - _bw / 2, r: x + _bw / 2, t: y - 34, b: y + _bh }, _gbFxStep, _fxNow);
-    _spot = { x: x, y: y };
-  }
+  /* v2.11.2：**回退 v2.11.1 的「空位兜底驱逐」** —— 它在真实浏览器里让跨步 live 重叠
+     从 108px² 涨到 660px²（四种尝试里唯一让指标变差的）。这里恢复「找不到空位就落回基准位」，
+     宁可重叠也不误删仍在阅读的旧数字。 */
+  if (!_spot) _spot = { x: x, y: y };
   x=_spot.x; y=_spot.y;
   el.style.cssText='left:'+Math.round(x)+'px;top:'+Math.round(y)+'px'
     +';color:'+color+';font-size:'+(big?'var(--fs-3xl)':'var(--fs-2xl)')

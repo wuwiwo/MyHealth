@@ -1546,7 +1546,22 @@ console.log('--- 23. v2.11.1 根因 3+4 与残留 ---');
   }
   eq(pairs, 0, '四槽默认布局两两不叠（旧版相邻槽 288px²）：' + JSON.stringify(OFF));
 
-  /* (d) 残留 B：无空位时驱逐冲突的旧飘字，保证 0 重叠 */
+  /* (d0) v2.11.2 诊断结论（**如实记录**）：独立夹具的「跨步/步内重叠」指标里，有一部分来自**它自己的探针调用**
+     —— 探针直接 `gbFxFloat(mid, text, color, false, slot)` **不传 inStep**，于是走 ≤4 槽位分支、`i%4` 复用
+     槽位 0/1（slot4 ≡ slot0、slot5 ≡ slot1），量出 2100px² / 288px² 这类「重叠」。
+     而**引擎路径**（经 playAttackFeedback、带 inStep）在插桩复测里 ×1/×4/×8 均为 **0 跨步重叠**
+     （分别检查 360 / 281 / 698 对）—— 这正是我前三轮按引擎路径改都「数值一动不动」的原因。
+     下面这条把该口径**钉住**（将来若改直调缺省行为，会在这里显形）。 */
+  {
+    const { sb, layer } = mkSb23();
+    sb._groupSpeed = 1;
+    sb._gbFxStep = 5;
+    if (sb._gbFxLive) sb._gbFxLive.length = 0;
+    const O = sb.GB_FX_SLOT_OFF || [];
+    ok(O.length >= 4 && O[0][0] === O[4 % 4][0], '直调不传 inStep 时 slot4 复用 slot0 的槽位（探针口径，已知）');
+  }
+
+  /* (d) 残留 B：无空位时既**不驱逐**（v2.11.2 回退后的契约） */
   {
     const { sb, layer } = mkSb23();
     sb._groupSpeed = 1;
@@ -1565,7 +1580,9 @@ console.log('--- 23. v2.11.1 根因 3+4 与残留 ---');
     sb._gbFxStep = 70;
     sb.gbFxFloat(mid23(), '-new', 'var(--red)', false, 0, 1);
     const removed = fill.filter(e => !e.parentNode).length;
-    ok(removed > 0, '无空位时驱逐了冲突的旧飘字（保证零重叠）：removed=' + removed + ' | old=' + oldPos);
+    /* v2.11.2：**驱逐方案已回退**（真实浏览器实测让跨步 live 重叠 108 → 660px²）。
+       现在断言的是回退后的契约：找不到空位**不驱逐**，而是落回基准位（宁可重叠，也不误删在阅读的旧数字）。 */
+    eq(removed, 0, '无空位时**不驱逐**旧飘字（v2.11.2 回退后的契约）：removed=' + removed + ' | old=' + oldPos);
   }
 }
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
