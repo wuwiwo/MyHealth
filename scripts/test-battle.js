@@ -429,5 +429,48 @@ let abortedBattle = null;
     JSON.stringify({ winner: b2.winner, points: host.refine.points }));
 }
 
+console.log('\n[9] 单敌演出 parity（v2.11.3：评审根因 1 单敌侧）');
+{
+  /* (a) 档位策略表：寿命随档位收缩、×2 起聚合 */
+  const host = makeGameBattleSandbox();
+  const pol = s2 => (typeof host.sb.battleFxPolicy === 'function' ? host.sb.battleFxPolicy(s2) : undefined);
+  const q1 = pol(1), q2 = pol(2), q4 = pol(4), q8 = pol(8);
+  assert('9a battleFxPolicy 给出四档策略（源码级）', !!(q1 && q2 && q4 && q8), JSON.stringify({ q1: q1, q8: q8 }));
+  assert('9a ×1：不聚合、寿命 600ms（与既有 .bc-impact .6s 对齐）', !!q1 && q1.aggregate === false && q1.lifeMs === 600, JSON.stringify(q1));
+  assert('9a ×2 起聚合、寿命随档位收缩（×4 ≤ 260 / ×8 ≤ 170）',
+    !!q2 && q2.aggregate === true && q2.lifeMs < q1.lifeMs && q4.lifeMs <= 260 && q8.lifeMs <= 170,
+    JSON.stringify({ q2: q2, q4: q4, q8: q8 }));
+  assert('9a ×8 寿命 < 2 个步进（评审口径：不超过约 1~2 批）', !!q8 && q8.lifeMs < q8.stepMs * 2, JSON.stringify(q8));
+
+  /* (b)(c)(d) 一 tick 三个同目标伤害事件 → 1 个 impact、带内联动画时长、每单位只重启一次动画 */
+  const created = [];
+  const origCreate = host.sb.document.createElement.bind(host.sb.document);
+  host.sb.document.createElement = function (tag) { const el = origCreate(tag); created.push(el); return el; };
+  const p = host.sb.document.getElementById('battlePlayer');
+  const e = host.sb.document.getElementById('battleEnemy');
+  const reflows = { p: 0, e: 0 };
+  Object.defineProperty(p, 'offsetWidth', { get() { reflows.p++; return 0; }, configurable: true });
+  Object.defineProperty(e, 'offsetWidth', { get() { reflows.e++; return 0; }, configurable: true });
+  /* ⚠️ `_battleSpeed` 是 `let` 声明（不是 sandbox 属性）→ 必须走 vm.runInContext 才能改到模块内变量 */
+  vm.runInContext('_battleSpeed=4', host.sb);
+  const evs = [
+    { type: 'damage', damageType: 'physical', sourceSide: 'player', targetSide: 'enemy', hpDamage: 100, msg: '⚔️ 甲 攻击 乙 → 100 伤害' },
+    { type: 'damage', damageType: 'soul', sourceSide: 'player', targetSide: 'enemy', hpDamage: 150, msg: '👻 甲 魂攻击 乙 → 150 魂伤害' },
+    { type: 'damage', damageType: 'physical', sourceSide: 'player', targetSide: 'enemy', hpDamage: 50, msg: '⚔️ 甲 攻击 乙 → 50 伤害' }
+  ];
+  if (typeof host.sb.animateBattleEvents === 'function') host.sb.animateBattleEvents(evs, p, e, 100000);
+  const impacts = created.filter(x => String(x.className || '').indexOf('bc-impact') >= 0);
+  assert('9b ×4 同目标 3 次伤害聚合成 1 个 impact（旧实现 3 个）', impacts.length === 1,
+    'n=' + impacts.length + ' | texts=' + JSON.stringify(impacts.map(i => i.textContent)));
+  assert('9c 聚合数值 = 三者之和（100+150+50=300）', impacts.length === 1 && /300/.test(String(impacts[0].textContent)),
+    JSON.stringify(impacts.map(i => i.textContent)));
+  assert('9c impact 带内联 animationDuration = 档位寿命（旧实现只有 CSS 固定 .6s）',
+    impacts.length === 1 && String(impacts[0].style.animationDuration) === q4.lifeMs + 'ms',
+    'duration=' + (impacts[0] && impacts[0].style.animationDuration) + ' | 期望 ' + (q4 || {}).lifeMs + 'ms');
+  assert('9d 一 tick 内每单位只强制重启一次动画（旧实现每事件一次 reflow）',
+    reflows.e <= 1 && reflows.p <= 1, JSON.stringify(reflows));
+  assert('9d 受击类确实挂上了（不是因为没动而「只有一次」）', e.classList.contains('hit') && p.classList.contains('attacking'),
+    JSON.stringify({ e: e.classList._s, p: p.classList._s }));
+}
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

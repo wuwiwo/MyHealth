@@ -220,6 +220,71 @@ function battleEventSides(ev){
   }
   return null
 }
+/* ============================================================
+   v2.11.3（评审根因 1 的**单敌侧**，与群战 gbFxPolicy 同一思路）
+   ------------------------------------------------------------
+   问题：单敌步进 = BATTLE_STEP_BASE_MS ÷ 档位 = 600/300/150/75ms，而 `.bc-impact` 固定 `.6s`
+   且**每有一个 damage 事件就创建一个** → 同时存活约 1/2/4/8 批；`animateBattleEvent` 还会
+   **每个 tick 移除并强制重启** attacking/hit 类（每个事件一次 reflow）。
+   修法：把演出寿命绑到**演出窗口**、按档位**聚合同目标**、每单位每个窗口**只重启一次**动画。
+   ⚠️ 纯表现层：不改 `battleTick`，不改任何结算/胜负/日志。 */
+var BATTLE_FX_AT={}   /* 每个动画键的上一次重启时刻（窗口内不重复重启） */
+function battleFxPolicy(speed){
+  var sp=speed||1
+  var step=(typeof battleStepDelay==='function')?battleStepDelay(BATTLE_STEP_BASE_MS,sp):Math.round(BATTLE_STEP_BASE_MS/sp)
+  if(sp<=1)return {speed:1,stepMs:step,lifeMs:600,aggregate:false}
+  if(sp<=2)return {speed:2,stepMs:step,lifeMs:450,aggregate:true}
+  if(sp<=4)return {speed:4,stepMs:step,lifeMs:220,aggregate:true}
+  return {speed:8,stepMs:step,lifeMs:140,aggregate:true}
+}
+/* 只在**演出窗口**外才重启类动画（窗口内重复 restart 等于让动画永远停在起始帧） */
+function battleFxRestart(el,cls,key,lifeMs,now){
+  if(!el||!el.classList)return false
+  var last=BATTLE_FX_AT[key]||0
+  if(last&&now-last<lifeMs)return false
+  BATTLE_FX_AT[key]=now
+  el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls)
+  return true
+}
+function battleFxNum(ev){
+  if(!ev)return 0
+  if(typeof ev.hpDamage==='number')return ev.hpDamage
+  var n=String(ev.msg||'').replace(/[^0-9\-]/g,'')
+  return Number(n)||0
+}
+/* 一 tick 的全部事件 → 演出（聚合 + 窗口节流 + 生命期随档位） */
+function animateBattleEvents(events,pEl,eEl,nowMs){
+  if(!events||!events.length)return
+  var pol=battleFxPolicy(_battleSpeed)
+  var now=(typeof nowMs==='number')?nowMs:((typeof Date!=='undefined'&&Date.now)?Date.now():0)
+  var dmg=[]
+  for(var i=0;i<events.length;i++){ var ev=events[i]; if(ev&&ev.type==='damage'&&battleEventSides(ev))dmg.push(ev) }
+  if(!dmg.length)return
+  /* 聚合：同一目标侧 + 同类（反射单列）合并成一条 */
+  var groups=[],byKey={}
+  dmg.forEach(function(ev){
+    var sides=battleEventSides(ev)
+    var key=sides.targetSide+'|'+(ev.damageType==='reflect'?'reflect':'hit')
+    if(pol.aggregate&&byKey[key]){ byKey[key].amount+=battleFxNum(ev); return }
+    var g={ev:ev,sides:sides,amount:battleFxNum(ev)}
+    if(pol.aggregate)byKey[key]=g
+    groups.push(g)
+  })
+  var hitDone={},atkDone={}
+  groups.forEach(function(g,gi){
+    var sides=g.sides
+    var tgt=(sides.targetSide==='player')?pEl:eEl
+    /* 反伤：只闪目标，不伪装成攻击者前冲（既有契约，见 animateBattleEvent） */
+    if(g.ev.damageType!=='reflect'){
+      var src=(sides.sourceSide==='player')?pEl:eEl
+      var atkCls=(sides.sourceSide==='player')?'attacking':'attacking-enemy'
+      if(src&&!atkDone[sides.sourceSide]){ atkDone[sides.sourceSide]=1; battleFxRestart(src,atkCls,'atk:'+sides.sourceSide,pol.lifeMs,now) }
+    }
+    if(tgt&&!hitDone[sides.targetSide]){ hitDone[sides.targetSide]=1; battleFxRestart(tgt,'hit','hit:'+sides.targetSide,pol.lifeMs,now) }
+    if(tgt)showImpact(tgt,g.ev,g.amount,pol.lifeMs)
+  })
+}
+
 function animateBattleEvent(ev,pEl,eEl){
   if(!ev||ev.type!=='damage')return
   var sides=battleEventSides(ev)
@@ -261,7 +326,9 @@ function runBattle(){
       renderBattleHP()
       // Attack & hit animations are driven by explicit source/target sides, never by ambiguous type labels.
       var pEl=document.getElementById('battlePlayer'),eEl=document.getElementById('battleEnemy')
-      result.events.forEach(function(ev){animateBattleEvent(ev,pEl,eEl)})
+      /* v2.11.3：整 tick 一起演出（聚合同目标 + 窗口节流 + 生命期随档位），
+         取代「逐事件 animateBattleEvent」——后者每事件重启一次类动画并各建一个 impact。 */
+      animateBattleEvents(result.events,pEl,eEl)
     }catch(err){
       /* v2.5.0：引擎异常 → 按「异常中止」收尾；不再改 HP、不再判胜、不再走 endBattle(true)
          发奖并推进关卡。console.error 留在 catch 现场（本项目禁止静默 catch）。 */
@@ -290,15 +357,18 @@ function addBattleLog(msg,type,targetSide){
   div.textContent='▸ '+msg;el.appendChild(div);el.scrollTop=el.scrollHeight
 }
 
-function showImpact(targetEl,ev){
-  if(!targetEl||!ev.msg)return;
-  var num=(typeof ev.hpDamage==='number')?String(ev.hpDamage):ev.msg.replace(/[^0-9\-]/g,'');
-  if(!num||Number(num)<=0)return;
+function showImpact(targetEl,ev,amount,lifeMs){
+  if(!targetEl||!ev||!ev.msg)return;
+  /* v2.11.3：支持**聚合后的显式数值**与**演出窗口生命期**（不传则沿用旧口径 600ms） */
+  var n=(typeof amount==='number')?amount:battleFxNum(ev)
+  if(!(n>0))return;
+  var life=(typeof lifeMs==='number'&&lifeMs>0)?lifeMs:600
   var impact=document.createElement('div');impact.className='bc-impact';
-  impact.textContent=(ev.sourceSide==='player'?'💥':'✨')+num;
+  impact.textContent=(ev.sourceSide==='player'?'💥':'✨')+n;
   impact.style.left='50%';impact.style.top='30%';
+  if(impact.style)impact.style.animationDuration=life+'ms';   /* 动画与生命期同步（旧实现固定 .6s） */
   targetEl.appendChild(impact);
-  setTimeout(function(){if(impact.parentNode)impact.remove()},600);
+  setTimeout(function(){if(impact.parentNode)impact.remove()},life);
 }
 
 function endBattle(won){
