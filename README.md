@@ -105,6 +105,7 @@ page/
 ├── package.json
 └── vercel.json
 doc/
+├── design-battle-experience-v1.md  ← ⚔️ 战斗体验设计规格与作者裁决
 ├── HANDOFF.md  ← 🤝 AI/开发者交接文档（环境/纪律/模块/测试/待办/踩坑）
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── design-v2.0.md          v2.0 玩法设计（玩家技能/宠物/宝珠/多对多敌群）
@@ -119,7 +120,8 @@ doc/
     ├── v2.0问题回答与补充.md                        v2.0 设计问答（已并入 design-v2.0）
     └── plans/
         ├── plan-20260827-m2a-kickoff.md             M2a 起步计划
-        └── plan-20260827-action-dataset.md          动作数据集接入计划
+        ├── plan-20260827-action-dataset.md          动作数据集接入计划
+        └── 战斗体验施工计划.md                      战斗体验分批施工与验收计划
 ```
 
 ---
