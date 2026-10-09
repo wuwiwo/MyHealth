@@ -1001,6 +1001,20 @@ function gbFxFloat(card, text, color, big, slot, inStep, anchorX, lifeMs){
    但「谁挨打了」不能丢 —— 受击目标**仍然闪芯片**（.gb-hit），只是不再在芯片旁出数字。
    中央区理论上必然存在（renderGroupBattlePane 固定产出）；真缺了就如实告警并**不出飘字**，
    绝不因此抛错中断战斗推进（这条路径在自动推进里，抛错会直接卡死整场）。 */
+/* v2.11.5（作者裁决 B）：**抽屉态芯片徽标**。
+   抽屉展开时中央特效区被压到 8vh，飘字不能再放；但状态/护盾这类关键结果仍要看得见 ——
+   挂到**目标芯片自身**（`.gb-unit` 是 position:relative），因此落在广场条带里、不压日志正文。
+   生命期沿用档位策略（与中央飘字同一口径），到点自行移除。 */
+function showChipBadge(card, text, lifeMs) {
+  if (!card || !text || typeof card.appendChild !== 'function') return
+  var el = document.createElement('div')
+  el.className = 'gb-chip-mark'
+  el.textContent = text
+  card.appendChild(el)
+  var life = (typeof lifeMs === 'number' && lifeMs > 0) ? lifeMs : 900
+  setTimeout(function(){ if (el.parentNode && el.parentNode.removeChild) el.parentNode.removeChild(el) }, life)
+}
+
 function playAttackFeedback(gb, step) {
   var ov = document.getElementById('battleOverlay')
   if (!ov) return
@@ -1008,7 +1022,12 @@ function playAttackFeedback(gb, step) {
      两者都锚在中央特效区，而抽屉展开后中央区被压到 8vh，特效会直接画在日志正文上（实测截图）。
      打日志就是在复盘，不需要打击反馈；受击闪烁也一并跳过（它同样是为了「看战斗」）。
      ⚠️ 写成防御式：测试桩的 #battleOverlay 没有 classList（见 test-group-ui-presentation §13）。 */
-  if (ov.classList && typeof ov.classList.contains === 'function' && ov.classList.contains('gb-log-open')) return
+  /* v2.11.5（作者裁决 **B**）：日志抽屉展开时**不再整体跳过反馈** ——
+     ① **芯片锚定**的反馈照常：受击闪烁 + 状态徽标（`.gb-chip-mark` 挂在目标芯片上）；
+     ② **中央特效区**的飘字与施法特效**仍然跳过**：中央区被压到 8vh，特效会直接画在日志正文上
+        （v2.4.2 实测截图）；抽屉态的空间给了日志，不该再被特效占用。
+     ⚠️ 防御式：测试桩的 #battleOverlay 没有 classList（见 test-group-ui-presentation §13）。 */
+  var logOpen = !!(ov.classList && typeof ov.classList.contains === 'function' && ov.classList.contains('gb-log-open'))
   var mid = (typeof document!=='undefined') ? document.getElementById('gbArenaMid') : null
   if (!mid) console.warn('[group] 找不到中央特效区 #gbArenaMid —— 本步只闪芯片、不出飘字')
   var logs = (gb && gb.log) ? gb.log : []
@@ -1062,6 +1081,7 @@ function playAttackFeedback(gb, step) {
       if (cid) _gbHitUntil[cid] = nowMs + flashMs
       setTimeout(function(){ card.classList.remove('gb-hit') }, flashMs)
     }
+    if (logOpen) return   /* v2.11.5：抽屉态只闪芯片，中央飘字跳过 */
     if (!mid) return
     var color = (hit.kind === 'heal') ? 'var(--green)' : gbHitColor(gb, e, hit.amount)
     var text = (hit.kind === 'heal' ? '+' : '-') + hit.amount
@@ -1079,6 +1099,8 @@ function playAttackFeedback(gb, step) {
   marks.forEach(function(rec){
     var e = rec.e
     var card2 = gbCardForEvent(ov, gb, e)
+    /* v2.11.5（裁决 B）：抽屉态把标记改成**芯片徽标**（不占中央区、不压日志） */
+    if (logOpen) { showChipBadge(card2, rec.text, pol.lifeMs); return }
     var ax2 = null
     if (card2 && typeof card2.getBoundingClientRect === 'function') {
       try { var cr2 = card2.getBoundingClientRect(); if (cr2 && cr2.width) ax2 = cr2.left + cr2.width / 2 } catch (er2) { ax2 = null /* 忽略：取不到芯片 rect 就退回中央区锚点 */ }

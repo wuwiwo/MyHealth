@@ -1585,6 +1585,85 @@ console.log('--- 23. v2.11.1 根因 3+4 与残留 ---');
     eq(removed, 0, '无空位时**不驱逐**旧飘字（v2.11.2 回退后的契约）：removed=' + removed + ' | old=' + oldPos);
   }
 }
+/* ============ 24. v2.11.5 抽屉态反馈（作者裁决 B） ============
+   裁决：抽屉展开时**不再整体跳过反馈** —— 芯片锚定的（受击闪烁 + `.gb-chip-mark` 状态徽标）照常；
+   **中央特效区**的飘字与施法特效仍然跳过（中央区被压到 8vh，会画在日志正文上）。 */
+console.log('--- 24. v2.11.5 抽屉态反馈（裁决 B） ---');
+{
+  function mkSb24(logOpen) {
+    const sb = makeSandbox();
+    const layer = {
+      children: [],
+      appendChild(el) { el.parentNode = this; this.children.push(el); return el; },
+      removeChild(el) { const i = this.children.indexOf(el); if (i >= 0) this.children.splice(i, 1); el.parentNode = null; return el; },
+      get innerHTML() { return ''; }, set innerHTML(v) { if (!v) layer.children.length = 0; }
+    };
+    const chipBadges = [];
+    const chip = {
+      _uid: 'uB',
+      getAttribute(k) { return k === 'data-uid' ? 'uB' : (k === 'data-name' ? '乙' : null); },
+      getBoundingClientRect() { return { left: 220, top: 80, width: 40, height: 40, right: 260, bottom: 120 }; },
+      appendChild(el) { el.parentNode = this; chipBadges.push(el); return el; },
+      classList: { _c: {}, add(c) { this._c[c] = 1; }, remove(c) { delete this._c[c]; }, contains(c) { return !!this._c[c]; } }
+    };
+    const ov = {
+      classList: { _c: {}, add(c) { this._c[c] = 1; }, remove(c) { delete this._c[c]; },
+        contains(c) { return c === 'gb-log-open' ? !!logOpen : !!this._c[c]; }, toggle(c, v) { if (v) this._c[c] = 1; else delete this._c[c]; } },
+      querySelectorAll(sel) { return sel.indexOf('.gb-unit') >= 0 ? [chip] : []; },
+      querySelector(sel) { return /data-uid="uB"/.test(sel) ? chip : null; }
+    };
+    const mid = { appendChild() {}, getBoundingClientRect: () => ({ left: 0, top: 300, width: 390, height: 51 }) };
+    const opts = { id: 'gbFx', setAttribute() {}, style: {}, get innerHTML() { return ''; }, set innerHTML(v) { if (!v) layer.children.length = 0; } };
+    sb.document.getElementById = id => {
+      if (id === 'gbFx') return Object.assign(opts, { appendChild: layer.appendChild.bind(layer), removeChild: layer.removeChild.bind(layer) });
+      if (id === 'battleOverlay') return ov;
+      if (id === 'gbArenaMid') return mid;
+      return null;
+    };
+    sb.document.body = { appendChild() {} };
+    sb.document.createElement = () => ({ style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, parentNode: null, textContent: '' });
+    sb._groupSpeed = 1;
+    sb.gbFxClear();
+    return { sb, layer, chip, chipBadges };
+  }
+  const gbOf = evs => ({ units: [{ id: 'uB', name: '乙', side: 'enemy' }], log: [{ turn: 1, unit: '甲', events: evs }] });
+  const dmgEv = { msg: '⚔️ 甲 攻击 乙 → 100 伤害', type: 'damage', targetId: 'uB' };
+  const shieldEv = { msg: '🛡️ 乙 护盾吸收 120', type: 'status', targetId: 'uB' };
+
+  /* (a) 抽屉打开：芯片仍闪（旧实现整体 return → 不闪） */
+  {
+    const { sb, chip } = mkSb24(true);
+    sb.playAttackFeedback(gbOf([dmgEv]), null);
+    ok(chip.classList.contains('gb-hit'), '24a 抽屉态下受击芯片**仍然闪烁**（旧实现整体跳过）');
+  }
+  /* (b) 抽屉打开：状态标记变**芯片徽标**（旧实现什么都不出） */
+  {
+    const { sb, chipBadges } = mkSb24(true);
+    sb.playAttackFeedback(gbOf([shieldEv]), null);
+    ok(chipBadges.length === 1 && /🛡️/.test(chipBadges[0].textContent) && /120/.test(chipBadges[0].textContent),
+      '24b 抽屉态下状态标记落在**目标芯片**上（.gb-chip-mark）：' + JSON.stringify(chipBadges.map(x => x.textContent)));
+    ok(chipBadges.length === 1 && chipBadges[0].className.indexOf('gb-chip-mark') >= 0, '24b 类名为 gb-chip-mark（源码/CSS 契约）');
+  }
+  /* (c) 抽屉打开：中央特效区**不出**飘字（裁决 B 的边界） */
+  {
+    const { sb, layer } = mkSb24(true);
+    sb.playAttackFeedback(gbOf([dmgEv, shieldEv]), null);
+    eq(layer.children.length, 0, '24c 抽屉态下中央特效区不出任何飘字（不压日志正文）');
+  }
+  /* (d) 抽屉关闭：行为与既有契约一致（中央飘字照旧） */
+  {
+    const { sb, layer, chip } = mkSb24(false);
+    sb.playAttackFeedback(gbOf([dmgEv]), null);
+    ok(chip.classList.contains('gb-hit'), '24d 抽屉关闭时芯片仍闪（未回归）');
+    eq(layer.children.length, 1, '24d 抽屉关闭时中央飘字照旧（未回归）：' + layer.children.length);
+  }
+  /* (e) 施法特效在抽屉态仍然跳过（裁决 B 未改动这一半） */
+  {
+    const { sb, layer } = mkSb24(true);
+    sb.gbShowSkillCast(gbOf([dmgEv]), { skillId: 'blizzard' }, null);
+    eq(layer.children.length, 0, '24e 抽屉态下施法特效仍跳过（中央区不放特效）');
+  }
+}
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }
 process.exit(fail === 0 ? 0 : 1);

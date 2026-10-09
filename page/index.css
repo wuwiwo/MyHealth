@@ -591,6 +591,13 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
    高速档位（×8 ≈ 88ms/步）下表现为「不断重启 / 一直亮着」，闪烁失去语义。
    改成 box-shadow + filter 的**状态**（配 transition）：重建后的新节点同样是「亮着」，
    不重播时间轴；`@keyframes gbHit` 保留（兼容既有引用），只是不再挂在 .gb-hit 上。 */
+/* v2.11.5（裁决 B）：抽屉态的状态/护盾**芯片徽标** —— 挂在目标芯片右上角（广场条带内），
+/* v2.11.5（裁决 B）：抽屉态的状态/护盾**芯片徽标** —— 挂在目标芯片右上角（广场条带内），
+   不占中央特效区、不压日志正文。 */
+.gb-chip-mark{position:absolute;top:-4px;right:-4px;z-index:3;pointer-events:none;
+  font-size:var(--fs-2xs);font-weight:800;line-height:1;padding:1px 3px;border-radius:var(--rad-full);
+  background:var(--surface-2);border:1px solid var(--bd);color:var(--text);
+  animation:impactPop .6s ease forwards}
 .gb-unit.gb-hit{box-shadow:0 0 0 2px var(--red),0 0 12px var(--red);filter:brightness(1.25);
   transition:box-shadow var(--dur-1) var(--ease-std),filter var(--dur-1) var(--ease-std)}
 .gb-unit.gb-low .gb-hp-fill{animation:gbLowPulse 1.2s ease-in-out infinite}
