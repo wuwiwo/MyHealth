@@ -405,6 +405,10 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 @keyframes atkLunge{0%{transform:translateX(0)}40%{transform:translateX(20px) scale(1.05)}100%{transform:translateX(0)}}
 .battle-char.attacking-enemy{animation:atkLungeEnemy .25s ease}
 @keyframes atkLungeEnemy{0%{transform:translateX(0)}40%{transform:translateX(-20px) scale(1.05)}100%{transform:translateX(0)}}
+/* v2.11.4（根因 3 单敌侧）：状态/护盾类即时标记 —— 与 .bc-impact 同锚点、同动画，
+   但颜色中性（--text）、字号小一档，避免与伤害数字抢注意力。 */
+.bc-mark{position:absolute;font-size:var(--fs-lg);font-weight:800;color:var(--text);
+  pointer-events:none;animation:impactPop .6s ease forwards;text-shadow:0 0 6px rgba(0,0,0,.5);z-index:4}
 .bc-impact{position:absolute;font-size:var(--fs-2xl);font-weight:900;color:var(--orange);pointer-events:none;animation:impactPop .6s ease forwards;text-shadow:0 0 8px var(--orange-g);z-index:5}
 @keyframes impactPop{0%{opacity:0;transform:translate(-50%,0) scale(.3)}30%{opacity:1;transform:translate(-50%,-10px) scale(1.2)}100%{opacity:0;transform:translate(-50%,-40px) scale(.8)}}
 .bc-hp-fill{height:100%;border-radius:var(--rp);background:linear-gradient(90deg,var(--green-d),var(--green));transition:width .3s ease}

@@ -246,6 +246,47 @@ function battleFxRestart(el,cls,key,lifeMs,now){
   el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls)
   return true
 }
+/* v2.11.4（评审根因 3 的**单敌侧**）：状态 / 护盾类事件的即时语义标记。
+   问题：`animateBattleEvent` 对 `ev.type!=='damage'` 直接 return → 单敌的 `type:'shield'`
+   （护盾吸收 / 护盾破碎）以及其它非伤害状态**完全没有即时反馈**，只能读战报。
+   ⚠️ 与群战同一口径：**显式小表**匹配已知文案，**匹配不到就什么都不出**（不猜、不造噪声）；
+   且必须有**显式 targetSide** 才知道该挂在谁身上 —— 否则同样跳过。 */
+var BC_MARKS=[
+  [/护盾吸收 (\d+)/, function(m,msg){ return '🛡️' + m[1] + (/护盾破碎/.test(msg) ? '💥' : '') }],
+  [/护盾破碎/, function(){ return '🛡️💥' }],
+  [/破甲/, function(){ return '💠' }],
+  [/中毒|☠️/, function(){ return '☠️' }],
+  [/冰冻|❄️/, function(){ return '❄️' }],
+  [/潮湿|变潮湿/, function(){ return '💧' }],
+  [/睡眠|哈欠|😴/, function(){ return '😴' }],
+  [/嘲讽/, function(){ return '😡' }],
+  [/净化|清除迷雾/, function(){ return '✨' }],
+  [/末日|🌑/, function(){ return '🌑' }],
+  [/幽魂附身|👻/, function(){ return '👻' }],
+  [/威吓|😱/, function(){ return '😱' }],
+  [/变小/, function(){ return '🔻' }],
+  [/蓄力/, function(){ return '⏳' }]
+];
+function bcMarkerFor(ev){
+  if(!ev||ev.type==='damage')return null
+  if(ev.targetSide!=='player'&&ev.targetSide!=='enemy')return null
+  var msg=String(ev.msg||'')
+  if(!msg)return null
+  for(var i=0;i<BC_MARKS.length;i++){ var m=BC_MARKS[i][0].exec(msg); if(m)return BC_MARKS[i][1](m,msg) }
+  return null
+}
+/* 标记：挂在目标元素上（与 impact 同锚点），生命期随档位 */
+function showMark(targetEl,text,lifeMs){
+  if(!targetEl||!text)return
+  var life=(typeof lifeMs==='number'&&lifeMs>0)?lifeMs:600
+  var mark=document.createElement('div');mark.className='bc-mark'
+  mark.textContent=text
+  mark.style.left='50%';mark.style.top='16%'
+  if(mark.style)mark.style.animationDuration=life+'ms'
+  targetEl.appendChild(mark)
+  setTimeout(function(){if(mark.parentNode)mark.remove()},life)
+}
+
 function battleFxNum(ev){
   if(!ev)return 0
   if(typeof ev.hpDamage==='number')return ev.hpDamage
@@ -257,6 +298,17 @@ function animateBattleEvents(events,pEl,eEl,nowMs){
   if(!events||!events.length)return
   var pol=battleFxPolicy(_battleSpeed)
   var now=(typeof nowMs==='number')?nowMs:((typeof Date!=='undefined'&&Date.now)?Date.now():0)
+  /* ⚠️ 标记扫描必须在 `if(!dmg.length)return` **之前** —— 只有护盾/状态事件的 tick 没有任何 damage，
+     放到后面会被早退吞掉（这正是第一版 0 条标记的原因）。 */
+  /* v2.11.4（根因 3 单敌侧）：非伤害的状态/护盾事件 → 即时标记（每目标每 tick 最多一条） */
+  var markDone={}
+  events.forEach(function(ev){
+    var mk=bcMarkerFor(ev)
+    if(!mk)return
+    if(markDone[ev.targetSide])return
+    markDone[ev.targetSide]=1
+    showMark(ev.targetSide==='player'?pEl:eEl,mk,pol.lifeMs)
+  })
   var dmg=[]
   for(var i=0;i<events.length;i++){ var ev=events[i]; if(ev&&ev.type==='damage'&&battleEventSides(ev))dmg.push(ev) }
   if(!dmg.length)return

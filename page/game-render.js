@@ -889,7 +889,7 @@ var GB_FX_SLOT_OFF=[[0,0],[-78,-18],[78,-18],[0,-70]]   /* 中 / 左上 / 右上
    ⚠️ 用**显式小表**匹配已知文案，**匹配不到就什么都不出**（不猜、不造噪声）。
    标记同样走 gbFxFloat → 一起参与目标锚定、跨步占位与档位生命期。 */
 var GB_FX_MARKS=[
-  [/护盾吸收 (\d+)/, function(m){ return '🛡️' + m[1] }],
+  [/护盾吸收 (\d+)/, function(m,msg){ return '🛡️' + m[1] + (/护盾破碎/.test(msg) ? '💥' : '') }],
   [/护盾破碎/, function(){ return '🛡️💥' }],
   [/破甲/, function(){ return '💠' }],
   [/中毒|☠️/, function(){ return '☠️' }],
@@ -912,7 +912,7 @@ function gbMarkerFor(e, parsed){
   if (e.type && e.type !== 'status' && e.type !== 'talent' && e.type !== 'terrain') return null;
   for (var i = 0; i < GB_FX_MARKS.length; i++) {
     var m = GB_FX_MARKS[i][0].exec(msg);
-    if (m) return GB_FX_MARKS[i][1](m);
+    if (m) return GB_FX_MARKS[i][1](m, msg);
   }
   return null;
 }

@@ -100,7 +100,7 @@ function ghMakeEl(id) {
       toggle(c, v) { if (v) this._s[c] = 1; else delete this._s[c]; },
       contains(c) { return !!this._s[c]; }
     },
-    appendChild() { }, remove() { }, addEventListener() { }, removeEventListener() { },
+    appendChild() { this.appendChildCount = (this.appendChildCount || 0) + 1; }, remove() { }, addEventListener() { }, removeEventListener() { },
     querySelectorAll() { return []; }, querySelector() { return null; }, closest() { return null; }
   };
   return el;
@@ -471,6 +471,46 @@ console.log('\n[9] 单敌演出 parity（v2.11.3：评审根因 1 单敌侧）')
     reflows.e <= 1 && reflows.p <= 1, JSON.stringify(reflows));
   assert('9d 受击类确实挂上了（不是因为没动而「只有一次」）', e.classList.contains('hit') && p.classList.contains('attacking'),
     JSON.stringify({ e: e.classList._s, p: p.classList._s }));
+}
+console.log('\n[10] 单敌状态类即时反馈（v2.11.4：评审根因 3 的单敌侧）');
+{
+  const host = makeGameBattleSandbox();
+  const created = [];
+  const origCreate = host.sb.document.createElement.bind(host.sb.document);
+  host.sb.document.createElement = function (tag) { const el = origCreate(tag); created.push(el); return el; };
+  const p = host.sb.document.getElementById('battlePlayer');
+  const e = host.sb.document.getElementById('battleEnemy');
+  vm.runInContext('_battleSpeed=1', host.sb);
+  const marksOf = () => created.filter(x => String(x.className || '').indexOf('bc-mark') >= 0);
+
+  /* (a) 护盾吸收 → 敌人身上 1 条标记 */
+  created.length = 0;
+  if (typeof host.sb.animateBattleEvents === 'function') host.sb.animateBattleEvents([
+    { msg: '🛡️ 敌人 护盾吸收 120', type: 'shield', sourceSide: 'player', targetSide: 'enemy', shieldAbsorbed: 120, amount: 120, hpDamage: 0 }
+  ], p, e, 200000);
+  const m1 = marksOf();
+  assert('10a 护盾吸收产生 1 条即时标记（旧实现 0 条）', m1.length === 1, 'n=' + m1.length);
+  assert('10a 标记内容含护盾与吸收量', m1.length === 1 && /🛡️/.test(m1[0].textContent) && /120/.test(m1[0].textContent), JSON.stringify(m1.map(x => x.textContent)));
+  assert('10a 标记挂在**目标**元素上（enemy）', m1.length === 1 && e.appendChildCount === 1, 'enemyAppends=' + e.appendChildCount + ' playerAppends=' + p.appendChildCount);
+  assert('10a 标记带内联 animationDuration（随档位）', m1.length === 1 && String(m1[0].style.animationDuration) === '600ms', 'd=' + (m1[0] && m1[0].style.animationDuration));
+
+  /* (b) 护盾破碎 → 标记含破碎语义；同侧两条只出一条（防刷屏） */
+  created.length = 0;
+  if (typeof host.sb.animateBattleEvents === 'function') host.sb.animateBattleEvents([
+    { msg: '🛡️ 你 护盾吸收 30（护盾破碎）', type: 'shield', sourceSide: 'enemy', targetSide: 'player', shieldAbsorbed: 30, amount: 30, hpDamage: 0 },
+    { msg: '🛡️ 你 护盾吸收 10', type: 'shield', sourceSide: 'enemy', targetSide: 'player', shieldAbsorbed: 10, amount: 10, hpDamage: 0 }
+  ], p, e, 201000);
+  const m2 = marksOf();
+  assert('10b 同一目标一 tick 内最多 1 条标记（不刷屏）', m2.length === 1, 'n=' + m2.length);
+  assert('10b 护盾破碎语义保留（🛡️💥）', m2.length === 1 && /💥/.test(m2[0].textContent), JSON.stringify(m2.map(x => x.textContent)));
+
+  /* (c) 无法识别的状态 / 缺 targetSide → 不出标记（防噪声） */
+  created.length = 0;
+  if (typeof host.sb.animateBattleEvents === 'function') host.sb.animateBattleEvents([
+    { msg: '某个不可识别的状态变化', type: 'def', sourceSide: 'enemy', targetSide: 'player' },
+    { msg: '🛡️ 护盾吸收 50', type: 'shield', sourceSide: 'player' }
+  ], p, e, 202000);
+  assert('10c 不可识别 / 缺 targetSide 的事件**不**产生标记（不猜、不造噪声）', marksOf().length === 0, 'n=' + marksOf().length);
 }
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);
