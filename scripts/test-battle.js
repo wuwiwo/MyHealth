@@ -100,7 +100,7 @@ function ghMakeEl(id) {
       toggle(c, v) { if (v) this._s[c] = 1; else delete this._s[c]; },
       contains(c) { return !!this._s[c]; }
     },
-    appendChild() { this.appendChildCount = (this.appendChildCount || 0) + 1; }, remove() { }, addEventListener() { }, removeEventListener() { },
+    appendChild() { this.appendChildCount = (this.appendChildCount || 0) + 1; }, remove() { }, handlers: {}, addEventListener(type, fn) { this.handlers[type] = fn; }, click() { if (this.handlers.click) this.handlers.click(); }, removeEventListener() { },
     querySelectorAll() { return []; }, querySelector() { return null; }, closest() { return null; }
   };
   return el;
@@ -108,11 +108,12 @@ function ghMakeEl(id) {
 /* game-battle.js 的沙箱：只需单敌战斗所需的全局（battleTick 由每个用例各自注入） */
 function makeGameBattleSandbox() {
   const els = {};
+  const docEvents = {}, winEvents = {};
   const doc = {
-    getElementById(id) { if (!els[id]) els[id] = ghMakeEl(id); return els[id]; },
+    getElementById(id) { if (!els[id]) { const el=ghMakeEl(id); el.id=id; els[id] = el; } return els[id]; },
     createElement(tag) { return ghMakeEl('_new_' + tag); },
     querySelectorAll() { return []; },
-    addEventListener() { }
+    addEventListener(type, fn) { docEvents[type] = fn; }
   };
   const game = { attempts: {}, cleared: [], current: '1-1' };
   const refine = { points: 0, unlocked: true };
@@ -120,8 +121,11 @@ function makeGameBattleSandbox() {
   const sb = {
     Math, JSON, console, Date, document: doc,
     setTimeout() { }, clearTimeout() { },
+    addEventListener(type, fn) { winEvents[type] = fn; },
     /* battle.js 的纯函数 + 关卡表由上一个 sandbox 提供（同源，避免第二份实现） */
     LEVELS: sandbox.LEVELS, findLevel: sandbox.findLevel,
+    buildBattleSides: sandbox.buildBattleSides, createBattle: sandbox.createBattle,
+    rollBossAffixFor: sandbox.rollBossAffixFor,
     getGame() { return game; }, setGame() { },
     today() { return '2026-10-06'; },
     store: { get() { return null; }, set() { } },
@@ -134,7 +138,7 @@ function makeGameBattleSandbox() {
   sb.window = sb; sb.globalThis = sb;
   vm.createContext(sb);
   vm.runInContext(gameBattleSrc, sb);
-  return { sb, els, game, refine, calls };
+  return { sb, els, game, refine, calls, docEvents, winEvents };
 }
 function ghBattle(over) {
   const b = {
@@ -512,5 +516,261 @@ console.log('\n[10] 单敌状态类即时反馈（v2.11.4：评审根因 3 的�
   ], p, e, 202000);
   assert('10c 不可识别 / 缺 targetSide 的事件**不**产生标记（不猜、不造噪声）', marksOf().length === 0, 'n=' + marksOf().length);
 }
+/* ============================================================
+   11. 批次 A：终局按 800ms 胜负 → 1200ms 战果 → 战绩推进
+   ------------------------------------------------------------
+   对 endBattle 使用可控时钟驱动公开渲染入口；结算只能发生在 endBattle，
+   推进展示 timer 不得再次发奖/写进度。旧版会立即同时显示所有层并设 2 秒 auto。
+   ============================================================ */
+console.log('\n[11] 批次 A 单敌终局分阶段与 auto 中止');
+/* 可控时钟终局宿主：
+   · `Date.now()` 由假时钟提供，fire 时**推进到该 timer 的到期时刻**（真实浏览器语义：
+     timer 不会提前触发），phase/auto 的绝对 deadline 才能被精确断言；
+   · `#battleEnd` 的 innerHTML 赋值会重建其中的 id 节点（真实 DOM 语义）——否则
+     `bindContinue` 会把旧层的 click 监听器叠加到同一个假元素上，点击一次推进两层。 */
+function makeOutroHost(startClock){
+  const host=makeGameBattleSandbox();
+  const tasks=[];let nextId=1;
+  let now=(typeof startClock==='number')?startClock:1000;
+  host.sb.Date={now:()=>now};
+  /* 结算含 Math.random（战利品）→ 固定随机数，便于跨 host 逐项对比 */
+  const detMath=Object.create(Math);detMath.random=function(){return 0.5};
+  host.sb.Math=detMath;
+  host.sb.setTimeout=function(fn,ms){const t={id:nextId++,fn:fn,ms:(typeof ms==='number'?ms:0),due:now+(typeof ms==='number'?ms:0),cancelled:false};tasks.push(t);return t.id};
+  host.sb.clearTimeout=function(id){const t=tasks.find(x=>x.id===id);if(t)t.cancelled=true};
+  const end=host.sb.document.getElementById('battleEnd');let endHtml='';
+  const layerNodes=Object.create(null);
+  Object.defineProperty(end,'innerHTML',{configurable:true,
+    get(){return endHtml},
+    set(v){endHtml=String(v);
+      Object.keys(layerNodes).forEach(k=>delete layerNodes[k]);
+      (endHtml.match(/id="[^"]+"/g)||[]).forEach(x=>{const id=x.slice(4,-1);layerNodes[id]=ghMakeEl(id)})}});
+  const baseGet=host.sb.document.getElementById.bind(host.sb.document);
+  host.sb.document.getElementById=function(id){if(id==='battleEnd')return end;if(layerNodes[id])return layerNodes[id];return baseGet(id)};
+  host.sb.document.getElementById('battleOverlay').classList.add('open');
+  host.sb.__tasks=tasks;
+  host.sb.__now=function(){return now};
+  host.sb.__setNow=function(v){now=v};
+  /* 按名义延时触发（并把假时钟推进到到期时刻）；找不到则返回 false（断言据此判红） */
+  host.sb.__runDelay=function(ms){
+    const t=tasks.find(x=>!x.cancelled&&x.ms===ms);
+    if(!t)return false;
+    t.cancelled=true;if(t.due>now)now=t.due;t.fn();return true;
+  };
+  host.sb.__pending=function(){return tasks.filter(x=>!x.cancelled)};
+  return host;
+}
+{
+  const host=makeOutroHost();
+  const b=ghBattle();
+  b.done=true;b.winner=true;b.enemy.hp=0;
+  host.sb.getGame().current='1-1';
+  host.sb.getGame().cleared=[];
+  host.sb._battleAuto=false;
+  vm.runInContext('_battle=__ghBattle; endBattle(true)',Object.assign(host.sb,{__ghBattle:b}));
+  const end=host.els.battleEnd;
+  assert('11 普通胜利初始只呈现胜负，不提前显示战果/战绩动作',/胜利/.test(end.innerHTML)&&!/战利品/.test(end.innerHTML)&&!/battleNext/.test(end.innerHTML),String(end.innerHTML).slice(0,160));
+  assert('11 800ms 后才呈现战果',host.sb.__runDelay(800)&&/战利品/.test(end.innerHTML)&&!/battleNext/.test(end.innerHTML),String(end.innerHTML).slice(0,160));
+  assert('11 再经 1200ms 才呈现战绩操作',host.sb.__runDelay(1200)&&/battleNext/.test(end.innerHTML),String(end.innerHTML).slice(0,160));
+  const once={points:host.refine.points,cleared:host.game.cleared.slice(),tracks:host.calls.trackLevel.slice(),attempts:JSON.stringify(host.game.attempts)};
+  vm.runInContext('_battle=__ghBattle; endBattle(true)',Object.assign(host.sb,{__ghBattle:b}));
+  assert('11 重复 endBattle 对同一实例保持结算幂等（无二次奖励/进度）',host.refine.points===once.points&&host.game.cleared.length===once.cleared.length&&host.calls.trackLevel.length===once.tracks.length&&JSON.stringify(host.game.attempts)===once.attempts,
+    JSON.stringify({once:once,again:{points:host.refine.points,cleared:host.game.cleared,tracks:host.calls.trackLevel,attempts:host.game.attempts}}));
+}
+{
+  const host=makeOutroHost();
+  const b=ghBattle();b.done=true;b.winner=true;b.enemy.hp=0;
+  host.sb.getGame().current='1-1';host.sb.getGame().cleared=[];
+  vm.runInContext('_battleAuto=true',host.sb);
+  Object.assign(host.sb,{__ghBattle:b});
+  vm.runInContext('_battle=__ghBattle; endBattle(true)',host.sb);
+  assert('11 auto 胜利同样先展示胜负 800ms',!/战利品/.test(host.els.battleEnd.innerHTML)&&host.sb.__tasks.some(t=>t.ms===800),String(host.els.battleEnd.innerHTML));
+  assert('11 auto 胜利战果不少于 2000ms 后安排推进',host.sb.__runDelay(800)&&/战利品/.test(host.els.battleEnd.innerHTML)&&host.sb.__tasks.some(t=>t.ms===2000),JSON.stringify(host.sb.__tasks.map(t=>t.ms)));
+  vm.runInContext('_battleAuto=false',host.sb);
+  const before=host.calls.trackLevel.length;
+  host.sb.__runDelay(2000);
+  assert('11 玩家关闭 auto 可阻止自动下一关',host.els.battleOverlay.classList.contains('open')&&host.calls.trackLevel.length===before,
+    JSON.stringify({open:host.els.battleOverlay.classList.contains('open'),tracks:host.calls.trackLevel.length}));
+}
+{
+  const host=makeOutroHost();
+  const b=ghBattle();b.done=true;b.winner=false;b.player.hp=0;
+  host.sb.getGame().current='1-1';
+  vm.runInContext('_battleAuto=true',host.sb);Object.assign(host.sb,{__ghBattle:b});
+  vm.runInContext('_battle=__ghBattle; endBattle(false)',host.sb);
+  assert('11 单敌失败立即关闭 auto 且只显示胜负层',vm.runInContext('_battleAuto',host.sb)===false&&/战败/.test(host.els.battleEnd.innerHTML)&&!/battleRetry/.test(host.els.battleEnd.innerHTML),String(host.els.battleEnd.innerHTML));
+  assert('11 失败 800ms 后展示失败战果而非奖励',host.sb.__runDelay(800)&&/失败/.test(host.els.battleEnd.innerHTML)&&!/战利品/.test(host.els.battleEnd.innerHTML)&&!/battleRetry/.test(host.els.battleEnd.innerHTML),String(host.els.battleEnd.innerHTML));
+  assert('11 失败战果后才出现重试层且不会自动重试',host.sb.__runDelay(1200)&&/battleRetry/.test(host.els.battleEnd.innerHTML)&&!host.sb.__tasks.some(t=>t.ms===2000),String(host.els.battleEnd.innerHTML));
+}
+
+/* ============================================================
+   12. 批次 A 收尾（F2/F3/F4/F5）：显式「继续」、跨后台追赶、本场快照、彩带分层
+   ------------------------------------------------------------
+   全部用假时钟（fire 时推进到到期时刻）驱动真实 endBattle / resumeBattleOutroTimers，
+   断言「按绝对 deadline 追赶多个已过期阶段」「提前推进后旧 callback 失效」
+   「重复/迟到 callback 不重绘旧层、不二次结算」。
+   ============================================================ */
+console.log('\n[12] 批次 A 收尾：显式推进 / 后台追赶 / 本场快照 / 彩带分层');
+
+/* 结算快照（用于断言「只结算一次」「追赶与单步一致」；彩带次数单独断言） */
+function outroSettlement(host){
+  return JSON.stringify({points:host.refine.points,cleared:host.sb.getGame().cleared.slice(),
+    tracks:host.calls.trackLevel.slice(),attempts:host.sb.getGame().attempts||{},
+    current:host.sb.getGame().current});
+}
+function ghWinBattle(){const b=ghBattle();b.done=true;b.winner=true;b.enemy.hp=0;return b}
+function ghLoseBattle(){const b=ghBattle();b.done=true;b.winner=false;b.player.hp=0;return b}
+function ghStartOutro(host,battle,auto){
+  host.sb.getGame().current='1-1';host.sb.getGame().cleared=[];
+  vm.runInContext('_battleAuto='+(auto?'true':'false'),host.sb);
+  vm.runInContext('_battle=__ghBattle; endBattle('+(battle.winner?'true':'false')+')',Object.assign(host.sb,{__ghBattle:battle}));
+}
+
+/* ---- 12a 胜负层「继续」提前推进 + 旧 800/1200 callback 失效 ---- */
+{
+  const host=makeOutroHost(10000);
+  ghStartOutro(host,ghWinBattle(),false);
+  const end=host.els.battleEnd;
+  const phase=host.sb.__tasks.find(t=>t.ms===800&&!t.cancelled);
+  assert('12a 胜负层自带明确「继续」按钮，不再放跳过战果的「查看战绩」',
+    !!phase&&/id="battleOutroContinue"/.test(end.innerHTML)&&!/battleViewRecord/.test(end.innerHTML),String(end.innerHTML));
+  const settled=outroSettlement(host);
+  const cont=host.sb.document.getElementById('battleOutroContinue');
+  cont.handlers.click();
+  assert('12a 点「继续」立即进入战果层（不等 800ms）',/战利品/.test(end.innerHTML)&&!/battleNext/.test(end.innerHTML),String(end.innerHTML));
+  assert('12a 提前推进取消了 800ms 阶段 timer',!!phase&&phase.cancelled===true);
+  if(phase)phase.fn();
+  assert('12a 旧 800ms callback 迟到不重绘旧层、不二次结算',
+    /战利品/.test(end.innerHTML)&&!/battleNext/.test(end.innerHTML)&&outroSettlement(host)===settled,String(end.innerHTML));
+  const reward=host.sb.__pending().find(t=>t.ms===1200);
+  assert('12a 战果层有「继续」且自动阶段为 1200ms',!!reward&&/id="battleOutroContinue"/.test(end.innerHTML),String(end.innerHTML));
+  host.sb.document.getElementById('battleOutroContinue').handlers.click();
+  assert('12a 战果层「继续」立即进入战绩层',/battleNext/.test(end.innerHTML)&&/battleShare/.test(end.innerHTML),String(end.innerHTML));
+  assert('12a 提前推进取消了 1200ms 阶段 timer',!!reward&&reward.cancelled===true);
+  const recordHtml=end.innerHTML,settledRecord=outroSettlement(host);
+  if(reward)reward.fn();
+  if(phase)phase.fn();
+  assert('12a 旧 1200ms callback 迟到不重绘战绩层、不二次结算',
+    end.innerHTML===recordHtml&&outroSettlement(host)===settledRecord,String(end.innerHTML).slice(0,140));
+}
+
+/* ---- 12b 单敌 auto 胜利：战果层「查看战绩」取消自动推进（无「继续」） ---- */
+{
+  const host=makeOutroHost(20000);
+  ghStartOutro(host,ghWinBattle(),true);
+  const end=host.els.battleEnd;
+  host.sb.__runDelay(800);
+  assert('12b auto 胜利战果层只有「查看战绩」、保留自动提示、不出现「继续」',
+    /battleViewRecord/.test(end.innerHTML)&&!/battleOutroContinue/.test(end.innerHTML)&&/自动模式/.test(end.innerHTML),String(end.innerHTML));
+  const auto=host.sb.__pending().find(t=>t.ms===2000);
+  assert('12b auto 战果阶段至少 2000ms 后才推进',!!auto);
+  host.sb.document.getElementById('battleViewRecord').handlers.click();
+  assert('12b 点「查看战绩」立即进入战绩层',/battleNext/.test(end.innerHTML),String(end.innerHTML));
+  assert('12b 点「查看战绩」取消了自动推进 timer 并关掉 auto',!!auto&&auto.cancelled===true&&vm.runInContext('_battleAuto',host.sb)===false);
+  const tracks=host.calls.trackLevel.length,stable=end.innerHTML,settledAuto=outroSettlement(host);
+  if(auto)auto.fn();
+  assert('12b 迟到 auto callback 不再自动进下一关、不重绘',
+    host.calls.trackLevel.length===tracks&&host.els.battleOverlay.classList.contains('open')&&end.innerHTML===stable,
+    JSON.stringify({tracks:host.calls.trackLevel.length,open:host.els.battleOverlay.classList.contains('open')}));
+  assert('12b 「查看战绩」只结算一次',outroSettlement(host)===settledAuto,outroSettlement(host)+' vs '+settledAuto);
+}
+
+/* ---- 12c pageshow 跨 800+1200 两个 deadline：一次收敛到战绩层，且与单步推进一致 ---- */
+{
+  const host=makeOutroHost(30000);
+  ghStartOutro(host,ghWinBattle(),false);
+  const atSettle=outroSettlement(host);
+  assert('12c 追赶前仍停在胜负层且未放彩带',!/战利品/.test(host.els.battleEnd.innerHTML)&&host.calls.celebrate===0,String(host.calls.celebrate));
+  host.sb.__setNow(30000+2500);
+  host.winEvents.pageshow();
+  assert('12c pageshow 一次收敛到战绩层（不逐层重计）',/battleNext/.test(host.els.battleEnd.innerHTML),String(host.els.battleEnd.innerHTML).slice(0,140));
+  assert('12c 战绩层无遗留推进 timer',host.sb.__pending().length===0,JSON.stringify(host.sb.__pending().map(t=>t.ms)));
+  assert('12c 追赶不重复结算（奖励/进度/失败次数/通关不变）',outroSettlement(host)===atSettle,outroSettlement(host)+' vs '+atSettle);
+  assert('12c 追赶只在收敛到战绩层时放一次彩带',host.calls.celebrate===1,String(host.calls.celebrate));
+  const again=host.els.battleEnd.innerHTML;
+  host.winEvents.pageshow();
+  host.docEvents.visibilitychange();
+  assert('12c 再次恢复不改写战绩层',host.els.battleEnd.innerHTML===again);
+
+  const single=makeOutroHost(30000);
+  ghStartOutro(single,ghWinBattle(),false);
+  single.sb.__runDelay(800);
+  single.sb.__runDelay(1200);
+  assert('12c 与「只推进一次」的单步路径逐项一致（奖励/进度/失败次数/通关/彩带）',
+    outroSettlement(host)===outroSettlement(single)&&host.calls.celebrate===single.calls.celebrate,
+    outroSettlement(host)+' vs '+outroSettlement(single)+' | 彩带 '+host.calls.celebrate+' vs '+single.calls.celebrate);
+  assert('12c 收敛后的界面与单步路径一致',host.els.battleEnd.innerHTML===single.els.battleEnd.innerHTML);
+}
+
+/* ---- 12d visibilitychange 剩余时间按绝对 deadline 重排（不重新计满） ---- */
+{
+  const host=makeOutroHost(40000);
+  ghStartOutro(host,ghWinBattle(),false);
+  const first=host.sb.__tasks.find(t=>t.ms===800&&!t.cancelled);
+  host.sb.__setNow(40000+500);
+  host.docEvents.visibilitychange();
+  const pend=host.sb.__pending();
+  assert('12d 原 800ms timer 已取消',!!first&&first.cancelled===true);
+  assert('12d 按绝对剩余 300ms 重排（due 仍是 t0+800，不重新计满）',
+    pend.length===1&&pend[0].ms===300&&pend[0].due===40000+800,
+    JSON.stringify(pend.map(t=>({ms:t.ms,due:t.due}))));
+  host.sb.__setNow(40000+800);
+  assert('12d 剩余时间到期后进入战果层',host.sb.__runDelay(300)&&/战利品/.test(host.els.battleEnd.innerHTML),String(host.els.battleEnd.innerHTML).slice(0,120));
+  assert('12d 战果层自动阶段仍是完整的 1200ms',!!host.sb.__pending().find(t=>t.ms===1200));
+}
+
+/* ---- 12e F4 本场快照：分享卡片显示刚打完的关卡（不是已推进的下一关） ---- */
+{
+  const host=makeOutroHost(50000);
+  host.sb.startBattle('1-1');
+  const b=ghWinBattle();
+  vm.runInContext('_battle=__ghBattle; endBattle(true)',Object.assign(host.sb,{__ghBattle:b}));
+  host.sb.__runDelay(800);host.sb.__runDelay(1200);
+  const lv=host.sb.findLevel('1-1');
+  assert('12e 前置：胜利结算后 current 已推进到下一关',host.sb.getGame().current==='1-2',String(host.sb.getGame().current));
+  host.sb.document.getElementById('battleShare').handlers.click();
+  assert('12e 点「分享卡片」后 #shareLevel 仍是刚打完的关卡',
+    host.els.shareLevel.textContent==='1-1 '+lv.npc,JSON.stringify(host.els.shareLevel.textContent));
+  assert('12e 分享入口仍关掉 auto 并取消 timer',vm.runInContext('_battleAuto',host.sb)===false&&host.sb.__pending().length===0);
+}
+
+/* ---- 12f F5 彩带分层：胜负/战果不放，进入战绩层恰好一次；失败路径不放 ---- */
+{
+  const host=makeOutroHost(60000);
+  ghStartOutro(host,ghWinBattle(),false);
+  assert('12f 胜负阶段不放彩带',host.calls.celebrate===0,String(host.calls.celebrate));
+  host.sb.__runDelay(800);
+  assert('12f 战果阶段不放彩带（不遮挡奖励文字）',host.calls.celebrate===0,String(host.calls.celebrate));
+  host.sb.__runDelay(1200);
+  assert('12f 进入战绩层恰好放一次彩带',host.calls.celebrate===1,String(host.calls.celebrate));
+  host.winEvents.pageshow();
+  host.docEvents.visibilitychange();
+  assert('12f 重复恢复不重复放彩带',host.calls.celebrate===1,String(host.calls.celebrate));
+
+  const loss=makeOutroHost(70000);
+  ghStartOutro(loss,ghLoseBattle(),true);
+  loss.sb.__runDelay(800);loss.sb.__runDelay(1200);
+  assert('12f 失败路径进入战绩层也不放彩带',loss.calls.celebrate===0&&/battleRetry/.test(loss.els.battleEnd.innerHTML),String(loss.calls.celebrate));
+
+  const auto=makeOutroHost(80000);
+  ghStartOutro(auto,ghWinBattle(),true);
+  auto.sb.__runDelay(800);
+  auto.sb.__runDelay(2000);
+  assert('12f auto 胜利直接进下一关时不放彩带（取舍：不经战绩层）',
+    auto.calls.celebrate===0&&auto.calls.trackLevel.length===1,String(auto.calls.celebrate));
+}
+
+/* ---- 12g 本场 overlay 已关闭后，阶段 callback 不得再推进/重绘 ---- */
+{
+  const host=makeOutroHost(90000);
+  ghStartOutro(host,ghWinBattle(),false);
+  const end=host.els.battleEnd,html=end.innerHTML;
+  host.els.battleOverlay.classList.remove('open');
+  host.sb.__runDelay(800);
+  assert('12g overlay 关闭后阶段 callback 不重绘、不排下一层',
+    end.innerHTML===html&&host.sb.__pending().length===0,
+    JSON.stringify({html:String(end.innerHTML).slice(0,80),pending:host.sb.__pending().map(t=>t.ms)}));
+}
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 process.exit(fail > 0 ? 1 : 0);

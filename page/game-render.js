@@ -369,7 +369,75 @@ function updateGameBar(){
 }
 
 /* ========== 敌群试炼（M2b 多对多） ========== */
-var _groupBattle=null,_groupTimer=null
+var _groupBattle=null,_groupTimer=null,_groupOutcomeMessage='',_gbOutroActive=null,_gbOutroGeneration=0,_gbOutroSettlementId=0
+function cancelGroupOutroTimer(){
+  var state=_gbOutroActive
+  if(!state)return
+  state.token++
+  if(state.timer){clearTimeout(state.timer);state.timer=null}
+  state.deadline=0;state.advance=null
+}
+function invalidateGroupOutro(){
+  cancelGroupOutroTimer()
+  _gbOutroActive=null
+  _gbOutroGeneration++
+}
+function groupOutroPanelOpen(){
+  var panel=document.getElementById('panelOverlay')
+  return !!(panel&&panel.classList&&panel.classList.contains('open'))
+}
+function groupOutroStageOpen(phase){
+  var panel=document.getElementById('panelOverlay')
+  var html=panel&&panel.innerHTML||''
+  return !!(panel&&panel.classList&&panel.classList.contains('open')&&(html.indexOf('data-group-outro="'+phase+'"')>-1||html.indexOf('data-group-outro=\\"'+phase+'\\"')>-1))
+}
+function armGroupOutroTimer(state){
+  var token=++state.token,settlementId=state.id,generation=state.generation,deadline=state.deadline
+  var remaining=Math.max(0,deadline-Date.now())
+  state.timer=setTimeout(function(){
+    if(_gbOutroActive!==state||state.id!==settlementId||state.token!==token||state.generation!==generation||generation!==_gbOutroGeneration
+      ||state.deadline!==deadline||_groupBattle!==state.battle||!state.battle.done||!groupOutroStageOpen(state.phase))return
+    state.timer=null
+    var advance=state.advance;state.advance=null
+    if(advance)advance(deadline)
+  },remaining)
+}
+function scheduleGroupOutro(state,fn,delay,fromDeadline){
+  if(_gbOutroActive!==state)return
+  if(state.timer){clearTimeout(state.timer);state.timer=null}
+  state.advance=fn;state.deadline=(typeof fromDeadline==='number'?fromDeadline:Date.now())+delay
+  armGroupOutroTimer(state)
+}
+function resumeGroupOutroTimer(){
+  var state=_gbOutroActive
+  if(!state||!state.timer||!state.advance)return
+  /* Capture the active phase before clearing. Its callback may replace the outro
+     state when it creates the result layer; the next expired phase then belongs
+     to that new state and must also be consumed during this same pageshow. */
+  while(state===_gbOutroActive&&state.advance&&state.deadline<=Date.now()){
+    if(state.timer){clearTimeout(state.timer);state.timer=null}
+    var advance=state.advance,deadline=state.deadline
+    state.advance=null
+    advance(deadline)
+    state=_gbOutroActive
+  }
+  if(state&&state===_gbOutroActive&&state.timer&&state.advance){
+    clearTimeout(state.timer);state.timer=null;armGroupOutroTimer(state)
+  }
+}
+if(typeof document!=='undefined'&&document.addEventListener){
+  document.addEventListener('visibilitychange',resumeGroupOutroTimer)
+  if(typeof window!=='undefined'&&window.addEventListener)window.addEventListener('pageshow',resumeGroupOutroTimer)
+}
+function advanceGroupOutro(){
+  var state=_gbOutroActive
+  if(!state||!state.advance||!groupOutroStageOpen(state.phase)||state.battle!==_groupBattle)return
+  var advance=state.advance
+  state.token++
+  if(state.timer){clearTimeout(state.timer);state.timer=null}
+  state.deadline=0;state.advance=null
+  advance()
+}
 var _groupStageId=null   // 当前敌群小关 id（通关记录用）
 var _groupActing=null    // 当前行动中的单位 id（高亮）
 var _petBattlePicks=[]   // 宠物参战选择（M4-6）；v2.2 WP-H1 起以存档 `dh-pets-v1.battlePicks` 为准
@@ -428,6 +496,9 @@ function currentGroupStageId(){
 
 /* 启动敌群试炼：生成玩家 Unit + 敌人，开群战 */
 function startGroupTrial(groupId){
+  invalidateGroupOutro()
+  if(typeof cancelSingleBattleTimers==='function')cancelSingleBattleTimers()
+  _groupOutcomeMessage=''
   // 支持：小关 id（g1-1）或大关 id（g1，取第 1 关）
   var stage = (typeof getGroupStage === 'function') ? getGroupStage(groupId) : null
   var glv
@@ -524,6 +595,7 @@ function autoPickPets(n){
 
 /* 群战推进（自动模式定时循环；手动模式点按钮触发） */
 function _groupStep(){
+  if(_groupBattle&&_groupBattle.done)return
   if(_groupPaused)return   // 详情弹层打开中：挂起，关闭后 resumeGroupBattle() 续跑
   if(!_groupBattle||_groupBattle.done){_groupDone();return}
   // 单步执行：一次一个单位行动（速度优先级可见）
@@ -1282,16 +1354,21 @@ function gbShowSkillCast(gb, bubble, evs){
 
 /* 群战结束 */
 function _groupDone(){
+  /* 没有本场战斗可结算：旧实现在 `_groupBattle===null` 时仍按失败路径走下去
+     （结算宠物受伤 + 打开一份「💀 失败」面板），凭空造出一场失败。 */
+  if(!_groupBattle)return
   if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
   var w=_groupBattle&&_groupBattle.winner
   /* v2.1.19：手动模式下战斗结束后仍可继续点「下一步」→ _groupStep 会再次走到这里，
      导致 markGroupStageCleared / groupVictoryReward 被重复执行、奖励重复发放。
      这里保证每场战斗只结算一次。 */
-  if(_groupRewarded){
-    renderGroupOverlay(false)
-    return
-  }
+  if(_groupRewarded)return
   _groupRewarded=true
+  invalidateGroupOutro()
+  var battle=_groupBattle
+  var outro={id:++_gbOutroSettlementId,battle:battle,generation:_gbOutroGeneration,token:0,timer:null,deadline:0,advance:null,phase:'outcome'}
+  _gbOutroActive=outro
+  var isCurrentOutro=function(phase){return _gbOutroActive===outro&&outro.generation===_gbOutroGeneration&&_groupBattle===battle&&battle&&battle.done&&outro.phase===phase}
   _groupActing=null        // v2.1.14：战斗结束不再残留「行动中」高亮
   _groupPaused=false
   gbFxClear()              // v2.4.0：清掉本场残留飘字（否则结算面板后面还飘着旧数字）
@@ -1310,7 +1387,7 @@ function _groupDone(){
     if (prog && prog.firstClear) {
       msg += (prog.nextStage ? ' · 🔓 解锁 ' + prog.nextStage : ' · 🏆 全部通关！')
     }
-    toast(msg, 's')
+    _groupOutcomeMessage=msg
     // 立即重渲染小关列表（无需刷新）
     if (stageId && typeof showGroupStages === 'function') {
       var lg = stageId.split('-')[0]
@@ -1319,7 +1396,7 @@ function _groupDone(){
   }
   else {
     // v2.1.19：参战的成熟宠物 50% 几率受伤
-    var msg0 = '💀 敌群讨伐失败…'
+    var msg0 = '💀 敌群讨伐失败… 无奖励'
     try {
       var dInj = getPetStore()
       var sps = (_groupBattle && _groupBattle.allies ? _groupBattle.allies : [])
@@ -1327,12 +1404,40 @@ function _groupDone(){
       var hurt = (typeof applyDefeatInjuries === 'function') ? applyDefeatInjuries(dInj, sps) : []
       if (hurt.length) { savePetStore(dInj); msg0 += ' ' + hurt.join('、') + ' 受伤（喂养恢复）' }
     } catch (e) { console.warn('[group] 受伤判定失败', e); }
-    toast(msg0, 'e')
+    _groupOutcomeMessage=msg0
   }
-  /* v2.4.0 改造 4：结算统计面板 —— 统计**只算一次**（在这里算好传进去），
-     且必须排在既有副作用（通关标记 / 奖励 / 宠物受伤 / 小关列表）**之后**，顺序不动。
-     面板走 #panelOverlay（z-index 52 > 战斗层 50），不新建 overlay。 */
-  if(_groupBattle)showGroupResultPanel(_groupBattle, groupBattleStats(_groupBattle))
+  /* 结算和奖励/受伤副作用只在此处一次；展示阶段仅依次呈现胜负、战果、战绩。 */
+  _groupOutcomeMessage=_groupOutcomeMessage||''
+  var gb=battle,stats=gb?groupBattleStats(gb):null
+  var outcome=gb&&gb.winner==='ally'?'🏆 胜利':'💀 失败'
+  function bindContinue(){var btn=document.getElementById('gbOutroContinue');if(btn)btn.addEventListener('click',advanceGroupOutro)}
+  function openOutcomeStage(phase,title,body){
+    if(!isCurrentOutro(phase))return
+    outro.phase=phase
+    var html='<div class="det-hdr" data-group-outro="'+phase+'"><button class="speed-btn" id="detailClose">✕</button><span class="det-title">'+outcome+'</span></div><div class="det-card"><div class="det-h">'+title+'</div>'+(body?'<div class="det-line">'+escHtml(body)+'</div>':'')+'</div><button class="speed-btn" id="gbOutroContinue">继续</button>'
+    _openDetailPanel(html,function(){
+      if(_gbOutroActive!==outro)return
+      invalidateGroupOutro()
+      outro.phase='closed'
+      var bo=document.getElementById('battleOverlay');if(bo)bo.classList.remove('open')
+    })
+    bindContinue()
+  }
+  function showStats(){
+    if(!isCurrentOutro('reward')||!groupOutroPanelOpen())return
+    showGroupResultPanel(gb,stats)
+  }
+  function showOutcome(fromDeadline){
+    if(!isCurrentOutro('outcome'))return
+    var deadline=(typeof fromDeadline==='number')?fromDeadline:Date.now()
+    outro.phase='reward'
+    if(deadline>=Date.now())openOutcomeStage('reward','战果',_groupOutcomeMessage||'未获得奖励；失败副作用已结算')
+    else if(groupOutroStageOpen('outcome'))openOutcomeStage('reward','战果',_groupOutcomeMessage||'未获得奖励；失败副作用已结算')
+    if(!groupOutroStageOpen('reward'))return
+    scheduleGroupOutro(outro,showStats,1200,deadline)
+  }
+  openOutcomeStage('outcome','胜负','')
+  scheduleGroupOutro(outro,showOutcome,800)
 }
 
 /* 敌群胜利奖励：技能点（基数 4 点/胜，与挑战数值独立）+ 材料掉落
@@ -1592,6 +1697,13 @@ function gbCopyFallback(text){
       —— 那会再次进入 _groupDone（本函数正是从 _groupDone 里调起的）。 */
 function showGroupResultPanel(gb, stats){
   if(!gb||!stats)return
+  var outro=_gbOutroActive
+  if(outro&&outro.battle===gb&&outro.phase==='reward'&&_groupBattle===gb){outro.phase='stats';cancelGroupOutroTimer()}
+  if(gb.done&&_groupBattle===gb&&_groupRewarded&&(!outro||outro.battle!==gb||outro.phase==='closed'||outro.phase==='detail'))return
+  if(outro&&outro.battle===gb){
+    if((outro.phase!=='reward'&&outro.phase!=='stats')||_groupBattle!==gb)return
+    if(outro.phase==='reward'&&outro.deadline===0&&!outro.advance){outro.phase='stats';cancelGroupOutroTimer()}
+  }
   var win=gb.winner==='ally'
   var h='<div class="det-hdr">'
     +'<button class="speed-btn" id="detailClose">✕</button>'
@@ -1623,7 +1735,9 @@ function showGroupResultPanel(gb, stats){
       +'但 gb.log 只记行动者名字、没有 id，日志归因只能落到**首个**同名单位。</div></div>'
   }
   h+='<button class="speed-btn" id="gbCopyReport">📋 复制战报</button>'
+  if(outro&&outro.battle===gb)h=h.replace('<div class="det-hdr">','<div class="det-hdr" data-group-outro="stats">')
   _openDetailPanel(h, function(){
+    if(outro&&_gbOutroActive===outro){invalidateGroupOutro();outro.phase='closed'}
     var bo=document.getElementById('battleOverlay')
     if(bo)bo.classList.remove('open')
   })
@@ -1757,7 +1871,7 @@ function renderGroupOverlay(show){
   gbApplyStepTransitions(ov,gb)
   // 事件绑定
   var closeBtn=document.getElementById('gbClose')
-  if(closeBtn)closeBtn.addEventListener('click',function(){ov.classList.remove('open');_groupBattle=null;_groupPaused=false;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}gbFxClear()})
+  if(closeBtn)closeBtn.addEventListener('click',function(){cancelGroupOutroTimer();ov.classList.remove('open');_groupBattle=null;_groupPaused=false;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}gbFxClear()})
   // v2.1.22：场地胶囊 → 场地介绍弹层
   var terrBtn=document.getElementById('gbTerrain')
   if(terrBtn)terrBtn.addEventListener('click',function(){showTerrainDetail(gb.terrain)})
@@ -1772,6 +1886,7 @@ function renderGroupOverlay(show){
   })
   var modeBtn=document.getElementById('gbMode')
   if(modeBtn)modeBtn.addEventListener('click',function(){
+    if(_groupBattle&&_groupBattle.done&&_groupMode==='auto')invalidateGroupOutro()
     _groupMode=_groupMode==='auto'?'manual':'auto'
     localStorage.setItem('dh-group-mode',_groupMode)
     if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
@@ -2527,6 +2642,14 @@ var _detailRestore=null   // 关闭弹层后要恢复的界面（从技能培养
 function _openDetailPanel(html, restore){
   var ov=document.getElementById('panelOverlay')
   if(!ov)return
+  if(typeof html==='string'&&html.indexOf('data-group-outro=')<0&&_gbOutroActive&&_gbOutroActive.battle===_groupBattle&&_gbOutroActive.phase!=='stats'){
+    /* 非本场 outro 自己的详情面板被打开 → 作废 outro，防止过期阶段回调覆盖玩家操作。
+       先取引用再标记 phase（`invalidateGroupOutro()` 会把 `_gbOutroActive` 置 null，
+       旧实现此处紧接着 `.phase='detail'` 必然抛 TypeError）。 */
+    var activeOutro=_gbOutroActive
+    activeOutro.phase='detail'
+    invalidateGroupOutro()
+  }
   _detailRestore=(typeof restore==='function')?restore:null
   ov.innerHTML='<div class="panel-inner">'+html+'</div>'
   ov.classList.add('open')

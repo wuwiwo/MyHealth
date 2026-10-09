@@ -4,6 +4,78 @@
    ============================================ */
 /* ========== BATTLE ========== */
 let _battleRunning=false,_battleSpeed=1,_battleTimer=null,_battle=null,_battleAuto=false
+var _battlePhaseTimer=null,_battleAutoTimer=null,_battleStartTimer=null,_battlePhaseDeadline=0,_battleAutoDeadline=0,_battlePhaseCallback=null,_battleAutoCallback=null,_battlePhaseToken=0,_battleAutoToken=0,_battleSessionToken=0,_battleEndSnapshot=null,_battleLevelId=null
+/* 单敌终局阶段的两条推进通道（phase = 普通 800/1200ms；auto = 自动胜利战果 2000ms）。
+   deadline 是**绝对到期时刻**（`Date.now()` 口径），用于：
+     ① 页面后台恢复时按剩余时间重排（不重新计满）；
+     ② 恢复时一次性消费所有已过期阶段（追赶多个阶段）。
+   timer 回调把自己的 deadline 交给 fn，下一阶段以它为锚累加。 */
+var _battleOutroSlots={phase:{timer:'_battlePhaseTimer',deadline:'_battlePhaseDeadline',callback:'_battlePhaseCallback',token:'_battlePhaseToken'},auto:{timer:'_battleAutoTimer',deadline:'_battleAutoDeadline',callback:'_battleAutoCallback',token:'_battleAutoToken'}}
+function battleOutroSlot(kind){return _battleOutroSlots[kind==='auto'?'auto':'phase']}
+function scheduleBattleOutro(kind,fn,delay,fromDeadline){
+  var s=battleOutroSlot(kind)
+  if(window[s.timer])clearTimeout(window[s.timer])
+  var token=++window[s.token]
+  window[s.callback]=fn
+  var deadline=(typeof fromDeadline==='number'?fromDeadline:Date.now())+delay
+  window[s.deadline]=deadline
+  /* 剩余时间 = 绝对 deadline 的余额。真实浏览器不会提前触发 setTimeout，
+     故 remaining 恒 ≤ delay；这里**不做上界夹取**，保持纯绝对 deadline 语义
+     （测试夹具若要模拟触发，必须自己把时钟推进到该 timer 的到期时刻）。 */
+  var remaining=Math.max(0,deadline-Date.now())
+  window[s.timer]=setTimeout(function(){
+    if(token!==window[s.token])return
+    window[s.timer]=null;window[s.deadline]=0
+    var cb=window[s.callback];window[s.callback]=null
+    if(cb)cb(deadline)
+  },remaining)
+}
+function rearmBattleOutroTimer(kind){
+  var s=battleOutroSlot(kind)
+  if(!window[s.timer]||!window[s.callback])return
+  clearTimeout(window[s.timer])
+  var token=++window[s.token],deadline=window[s.deadline]
+  window[s.timer]=setTimeout(function(){
+    if(token!==window[s.token])return
+    window[s.timer]=null;window[s.deadline]=0
+    var cb=window[s.callback];window[s.callback]=null
+    if(cb)cb(deadline)
+  },Math.max(0,deadline-Date.now()))
+}
+/* 同步消费一个已过期阶段（回调会排下一层；旧 callback 由 token/session 守卫拦截） */
+function consumeBattleOutroStage(kind){
+  var s=battleOutroSlot(kind),timer=window[s.timer],deadline=window[s.deadline],cb=window[s.callback]
+  window[s.timer]=null;window[s.deadline]=0;window[s.callback]=null;window[s.token]++
+  if(timer)clearTimeout(timer)
+  if(cb)cb(deadline)
+}
+function resumeBattleOutroTimers(){
+  /* 页面隐藏期间可能已跨过多个阶段 deadline：循环消费到「剩下未过期的阶段」为止，
+     否则只会前进一层、再重新计满下一层（违反按剩余时间追赶）。 */
+  var guard=0
+  while(guard++<16){
+    if(_battlePhaseTimer&&_battlePhaseDeadline<=Date.now()){consumeBattleOutroStage('phase');continue}
+    if(_battleAutoTimer&&_battleAutoDeadline<=Date.now()){consumeBattleOutroStage('auto');continue}
+    break
+  }
+  rearmBattleOutroTimer('phase')
+  rearmBattleOutroTimer('auto')
+}
+if(typeof document!=='undefined'&&document.addEventListener){
+  document.addEventListener('visibilitychange',resumeBattleOutroTimers)
+  if(typeof window!=='undefined'&&window.addEventListener)window.addEventListener('pageshow',resumeBattleOutroTimers)
+}
+function cancelBattleOutroTimers(){
+  _battlePhaseToken++;_battleAutoToken++
+  _battlePhaseCallback=null;_battleAutoCallback=null;_battlePhaseDeadline=0;_battleAutoDeadline=0
+  if(_battlePhaseTimer){clearTimeout(_battlePhaseTimer);_battlePhaseTimer=null}
+  if(_battleAutoTimer){clearTimeout(_battleAutoTimer);_battleAutoTimer=null}
+  if(_battleStartTimer){clearTimeout(_battleStartTimer);_battleStartTimer=null}
+}
+function cancelSingleBattleTimers(){
+  cancelBattleOutroTimers()
+  if(_battleTimer){clearTimeout(_battleTimer);_battleTimer=null}
+}
 
 /* ========== 战斗速度（关卡挑战 / 单敌） ==========
    与敌群侧**同口径**（game-render.js：`_groupSpeed` + localStorage `dh-group-speed`
@@ -94,6 +166,12 @@ function restoreSingleBattleOverlay() {
 
 function startBattle(id){
   const lv=findLevel(id);if(!lv)return
+  cancelSingleBattleTimers()
+  _battleSessionToken++
+  _battleEndSnapshot=null
+  _battleLevelId=id   /* F4：本场快照的关卡来源（endBattle 里 getGame().current 会被推进） */
+  if(typeof invalidateGroupOutro==='function')invalidateGroupOutro()
+  if(typeof cancelGroupOutroTimer==='function')cancelGroupOutroTimer()
   // 重建单敌战斗 overlay 结构（群战可能覆盖过 innerHTML）
   restoreSingleBattleOverlay()
   if(!getGame().attempts)getGame().attempts={}
@@ -141,7 +219,7 @@ function startBattle(id){
   document.getElementById('battleLog').innerHTML=''
   document.getElementById('battleEnd').innerHTML=''
   document.getElementById('battleOverlay').classList.add('open')
-  setTimeout(()=>runBattle(),500)
+  _battleStartTimer=setTimeout(()=>{_battleStartTimer=null;runBattle()},500)
 }
 
 /* ========== v2.5.0：战斗引擎异常不得伪装成胜利 ==========
@@ -181,6 +259,7 @@ function getLastBattleError(){return _lastBattleError}
    不动 HP、不发奖、不写通关、不计失败次数，并在界面上如实说明。
    `extra` 用于校正上下文里的 `stage`（v2.5.2：守卫已覆盖渲染段，失败可能不发生在引擎调用里）。 */
 function endBattleAborted(err,extra){
+  cancelSingleBattleTimers()
   var ctx=battleErrorContext(err,_battle,extra)
   _lastBattleError=ctx
   if(_battle){
@@ -201,6 +280,7 @@ function endBattleAborted(err,extra){
   }
   var abortBtn=document.getElementById('battleAbort')
   if(abortBtn)abortBtn.addEventListener('click',function(){
+    cancelSingleBattleTimers()
     document.getElementById('battleOverlay').classList.remove('open')
     if(typeof renderGame==='function')renderGame()
   })
@@ -424,63 +504,122 @@ function showImpact(targetEl,ev,amount,lifeMs){
 }
 
 function endBattle(won){
-  _battle.done=true;const el=document.getElementById('battleEnd')
-  var g=getGame()
+  if(!_battle||_battle._settled)return
+  _battle._settled=true
+  var sessionToken=_battleSessionToken
+  /* F4：本场关卡取 startBattle 记录的快照值。不能再靠 `getGame().current` 反查 ——
+     本函数随后会把它推进到下一关，快照/分享卡片会因此指向**下一关**。
+     仅当没有快照值（如直接调 endBattle 的旧路径）才回退到 current。 */
+  var settledLevelId=_battleLevelId||(getGame()&&getGame().current)||''
+  var settledLevel=findLevel(settledLevelId)||null
+  _battle.done=true
+  cancelSingleBattleTimers()
+  const el=document.getElementById('battleEnd')
+  var g=getGame(),lootLine='',nextId=''
   if(!won){
     if(!g.attempts)g.attempts={}
     var todayKey=today()+'_'+g.current
     g.attempts[todayKey]=(g.attempts[todayKey]||0)+1
     setGame(g)
-  }
-  if(won){
-    // 🎁 先取"被击败的关卡"再推进 current，否则战利品会错按下一关类型结算
-    var beatenLv=findLevel(g.current)||{}
+    _battleAuto=false
+    var autoBtn=document.getElementById('battleAuto');if(autoBtn){autoBtn.classList.remove('active');autoBtn.textContent='🔄 自动'}
+  }else{
+    // 结算入口保持唯一；先记通关/奖励，展示阶段只读上述真实结算结果。
+    var beatenLv=settledLevel||findLevel(g.current)||{}
     if(!g.cleared.includes(g.current))g.cleared.push(g.current)
-    let nextId='';let found=false
+    var found=false
     for(const ch of Object.values(LEVELS)){
-      for(const lv2 of ch.levels){
-        if(found){nextId=lv2.id;found=false;break}
-        if(lv2.id===g.current)found=true
-      }
+      for(const lv2 of ch.levels){if(found){nextId=lv2.id;found=false;break}if(lv2.id===g.current)found=true}
       if(nextId)break
     }
-    if(nextId)g.current=nextId
-    else g.current=''
-    setGame(g)
-    trackLevel(g.current)
-    // 🎁 Victory loot: refine points (banked, spendable once soul refinement unlocked)
-    var loot=rollLoot(beatenLv)
-    var ref=getRefine()
-    ref.points=(ref.points||0)+loot.points
-    saveRefine(ref)
-    var lootLine='<div class="be-loot">🎁 战利品 +'+loot.points+' 炼化点'+(loot.mult>2?'（BOSS ×10）': '')+(ref.unlocked?'':'（通关 9-6 解锁炼魂后可用）')+'</div>'
-    el.innerHTML='<div class="be-result be-win">🏆 胜利！</div>'+lootLine+'<div class="be-replay"><button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button></div>'
-    celebrate()
-    if(_battleAuto&&nextId){
-      el.innerHTML+='<div style="font-size:var(--fs-2xs);color:var(--text3);text-align:center;margin-top:6px">🔄 自动模式：2秒后进入下一关...</div>'
-      setTimeout(function(){
-        var ov=document.getElementById('battleOverlay');
-        if(ov&&ov.classList.contains('open')&&_battleAuto){
-          ov.classList.remove('open');
-          setTimeout(function(){if(_battleAuto&&getGame().current)startBattle(getGame().current)},200);
-        }
-      },2000);
-    }
-  } else {
-    _battleAuto=false;
-    var autoBtn=document.getElementById('battleAuto');if(autoBtn){autoBtn.classList.remove('active');autoBtn.textContent='🔄 自动'}
-    el.innerHTML='<div class="be-result be-lose">💀 战败</div><div class="be-replay"><button class="be-btn be-btn-retry" id="battleRetry">🔄 重新挑战</button></div>'
+    g.current=nextId||''
+    setGame(g);trackLevel(g.current)
+    var loot=rollLoot(beatenLv),ref=getRefine()
+    ref.points=(ref.points||0)+loot.points;saveRefine(ref)
+    lootLine='🎁 战利品 +'+loot.points+' 炼化点'+(loot.mult>2?'（BOSS ×10）':'')+(ref.unlocked?'':'（通关 9-6 解锁炼魂后可用）')
+    /* F5：彩带不再在结算瞬间放（会盖住 800/1200ms 两个阶段），改到进入战绩层时一次性触发 */
   }
-  document.getElementById('battleNext')?.addEventListener('click',()=>{document.getElementById('battleOverlay').classList.remove('open');renderGame()})
-  document.getElementById('battleRetry')?.addEventListener('click',()=>{document.getElementById('battleOverlay').classList.remove('open');setTimeout(()=>startBattle(getGame().current),100)})
-  document.getElementById('battleShare')?.addEventListener('click',showShareCard)
+  var heading=won?'<div class="be-result be-win">🏆 胜利！</div>':'<div class="be-result be-lose">💀 战败</div>'
+  _battleEndSnapshot={token:sessionToken,levelId:settledLevelId,level:settledLevel,result:won?'win':'loss',lootText:lootLine,nextId:nextId,celebrated:false}
+  function isCurrentSettlement(){
+    if(!(_battleSessionToken===sessionToken&&_battle&&_battle._settled&&_battleEndSnapshot&&_battleEndSnapshot.token===sessionToken))return false
+    /* 本场 overlay 已关闭（✕/下一关/分享离开后）就不再推进展示层；元素缺失的桩环境不拦 */
+    var ov=document.getElementById('battleOverlay')
+    return !(ov&&ov.classList&&!ov.classList.contains('open'))
+  }
+  /* 层级只允许单向推进：0 胜负 → 1 战果 → 2 战绩。重复点击 / 迟到 callback 不得重绘成旧层。 */
+  var layer=0
+  function disposeAuto(){
+    _battleAuto=false
+    var auto=document.getElementById('battleAuto');if(auto){auto.classList.remove('active');auto.textContent='🔄 自动'}
+  }
+  /* 显式「继续」/「查看战绩」：先取消当前阶段 timer，再立即进入下一层（幂等、单向） */
+  function bindContinue(id,next){
+    var b=document.getElementById(id)
+    if(!b)return
+    b.addEventListener('click',function(){
+      if(layer>=2)return
+      cancelBattleOutroTimers()
+      next()
+    })
+  }
+  function showRecord(){
+    if(!isCurrentSettlement()||layer>=2)return
+    layer=2
+    cancelBattleOutroTimers()
+    disposeAuto()
+    el.innerHTML=heading+(won?'<div class="be-loot">'+lootLine+'</div>':'<div class="be-loot">未获得奖励 · 本次失败已记录</div>')
+      +'<div class="be-replay">'+(won?'<button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button>':'<button class="be-btn be-btn-retry" id="battleRetry">🔄 重新挑战</button>')+'</div>'
+    bindBattleRecordActions()
+    /* F5：彩带只在进入战绩层时放一次（用快照标志防重），胜负/战果阶段不遮挡按钮。
+       auto 胜利直接进下一关、不经过战绩层 → 不放彩带（取舍见交付报告）。 */
+    if(won&&_battleEndSnapshot&&!_battleEndSnapshot.celebrated){_battleEndSnapshot.celebrated=true;celebrate()}
+  }
+  function showReward(fromDeadline){
+    if(!isCurrentSettlement()||layer!==0)return
+    layer=1
+    if(won&&_battleAuto&&nextId){
+      /* auto 胜利战果层：已入账战利品 + 「查看战绩」（取消自动推进）+ 保留自动提示；无「继续」 */
+      el.innerHTML=heading+'<div class="be-loot">'+lootLine+'</div>'
+        +'<button class="be-btn be-btn-retry" id="battleViewRecord">查看战绩</button>'
+        +'<div class="be-auto-note">🔄 自动模式：战果展示至少 2 秒后进入下一关</div>'
+      bindContinue('battleViewRecord',showRecord)
+      scheduleBattleOutro('auto',function(){
+        if(!isCurrentSettlement()||layer!==1)return
+        var ov=document.getElementById('battleOverlay')
+        if(ov&&ov.classList.contains('open')&&_battleAuto&&getGame().current){ov.classList.remove('open');startBattle(getGame().current)}
+      },2000,fromDeadline)
+    }else{
+      el.innerHTML=heading+'<div class="be-loot">'+(won?lootLine:'未获得奖励 · 本次失败已记录')+'</div>'
+        +'<button class="be-btn be-btn-retry" id="battleOutroContinue">继续</button>'
+      bindContinue('battleOutroContinue',showRecord)
+      scheduleBattleOutro('phase',showRecord,1200,fromDeadline)
+    }
+  }
+  /* 胜负层：800ms → 战果层；「继续」可提前推进（胜负两条路径都有） */
+  el.innerHTML=heading+'<button class="be-btn be-btn-retry" id="battleOutroContinue">继续</button>'
+  bindContinue('battleOutroContinue',function(){showReward()})
+  scheduleBattleOutro('phase',function(deadline){showReward(deadline)},800)
+}
+function bindBattleRecordActions(){
+  var next=document.getElementById('battleNext'),retry=document.getElementById('battleRetry'),share=document.getElementById('battleShare'),ov=document.getElementById('battleOverlay')
+  if(next)next.addEventListener('click',function(){cancelSingleBattleTimers();_battleAuto=false;ov.classList.remove('open');renderGame()})
+  if(retry)retry.addEventListener('click',function(){cancelSingleBattleTimers();_battleAuto=false;ov.classList.remove('open');_battleStartTimer=setTimeout(function(){_battleStartTimer=null;startBattle(getGame().current)},100)})
+  if(share)share.addEventListener('click',function(){cancelBattleOutroTimers();_battleAuto=false;showShareCard()})
 }
 /* ========== SHARE CARD ========== */
 function showShareCard(){
-  const lv=findLevel(getGame().current)||findLevel(getGame().cleared[getGame().cleared.length-1])
+  cancelBattleOutroTimers()
+  _battleAuto=false
+  /* F4：本次结算仍有效时用**本场快照**渲染（胜利后 `getGame().current` 已推进到下一关，
+     旧实现会分享成下一关）；否则回退到现有「当前关 → 最近通关」逻辑。 */
+  var snap=_battleEndSnapshot
+  var useSnap=!!(_battle&&_battle._settled&&snap&&snap.token===_battleSessionToken&&snap.levelId)
+  var levelId=useSnap?snap.levelId:getGame().current
+  const lv=useSnap?(snap.level||findLevel(snap.levelId)):(findLevel(getGame().current)||findLevel(getGame().cleared[getGame().cleared.length-1]))
   if(!lv)return
   const stats=getGameStats()
-  document.getElementById('shareLevel').textContent=getGame().current+' '+lv.npc
+  document.getElementById('shareLevel').textContent=levelId+' '+lv.npc
   document.getElementById('shareStats').innerHTML=
     '<div class="share-stat"><div class="ss-v">'+stats.atk+'</div><div class="ss-l">攻击</div></div>'+
     '<div class="share-stat"><div class="ss-v">'+stats.def+'</div><div class="ss-l">防御</div></div>'+

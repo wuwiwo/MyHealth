@@ -95,7 +95,15 @@ function makeHarness(opt) {
     addEventListener(t, fn) { (docListeners[t] = docListeners[t] || []).push(fn); }
   };
 
-  const sb = { Math: deterministicMath(), JSON, console, Date };
+  /* 假时钟：`Date.now()` 由 vnow 提供。真实浏览器里 setTimeout **不会提前触发**，
+     故 flush 时必须把时钟推进到该 timer 的到期时刻 —— 否则绝对 deadline 语义
+     （`remaining = deadline - Date.now()`）会被夹具伪造，测出来是假的绿。
+     用 Proxy 保留 Date 的构造与其它静态方法（战斗代码里 `new Date()` 照常可用）。 */
+  let vnow = 1000000;
+  const FakeDate = new Proxy(Date, {
+    get(t, p, r) { if (p === 'now') return () => vnow; return Reflect.get(t, p, r); }
+  });
+  const sb = { Math: deterministicMath(), JSON, console, Date: FakeDate };
   sb.window = sb; sb.globalThis = sb;
   sb.localStorage = {
     getItem: k => (k in ls ? ls[k] : null),
@@ -103,7 +111,7 @@ function makeHarness(opt) {
     removeItem: k => { delete ls[k]; }
   };
   sb.document = doc;
-  sb.setTimeout = function (fn, ms) { timers.push({ fn: fn, ms: ms === undefined ? 0 : ms }); return timers.length; };
+  sb.setTimeout = function (fn, ms) { const d = ms === undefined ? 0 : ms; timers.push({ fn: fn, ms: d, due: vnow + d }); return timers.length; };
   sb.clearTimeout = function () {};
   sb.toast = function () {};
   let game = { current: '1-1', cleared: [], attempts: {} };
@@ -127,11 +135,13 @@ function makeHarness(opt) {
     set: (expr, v) => vm.runInContext(expr + '=' + JSON.stringify(v), sb),
     game: () => game,
     lastTimer: () => timers[timers.length - 1],
-    /* 清空队列并执行最后一个定时器（= 战斗 tick 的下一次调度 / 流程的下一步），返回其延时 */
+    /* 清空队列并执行最后一个定时器（= 战斗 tick 的下一次调度 / 流程的下一步），返回其延时。
+       执行前把假时钟推进到该 timer 的到期时刻（真实语义；否则定时器等于被提前触发）。 */
     flushToLast: function () {
       const t = H.lastTimer();
       timers.length = 0;
       if (!t) return null;
+      if (t.due > vnow) vnow = t.due;
       t.fn();
       return t.ms;
     },
@@ -248,7 +258,7 @@ assert('×1 场景：startBattle 仍是 ×1（默认档位没被改动）', H1.g
 H1.timers.length = 0; boot1.fn();
 assert('★ ×1：回合间隔仍是 600ms（原节奏未变）', H1.lastTimer().ms === 600, String(H1.lastTimer().ms));
 
-/* 4c ★ 自动模式逐关继承：胜利 → 2s 自动进关 → 下一关仍是 ×8 */
+/* 4c ★ 自动模式逐关继承：胜利展示 800ms + 战果 2s → 自动进关 → 下一关仍是 ×8 */
 console.log('--- 4c. 自动模式继承（胜利 → 自动进关 → 下一关） ---');
 /* 关卡要「后面还有下一关」且下一关血量不至于被一击秒掉：取一个有后继、且后继血量不缩水的中间关卡 */
 const cands = order.filter((lv, i) => order[i + 1] && order[i + 1].hp >= lv.hp * 0.8 && lv.hp > 0);
@@ -273,20 +283,22 @@ let ticks = 0, tickDelays = [];
 while (!HA.get('_battle.done') && ticks < 60) { tickDelays.push(HA.flushToLast()); ticks++; }
 assert('战斗在有限回合内结束（用例自检：驱动有效）', HA.get('_battle.done') === true, 'ticks=' + ticks);
 assert('★ ×8 全程每个回合间隔都是 75ms（' + ticks + ' 回合）', tickDelays.every(v => v === 75), JSON.stringify(tickDelays));
+const phaseOutcome = HA.lastTimer();
+assert('胜负阶段先等待 800ms', !!phaseOutcome && phaseOutcome.ms === 800, phaseOutcome && String(phaseOutcome.ms));
+HA.flushToLast();                                   // 800ms：进入战果阶段并开始 auto 成功显示窗口
 const adv = HA.lastTimer();
-assert('胜利后自动进关延时仍是 2000ms（未改自动节奏）', !!adv && adv.ms === 2000, adv && String(adv.ms));
-HA.flushToLast();                                   // 2000ms：关 overlay + 排 200ms
+assert('自动胜利战果阶段至少显示 2000ms', !!adv && adv.ms === 2000, adv && String(adv.ms));
+HA.flushToLast();                                   // 战果 2000ms 到期：直接进下一关（不再套 200ms 延迟）
 const step = HA.lastTimer();
-assert('200ms 后进入下一关（原流程未改）', !!step && step.ms === 200, step && String(step.ms));
+assert('自动进关将进入下一关开战（仅排下一关 500ms 开场）', !!step && step.ms === 500, step && String(step.ms));
 const nextId = HA.game().current;
 assert('玩家进度已推进到下一关（' + midLv.id + ' → ' + nextId + '，用例预期 ' + nextLv.id + '）',
   nextId === nextLv.id, String(nextId));
-HA.timers.length = 0; step.fn();                    // startBattle(下一关)
+HA.timers.length = 0; step.fn();                    // 自动开始下一关，并同步进入下一关首次tick
 const bootB = HA.timers.pop();
-assert('下一关开战引导 500ms', !!bootB && bootB.ms === 500, bootB && String(bootB.ms));
+assert('自动模式下一关首次回合延时 = 75ms（= 600/8）', !!bootB && bootB.ms === 75, bootB && String(bootB.ms));
 assert('★ 下一关仍继承 ×8（= 修复的目标行为）', HA.get('_battleSpeed') === 8, String(HA.get('_battleSpeed')));
-bootB.fn();
-const dNext = HA.lastTimer().ms;
+const dNext = bootB.ms;
 assert('★ 下一关的首次回合调度 = 75ms（修复前会被硬重置成 600ms）', dNext === 75, String(dNext));
 assert('★ 8× 高亮在自动进关后仍保持（不再出现「高亮 8×、实跑 1×」）',
   HA.btn(8).classList.contains('active') && !HA.btn(1).classList.contains('active'));

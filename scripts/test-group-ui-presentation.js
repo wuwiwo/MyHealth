@@ -50,13 +50,16 @@ function makeSandbox() {
     querySelectorAll: () => [], querySelector: () => null, addEventListener() {}, setAttribute() {},
     getAttribute: () => null, textContent: '' };
   sb.__ov = ov;
+  sb.__documentEvents = {};
+  sb.__windowEvents = {};
   sb.document = {
     getElementById: id => (id === 'panelOverlay' ? ov : null),
     querySelector: () => null, querySelectorAll: () => [],
     createElement: () => ({ style: {}, classList: { add() {}, remove() {}, toggle() {} },
       addEventListener() {}, appendChild() {}, setAttribute() {}, innerHTML: '' }),
-    body: { appendChild() {} }, addEventListener() {}, documentElement: { setAttribute() {} }
+    body: { appendChild() {} }, addEventListener(name, fn) { sb.__documentEvents[name] = fn; }, documentElement: { setAttribute() {} }
   };
+  sb.addEventListener = (name, fn) => { sb.__windowEvents[name] = fn; };
   sb.toast = function () {};
   sb.setTimeout = () => 0; sb.clearTimeout = () => {};
   sb.navigator = { clipboard: { writeText: () => ({ then: () => {} }) } };
@@ -1663,6 +1666,245 @@ console.log('--- 24. v2.11.5 抽屉态反馈（裁决 B） ---');
     sb.gbShowSkillCast(gbOf([dmgEv]), { skillId: 'blizzard' }, null);
     eq(layer.children.length, 0, '24e 抽屉态下施法特效仍跳过（中央区不放特效）');
   }
+}
+/* ============ 25. v2.12.0 群战终局顺序呈现（纯展示计时，不重复结算） ============ */
+console.log('--- 25. v2.12.0 群战终局分阶段 ---');
+{
+  const tasks=[];let tid=1,clock=20000,toastCalls=[];let resultCalls=0,statsCalls=0;
+  sb.Date={now:()=>clock};
+  sb.setTimeout=(fn,ms)=>{const t={id:tid++,fn:fn,ms:ms,due:clock+ms,cancelled:false};tasks.push(t);return t.id};
+  sb.clearTimeout=id=>{const t=tasks.find(x=>x.id===id);if(t)t.cancelled=true};
+  sb.toast=(...a)=>toastCalls.push(a);
+  sb.groupBattleStats=gb=>{statsCalls++;return {rows:[],rounds:gb.turn,terrain:0,dot:0,shield:0,dup:false}};
+  sb.showGroupResultPanel=(gb,stats)=>{resultCalls++;sb.__result={gb:gb,stats:stats};groupPanel.innerHTML='<div data-group-outro="stats"><div>我方战报</div><button id="detailClose">close</button></div>';groupPanel.classList.add('open')};
+  sb.markGroupStageCleared=()=>({firstClear:true,nextStage:'g1-2'});
+  sb.groupVictoryReward=()=>({msg:'技能点 +4 · 营养液 +1'});
+  sb.showGroupStages=()=>{};
+  const groupNodes=Object.create(null),groupPanel={_html:'',classList:{open:false,add(){this.open=true},remove(){this.open=false},contains(){return this.open}}};
+  Object.defineProperty(groupPanel,'innerHTML',{get(){return this._html},set(v){this._html=v;Object.keys(groupNodes).forEach(k=>delete groupNodes[k]);(v.match(/id="[^"]+"/g)||[]).forEach(x=>{const id=x.slice(4,-1);groupNodes[id]={addEventListener(type,fn){this['on'+type]=fn},click(){if(this.onclick)this.onclick()}}})}});
+  sb.document.getElementById=id=>id==='panelOverlay'?groupPanel:(groupNodes[id]||null);
+  groupPanel.classList.add();
+  sb.__runGroupDelay=ms=>{const t=tasks.find(x=>!x.cancelled&&x.ms===ms&&x.due>clock);if(!t)return false;t.cancelled=true;clock=t.due;t.fn();return true};
+  const gb={done:true,winner:'ally',turn:3,allies:[],enemies:[],units:[],log:[]};
+  sb._groupStageId='g1-1';sb._groupRewarded=false;sb._groupBattle=gb;
+  sb._groupOutcomeMessage='';
+  sb._groupTimer=null;sb._gbOutroActive=null;sb._gbOutroGeneration=0;
+  sb._groupActing=null;sb._groupPaused=false;
+  sb.gbFxClear=()=>{};sb.renderGroupOverlay=()=>{};sb._detailRestore=null;
+  sb._groupDone();
+  ok(/胜利/.test(groupPanel.innerHTML)&&!/战果/.test(groupPanel.innerHTML)&&resultCalls===0,
+    '25a 群战胜利先只显示胜负阶段，不并发战果/统计：'+groupPanel.innerHTML);
+  ok(toastCalls.length===0,'25a 群战结算不再发与统计抢读的奖励 toast：'+JSON.stringify(toastCalls));
+  ok(sb.__runGroupDelay(800)&&/战果/.test(groupPanel.innerHTML)&&/技能点 \+4/.test(groupPanel.innerHTML)&&resultCalls===0,
+    '25b 800ms 后先展示已结算战果文字，详细统计仍隐藏：'+groupPanel.innerHTML);
+  ok(sb.__runGroupDelay(1200)&&resultCalls===1&&statsCalls===1&&/我方战报/.test(groupPanel.innerHTML),
+    '25c 再 1200ms 后只进入一次详细战绩：'+JSON.stringify({resultCalls:resultCalls,statsCalls:statsCalls,html:groupPanel.innerHTML}));
+  sb._groupDone();
+  ok(resultCalls===1&&statsCalls===1&&/我方战报/.test(groupPanel.innerHTML),'25d 重复调用结算入口不再触发二次奖励/统计：'+JSON.stringify({resultCalls:resultCalls,statsCalls:statsCalls}));
+}
+/* ============ 26. 显式推进、绝对截止与过期 callback 防护 ============ */
+console.log('--- 26. 群战终局交互与后台计时 ---');
+{
+  const nodes = Object.create(null);
+  let now = 10000, tid = 1;
+  const tasks = [];
+  sb.Date = { now: () => now };
+  sb.setTimeout = (fn, ms) => { const t={id:tid++,fn,delay:ms,due:now+ms,cancelled:false};tasks.push(t);return t.id; };
+  sb.clearTimeout = id => { const t=tasks.find(x=>x.id===id);if(t)t.cancelled=true; };
+  sb.__fireDue = () => { let t; while((t=tasks.filter(x=>!x.cancelled&&x.due<=now).sort((a,b)=>a.due-b.due)[0])){t.cancelled=true;t.fn();} };
+  const mkNode = id => nodes[id] = {id, listeners:{}, addEventListener(type,fn){this.listeners[type]=fn;}, click(){if(this.listeners.click)this.listeners.click({preventDefault(){}});}};
+  const panel = { _html:'', classList:{open:false,add(){this.open=true;},remove(){this.open=false;},contains(){return this.open;}} };
+  Object.defineProperty(panel,'innerHTML',{configurable:true,get(){return this._html;},set(v){this._html=v;Object.keys(nodes).forEach(k=>delete nodes[k]);(v.match(/id="[^"]+"/g)||[]).forEach(x=>mkNode(x.slice(4,-1)));}});
+  sb.document.getElementById = id => id==='panelOverlay'?panel:(nodes[id]||null);
+  sb.toast = () => {};
+  sb.groupBattleStats = gb => ({rows:[],rounds:gb.turn,terrain:0,dot:0,shield:0,dup:false});
+  sb.showGroupResultPanel = (gb,stats) => { sb.__shownResult={gb,stats}; panel.innerHTML='<div data-group-outro="stats"><button id="detailClose">close</button></div>';panel.classList.add('open'); };
+  sb.markGroupStageCleared = () => ({firstClear:true,nextStage:'g1-2'});
+  sb.groupVictoryReward = () => ({msg:'奖励文本'}); sb.showGroupStages=()=>{};
+  sb._groupStageId='g1-1';sb._groupRewarded=false;sb._groupBattle={done:true,winner:'ally',turn:3,allies:[],enemies:[],units:[],log:[]};
+  sb._groupOutcomeMessage='';sb._groupTimer=null;sb._gbOutroActive=null;sb._gbOutroGeneration=0;sb._groupActing=null;sb._groupPaused=false;sb._detailRestore=null;
+  sb.gbFxClear=()=>{};sb.renderGroupOverlay=()=>{};
+  sb._groupDone();
+  panel.classList.add('open');
+  ok(!!nodes.gbOutroContinue,'26a 胜负阶段提供明确继续按钮');
+  ok(tasks.some(t=>!t.cancelled&&t.due===now+800),'26a 胜负自动阶段 deadline 为 Date.now()+800ms');
+  const firstDeadline=tasks.find(t=>!t.cancelled&&t.due===now+800);
+  now+=500;if(sb.__documentEvents.visibilitychange)sb.__documentEvents.visibilitychange();
+  ok(firstDeadline&&firstDeadline.cancelled&&tasks.some(t=>!t.cancelled&&t.due===now+300),'26b 后台恢复按绝对剩余 300ms 重排，不重新计满 800ms');
+  if(nodes.gbOutroContinue)nodes.gbOutroContinue.click();
+  ok(/战果/.test(panel.innerHTML)&&/奖励文本/.test(panel.innerHTML),'26c 显式继续提前进入含真实摘要的战果阶段');
+  ok(!!nodes.gbOutroContinue&&tasks.some(t=>!t.cancelled&&t.due===now+1200),'26c 战果阶段有继续按钮且自动阶段为 1200ms');
+  if(nodes.gbOutroContinue)nodes.gbOutroContinue.click();
+  ok(!!sb.__shownResult,'26d 再次显式继续进入战绩层');
+  now+=5000;sb.__fireDue();
+  ok(!!sb.__shownResult&&/detailClose/.test(panel.innerHTML),'26e 已进入战绩后旧 callback 不得重开/覆盖结果层');
+  sb._groupDone();
+  ok(!!sb.__shownResult,'26f 已 done 的重复结算调用不能离开战绩流程');
+
+  sb._groupBattle={done:true,winner:'enemy',turn:4,allies:[],enemies:[],units:[],log:[]};
+  sb._groupStageId=null;sb._groupRewarded=false;sb._groupOutcomeMessage='';
+  sb._groupDone();
+  const closeTimer=tasks.filter(t=>!t.cancelled).slice(-1)[0];
+  const staleCloseCallback=closeTimer&&closeTimer.fn;
+  if(nodes.detailClose)nodes.detailClose.click();
+  ok(!panel.classList.open&&!panel.innerHTML,'26h 关闭胜负阶段只关闭面板，不隐式切到战果');
+  ok(closeTimer&&closeTimer.cancelled,'26h 关闭结果面板取消挂起 timer');
+  if(staleCloseCallback)staleCloseCallback();
+  ok(!panel.classList.open&&!/战果/.test(panel.innerHTML),'26h 关闭后迟到 callback 不能续结算');
+
+  sb._groupBattle={done:true,winner:'ally',turn:5,allies:[],enemies:[],units:[],log:[]};
+  sb._groupStageId='g1-1';sb._groupRewarded=false;sb._groupOutcomeMessage='';
+  sb._groupDone();
+  if(staleCloseCallback)staleCloseCallback();
+  ok(/胜负/.test(panel.innerHTML)&&!/战果/.test(panel.innerHTML),'26i 重开新场后旧 callback 不能覆盖新结果');
+}
+/* 27. 后台跨越多个绝对阶段截止；pageshow 恢复并收敛，不为群战自动续关 */
+console.log('--- 27. 后台跨阶段截止与群战不自动续关 ---');
+{
+  const nodes=Object.create(null);let now=40000,tid=1,clears=0,awards=0,stats=0,resultCalls=0;const tasks=[];
+  sb.Date={now:()=>now};
+  sb.setTimeout=(fn,ms)=>{const t={id:tid++,fn,delay:ms,due:now+ms,cancelled:false};tasks.push(t);return t.id;};
+  sb.clearTimeout=id=>{const t=tasks.find(x=>x.id===id);if(t)t.cancelled=true;};
+  const fireDue=()=>{let t;while((t=tasks.filter(x=>!x.cancelled&&x.due<=now).sort((a,b)=>a.due-b.due)[0])){t.cancelled=true;t.fn();}};
+  const panel={_html:'',classList:{open:false,add(){this.open=true;},remove(){this.open=false;},contains(){return this.open;}}};
+  Object.defineProperty(panel,'innerHTML',{configurable:true,get(){return this._html;},set(v){this._html=v;Object.keys(nodes).forEach(k=>delete nodes[k]);(v.match(/id="[^"]+"/g)||[]).forEach(x=>{const id=x.slice(4,-1);nodes[id]={listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},click(){if(this.listeners.click)this.listeners.click({preventDefault(){}});}};});}});
+  sb.document.getElementById=id=>id==='panelOverlay'?panel:(nodes[id]||null);
+  sb.addEventListener=(name,fn)=>{sb.__windowEvents[name]=fn;};
+  sb.groupBattleStats=gb=>{stats++;return {rows:[],rounds:gb.turn,terrain:0,dot:0,shield:0,dup:false};};
+  sb.showGroupResultPanel=()=>{resultCalls++;panel.innerHTML='<div data-group-outro="stats"><div>我方战报</div><button id="detailClose">close</button></div>';panel.classList.add('open');};
+  sb.markGroupStageCleared=()=>{clears++;return {firstClear:true,nextStage:'g1-2'};};
+  sb.groupVictoryReward=()=>{awards++;return {msg:'一次奖励'};};sb.showGroupStages=()=>{};
+  const battle={done:true,winner:'ally',turn:8,allies:[],enemies:[],units:[],log:[]};
+  sb._groupBattle=battle;sb._groupStageId='g1-1';sb._groupRewarded=false;sb._groupOutcomeMessage='';
+  sb._groupTimer=null;sb._gbOutroActive=null;sb._gbOutroGeneration=0;sb._groupActing=null;sb._groupPaused=false;sb._detailRestore=null;
+  sb.gbFxClear=()=>{};sb.renderGroupOverlay=()=>{};
+  sb._groupDone();
+  const firstDue=tasks.find(t=>!t.cancelled&&t.due===now+800);
+  now+=2500; // 页面隐藏期间两个阶段 deadline 均已到期，浏览器未派发被节流的 timeout。
+  if(sb.__windowEvents.pageshow)sb.__windowEvents.pageshow();
+  fireDue();
+  ok(firstDue&&firstDue.due===40000+800,'27a 胜负阶段按 Date.now 设绝对截止');
+  ok(/data-group-outro="stats"/.test(panel.innerHTML)&&resultCalls===1&&stats===1,'27b pageshow 恢复时越过已到期胜负和战果，收敛到战绩层');
+  ok(clears===1&&awards===1&&sb._groupBattle===battle,'27c 后台推进与群战自动模式都不重结算、不自动续关');
+  now+=10000;fireDue();
+  ok(/data-group-outro="stats"/.test(panel.innerHTML)&&resultCalls===1&&stats===1,'27d 战绩层无遗留自动推进 callback');
+}
+{
+  const nodes=Object.create(null);let now=30000,tid=1;const tasks=[];
+  sb.Date={now:()=>now};
+  sb.setTimeout=(fn,ms)=>{const t={id:tid++,fn,delay:ms,due:now+ms,cancelled:false};tasks.push(t);return t.id;};
+  sb.clearTimeout=id=>{const t=tasks.find(x=>x.id===id);if(t)t.cancelled=true;};
+  const panel={_html:'',classList:{open:false,add(){this.open=true;},remove(){this.open=false;},contains(){return this.open;}}};
+  Object.defineProperty(panel,'innerHTML',{configurable:true,get(){return this._html;},set(v){this._html=v;(v.match(/id="[^"]+"/g)||[]).forEach(x=>{const id=x.slice(4,-1);nodes[id]={listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},click(){if(this.listeners.click)this.listeners.click({preventDefault(){}});}};});}});
+  sb.document.getElementById=id=>id==='panelOverlay'?panel:(nodes[id]||null);
+  sb.toast=()=>{};sb.groupBattleStats=gb=>({rows:[],rounds:gb.turn,terrain:0,dot:0,shield:0,dup:false});
+  sb.showGroupResultPanel=()=>{sb.__resultShown=true;panel.innerHTML='<div data-group-outro="stats"><button id="detailClose">close</button></div>';panel.classList.add('open');};
+  sb._groupStageId=null;sb._groupRewarded=false;sb._groupBattle={done:true,winner:'enemy',turn:2,allies:[],enemies:[],units:[],log:[]};sb._groupOutcomeMessage='';
+  sb._groupTimer=null;sb._gbOutroActive=null;sb._gbOutroGeneration=0;sb._groupActing=null;sb._groupPaused=false;sb._detailRestore=null;sb.gbFxClear=()=>{};sb.renderGroupOverlay=()=>{};
+  sb.getPetStore=()=>({pets:[]});sb.applyDefeatInjuries=()=>['🐾 星尘'];sb.savePetStore=()=>{};
+  sb._groupDone();
+  panel.classList.add('open');
+  ok(/失败/.test(panel.innerHTML)&&!(/奖励/.test(panel.innerHTML)),'26g 失败阶段明确且不捏造奖励');
+  if(nodes.gbOutroContinue)nodes.gbOutroContinue.click();
+  ok(/星尘/.test(panel.innerHTML)&&/受伤/.test(panel.innerHTML),'26g 失败真实宠物伤病摘要保留至战果');
+  ok(/无奖励/.test(panel.innerHTML)&&!/技能点|营养液|宠物饲料/.test(panel.innerHTML),'26g 失败战果只显示无奖励及真实副作用');
+}
+/* ============ 28~30. 批次 A 收尾：outro 期间外来详情面板、空 battle 守卫、真实结果面板 ============
+   这三节各自 `makeSandbox()` 起一份干净上下文：25~27 节把 `showGroupResultPanel`、
+   `document.getElementById`、`Date` 都换成了 mock，直接复用会失去「真实面板」的含义。 */
+function mkOutroHost(startNow){
+  const S=makeSandbox();
+  const nodes=Object.create(null);let now=startNow,tid=1;const tasks=[];
+  S.Date={now:()=>now};
+  S.setTimeout=(fn,ms)=>{const t={id:tid++,fn:fn,delay:(typeof ms==='number'?ms:0),due:now+(typeof ms==='number'?ms:0),cancelled:false};tasks.push(t);return t.id;};
+  S.clearTimeout=id=>{const t=tasks.find(x=>x.id===id);if(t)t.cancelled=true;};
+  const panel={_html:'',classList:{open:false,add(){this.open=true;},remove(){this.open=false;},contains(){return this.open;}}};
+  Object.defineProperty(panel,'innerHTML',{configurable:true,get(){return this._html;},set(v){this._html=String(v);Object.keys(nodes).forEach(k=>delete nodes[k]);(String(v).match(/id="[^"]+"/g)||[]).forEach(x=>{const id=x.slice(4,-1);nodes[id]={listeners:{},addEventListener(t,f){this.listeners[t]=f;},click(){if(this.listeners.click)this.listeners.click({preventDefault(){}});}};});}});
+  S.document.getElementById=id=>id==='panelOverlay'?panel:(nodes[id]||null);
+  S.toast=()=>{};
+  S.gbFxClear=()=>{};S.renderGroupOverlay=()=>{};
+  S.markGroupStageCleared=()=>({firstClear:true,nextStage:'g1-2'});
+  S.groupVictoryReward=()=>({msg:'💠 技能点 +4 · 营养液 +1'});
+  S.showGroupStages=()=>{};
+  return {S:S,panel:panel,nodes:nodes,tasks:tasks,
+    setNow(v){now=v;},
+    pending(){return tasks.filter(t=>!t.cancelled);},
+    fireDue(){let t;while((t=tasks.filter(x=>!x.cancelled&&x.due<=now).sort((a,b)=>a.due-b.due)[0])){t.cancelled=true;t.fn();}}};
+}
+/* 布置一场已结束的群战（不含结算副作用） */
+function mkDone(h,winner){
+  h.S._groupBattle={done:true,winner:winner||'ally',turn:3,allies:[],enemies:[],units:[],log:[]};
+  h.S._groupStageId='g1-1';h.S._groupRewarded=false;h.S._groupOutcomeMessage='';
+  h.S._groupTimer=null;h.S._gbOutroActive=null;h.S._gbOutroGeneration=0;
+  h.S._groupActing=null;h.S._groupPaused=false;h.S._detailRestore=null;
+}
+console.log('--- 28. F1：outro 期间打开非本场详情面板（原「空引用」崩溃） ---');
+{
+  const h=mkOutroHost(60000);
+  mkDone(h,'ally');
+  h.S._groupDone();
+  ok(/data-group-outro="outcome"/.test(h.panel.innerHTML)&&/胜利/.test(h.panel.innerHTML),'28 前置：outro 处于胜负阶段：'+h.panel.innerHTML);
+  const t800=h.pending().find(t=>t.due===60000+800);
+  let err=null;
+  try{ h.S._openDetailPanel('<div class="det-card"><div class="det-h">外部详情</div></div>'); }catch(e){ err=e; }
+  ok(err===null,'28a outro 期间打开非本场详情面板不抛 TypeError（旧实现在此必抛）：'+(err&&err.message));
+  ok(h.S._gbOutroActive===null,'28a outro 被作废（防过期阶段覆盖玩家操作）');
+  ok(!!t800&&t800.cancelled===true,'28a 挂起的阶段 timer 被取消');
+  if(t800)t800.fn();
+  ok(h.S._gbOutroActive===null&&!/data-group-outro/.test(h.panel.innerHTML)&&/外部详情/.test(h.panel.innerHTML),'28a 迟到阶段 callback 不覆盖已打开的详情面板：'+h.panel.innerHTML);
+}
+{
+  const h=mkOutroHost(70000);
+  mkDone(h,'ally');
+  h.S._groupDone();
+  h.setNow(70000+800);h.fireDue();
+  ok(/data-group-outro="reward"/.test(h.panel.innerHTML),'28b 前置：outro 处于战果阶段：'+h.panel.innerHTML);
+  const t1200=h.pending().find(t=>t.due===70000+800+1200);
+  let err=null;
+  try{ h.S._openDetailPanel('<div class="det-card"><div class="det-h">战果期间的外部详情</div></div>'); }catch(e){ err=e; }
+  ok(err===null,'28b 战果阶段同样不抛（旧实现在 reward 阶段也判红）：'+(err&&err.message));
+  ok(h.S._gbOutroActive===null&&!!t1200&&t1200.cancelled===true,'28b 作废 outro 并取消 1200ms 阶段 timer');
+  h.setNow(70000+3000);h.fireDue();
+  ok(/战果期间的外部详情/.test(h.panel.innerHTML)&&!/data-group-outro/.test(h.panel.innerHTML),'28b 迟到战果 callback 不得把面板换回旧阶段：'+h.panel.innerHTML);
+}
+console.log('--- 29. F6：没有本场战斗时 _groupDone 不得凭空结算 ---');
+{
+  const h=mkOutroHost(80000);
+  let injuries=0;
+  h.S.getPetStore=()=>({pets:[]});
+  h.S.applyDefeatInjuries=()=>{injuries++;return ['🐾 星尘'];};
+  h.S.savePetStore=()=>{};
+  h.S._groupBattle=null;h.S._groupRewarded=false;h.S._groupOutcomeMessage='';h.S._groupTimer=null;
+  h.S._gbOutroActive=null;h.S._gbOutroGeneration=0;h.S._groupActing=null;h.S._groupPaused=false;h.S._detailRestore=null;
+  h.S._groupDone();
+  ok(!h.panel.classList.open,'29 无本场战斗时不打开「💀 失败」结果面板');
+  ok(h.panel.innerHTML==='','29 不渲染任何结算内容：'+h.panel.innerHTML);
+  ok(injuries===0,'29 不按失败路径结算宠物受伤（旧实现在此判红）：injuries='+injuries);
+  ok(h.pending().length===0,'29 不排任何阶段 timer');
+  ok(h.S._groupRewarded===false&&h.S._gbOutroActive===null,'29 也不占用「已结算」标记/outro 状态');
+}
+console.log('--- 30. 真实 showGroupResultPanel 走完 reward→stats（不 mock）+ 重复结算不取消已排 timer ---');
+{
+  const h=mkOutroHost(90000);
+  const S=h.S;
+  mkDone(h,'ally');
+  ok(typeof S.showGroupResultPanel==='function','30 前置：真实 showGroupResultPanel 可用（game-render.js 原函数）');
+  S._groupDone();
+  const t800=h.pending().find(t=>t.due===90000+800);
+  S._groupDone();
+  ok(!!t800&&t800.cancelled===false,'30a 胜负阶段重复 _groupDone 不取消已排 stage timer（幂等守卫先返回）');
+  ok(/data-group-outro="outcome"/.test(h.panel.innerHTML),'30a 重复结算不重开结果面板');
+  h.setNow(90000+800);h.fireDue();
+  ok(/data-group-outro="reward"/.test(h.panel.innerHTML)&&/技能点 \+4/.test(h.panel.innerHTML),'30b 战果阶段展示真实已结算奖励：'+h.panel.innerHTML);
+  const t1200=h.pending().find(t=>t.due===90000+800+1200);
+  S._groupDone();
+  ok(!!t1200&&t1200.cancelled===false,'30b 战果阶段重复 _groupDone 不取消已排 timer');
+  h.setNow(90000+800+1200);h.fireDue();
+  ok(/data-group-outro="stats"/.test(h.panel.innerHTML)&&/我方战报/.test(h.panel.innerHTML),'30c 真实 showGroupResultPanel 不被新守卫挡住，进入详细战绩：'+h.panel.innerHTML);
+  ok(!!S._gbOutroActive&&S._gbOutroActive.phase==='stats','30c outro 进入 stats 阶段且未被 _openDetailPanel 作废');
+  ok(h.pending().length===0,'30c 战绩层无遗留推进 timer');
+  S._groupDone();
+  ok(/data-group-outro="stats"/.test(h.panel.innerHTML),'30d 战绩层重复 _groupDone 不重开结果面板');
 }
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');
 if (fail) { console.log('\n失败项：'); fails.forEach(f => console.log(' ✗ ' + f)); }

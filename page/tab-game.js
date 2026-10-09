@@ -5,10 +5,11 @@
 /* ========== GAME EVENT HANDLER ========== */
 function onGameEvent(el,id,act){
   switch(id){
-    case 'battleClose':_battle.done=true;_battleAuto=false;if(_battleTimer)clearTimeout(_battleTimer);_battleRunning=false
+    case 'battleClose':_battle.done=true;_battleAuto=false;if(typeof cancelSingleBattleTimers==='function')cancelSingleBattleTimers();_battleRunning=false
       document.getElementById('battleOverlay').classList.remove('open');renderGame();return true;
     case 'battleAuto':{
       _battleAuto=!_battleAuto;
+      if(!_battleAuto&&typeof cancelBattleOutroTimers==='function'&&_battleAutoTimer){clearTimeout(_battleAutoTimer);_battleAutoTimer=null;_battleAutoDeadline=0;_battleAutoCallback=null}
       el.classList.toggle('active',_battleAuto);
       el.textContent=_battleAuto?'🔄 自动✓':'🔄 自动';
       if(_battleAuto){toast('自动模式已开启：胜利后自动挑战下一关','s')}

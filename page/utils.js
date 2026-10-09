@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.11.5';
+const APP_VERSION = '2.12.0';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -149,7 +149,7 @@ function emptyHtml(emoji,title,sub,cta){
 }
 
 /* ========== CELEBRATE ========== */
-function celebrate(){const o=document.createElement('div');o.style='position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden'
+function celebrate(){const o=document.createElement('div');o.id='cfLayer';o.style='position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden'
 const cs=['#F97316','#22C55E','#3B82F6','#A855F7','#EAB308','#EF4444']
 for(let i=0;i<30;i++){const c=document.createElement('div')
 c.style=`position:absolute;left:${Math.random()*100}%;top:-10px;width:${4+Math.random()*8}px;height:${4+Math.random()*8}px;background:${cs[i%cs.length]};border-radius:${Math.random()>.5?'50%':'2px'};animation:cf${i} ${1.5+Math.random()*2}s linear forwards`

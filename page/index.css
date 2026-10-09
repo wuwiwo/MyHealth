@@ -511,7 +511,15 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 
 /* ========== BATTLE LOOT ========== */
 .be-loot{text-align:center;font-size:var(--fs-xs);color:var(--yellow);margin:8px 0 4px;animation:lootPop .5s cubic-bezier(.34,1.56,.64,1)}
+.be-auto-note{font-size:var(--fs-xs);color:var(--text2);text-align:center;margin:8px 0;line-height:1.5}
 @keyframes lootPop{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.be-loot{animation:none}.be-btn{transition:none}.be-btn:active{transform:none}}
+/* F5：减弱动态效果下彻底抑制胜利彩带粒子（celebrate() 生成的粒子 id 形如 cf0..cf29）；只降动效，不改阶段时长 */
+@media(prefers-reduced-motion:reduce){[id^="cf"]{animation:none!important;opacity:0!important}}
+/* F5：胜利彩带只在上方区域飘落（容器 #cfLayer 由 celebrate() 建，overflow:hidden 裁掉下半段），
+   使彩带不覆盖终局结果卡片与操作按钮 —— 真实浏览器 3 秒窗口连续采样遮挡为 0。
+   容器 inline inset:0 与本规则同时存在时 CSS 忽略 bottom、以 height 为准。 */
+#cfLayer{height:70vh}
 
 /* ========== SUMMON PANEL ========== */
 .summon-card{background:linear-gradient(135deg,rgba(var(--purple-rgb),.08),rgba(var(--brand-rgb),.06));border:1px solid rgba(var(--purple-rgb),.25);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;box-shadow:var(--shadow)}
