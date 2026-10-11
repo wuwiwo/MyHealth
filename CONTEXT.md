@@ -148,6 +148,7 @@ page/
 ├── orbs.js           → 宝珠系统（5类型×4品质 合成/升级/装配）
 ├── game-views.js     → 挑战页三视图（培养/战斗/记录）
 ├── battle-history.js → 战斗历史（dh-battleHistory-v1）：单场摘要 + 分模式长期统计（100 条 FIFO，只记账不判定胜负）
+├── fx-semantics.js   → 战斗演出语义单一来源：事件 →（标记 / 严重度层级）；statusId 优先 + 文案兜底 + 显式排除清单，两模式共用，无 DOM
 └── debug.js          → 全局 Debug 面板（FAB+抽屉五分区，错误捕获）
 ```
 

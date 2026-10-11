@@ -607,6 +607,10 @@ function _groupStep(){
     }
   } catch (e) { console.warn('[group] 存快照失败', e); }
   var _perfT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
+  /* v2.14.0（批次 C）：击杀/阵亡检测的**事前 HP 快照**（纯数据；fx-semantics.js 未加载则跳过）。
+     ⚠️ 本函数内不得出现任何 DOM 操作（§8 源码守卫）—— 检测与演出都交给独立函数。 */
+  var hpBefore = (typeof fxHpSnapshot === 'function')
+    ? fxHpSnapshot(_groupBattle && _groupBattle.units) : null
   var step = groupBattleStep(_groupBattle)
   /* v2.1.26 [7b]：群战单步耗时埋点，供 Debug 面板「⏱ 性能」分区读取 */
   try { if (typeof window.__perfMarkStep === 'function') {
@@ -617,6 +621,12 @@ function _groupStep(){
   renderGroupOverlay(false)
   // 攻击反馈动画：解析本次行动的日志，高亮受击目标 + 伤害飘字
   if (step.unit) playAttackFeedback(_groupBattle, step)
+  /* v2.14.0（批次 C）：击杀/阵亡提示（**本步前后 HP 跨零**；引擎不落阵亡日志，故在 UI 侧判）。
+     离散语义：不参与数值聚合、不影响下一步调度与结算。 */
+  if (hpBefore && typeof fxDetectKills === 'function') {
+    var _kills = fxDetectKills(hpBefore, _groupBattle && _groupBattle.units)
+    if (_kills.length) gbFxKillMarks(_groupBattle, _kills)
+  }
   if(_groupBattle.done){_groupDone();return}
   // 技能气泡 → v2.4.2 起并入中央特效区的施法特效（图标 + 一句话），见 gbShowSkillCast
   var lastLog = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1] : null
@@ -960,33 +970,19 @@ var GB_FX_SLOT_OFF=[[0,0],[-78,-18],[78,-18],[0,-70]]   /* 中 / 左上 / 右上
    玩家只能去战报里找（评审实测确认）。
    ⚠️ 用**显式小表**匹配已知文案，**匹配不到就什么都不出**（不猜、不造噪声）。
    标记同样走 gbFxFloat → 一起参与目标锚定、跨步占位与档位生命期。 */
-var GB_FX_MARKS=[
-  [/护盾吸收 (\d+)/, function(m,msg){ return '🛡️' + m[1] + (/护盾破碎/.test(msg) ? '💥' : '') }],
-  [/护盾破碎/, function(){ return '🛡️💥' }],
-  [/破甲/, function(){ return '💠' }],
-  [/中毒|☠️/, function(){ return '☠️' }],
-  [/冰冻|❄️/, function(){ return '❄️' }],
-  [/潮湿|变潮湿/, function(){ return '💧' }],
-  [/睡眠|哈欠|😴/, function(){ return '😴' }],
-  [/嘲讽/, function(){ return '😡' }],
-  [/净化|清除迷雾/, function(){ return '✨' }],
-  [/末日|🌑/, function(){ return '🌑' }],
-  [/幽魂附身|👻/, function(){ return '👻' }],
-  [/威吓|😱/, function(){ return '😱' }],
-  [/变小/, function(){ return '🔻' }],
-  [/蓄力/, function(){ return '⏳' }]
-];
-/* 事件 → 标记文本（匹配不到返回 null；已被 gbParseHit 处理的伤害/治疗不再重复出标记） */
+/* v2.14.0（批次 C）：14 行自有表**收敛为单一来源** —— page/fx-semantics.js 的 fxMarkForEvent
+   （id 优先：`ev.statusId` 查闭集映射；文案兜底：无 id 时按文案表）。
+   ⚠️ **模式差异保留在本函数自己的守卫里**（不进单一来源）：
+     ① 本模式只对 `status|talent|terrain` 三种 type 出标记（伤害/治疗已由 gbParseHit 出数字）；
+     ② 已被 gbParseHit 解析成数值的事件不再重复出标记（`parsed` 非空即返回）。
+   ⚠️ fx-semantics.js 未加载（多个既有夹具只装 page/ 子集）→ 静默返回 null，绝不抛错。 */
 function gbMarkerFor(e, parsed){
   if (!e || parsed) return null;
   var msg = e.msg || '';
   if (!msg) return null;
   if (e.type && e.type !== 'status' && e.type !== 'talent' && e.type !== 'terrain') return null;
-  for (var i = 0; i < GB_FX_MARKS.length; i++) {
-    var m = GB_FX_MARKS[i][0].exec(msg);
-    if (m) return GB_FX_MARKS[i][1](m, msg);
-  }
-  return null;
+  if (typeof fxMarkForEvent !== 'function') return null;   /* 单一来源缺失：不出标记，不报错 */
+  return fxMarkForEvent(e);
 }
 
 function gbFxPolicy(speed) {
@@ -1085,6 +1081,49 @@ function showChipBadge(card, text, lifeMs) {
   card.appendChild(el)
   var life = (typeof lifeMs === 'number' && lifeMs > 0) ? lifeMs : 900
   setTimeout(function(){ if (el.parentNode && el.parentNode.removeChild) el.parentNode.removeChild(el) }, life)
+}
+
+/* ============================================================
+   v2.14.0（批次 C）：击杀 / 阵亡的可读短提示（**UI 侧 HP 跨零检测**）
+   ------------------------------------------------------------
+   为什么在 UI 侧检测：群战引擎**不落「单位阵亡」日志**（`hp<=0` 只是被跳过），
+   单敌引擎也不写阵亡事件（只判 winner）→ 击杀必须由表现层按「本步前后 HP 从 ≥1 掉到 ≤0」
+   自行识别，**不得改引擎**（引擎/日志/固定种子结果逐字节不变）。
+   触发判据与快照/比对的纯函数在 page/fx-semantics.js（fxHpSnapshot / fxDetectKills /
+   fxHpPairSnapshot / fxDetectSidedKills）—— 只认**跨零**，故：
+     · 事前已 0（上一场/上一步已阵亡）→ 不重复触发；
+     · 本步之前不在场（新召唤 / 未登记）→ 不判击杀。
+   表现：**离散语义**，走既有锚定与生命期路径（非抽屉 = 中央区飘字；抽屉 = 目标芯片徽标），
+   **不参与数值聚合**（不属于 damage/heal 的同类可加总项），**不延迟结算**（挂完即返回，
+   下一步的调度与结算不受影响），**不遮挡按钮**（#gbFx 是 pointer-events:none 的固定层；
+   芯片徽标落在广场条带内）。
+   ============================================================ */
+function gbFxKillMarks(gb, kills){
+  if (!kills || !kills.length) return
+  var ov = (typeof document !== 'undefined') ? document.getElementById('battleOverlay') : null
+  var logOpen = !!(ov && ov.classList && typeof ov.classList.contains === 'function' && ov.classList.contains('gb-log-open'))
+  var mid = (typeof document !== 'undefined') ? document.getElementById('gbArenaMid') : null
+  /* 生命期沿用**本模式自己的**档位策略（与飘字/徽标同一口径；不从语义层取时长） */
+  var pol = gbFxPolicy(_groupSpeed)
+  var slot = _gbFxSlotSeq
+  for (var i = 0; i < kills.length; i++) {
+    var k = kills[i]
+    var text = (typeof fxKillMarkFor === 'function') ? fxKillMarkFor(k.side) : '💀'
+    /* 锚点：按事件/快照里的 targetId 找目标芯片（找不到就不锚，仍出中央飘字） */
+    var card = null
+    if (ov && typeof ov.querySelector === 'function' && k.id != null) {
+      card = ov.querySelector('.gb-unit[data-uid="' + k.id + '"]')
+    }
+    if (logOpen) { showChipBadge(card, text, pol.lifeMs); continue }   /* 抽屉态：只出芯片徽标 */
+    if (!mid) continue
+    var anchorX = null
+    if (card && typeof card.getBoundingClientRect === 'function') {
+      try { var cr = card.getBoundingClientRect(); if (cr && cr.width) anchorX = cr.left + cr.width / 2 } catch (er) { anchorX = null /* 忽略：取不到芯片 rect 就退回中央区锚点 */ }
+    }
+    gbFxFloat(mid, text, 'var(--red)', true, slot, kills.length, anchorX, pol.lifeMs)
+    slot++
+    _gbFxSlotSeq = slot
+  }
 }
 
 function playAttackFeedback(gb, step) {

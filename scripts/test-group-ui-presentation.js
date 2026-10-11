@@ -66,7 +66,7 @@ function makeSandbox() {
   sb._petBattlePicks = []; sb._groupBattle = null;
   vm.createContext(sb);
   ['utils.js', 'date-roll.js', 'levels.js', 'monster-archetype.js',
-    'unit.js', 'state-core.js', 'status-defs.js', 'talent.js', 'skill.js', 'affix.js',
+    'unit.js', 'state-core.js', 'status-defs.js', 'fx-semantics.js', 'talent.js', 'skill.js', 'affix.js',
     'enemy.js', 'terrain.js', 'battle.js', 'battle-group.js', 'orbs.js',
     'pet-codex.js', 'pets.js', 'pet-materials.js', 'pet-store.js',
     'group-levels.js', 'group-progress.js', 'ai.js', 'pet-ui.js',

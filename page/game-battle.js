@@ -336,29 +336,20 @@ function battleFxRestart(el,cls,key,lifeMs,now){
    （护盾吸收 / 护盾破碎）以及其它非伤害状态**完全没有即时反馈**，只能读战报。
    ⚠️ 与群战同一口径：**显式小表**匹配已知文案，**匹配不到就什么都不出**（不猜、不造噪声）；
    且必须有**显式 targetSide** 才知道该挂在谁身上 —— 否则同样跳过。 */
-var BC_MARKS=[
-  [/护盾吸收 (\d+)/, function(m,msg){ return '🛡️' + m[1] + (/护盾破碎/.test(msg) ? '💥' : '') }],
-  [/护盾破碎/, function(){ return '🛡️💥' }],
-  [/破甲/, function(){ return '💠' }],
-  [/中毒|☠️/, function(){ return '☠️' }],
-  [/冰冻|❄️/, function(){ return '❄️' }],
-  [/潮湿|变潮湿/, function(){ return '💧' }],
-  [/睡眠|哈欠|😴/, function(){ return '😴' }],
-  [/嘲讽/, function(){ return '😡' }],
-  [/净化|清除迷雾/, function(){ return '✨' }],
-  [/末日|🌑/, function(){ return '🌑' }],
-  [/幽魂附身|👻/, function(){ return '👻' }],
-  [/威吓|😱/, function(){ return '😱' }],
-  [/变小/, function(){ return '🔻' }],
-  [/蓄力/, function(){ return '⏳' }]
-];
+/* v2.14.0（批次 C）：14 行自有表**收敛为单一来源** —— page/fx-semantics.js 的 fxMarkForEvent
+   （id 优先：`ev.statusId` 查闭集映射；文案兜底：无 id 时按文案表）。
+   ⚠️ **模式差异保留在本函数自己的守卫里**（不进单一来源）：
+     ① 本模式不出现在伤害事件上（`type==='damage'` 直接返回，数值由 showImpact 表达）；
+     ② 必须带**显式 targetSide** 才知道该挂到谁身上 —— 否则跳过（宁缺勿错）。
+   ⚠️ fx-semantics.js 未加载（test-auto-speed.js 等夹具只装 levels/battle/game-battle）
+      → 静默返回 null，绝不抛错。 */
 function bcMarkerFor(ev){
   if(!ev||ev.type==='damage')return null
   if(ev.targetSide!=='player'&&ev.targetSide!=='enemy')return null
   var msg=String(ev.msg||'')
   if(!msg)return null
-  for(var i=0;i<BC_MARKS.length;i++){ var m=BC_MARKS[i][0].exec(msg); if(m)return BC_MARKS[i][1](m,msg) }
-  return null
+  if(typeof fxMarkForEvent!=='function')return null;   /* 单一来源缺失：不出标记，不报错 */
+  return fxMarkForEvent(ev)
 }
 /* 标记：挂在目标元素上（与 impact 同锚点），生命期随档位 */
 function showMark(targetEl,text,lifeMs){
@@ -370,6 +361,25 @@ function showMark(targetEl,text,lifeMs){
   if(mark.style)mark.style.animationDuration=life+'ms'
   targetEl.appendChild(mark)
   setTimeout(function(){if(mark.parentNode)mark.remove()},life)
+}
+
+/* ============================================================
+   v2.14.0（批次 C）：单敌模式的击杀 / 阵亡可读短提示（**UI 侧 HP 跨零检测**）
+   ------------------------------------------------------------
+   单敌引擎同样不写「阵亡」事件（只判 winner / 把 hp 归零）→ 与群战同一口径：
+   在 `tick()` 里对比 `_battle.player / _battle.enemy` 本 tick 前后的 HP，只认 ≥1 → ≤0
+   （事前已 0 不重复触发）。纯函数在 page/fx-semantics.js（fxHpPairSnapshot / fxDetectSidedKills）。
+   表现：复用既有 `showMark`（挂在**目标单位**元素上、生命期随档位），
+   不新增锚定路径、不参与数值聚合、不延迟结算与终局流程（批次 A/B 的分层不受影响）。 */
+function bcFxKillMarks(battle, kills, pEl, eEl){
+  if(!kills||!kills.length)return
+  var pol=battleFxPolicy(_battleSpeed)
+  for(var i=0;i<kills.length;i++){
+    var k=kills[i]
+    var el=(k.side==='player')?pEl:eEl
+    var text=(typeof fxKillMarkFor==='function')?fxKillMarkFor(k.side):'💀'
+    showMark(el,text,pol.lifeMs)
+  }
 }
 
 function battleFxNum(ev){
@@ -455,6 +465,9 @@ function runBattle(){
        runBattle：`_battleRunning` 卡 true、`done` 仍 false、没有后续计时器、没有提示、
        也没有错误上下文 = 战斗永久冻结且不可定位。`stage` 记录真正失败在哪一段。 */
     var stage='battleTick'
+    /* v2.14.0（批次 C）：击杀/阵亡检测的**事前 HP 快照**（纯数据；fx-semantics.js 未加载则 null）。
+       放在 battleTick **之前**且不改变 stage —— 引擎抛错路径（stage='battleTick'）一字不动。 */
+    var hpBefore=(typeof fxHpPairSnapshot==='function')?fxHpPairSnapshot(_battle):null
     try{
       result=battleTick(_battle)
       stage='battleRender'
@@ -466,6 +479,12 @@ function runBattle(){
       /* v2.11.3：整 tick 一起演出（聚合同目标 + 窗口节流 + 生命期随档位），
          取代「逐事件 animateBattleEvent」——后者每事件重启一次类动画并各建一个 impact。 */
       animateBattleEvents(result.events,pEl,eEl)
+      /* v2.14.0（批次 C）：本 tick 前后 HP 跨零（≥1 → ≤0）→ 击杀/阵亡短提示。
+         离散语义：只挂标记，不改 HP、不动事件、不影响下面的累计与终局流程。 */
+      if(hpBefore&&typeof fxDetectSidedKills==='function'){
+        var _kill=fxDetectSidedKills(hpBefore,_battle)
+        if(_kill.length)bcFxKillMarks(_battle,_kill,pEl,eEl)
+      }
     }catch(err){
       /* v2.5.0：引擎异常 → 按「异常中止」收尾；不再改 HP、不再判胜、不再走 endBattle(true)
          发奖并推进关卡。console.error 留在 catch 现场（本项目禁止静默 catch）。 */

@@ -88,6 +88,11 @@ assert('存在玩家胜利关卡（50/30/300 属性）', wins > 0, 'wins=' + win
 console.log('\n[7] battleTick 异常不得判胜（v2.5.0）');
 
 const gameBattleSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'game-battle.js'), 'utf8');
+/* v2.14.0（批次 C）：单敌模式的「事件 → 演出语义」表已收敛到 page/fx-semantics.js，
+   夹具必须与 index.html 同序（fx-semantics.js 在 game-battle.js 之前）加载它，
+   否则 bcMarkerFor 的 typeof 守卫会静默降级 → §10 的标记断言会变成「什么都没渲染」的假绿。 */
+const fxSemanticsPath = path.join(__dirname, '..', 'page', 'fx-semantics.js');
+const fxSemanticsSrc = fs.existsSync(fxSemanticsPath) ? fs.readFileSync(fxSemanticsPath, 'utf8') : '';
 
 /* 最小 DOM 桩：只要求 getElementById/createElement/querySelectorAll/addEventListener
    返回可用的假元素，让 game-battle.js 的渲染分支不抛错（本套件不校验样式）。 */
@@ -137,6 +142,7 @@ function makeGameBattleSandbox() {
   };
   sb.window = sb; sb.globalThis = sb;
   vm.createContext(sb);
+  if (fxSemanticsSrc) vm.runInContext(fxSemanticsSrc, sb);   /* 批次 C：与 index.html 同序 */
   vm.runInContext(gameBattleSrc, sb);
   return { sb, els, game, refine, calls, docEvents, winEvents };
 }
