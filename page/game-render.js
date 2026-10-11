@@ -1409,6 +1409,9 @@ function _groupDone(){
   /* 结算和奖励/受伤副作用只在此处一次；展示阶段仅依次呈现胜负、战果、战绩。 */
   _groupOutcomeMessage=_groupOutcomeMessage||''
   var gb=battle,stats=gb?groupBattleStats(gb):null
+  /* v2.13.0 批次 B：奖励 / 通关进度 / 受伤副作用**全部落地之后**才写战斗历史。
+     写失败只提示（outro.history.ok=false → 结果面板一行小字），不回滚、不阻断结果呈现。 */
+  outro.history=recordGroupBattleHistory(gb,w,_groupStageId,stats)
   var outcome=gb&&gb.winner==='ally'?'🏆 胜利':'💀 失败'
   function bindContinue(){var btn=document.getElementById('gbOutroContinue');if(btn)btn.addEventListener('click',advanceGroupOutro)}
   function openOutcomeStage(phase,title,body){
@@ -1591,6 +1594,60 @@ function groupBattleStats(gb){
     logs:((gb&&gb.log)||[]).length}
 }
 
+/* ============================================================
+   v2.13.0 批次 B：敌群战斗历史（记账层，纯读 groupBattleStats）
+
+   口径（冻结）：
+     · metrics.terrain / dot / shield 取 `groupBattleStats()` 的同名汇总；
+       player* 取我方玩家行（`rows` 里 id==='player'），**没有该行就写 null**
+       （不拿 0 冒充「玩家没有输出/承伤」）。
+     · party 取 `rows`（alive 已由 groupBattleStats 按 `hp>0` 给出）；
+       同名单位的归因局限由 note 如实披露（dup）。
+     · 调用点在 `_groupRewarded` 幂等守卫之后；id 绑定在战斗对象上，
+       重复调用结算入口得到同一个 id → append 幂等（不写第二条）。
+   ============================================================ */
+function recordGroupBattleHistory(gb,winner,stageId,stats){
+  /* 模块未加载（部分测试夹具只装 game-render 需要的全局）→ 静默跳过，不抛错 */
+  if(typeof battleHistoryAppend!=='function')return null
+  if(!gb)return null
+  var st=stats||groupBattleStats(gb)
+  var playerRow=null
+  ;((st&&st.rows)||[]).forEach(function(r){ if(r&&r.id==='player')playerRow=r })
+  var party=((st&&st.rows)||[]).map(function(r){
+    return {name:r.name||r.key||'单位',dealt:r.dealt,taken:r.taken,healed:r.healed,alive:!!(r.alive)}
+  })
+  if(!gb._historyId){
+    gb._historyId=(typeof battleHistoryNewId==='function')
+      ?battleHistoryNewId()
+      :('bh-'+Date.now().toString(36)+'-group')   /* 模块缺失时的兜底 id（仍保证同场幂等） */
+  }
+  try{
+    return battleHistoryAppend({
+      id:gb._historyId,
+      endedAt:new Date().toISOString(),
+      mode:'group',
+      stageId:stageId||'',
+      result:(winner==='ally')?'win':'loss',
+      rounds:(st&&st.rounds)||0,
+      metrics:{
+        playerDealt:playerRow?playerRow.dealt:null,
+        playerTaken:playerRow?playerRow.taken:null,
+        playerHealed:playerRow?playerRow.healed:null,
+        terrain:(st&&typeof st.terrain==='number')?st.terrain:null,
+        dot:(st&&typeof st.dot==='number')?st.dot:null,
+        shield:(st&&typeof st.shield==='number')?st.shield:null
+      },
+      party:party,
+      /* dup=true：日志只记行动者名字、没有 id，同名只能归到首个同名单位 —— 如实披露 */
+      note:(st&&st.dup)?'本场存在同名单位：按首个同名单位归因':null
+    })
+  }catch(e){
+    /* 不静默：append 自身已兜异常，这里是第二道防线 */
+    console.error('[battle-history] 写入敌群战斗历史失败',e)
+    return {ok:false,reason:'threw'}
+  }
+}
+
 /* v2.4.4：蓄力「进入」与其到期文案在**同一条目里自相矛盾**（读起来像蓄力当场消失）。
    机制其实是对的：伤害确实在下回合结算（实测 turn2 出「进入蓄力（下回合释放）」→ turn3 才打出 `💥 X 蓄力重击 → …`）。
    矛盾来自：蓄力状态在**进入的当回合**就被状态到期流程消费，而释放走的是另一条调度。
@@ -1733,6 +1790,12 @@ function showGroupResultPanel(gb, stats){
   if(stats.dup){
     h+='<div class="det-card"><div class="det-line dim">⚠️ 本场存在同名单位：表格按 gb.units 顺序加后缀区分（如「宠物A#2」）；'
       +'但 gb.log 只记行动者名字、没有 id，日志归因只能落到**首个**同名单位。</div></div>'
+  }
+  /* v2.13.0 批次 B：历史写失败只在此处如实提示（奖励与进度已结算，不回滚） */
+  if(outro&&outro.battle===gb&&outro.history&&outro.history.ok===false){
+    h+='<div class="det-card">'+((typeof battleHistoryHintHtml==='function')
+      ?battleHistoryHintHtml(outro.history)
+      :'<div style="font-size:var(--fs-2xs);color:var(--text3);text-align:center">⚠️ 本场战绩未保存</div>')+'</div>'
   }
   h+='<button class="speed-btn" id="gbCopyReport">📋 复制战报</button>'
   if(outro&&outro.battle===gb)h=h.replace('<div class="det-hdr">','<div class="det-hdr" data-group-outro="stats">')

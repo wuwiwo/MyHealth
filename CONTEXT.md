@@ -147,6 +147,7 @@ page/
 ├── skill-ui.js       → 技能面板 UI
 ├── orbs.js           → 宝珠系统（5类型×4品质 合成/升级/装配）
 ├── game-views.js     → 挑战页三视图（培养/战斗/记录）
+├── battle-history.js → 战斗历史（dh-battleHistory-v1）：单场摘要 + 分模式长期统计（100 条 FIFO，只记账不判定胜负）
 └── debug.js          → 全局 Debug 面板（FAB+抽屉五分区，错误捕获）
 ```
 
@@ -160,6 +161,7 @@ page/
 | dh-skills-v1 | `skills` | 玩家技能（points/levels/loadout/slotsUnlocked）|
 | dh-groupProgress-v1 | `groupProgress` | 敌群通关进度（cleared）|
 | dh-challenge-v1 | `challenge` | 隐藏挑战存档 |
+| dh-battleHistory-v1 | `battleHistory` | 战斗历史（`battles[]`：单敌/敌群合计 100 条 FIFO 的单场摘要；`note` 披露归因限制）|
 
 详细键表见 `doc/HANDOFF.md` §7。
 

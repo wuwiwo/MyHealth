@@ -270,12 +270,17 @@ function endBattleAborted(err,extra){
   }
   _battleAuto=false
   _battleRunning=false
+  /* v2.13.0 批次 B：异常中止同样记账（既不是胜利也不是战败）。
+     回合取 battleErrorContext 已算出的值（取不到就是 0）；没有本场战斗对象时不写 ——
+     凭空造一条「无战斗摘要」的记录属于伪造数据。写失败只在面板上加一行小字，不回滚、不阻断收尾。 */
+  var abortHistory=recordSingleBattleHistory('aborted',(typeof ctx.turn==='number')?ctx.turn:0,_battleLevelId||'')
   var autoBtn=document.getElementById('battleAuto')
   if(autoBtn){autoBtn.classList.remove('active');autoBtn.textContent='🔄 自动'}
   var el=document.getElementById('battleEnd')
   if(el){
     el.innerHTML='<div class="be-result be-abort">⚠️ 战斗异常中止</div>'
       +'<div style="font-size:var(--fs-2xs);color:var(--text3);text-align:center;margin-top:6px">本关不计胜负、不发奖励、不推进进度；异常上下文已记录（关卡 / 回合 / 堆栈）</div>'
+      +battleHistoryHintHtml(abortHistory)
       +'<div class="be-replay"><button class="be-btn be-btn-retry" id="battleAbort">关闭</button></div>'
   }
   var abortBtn=document.getElementById('battleAbort')
@@ -468,6 +473,11 @@ function runBattle(){
       endBattleAborted(err,{stage:stage})
       return
     }
+    /* v2.13.0 批次 B：本场累计必须在 done 判定**之前** —— 结束回合的事件
+       （终结一击 / 同回合的承伤）也要计入。放在渲染 try/catch **之外**，
+       且自身再包一层：记账异常绝不中止战斗（那是渲染路径的职责）。 */
+    try{ accumulateBattleMetrics(_battle,result&&result.events) }
+    catch(e){ console.error('[battle-history] 本场统计失败',e) }
     if(_battle.done){endBattle(_battle.winner);_battleRunning=false;return}
     /* 间隔 = 基准 ÷ 当前速度档位（每次调度都读 `_battleSpeed`，战斗中改档立即生效） */
     _battleTimer=setTimeout(tick,battleStepDelay(BATTLE_STEP_BASE_MS,_battleSpeed))
@@ -501,6 +511,76 @@ function showImpact(targetEl,ev,amount,lifeMs){
   if(impact.style)impact.style.animationDuration=life+'ms';   /* 动画与生命期同步（旧实现固定 .6s） */
   targetEl.appendChild(impact);
   setTimeout(function(){if(impact.parentNode)impact.remove()},life);
+}
+
+/* ============================================================
+   v2.13.0 批次 B：单敌战斗历史（记账层，纯读引擎返回值）
+
+   口径（冻结）：
+     · 本场累计只从 `battleTick()` 返回的 `result.events` 里派生（**只读**，不改引擎、
+       不改事件对象）：`type==='damage'` 且 `hpDamage>0`，`sourceSide==='player'` →
+       玩家输出，`targetSide==='player'` → 玩家承伤。`hpDamage` 由引擎按
+       `min(剩余HP, 伤害-护盾吸收)` 给出（**不含 overkill**），可直接求和当「实际掉血」。
+     · 单敌**没有玩家治疗通道**（唯一 heal 事件的 sourceSide 是 'enemy'）→
+       playerHealed / party[].healed 一律 null（UI 显示「不适用」），不得以 0 冒充。
+     · 单敌没有场地 / DOT / 护盾汇总 → terrain / dot / shield 一律 null。
+     · 调用点全部位于既有幂等守卫（`_settled` / `_groupRewarded`）之后，
+       且 id 绑定在战斗对象上（重复调用结算入口得到同一个 id → append 幂等）。
+   ============================================================ */
+/* 同一场战斗复用同一个历史 id：重复调用结算入口时 append 会判重（不写第二条） */
+function battleHistoryIdFor(battle){
+  if(!battle)return null
+  if(!battle._historyId){
+    battle._historyId=(typeof battleHistoryNewId==='function')
+      ?battleHistoryNewId()
+      :('bh-'+Date.now().toString(36)+'-single')   /* 模块缺失时的兜底 id（仍保证同场幂等） */
+  }
+  return battle._historyId
+}
+/* 本场累计（在 done 判定**之前**调用：终结一击的事件也要计入） */
+function accumulateBattleMetrics(battle,events){
+  if(!battle||!events||!events.length)return
+  var m=battle._historyMetrics||(battle._historyMetrics={dealt:0,taken:0})
+  for(var i=0;i<events.length;i++){
+    var ev=events[i]
+    if(!ev||ev.type!=='damage')continue
+    var hp=(typeof ev.hpDamage==='number')?ev.hpDamage:0
+    if(!(hp>0))continue
+    if(ev.sourceSide==='player')m.dealt+=hp
+    if(ev.targetSide==='player')m.taken+=hp
+  }
+}
+/* 写一条单敌历史。`result` ∈ win|loss|aborted；模块未加载时返回 null（静默跳过，
+   见页头「跨模块调用一律 typeof 守卫」约定 —— 多个既有测试夹具只装 game-battle.js）。 */
+function recordSingleBattleHistory(result,rounds,stageId){
+  if(typeof battleHistoryAppend!=='function')return null
+  var b=_battle
+  if(!b)return null
+  var m=b._historyMetrics||{dealt:0,taken:0}
+  var playerName=(b.player&&b.player.name)||'你'
+  try{
+    return battleHistoryAppend({
+      id:battleHistoryIdFor(b),
+      endedAt:new Date().toISOString(),
+      mode:'single',
+      stageId:stageId||'',
+      result:result,
+      rounds:(typeof rounds==='number'&&rounds>=0)?rounds:0,
+      metrics:{playerDealt:m.dealt,playerTaken:m.taken,playerHealed:null,terrain:null,dot:null,shield:null},
+      party:[{name:playerName,dealt:m.dealt,taken:m.taken,healed:null,alive:!!(b.player&&b.player.hp>0)}],
+      note:null
+    })
+  }catch(e){
+    /* 不静默：append 自身已兜异常，这里是第二道防线（例如 append 被替换成抛错的实现） */
+    console.error('[battle-history] 写入单敌战斗历史失败',e)
+    return {ok:false,reason:'threw'}
+  }
+}
+/* 历史未保存提示（单敌战绩层 / 敌群结果面板共用同一文案，防两处写歪）。
+   game-render.js 通过 typeof 守卫复用本函数。 */
+function battleHistoryHintHtml(res){
+  if(!res||res.ok!==false)return ''
+  return '<div class="bh-unsaved" style="font-size:var(--fs-2xs);color:var(--text3);text-align:center;margin-top:4px">⚠️ 本场战绩未保存</div>'
 }
 
 function endBattle(won){
@@ -539,8 +619,11 @@ function endBattle(won){
     lootLine='🎁 战利品 +'+loot.points+' 炼化点'+(loot.mult>2?'（BOSS ×10）':'')+(ref.unlocked?'':'（通关 9-6 解锁炼魂后可用）')
     /* F5：彩带不再在结算瞬间放（会盖住 800/1200ms 两个阶段），改到进入战绩层时一次性触发 */
   }
+  /* v2.13.0 批次 B：奖励 / 通关进度 / 失败次数**全部结算完之后**才写战斗历史。
+     写失败只提示（本场快照 history.ok=false → 战绩层一行小字），不回滚奖励、不阻断呈现。 */
+  var historyRes=recordSingleBattleHistory(won?'win':'loss',(_battle&&typeof _battle.turn==='number')?_battle.turn:0,settledLevelId)
   var heading=won?'<div class="be-result be-win">🏆 胜利！</div>':'<div class="be-result be-lose">💀 战败</div>'
-  _battleEndSnapshot={token:sessionToken,levelId:settledLevelId,level:settledLevel,result:won?'win':'loss',lootText:lootLine,nextId:nextId,celebrated:false}
+  _battleEndSnapshot={token:sessionToken,levelId:settledLevelId,level:settledLevel,result:won?'win':'loss',lootText:lootLine,nextId:nextId,celebrated:false,history:historyRes}
   function isCurrentSettlement(){
     if(!(_battleSessionToken===sessionToken&&_battle&&_battle._settled&&_battleEndSnapshot&&_battleEndSnapshot.token===sessionToken))return false
     /* 本场 overlay 已关闭（✕/下一关/分享离开后）就不再推进展示层；元素缺失的桩环境不拦 */
@@ -569,6 +652,7 @@ function endBattle(won){
     cancelBattleOutroTimers()
     disposeAuto()
     el.innerHTML=heading+(won?'<div class="be-loot">'+lootLine+'</div>':'<div class="be-loot">未获得奖励 · 本次失败已记录</div>')
+      +battleHistoryHintHtml(historyRes)
       +'<div class="be-replay">'+(won?'<button class="be-btn be-btn-next" id="battleNext">下一关 →</button><button class="be-btn be-btn-retry" id="battleShare">📤 分享卡片</button>':'<button class="be-btn be-btn-retry" id="battleRetry">🔄 重新挑战</button>')+'</div>'
     bindBattleRecordActions()
     /* F5：彩带只在进入战绩层时放一次（用快照标志防重），胜负/战果阶段不遮挡按钮。

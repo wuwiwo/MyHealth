@@ -102,6 +102,18 @@ const SAMPLES = {
     version: 1, quarterKey: '2026-Q3', since: '2026-09-01',
     weekKey: '2026-09-28', settledWeekKey: '2026-09-21', adjust: -1000,
     lastLevel: 3, history: [{ type: 'level', level: 3, from: 2, date: '2026-09-20' }]
+  },
+  /* v2.13.0 批次 B：战斗历史（`page/battle-history.js`）—— 形状必须过它自己的 validate：
+     单敌没有治疗通道 / 场地 / DOT / 护盾汇总 → 这些字段一律 null（不得用 0 冒充）。 */
+  battleHistory: {
+    version: 1,
+    battles: [{
+      id: 'bh-sample-1', endedAt: '2026-09-15T10:00:00.000Z', mode: 'single', stageId: '1-1',
+      result: 'win', rounds: 3,
+      metrics: { playerDealt: 120, playerTaken: 40, playerHealed: null, terrain: null, dot: null, shield: null },
+      party: [{ name: '你', dealt: 120, taken: 40, healed: null, alive: true }],
+      note: null
+    }]
   }
 };
 

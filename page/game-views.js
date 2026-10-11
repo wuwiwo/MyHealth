@@ -247,6 +247,88 @@ function renderBattleView() {
   })
 }
 
+/* ===== v2.13.0 批次 B：战斗记录（⚔️）辅助 ===== */
+/* endedAt(ISO) → 本机可读时间。非法 / 缺失值原样回显（绝不渲染 "Invalid Date"）。 */
+function bhTime(iso) {
+  var d = new Date(iso)
+  if (!d || isNaN(d.getTime())) return String(iso == null ? '' : iso)
+  function p(n) { return (n < 10 ? '0' : '') + n }
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes())
+}
+/* 存档里的名字 / 关卡名一律转义（escHtml 来自 game-render.js，缺模块时降级为原样但仍是字符串） */
+function bhEsc(s) {
+  var v = (s == null) ? '' : String(s)
+  return (typeof escHtml === 'function') ? escHtml(v) : v
+}
+/* 胜率：分母 0（null）→ 「—」（不得把「无数据」显示成 0%） */
+function bhRate(r) { return (typeof r === 'number') ? (Math.round(r * 1000) / 10) + '%' : '—' }
+/* 可得性口径：null = 本模式不适用（如单敌无治疗通道）→「不适用」，不得以 0 冒充 */
+function bhVal(v) { return (v == null) ? '不适用' : v }
+
+/* 战斗记录区块（单敌 / 敌群**分列**，禁止跨模式合并排名）。
+   数据源 = battle-history.js；缺模块时整块走空状态，不抛错。 */
+function renderBattleHistoryBlock() {
+  var BH_MODES = [['single', '⚔️ 单敌挑战'], ['group', '👥 敌群试炼']]
+  var hist = (typeof battleHistoryList === 'function') ? (battleHistoryList() || []) : []
+  var h = '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚔️ 战斗记录 '
+    + '<span style="font-size:var(--fs-xs);color:var(--text3)">单敌 / 敌群分列 · 各计各的</span></div>'
+  if (!hist.length) {
+    /* 空状态：明确「无记录」，与「0 场」区分开 */
+    return h + '<div style="background:var(--bg2);border-radius:12px;padding:20px;text-align:center;font-size:var(--fs-base);color:var(--text3)">暂无战斗记录<br><span style="font-size:var(--fs-xs)">完成一场挑战后自动记录</span></div>'
+  }
+  BH_MODES.forEach(function (m) {
+    var mk = m[0]
+    var st = (typeof battleHistoryStats === 'function') ? battleHistoryStats(mk) : null
+    h += '<div style="background:var(--bg2);border:1px solid var(--bd-l);border-radius:14px;padding:14px;margin-bottom:10px">'
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+      + '<span style="font-size:var(--fs-base);font-weight:700">' + m[1] + '</span>'
+      + '<span style="flex:1"></span>'
+      + '<span style="font-size:var(--fs-2xs);color:var(--text3)">' + (st ? ('共 ' + st.total + ' 场') : '—') + '</span>'
+      + '</div>'
+    h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
+      + statCell('📊', '场次', st ? st.count : '—')
+      + statCell('🎯', '胜率', st ? bhRate(st.winRate) : '—')
+      + statCell('🔥', '当前连胜', st ? st.currentStreak : '—')
+      + statCell('🏅', '最佳连胜', st ? st.bestStreak : '—')
+      + statCell('⏱️', '平均回合', (st && st.avgRounds != null) ? st.avgRounds : '—')
+      + '</div>'
+    if (st && st.abortedCount > 0) {
+      h += '<div style="font-size:var(--fs-2xs);color:var(--text3);margin-top:8px">⚠️ 异常中止 ' + st.abortedCount + ' 次（不计胜率、不打断连胜）</div>'
+    }
+    h += '</div>'
+  })
+  /* 最近战斗：最多 10 条、最新在前；两种模式混排但**逐条标出模式**，不做跨模式排名 */
+  var recent = (typeof battleHistoryRecent === 'function') ? (battleHistoryRecent(10) || []) : hist.slice(-10).reverse()
+  h += '<div style="font-size:var(--fs-sm);font-weight:700;margin:14px 0 8px">🕒 最近战斗 '
+    + '<span style="font-size:var(--fs-2xs);color:var(--text3)">最多 10 条</span></div>'
+  if (!recent.length) {
+    h += '<div style="background:var(--bg2);border-radius:12px;padding:16px;text-align:center;font-size:var(--fs-sm);color:var(--text3)">暂无战斗记录</div>'
+    return h
+  }
+  var labels = { single: '⚔️ 单敌', group: '👥 敌群' }
+  recent.forEach(function (r) {
+    var res = r.result === 'win' ? '<b style="color:var(--green)">胜</b>'
+      : (r.result === 'loss' ? '<b style="color:var(--red)">败</b>' : '<b style="color:var(--orange)">异常中止</b>')
+    var stageName = ''
+    if (typeof findLevel === 'function') { var lv = findLevel(r.stageId); if (lv && lv.npc) stageName = lv.npc }
+    if (!stageName && typeof getGroupStage === 'function') { var gs = getGroupStage(r.stageId); if (gs && gs.name) stageName = gs.name }
+    h += '<div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px">'
+      + '<div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)">'
+      + '<span style="color:var(--text3)">' + bhEsc(bhTime(r.endedAt)) + '</span>'
+      + '<span>' + bhEsc(labels[r.mode] || r.mode) + '</span>'
+      + '<span style="flex:1"></span>' + res + '</div>'
+      + '<div style="font-size:var(--fs-xs);color:var(--text2);margin-top:6px">🗺️ ' + bhEsc(r.stageId || '—')
+      + (stageName ? ' · ' + bhEsc(stageName) : '') + ' · ⏱️ ' + (r.rounds || 0) + ' 回合</div>'
+      + '<div style="font-size:var(--fs-xs);color:var(--text2);margin-top:4px">⚔️ 输出 ' + bhVal(r.metrics.playerDealt)
+      + ' · 🛡️ 承伤 ' + bhVal(r.metrics.playerTaken) + ' · 💚 治疗 ' + bhVal(r.metrics.playerHealed) + '</div>'
+      + (r.mode === 'group' ? '<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:4px">🌍 场地 ' + bhVal(r.metrics.terrain)
+        + ' · ☠️ DOT ' + bhVal(r.metrics.dot) + ' · 🛡️ 护盾 ' + bhVal(r.metrics.shield) + '</div>' : '')
+      + (r.note ? '<div style="font-size:var(--fs-2xs);color:var(--text3);margin-top:4px">ℹ️ ' + bhEsc(r.note) + '</div>' : '')
+      + '</div>'
+  })
+  return h
+}
+
 /* ===== 记录视图：本月最佳 + 历史最佳 ===== */
 function renderRecordView() {
   var v = document.getElementById('gameRecordView')
@@ -273,6 +355,8 @@ function renderRecordView() {
     })
     h += '</div>'
   }
+  /* ===== v2.13.0 批次 B：⚔️ 战斗记录（单敌 / 敌群分列，禁止跨模式合并排名） ===== */
+  h += renderBattleHistoryBlock()
   // 属性最佳
   h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">📊 属性记录</div>'
   h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
