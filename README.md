@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.1
+> Personal Health Manager — 个人健身健康管理应用 v2.14.2
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -412,4 +412,6 @@ Vercel 项目设置：
 
 | **v2.14.1** | **2026-10-01** | **宠物面板两项（作者要求）**：① **营养液 ↔ 宠物粮 1:2 双向兑换（2 换 1）** —— 2 营养液 → 1 宠物粮、2 宠物粮 → 1 营养液；落在材料区（与既有「炼化石 10→1」同族交互），**不足 2 个不可换**（禁用/隐藏 + 说明）、**只整组、不产生小数**、兑换后**立即落盘并刷新面板**；规则**单一来源**在 `pet-materials.js` / `pet-store.js`，UI 只调用。② **宠物列表缩短**（作者：「现在列表太长了」）—— 目标：打开面板尽量**一屏看完「我的宠物 + 参战阵容」**，同时**不牺牲可读性与热区**（热区 ≥44px、名称不竖排、状态仍可见、操作仍 ≤2 次点击）；既有结构（结算按钮条件显示 / 参战阵容上移 / 一键治疗全宽）语义保持不变。⚠️ **本版为「未验证提交」**：执行子代理**撞 100 轮上限**（近期第六次）、停在"要写新测试套件"处 → **无报告**（屏数前后对比、改前改后截图、方案说明缺失）；主控实测改动落在 `page/pet-materials.js` / `pet-store.js` / `pet-ui.js` / `index.css`，新增 `scripts/test-pet-exchange-list.js`（337 行），全量 **67 套件 / 5252 断言 / 0 失败**（基线 66 / 5143）。**待补**：390×360 双宽度浏览器复验（兑换双向与不足提示、列表**屏数降幅**、名称不竖排、无横向溢出）；截图残留于未跟踪 `_tmp-pet-list-ui/`（未提交，供查看后删除）。**台账**：按指针取 2.14.1、登记已发布、指针推进到 2.14.2；changelog 按 minor 线自动落 `doc/changelog-v2.14.md` |
 
-> 当前版本：**v2.14.1**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+| **v2.14.2** | **2026-10-01** | **修复：宠物加成"就地累加"**（作者同步后反馈「宠物面板加成一直增加」）。**根因**：`page/pet-store.js` 的 `applyBattlePetBaseBonuses()` 写的是 **`u.base[k] = (u.base[k] || 0) + add`** —— **就地累加**；实测同一批 units 连调 10 次 **hp 317 → 434 → 551 → …**（每次 +117 hp / +13 atk / +5 def），**永不收敛**。`petStatBreakdown()` 里同样把凝聚/共鸣**写回 `u.base`**，再由 `boostPetForGroup(u)` 就地乘掉 → 一旦入参不是克隆，**每渲染一次多叠一层**。⚠️ **纠正主控初判**：在**宠物面板**路径上修前实测**并没有涨**（`createPetUnit()` 每次返回新克隆，旧代码**靠这个偶然前提**才没炸）；但**函数本身不纯**，且 `applyBattlePetBaseBonuses` 在 units 路径上 **100% 复现复利** → 仍属必须修的真 bug。**修法**：① 新增**纯计算核心 `petBaseBonusView(units)`**（只返回 `{cohesion, resonance, total, resonanceRate, benchCount}`，**零写入参**；面板与实战加成共用 → 单源）② **`applyBattlePetBaseBonuses` 改为幂等**（删 `+=`，改「当前 base − 上次那层 + 本次那层」，上次那层记在 **`WeakMap`**，不在单位上留可枚举字段 → 不进快照/日志/JSON；反算而非基线快照，以**保住两次调用间别人加的合法 base**，如等级增益）③ **`petStatBreakdown(pet)` 完全纯**（删掉写回 `u.base`/`u.hp` 的两行，带加成值只进局部 `withBonus` 并经 `out.baseWithBonus` 显式返回，`boostPetForGroup` 只作用于浅副本）。两函数注释均写明「**不得修改入参**」。⚠️ **一处刻意保留**：`applyBattlePetBaseBonuses` 仍写 `u.base` 一次 —— `buildGroupBattlePets` 管道与两套**禁改**既有断言依赖该契约 → 折中为**幂等**（第 2..10 次连 JSON 都不变），"纯"的能力由 `petBaseBonusView` 提供。**存档结论：不需要处理**（落盘结构无派生属性，单位只活在内存 → "被叠过"的值不可能进存档，也无法安全区分）；**云同步结论：宠物确实参与**（`sync.js` 的 `keys` 段 / `collectOtherKeys()`，`test-sync-coverage` 有往返断言），但只同步**宠物状态**（无派生属性）→ **异常不是云端传入的**；仓库根 `sync-data.json` 是 v2 时代夹具（`version: 2`、无 `keys`），不能当云端数据看。新增 `scripts/test-pet-bonus-stability.js`（**39 断言**：breakdown ×10 逐字节不变、`petBaseBonusView` ×10 不变、`applyBattlePetBaseBonuses` ×10 不变含**旧算法翻倍的反证**与保住等级增益正证、`buildGroupBattlePets` ×3 一致、4 条源码守卫），全量 **68 套件 / 5359 断言 / 0 失败**（同运行器对 HEAD 基线 67/5320，差值 +39 = 新套件）；**真实 Chrome 复验**：面板 5 次开关 + 切 tab 4 轮数值**恒定且等于修前正确基线**（5445/600/345/330/180/8），`applyBattlePetBaseBonuses` 修前 317→434→551、修后 **317 恒定** |
+
+> 当前版本：**v2.14.2**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

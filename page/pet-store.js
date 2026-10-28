@@ -342,19 +342,77 @@ function benchPetList(units) {
   return (d.pets || []).filter(function (p) { return canPetBattle(p) && !fielded[p.speciesId]; });
 }
 
-/* 把「团队凝聚 + 共鸣」加进参战宠物的**基础属性**（必须在 boostPetForGroup 之前调用） */
-function applyBattlePetBaseBonuses(units) {
-  if (!units || !units.length) return units;
+/* ============================================================
+   v2.14.2（修真实 bug「宠物面板加成一直增加」）：**纯计算**的加成明细
+   ⚠️ 本函数**不得修改入参**：`units` 只被读取 —— 不写 base / hp / 任何字段，
+      所有结果都在**返回对象**里：
+        · cohesion      团队凝聚（每属性一个整数）
+        · resonance     共鸣（每属性一个整数）
+        · total         cohesion + resonance（真正要加到基础属性上的量）
+        · resonanceRate 共鸣档位（按持有总数）
+        · benchCount    提供加成的未上场宠数量
+   两个消费方（`applyBattlePetBaseBonuses` / `petStatBreakdown`）都从这里取数，
+   保证「面板显示」与「实战建场」是**同一份**加成，不会各算一套。
+   ============================================================ */
+function petBaseBonusView(units) {
   var d = getPetStore();
   var bench = benchPetList(units);
   var coh = benchBonusSum(bench, TEAM_COHESION_RATE);
   var resRate = (typeof resonanceBonus === 'function') ? resonanceBonus((d.pets || []).length) : 0;
   var res = benchBonusSum(bench, resRate);
+  var total = {};
+  PET_BONUS_ATTRS.forEach(function (k) { total[k] = (coh[k] || 0) + (res[k] || 0); });
+  return { cohesion: coh, resonance: res, total: total,
+           resonanceRate: resRate, benchCount: bench.length };
+}
+
+/* 「上一次已经写进 base 的加成」登记表（WeakMap；兜底＝不可枚举属性）。
+   为什么需要它：`applyBattlePetBaseBonuses()` 的既有契约是**把加成写进 u.base**
+   （`buildGroupBattlePets` 的管道、以及两套受保护的既有断言都依赖这一点），但它
+   **绝不能累加** —— 同一批单位被复用 / 重复渲染时再 `+=` 就会一路往上爬。
+   所以每次按「当前 base − 上次那层 ＋ 本次这层」**反算**：
+     · 首次调用：上次 = 0 → 结果与修前**逐值一致**（既没涨也没少）；
+     · 再调一次：等于把上次那层换成本次的 → 数值恒定，不会涨；
+     · 两次之间若有人合法改过 base（例如 WP-G 的等级增益），那份改动会被**保住**
+       （这也是不存「原始基线快照」而存「已加的加成」的原因）。
+   ⚠️ 不放在单位上做可枚举字段 —— 否则会进 groupSnapshot / 战斗日志 / JSON 快照。 */
+var _petAppliedBonus = (typeof WeakMap === 'function') ? new WeakMap() : null;
+function petAppliedBonusOf(u) {
+  if (_petAppliedBonus) return _petAppliedBonus.get(u) || null;
+  return u._petAppliedBonus || null;            // 没有 WeakMap 的兜底：不可枚举属性
+}
+function petSetAppliedBonus(u, rec) {
+  if (_petAppliedBonus) { _petAppliedBonus.set(u, rec); return; }
+  try {
+    Object.defineProperty(u, '_petAppliedBonus', { value: rec, enumerable: false, configurable: true, writable: true });
+  } catch (e) {
+    // 忽略：极旧环境没有 defineProperty（或对象不可扩展）→ 退回普通字段，
+    // 只是会多一个可枚举属性，基线语义仍然正确（不会累加）。
+    u._petAppliedBonus = rec;
+  }
+}
+
+/* 把「团队凝聚 + 共鸣」加进参战宠物的**基础属性**（必须在 boostPetForGroup 之前调用）。
+   ⚠️ v2.14.2：写的是「换掉上一次那层、加上本次这层」的**反算值**，不再 `base += add` ——
+      同一批单位连续调用 10 次数值完全不变（修前每调一次就多叠一层；
+      回归测试 scripts/test-pet-bonus-stability.js）。
+   ⚠️ 本函数是「写进 u.base」的**兼容层**（建场管道与受保护断言依赖该契约）；
+      **需要纯计算 / 不碰入参请用 `petBaseBonusView(units)`（它一行都不写入参）**。 */
+function applyBattlePetBaseBonuses(units) {
+  if (!units || !units.length) return units;
+  var bonus = petBaseBonusView(units);            // 纯：不碰任何单位
   units.forEach(function (u) {
+    if (!u || !u.base) return;
+    var prev = petAppliedBonusOf(u) || {};
+    var rec = {};
     PET_BONUS_ATTRS.forEach(function (k) {
-      var add = (coh[k] || 0) + (res[k] || 0);
-      if (add > 0) u.base[k] = (u.base[k] || 0) + add;
+      var add = bonus.total[k] || 0;
+      var prevAdd = prev[k] || 0;
+      rec[k] = add;
+      if (!add && !prevAdd) return;                       // 恒无加成 → 一个字节都不动（与修前一致）
+      u.base[k] = (u.base[k] || 0) - prevAdd + add;       // 换掉上次那层，绝不累加
     });
+    petSetAppliedBonus(u, rec);
     u.hp = u.base.hp;   // 基础值变动后同步当前血量
   });
   return units;
@@ -368,15 +426,35 @@ function applyBattlePetBaseBonuses(units) {
         ① 基础 = `createPetUnit(pet).base`（图鉴基础 + 炼化 + 天赋静态修正，pet-codex.js）
         ② 加成 = 团队凝聚（`benchBonusSum(bench, TEAM_COHESION_RATE)`）
                + 共鸣（`benchBonusSum(bench, resonanceBonus(持有总数))`）
-               —— 与 `applyBattlePetBaseBonuses()` 同源（同一对函数），只是这里把两项分开留痕
+               —— 与 `applyBattlePetBaseBonuses()` 同源（同一份 `petBaseBonusView`），只是这里把两项分开留痕
         ③ 最终 = `boostPetForGroup(同一 unit)`（百分比池 = 稀有度倍率 + Σ宝珠%，group-levels.js）
       百分比池的「稀有度百分点 / 宝珠百分点」只**读取**（`PET_GROUP_SCALE[rarity]` / `unit._orbPct`）。
       速度不参与百分比池（与 boostPetForGroup 一致）。
+
+   🔴 v2.14.2 修复（真实 bug「宠物面板加成一直增加」）：
+      **本函数不得修改入参**（也不得写回 `createPetUnit()` 产物）。修前这里有一行
+      `u.base[k] = (u.base[k] || 0) + coh[k] + res[k]`，接着又让 `boostPetForGroup(u)`
+      把 `u.base` **就地**乘掉 —— 只要传进来的是「非一次性克隆」的单位（缓存 / 存档 /
+      同一对象多次渲染），每渲染一次就多叠一层凝聚+共鸣，面板读数一路往上爬。
+      现在「带加成的基础值」只算进**局部对象**并以 `out.baseWithBonus`（= `out.bench`）
+      **显式返回**；`boostPetForGroup` 只作用于局部副本 → 本函数零写入、可重复调用。
    ============================================================ */
 var PET_STAT_KEYS = ['hp', 'atk', 'def', 'spd', 'soulAtk', 'soulDef'];
+
+/* 单位浅副本（换掉 base）—— 给 `boostPetForGroup()` 这种**就地乘法**用。
+   ⚠️ 只为「不碰原单位」而存在：tags / _orbPct / _skillLevels 等字段按引用沿用，
+      与原单位语义一致（boostPetForGroup 只读 tags/_orbPct，只写 base/hp）。 */
+function petUnitWithBase(u, base) {
+  var c = {};
+  for (var k in u) { if (Object.prototype.hasOwnProperty.call(u, k)) c[k] = u[k]; }
+  c.base = base;
+  return c;
+}
+
 function petStatBreakdown(pet) {
   var zero = function () { var o = {}; PET_STAT_KEYS.forEach(function (k) { o[k] = 0; }); return o; };
   var out = { ok: false, base: zero(), cohesion: zero(), resonance: zero(), bench: zero(),
+              baseWithBonus: zero(),
               rarityPct: 0, orbPct: {}, poolPct: {}, final: zero(),
               benchCount: 0, resonanceRate: 0, boosted: false };
   if (!pet || typeof createPetUnit !== 'function') return out;
@@ -385,28 +463,40 @@ function petStatBreakdown(pet) {
   out.ok = true;
   PET_STAT_KEYS.forEach(function (k) { out.base[k] = u.base[k] || 0; });
 
-  /* 未上场（成熟 + 未受伤 + 非本宠）的宠物基础属性 × 比例 */
-  var d = getPetStore();
-  var fielded = {}; fielded[pet.speciesId] = true;
-  var bench = (d.pets || []).filter(function (p) { return canPetBattle(p) && !fielded[p.speciesId]; });
-  var coh = benchBonusSum(bench, TEAM_COHESION_RATE);
-  var resRate = (typeof resonanceBonus === 'function') ? resonanceBonus((d.pets || []).length) : 0;
-  var res = benchBonusSum(bench, resRate);
-  out.benchCount = bench.length;
-  out.resonanceRate = resRate;
-  PET_BONUS_ATTRS.forEach(function (k) { u.base[k] = (u.base[k] || 0) + (coh[k] || 0) + (res[k] || 0); });
-  u.hp = u.base.hp;
+  /* 未上场（成熟 + 未受伤 + 非本宠）的宠物基础属性 × 比例 ——
+     与 `applyBattlePetBaseBonuses()` **同一份来源**（`petBaseBonusView`），
+     用一个「假单位」只把 speciesId 交给它（`benchPetList` 只读 `_petSpecies`）。 */
+  var vb = petBaseBonusView([{ _petSpecies: pet.speciesId }]);
+  var coh = vb.cohesion;
+  var res = vb.resonance;
+  out.benchCount = vb.benchCount;
+  out.resonanceRate = vb.resonanceRate;
+  /* ⚠️ 本函数不得修改入参：带加成的基础值算进**局部** withBonus，
+     不写 `u.base`（写成 `u.base[k] = (u.base[k] || 0) + …` 就是「加成一直涨」的源头）。 */
+  var withBonus = {};
+  PET_STAT_KEYS.forEach(function (k) {
+    var add = (PET_BONUS_ATTRS.indexOf(k) > -1) ? ((coh[k] || 0) + (res[k] || 0)) : 0;   // 速度不参与
+    withBonus[k] = (out.base[k] || 0) + add;
+  });
   PET_STAT_KEYS.forEach(function (k) {
     out.cohesion[k] = coh[k] || 0;
     out.resonance[k] = res[k] || 0;
-    out.bench[k] = u.base[k] || 0;
+    out.bench[k] = withBonus[k];
+    out.baseWithBonus[k] = withBonus[k];      // 显式返回「带加成的基础值」（＝bench，留着更清楚）
   });
 
   out.rarityPct = ((typeof PET_GROUP_SCALE !== 'undefined') && PET_GROUP_SCALE[pet.rarity]) || 0;
   out.orbPct = u._orbPct || {};
-  if (typeof boostPetForGroup === 'function') { boostPetForGroup(u); out.boosted = true; }
+  if (typeof boostPetForGroup === 'function') {
+    /* 百分比池是**就地乘法**，只作用于局部副本 pb —— 原单位 u 一个字段都不动 */
+    var pb = petUnitWithBase(u, withBonus);
+    boostPetForGroup(pb);
+    out.boosted = true;
+    PET_STAT_KEYS.forEach(function (k) { out.final[k] = pb.base[k] || 0; });
+  } else {
+    PET_STAT_KEYS.forEach(function (k) { out.final[k] = withBonus[k] || 0; });
+  }
   PET_STAT_KEYS.forEach(function (k) {
-    out.final[k] = u.base[k] || 0;
     out.poolPct[k] = (k === 'spd') ? 0 : (out.rarityPct + (out.orbPct[k] || 0));
   });
   return out;
@@ -517,6 +607,7 @@ if (typeof window !== 'undefined') {
   window.teamCohesionBonus = teamCohesionBonus;
   window.benchBonusSum = benchBonusSum;
   window.benchPetList = benchPetList;
+  window.petBaseBonusView = petBaseBonusView;
   window.applyBattlePetBaseBonuses = applyBattlePetBaseBonuses;
   window.buildGroupBattlePets = buildGroupBattlePets;
 }
@@ -548,6 +639,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.teamCohesionBonus = teamCohesionBonus;
   globalThis.benchBonusSum = benchBonusSum;
   globalThis.benchPetList = benchPetList;
+  globalThis.petBaseBonusView = petBaseBonusView;
   globalThis.applyBattlePetBaseBonuses = applyBattlePetBaseBonuses;
   globalThis.buildGroupBattlePets = buildGroupBattlePets;
 }

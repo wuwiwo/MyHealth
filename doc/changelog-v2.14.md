@@ -5,6 +5,41 @@
 
 ---
 
+## v2.14.2
+
+Date: 2026-10-01
+
+**修复：宠物加成"就地累加"（不纯函数）** —— 作者同步后发现"宠物面板加成一直增加"。
+
+### 根因（已核实，含对主控初判的纠正）
+
+- `page/pet-store.js` 的 **`applyBattlePetBaseBonuses()`** 里是 **`u.base[k] = (u.base[k] || 0) + add`** → **就地累加**。
+  实测（同一批 units 连调 10 次）：**hp 317 → 434 → 551 → …**，每次 +117 hp / +13 atk / +5 def，**永不收敛**。
+- `petStatBreakdown()` 里同样把凝聚/共鸣**写回 `u.base`**，再由 `boostPetForGroup(u)` 就地乘掉 → **一旦入参不是克隆，每渲染一次多叠一层**。
+- ⚠️ **纠正主控初判**：在**宠物面板**这条路径上，修前实测**并没有涨**（`createPetUnit()` 每次返回新克隆，旧代码只是**靠这个偶然前提**才没炸）；但**函数本身是不纯的**，且 `applyBattlePetBaseBonuses` 在 units 路径上 **100% 复现复利**。所以这是**必须修的真 bug**，只是发作条件依赖调用方是否克隆。
+
+### 修法
+
+1. 新增**纯计算核心 `petBaseBonusView(units)`**：只返回 `{cohesion, resonance, total, resonanceRate, benchCount}`，**一行都不写入参**（有断言守）；面板与实战加成共用它 → 单源。
+2. **`applyBattlePetBaseBonuses()` 改为幂等**：删掉 `+=`，改成「**当前 base − 上次那层 + 本次那层**」；"上次那层"记在 **`WeakMap`**（不在单位上留可枚举字段 → 不进快照/日志/JSON）。选反算而非基线快照，是为了**保住两次调用之间别人加的合法 base**（如等级增益）。
+3. **`petStatBreakdown(pet)` 改为完全纯函数**：删掉写回 `u.base` 与 `u.hp` 的两行；带加成的基础值只算进局部 `withBonus`，经 `out.baseWithBonus`（= `out.bench`）**显式返回**；`boostPetForGroup` 只作用于浅副本 → **原单位零写入**。
+4. 两个函数注释均写明「**本函数不得修改入参**」。
+- ⚠️ **一处刻意保留**：`applyBattlePetBaseBonuses` 仍写 `u.base` 一次 —— `buildGroupBattlePets` 管道与两套**禁改**的既有断言（`test-pet-store.js` / `test-pet-heal-display.js` 读 `u.base` / `pipe.base`）依赖该契约，改成"返回克隆"必红。折中=**保留写入但幂等**（第 2..10 次连 JSON 都不变），"纯"的能力由 `petBaseBonusView` 提供。
+
+### 存档与云同步的结论
+
+- **已有存档不需要处理**：落盘结构中**没有派生属性**（`pets` 只有状态与材料/宝珠等），单位只活在内存 → "被叠过"的数值**不可能进过存档**，也无法安全区分"被叠过"与"本来就这么大" → **不瞎改数据**。
+- **宠物确实参与云同步**（`sync.js` 的 `keys` 段，`collectOtherKeys()` 从 `store.getAll()` 派生；`test-sync-coverage` 有往返断言），但同步的只是**宠物状态**（无派生属性）→ **作者的异常不是云端传入的**，是本地重复渲染/重复施加。
+- 仓库根 `sync-data.json` 是 **v2 时代夹具**（`version: 2`、无 `keys` 段），当前载荷已是 `version: 5` + `keys` → 不能拿它当"云端数据"看。
+
+### 测试与复验
+
+- 新增 `scripts/test-pet-bonus-stability.js`（**39 断言**）：`petStatBreakdown` ×10 **逐字节不变** + 存档不变；`petBaseBonusView` ×10 不变 + units JSON 一字不改；`applyBattlePetBaseBonuses` ×10 不变（含**"旧算法会翻倍"的反证**、保住等级增益的正证、单位无可枚举新增字段）；`buildGroupBattlePets` ×3 一致；4 条源码守卫（无 `+=`、breakdown 零写 `u.base`、`boostPetForGroup(pb)`、顺序契约）。
+- 全量 **68 套件 / 5359 断言 / 0 失败**（同运行器对 HEAD 实测基线 67 / 5320；差值 +39 = 恰好新套件）。
+- **真实 Chrome 复验**：面板 5 次开关 + 切 tab 4 轮数值**恒定且等于修前正确基线**（5445/600/345/330/180/8）；`applyBattlePetBaseBonuses` 修前 `317→434→551`、修后 **317 恒定**；`buildGroupBattlePets` ×3 一致。
+
+---
+
 ## v2.14.1
 
 Date: 2026-10-01
@@ -274,6 +309,7 @@ Date: 2026-10-12
 | v2.13.0 | 52 | 2924 行 game-render.js | 战斗历史（100 条 FIFO）+ 分模式长期统计；纯记账/展示，引擎逐字节不变 |
 | v2.14.0 | 53 | 2963 行 game-render.js | 反馈矩阵单一来源（fx-semantics.js）+ 击杀即时提示；纯表现层，引擎逐字节不变 |
 | v2.14.1 | 52 | （见 changelog） | **宠物面板两项**：① **营养液 ↔ 宠物粮 1:2 双向互兑（2 换 1）** —— 规则单一来源在 `pet-materials.js`/`pet-store.js`，UI 只调用；不足 2 个不可换、只整组、无小数、兑换即落盘。② **宠物列表缩短** —— 目标"一屏看完宠物 + 参战阵容"，同时守住热区 ≥44px、名称不竖排、状态可见、操作 ≤2 次点击；既有结构（结算条件显示/阵容上移/一键治疗全宽）语义不变。⚠️ **未验证提交**：子代理撞 100 轮上限、停在写测试前，**无报告**；主控实测改动 4 个 page 文件 + 新增 `test-pet-exchange-list`（337 行），全量 **67 套件 / 5252 断言 / 0 失败**（基线 66/5143）→ **待补双宽度浏览器复验**（兑换与列表屏数降幅）。台账按指针取 2.14.1、推进到 2.14.2 |
+| v2.14.2 | 52 | （见 changelog） | **修复：宠物加成"就地累加"**（作者：同步后加成一直增加）。根因：`pet-store.js` 的 `applyBattlePetBaseBonuses()` 用 `u.base[k] += add` **就地累加**（同批 units 连调 10 次 hp 317→434→551…永不收敛）；`petStatBreakdown()` 同样写回 `u.base` 再被 `boostPetForGroup` 就地乘掉。⚠️ **纠正主控初判**：面板路径修前实测**没涨**（`createPetUnit()` 每次新克隆，旧码靠这个偶然前提才没炸），但函数本身**不纯**、units 路径 **100% 复利** → 真 bug。修法：① 新增**纯核心 `petBaseBonusView()`**（零写入参、面板与实战单源）② `applyBattlePetBaseBonuses` 改**幂等**（当前 base − 上次那层 + 本次那层，上次记 `WeakMap`，不留在可枚举字段）③ `petStatBreakdown` **完全纯**（删写回，带加成值经 `out.baseWithBonus` 显式返回，`boostPetForGroup` 只作用浅副本）。⚠️ 刻意保留：`applyBattlePetBaseBonuses` 仍写 `u.base` 一次（两套禁改断言与建场管道依赖该契约）→ 折中为**幂等**。**存档无需处理**（派生属性从不落盘）；**宠物确实参与云同步**（`keys` 段）但只同步状态 → 异常非云端传入。新增 `test-pet-bonus-stability`（39 断言，含"旧算法翻倍"反证），全量 **68 套件 / 5359 断言**；真实 Chrome 复验数值恒定且等于修前正确基线 |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
 > （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。
