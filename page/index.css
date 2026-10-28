@@ -1019,8 +1019,8 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .pet-card-name{flex:1;min-width:0;font-size:var(--fs-lg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pet-card-rarity{flex-shrink:0;font-size:var(--fs-xs);color:var(--purple,#a855f7)}
 .pet-card-status{font-size:var(--fs-xs);color:var(--text3);margin-top:4px}
-.pet-card-bar{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-top:4px}
-.pet-card-bar i{display:block;height:100%;background:var(--orange);border-radius:3px;transition:width .3s}
+/* v2.15：`.pet-card-bar`（6px 进度条）随「紧凑行」移除 —— 它画的就是状态行里已经写着的
+   「孵化 42% / 成长 30%」（成熟宠恒为 100%，零信息量），改版后每只省 10px 且不丢信息。 */
 .pet-card-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px}
 
 /* ========== v2.3 WP-I：宠物面板版式（参战阵容置顶 / 一键治疗独立成行 / 材料区） ==========
@@ -1090,6 +1090,27 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .pet-cmp-up{color:var(--green)}
 .pet-cmp-dn{color:var(--red)}
 .pet-cmp-exit{margin-top:8px}
+
+/* ========== v2.15：宠物列表「紧凑行」（作者：「优化宠物列表，现在列表太长了」） ==========
+   改前每只 141px（标题行 + 状态行 + 6px 进度条 + 独立按钮行），8 只 = 2.20 屏（390×844）。
+   改后每只 ≈56px 一行：头像 32 + [名称(nowrap) + 稀有度 / 一行状态] + 右侧「⋯」；
+   操作默认收起（`.pet-card-actions[hidden]`），点「⋯」就地展开 → 再点动作 = 2 次点击。
+   ⚠️ 硬底线不变：① 名称 `white-space:nowrap` + 省略号（附录 A-1 的「一字一行」绝不许回来）；
+      ② 每个可点目标 ≥ --touch-min(44px)：行本身 min-height 44，「⋯」是 .speed-btn（44×44）；
+      ③ 状态文字仍用 --fs-xs（12px，设计规范的可读下限），颜色仍走 --text3 / --red。
+   ⚠️ 不新字号、不新颜色：本区块只出现既有令牌。 */
+.pet-card{padding:4px 10px;margin-bottom:4px;border-radius:var(--rad-md)}
+.pet-row{display:flex;align-items:center;gap:8px;min-height:var(--touch-min);min-width:0}
+.pet-row-main{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.pet-row .pet-card-head{gap:6px}
+.pet-row .pet-card-status{margin-top:1px;line-height:1.4}
+.pet-row-more{flex-shrink:0;width:var(--touch-min);padding:0;font-size:var(--fs-md)}
+.pet-card .pet-card-actions{margin-top:6px;justify-content:flex-start}
+.pet-card-actions[hidden]{display:none}
+/* 互兑按钮（🧪2→🍖1）与「🔄 兑换 10→1」同一排、同一尺寸族；禁用时只降不透明度并可读原因 */
+.pet-exch-btn{min-width:0}
+.pet-exch-btn[disabled]{opacity:.5;cursor:not-allowed}
+.pet-mat-hint{margin-top:8px;font-size:var(--fs-xs);line-height:1.6;color:var(--text3)}
 
 /* ========== LOADING / SKELETON ========== */
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--text3);border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}

@@ -100,6 +100,77 @@ function exchangeRefineStones(bag, times) {
   return { ok: true, spent: cost, gained: times };
 }
 
+/* ============================================================
+   v2.15 新增：**营养液 ⇄ 宠物粮 互兑（1:2，即 2 换 1，双向）**
+   作者原话：「让营养液与宠物粮可以 1:2 互相兑换（2 换 1）」。
+
+   · **比例唯一来源就是下面这个常量** —— UI 一律通过本文件的
+     `matExchangeView()` / `exchangeNutritionFeed()` 取值，不得在 UI 里再写一个 2；
+   · **只做整组兑换**：不足 2 个一律拒绝（按钮禁用 + 说明原因），
+     `spent` 恒为 2 的整数倍、`gained` 恒为整数 ⇒ **永不产生小数**；
+   · 与既有「炼化石 10→1」(`exchangeRefineStones`) **同一族写法**：纯逻辑、不碰 store/DOM，
+     落盘由 `pet-store.js` 的 `exchangePetMaterials()` 负责（单一落盘入口）。
+   ============================================================ */
+var PET_MAT_EXCHANGE_RATE = 2;
+var PET_MAT_EXCHANGE_LABELS = { nutrition: '营养液', feed: '宠物粮' };
+
+/* 互兑的另一端：营养液 ⇄ 宠物粮；其它材料返回 null（不开放兑换） */
+function matExchangePeer(type) {
+  if (type === 'nutrition') return 'feed';
+  if (type === 'feed') return 'nutrition';
+  return null;
+}
+
+/* 只读：某种材料够整组兑换几次（0 = 不足，不能换） */
+function matExchangeCapacity(bag, from) {
+  if (!bag || !matExchangePeer(from)) return 0;
+  return Math.floor((bag[from] || 0) / PET_MAT_EXCHANGE_RATE);
+}
+
+/* 只读：面板用的兑换视图（不含任何 UI 文案以外的判断逻辑）。
+   UI 只消费本函数 —— 禁用态、次数、原因全部来自这里。
+   @returns {{rate:number, gain:number, rows:Array<{from,to,label,peerLabel,have,peer,need,gain,times,ok,reason}>}} */
+function matExchangeView(bag) {
+  bag = bag || {};
+  var GAIN = 1;                       // 每次整组兑换换出 1 个（ratio = rate : gain）
+  var rows = [];
+  ['nutrition', 'feed'].forEach(function (from) {
+    var to = matExchangePeer(from);
+    var have = bag[from] || 0;
+    var peer = bag[to] || 0;
+    var times = matExchangeCapacity(bag, from);
+    rows.push({
+      from: from, to: to, peer: peer, have: have,
+      label: PET_MAT_EXCHANGE_LABELS[from], peerLabel: PET_MAT_EXCHANGE_LABELS[to],
+      need: PET_MAT_EXCHANGE_RATE, gain: GAIN, times: times, ok: times >= 1,
+      reason: times >= 1 ? null
+        : PET_MAT_EXCHANGE_LABELS[from] + '不足（需 ' + PET_MAT_EXCHANGE_RATE + '，现有 ' + have + '）'
+    });
+  });
+  return { rate: PET_MAT_EXCHANGE_RATE, gain: GAIN, rows: rows };
+}
+
+/* 执行 times 次整组兑换：每次 `PET_MAT_EXCHANGE_RATE` 个 from → 1 个 to。
+   from: 'nutrition' | 'feed'；times: 正整数（缺省/非法按 1 处理并**向下取整**，杜绝小数）。
+   成功才改 bag；失败**一个都不扣**（与 exchangeRefineStones 一致）。
+   @returns {{ok:boolean, from?,to?,spent?,gained?,fromBalance?,toBalance?,reason?}} */
+function exchangeNutritionFeed(bag, from, times) {
+  if (!matExchangePeer(from)) return { ok: false, reason: '该材料不支持兑换' };
+  times = Math.max(1, Math.floor(parseInt(times, 10) || 1));
+  if (!bag) return { ok: false, reason: '材料袋不存在' };
+  var to = matExchangePeer(from);
+  var cost = PET_MAT_EXCHANGE_RATE * times;
+  if ((bag[from] || 0) < cost) {
+    return { ok: false, reason: PET_MAT_EXCHANGE_LABELS[from] + '不足（需 ' + cost + '，现有 ' + (bag[from] || 0) + '）' };
+  }
+  bag[from] -= cost;
+  bag[to] = (bag[to] || 0) + times;
+  return {
+    ok: true, from: from, to: to, spent: cost, gained: times,
+    fromBalance: bag[from], toBalance: bag[to]
+  };
+}
+
 /* 技能等级上限 */
 var PET_SKILL_MAX_LEVEL = 10;
 
@@ -193,6 +264,11 @@ if (typeof window !== 'undefined') {
   window.refineSuccessRate = refineSuccessRate;
   window.attemptRefine = attemptRefine;
   window.exchangeRefineStones = exchangeRefineStones;
+  window.PET_MAT_EXCHANGE_RATE = PET_MAT_EXCHANGE_RATE;
+  window.matExchangePeer = matExchangePeer;
+  window.matExchangeCapacity = matExchangeCapacity;
+  window.matExchangeView = matExchangeView;
+  window.exchangeNutritionFeed = exchangeNutritionFeed;
   window.petSkillUpgradeCost = petSkillUpgradeCost;
   window.upgradePetSkill = upgradePetSkill;
   window.useSpirit = useSpirit;
@@ -208,6 +284,11 @@ if (typeof globalThis !== 'undefined') {
   globalThis.refineSuccessRate = refineSuccessRate;
   globalThis.attemptRefine = attemptRefine;
   globalThis.exchangeRefineStones = exchangeRefineStones;
+  globalThis.PET_MAT_EXCHANGE_RATE = PET_MAT_EXCHANGE_RATE;
+  globalThis.matExchangePeer = matExchangePeer;
+  globalThis.matExchangeCapacity = matExchangeCapacity;
+  globalThis.matExchangeView = matExchangeView;
+  globalThis.exchangeNutritionFeed = exchangeNutritionFeed;
   globalThis.petSkillUpgradeCost = petSkillUpgradeCost;
   globalThis.upgradePetSkill = upgradePetSkill;
   globalThis.useSpirit = useSpirit;

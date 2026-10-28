@@ -134,6 +134,11 @@ function orbSlotsHtml(pet, d) {
        disabled 语义就先别出现）。
    ⚠️ 只重排 + 改尺寸所在区块的骨架：所有数值/口径仍全部来自 pet-store.js，
       热区一律 ≥ --touch-min(44px)，不新字号、不新颜色（样式见 index.css 的 .pet-lineup/.pet-mat）。 */
+
+/* v2.15：宠物行「⋯」展开状态（**模块级 UI 状态，不进存档**，与 _petSrcOpen 同类做法）。
+   同一时刻只展开一行：8 只宠一起展开会让列表重新变长，与「缩短列表」的目标相反。 */
+var _petRowOpen = null;
+
 function renderPetPanel() {
   var ov = document.getElementById('panelOverlay')
   if (!ov) return
@@ -181,6 +186,28 @@ function renderPetPanel() {
   var m = d.materials || {}
   /* v2.2 WP-H5：一键治疗的候选 = 成熟 + 未阵亡 + 受伤（已死亡 / 未成熟不参与） */
   var injuredN = d.pets.filter(function(p){ return p.stage==='mature' && !p.isDead && p.injured }).length
+  /* ===== v2.15：🧪 营养液 ⇄ 🍖 宠物粮 互兑（1:2，即 2 换 1，双向）=====
+     作者原话：「让营养液与宠物粮可以 1:2 互相兑换（2 换 1）」。
+     ⚠️ **比例只有一个来源**：pet-store.js 的 `petMatExchangeInfo()` → pet-materials.js 里的
+        兑换常量。本处**不写任何比例数字**，按钮文案里的「2→1」也是从返回的 need/gain 拼出来的
+        —— 以后改比例只改一个常量，UI 一行不用动。
+     ⚠️ 与既有「炼化石 10→1」**同一族交互**：同一排按钮、点击即兑换、toast 报结果；
+        区别只有一处（作者要求）：**不足整组时按钮禁用**（`disabled` + `aria-disabled`），
+        并在按钮组下方出一行原因（`.pet-mat-hint`），不用「点了才报错」的方式。 */
+  var exInfo = (typeof petMatExchangeInfo === 'function') ? petMatExchangeInfo() : { rate: 0, rows: [] }
+  var exRows = exInfo.rows || []
+  var exBlocked = exRows.filter(function(r){ return !r.ok })
+  function exBtnHtml(row, icoFrom, icoTo) {
+    var label = (row.need + '→' + row.gain)
+    return '<button class="speed-btn pet-exch-btn" type="button" data-pet-exch="' + row.from + '"'
+      + ' aria-label="用 ' + row.need + ' 个' + row.label + '兑换 ' + row.gain + ' 个' + row.peerLabel + '"'
+      + ' title="' + (row.ok
+          ? (row.need + ' 个' + row.label + ' → ' + row.gain + ' 个' + row.peerLabel + '（整组兑换，可兑 ' + row.times + ' 次）')
+          : row.reason) + '"'
+      + (row.ok ? '' : ' disabled aria-disabled="true"')
+      + ' style="padding:8px 8px;min-height:44px;font-size:var(--fs-sm)">'
+      + icoFrom + label + icoTo + '</button>'
+  }
   h += '<div class="pet-mat">'
     +'<div class="pet-mat-row">'
     +'<span>🧪 营养液 <b style="font-size:var(--fs-base)">'+m.nutrition+'</b></span>'
@@ -190,10 +217,18 @@ function renderPetPanel() {
     +'<span>💎 宝珠碎片 <b style="font-size:var(--fs-base)">'+m.orbShard+'</b></span>'
     +'</div>'
     +'<div class="pet-mat-actions">'
+    + exRows.map(function(row){
+        return row.from === 'nutrition' ? exBtnHtml(row, '🧪', '🍖') : exBtnHtml(row, '🍖', '🧪')
+      }).join('')
     +'<button class="speed-btn" id="petExchange" title="10 个普通炼化石兑换 1 个高级炼化石" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">🔄 兑换 10→1</button>'
     /* v2.3：一键治疗**全宽独占一行**（.pet-btn-wide 的 flex:1 1 100%），不再与兑换并列 */
     +'<button class="speed-btn pet-btn-wide" id="petHealAll" title="自动消耗营养液，把所有受伤宠物一次治好（已阵亡/未成熟的不参与）" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(injuredN?';border-color:var(--red);color:var(--red)':'')+'">🧪 一键治疗'+(injuredN?'（'+injuredN+'）':'')+'</button>'
     +'</div>'
+    /* 原因只在「有一个方向换不了」时出现 —— 正常态不占高度（作者要的是更短的列表） */
+    +(exBlocked.length
+      ? '<div class="pet-mat-hint" role="note">🔁 营养液 ⇄ 宠物粮 ' + exInfo.rate + ' 换 1（整组兑换，不产生小数）· '
+          + exBlocked.map(function(r){ return r.reason }).join(' · ') + '</div>'
+      : '')
     +'</div>'
   // v2.1.17 宝珠：合成 / 库存分解
   h += orbBagHtml(d)
@@ -201,30 +236,64 @@ function renderPetPanel() {
   if (!d.pets.length) {
     h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:var(--fs-base);background:var(--bg2);border-radius:16px">还没有宠物 🐾<br><span style="font-size:var(--fs-xs)">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:var(--fs-md);border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
   } else {
-    d.pets.forEach(function(p, i) {
-      normalizePetStage(p);   // v2.0.9: 实时校正阶段（防 hatchProgress=100 卡 egg）
+    /* ===== v2.15：**列表缩短**（作者原话：「优化宠物列表，现在列表太长了」）=====
+       改前：每只 141px（标题行 + 状态行 + 6px 进度条 + 独立 44px 按钮行）——
+             390×844 下 8 只 = **2.20 屏**、5 只也要 1.6 屏才看得到底（附录 A-3 同源问题）。
+       改后：每只 **~56px 一行** —— 头像 32 + 名称（nowrap）+ 稀有度 + 一行状态；
+             操作收进右侧「⋯」（点 ⋯ 展开 → 再点动作 = **2 次点击**，热区各 44px）。
+       · 排序 = 按可操作性分组：参战 → 可用 → 受伤 → 成长中 → 阵亡（行上带 `data-pet-group`）；
+         **不加分组标题行**：每条标题至少 44px，8 只宠就是 +220px（＝0.26 屏），
+         与「缩短列表」的目标直接冲突；分组信息由排序位置 + 每行状态文字承担。
+       · 进度条（`.pet-card-bar`）去掉：它只是把状态行里已经写着的「孵化 42% / 成长 30%」
+         再画一遍（成熟宠恒为 100%，零信息），去掉后每只省 10px。
+       ⚠️ **不动**既有结构：结算按钮条件渲染 / 参战阵容上移 / 一键治疗全宽（`.pet-btn-wide`）。
+       ⚠️ 名称仍 `white-space:nowrap`（附录 A-1 的老问题，绝不回退成竖排）；
+          状态（成熟/孵化/成长 · 饥饿 · 健康 · 受伤/阵亡）仍逐只可见，只是从三行压成一行。 */
+    var _pickSet = {}
+    ;(_petBattlePicks || []).forEach(function(sid){ _pickSet[sid] = true })
+    var _GROUP_RANK = { lineup: 0, ready: 1, injured: 2, growing: 3, dead: 4 }
+    function _petGroupOf(p) {
+      if (p.isDead) return 'dead'
+      if (p.stage !== 'mature') return 'growing'
+      if (p.injured) return 'injured'
+      return _pickSet[p.speciesId] ? 'lineup' : 'ready'
+    }
+    var _rows = d.pets.map(function(p, i){ return { p: p, i: i, g: null } })
+    _rows.forEach(function(r){
+      normalizePetStage(r.p);   // v2.0.9: 实时校正阶段（防 hatchProgress=100 卡 egg）→ 先校正再判组
+      r.g = _petGroupOf(r.p)
+    })
+    /* 组内保持存档原顺序（稳定排序），组间按 _GROUP_RANK */
+    _rows.sort(function(a, b){
+      return _GROUP_RANK[a.g] !== _GROUP_RANK[b.g] ? _GROUP_RANK[a.g] - _GROUP_RANK[b.g] : a.i - b.i
+    })
+    _rows.forEach(function(r) {
+      var p = r.p, i = r.i
       var codex = getPetCodex(p.speciesId) || { name: p.name, rarity: p.rarity }
       /* v2.2.29：头像改用宠物专属图标（petIconStageHtml 内部兜底回原来的阶段 emoji） */
       var stageText = p.stage==='egg'?'孵化 '+Math.round(p.hatchProgress)+'%':p.stage==='grow'?'成长 '+Math.round(p.growth)+'%':'成熟'
       var dead = p.isDead ? '<span style="color:var(--red)">💀 阵亡</span>' : ''
       // v2.1.19 受伤状态：无法参战，需喂养把恢复进度喂到 100
       var inj = (!p.isDead && p.injured) ? '<span style="color:var(--red)">🤕 受伤 ' + Math.round(p.injuryHeal || 0) + '%</span>' : ''
-      // 进度条（孵化/成长）
-      var prog = p.stage==='egg' ? p.hatchProgress : p.stage==='grow' ? p.growth : 100
-      /* WP-I A-1：拆成「标题行（头像+名称+稀有度）/ 正文行（状态+进度）/ 操作行（按钮组）」。
-         原来单行 flex 时右侧按钮把中文名压到 ~21px 宽 →「清脆鸟」竖排三行。现在名称
-         独占标题行且 nowrap+省略号，任何宽度都不会竖排；按钮组独立一行，仍各 44px 热区。 */
-      h += '<div class="pet-card">'
-        +'<div class="pet-card-head">'
+      var petName = (codex.name||p.name)
+      var open = (_petRowOpen === i)
+      h += '<div class="pet-card" data-pet-group="'+r.g+'">'
+        +'<div class="pet-row">'
         +'<span class="pet-card-ico">'+petIconStageHtml(p.speciesId, 32, p.stage)+'</span>'
-        +'<span class="pet-card-name">'+(codex.name||p.name)+'</span>'
+        +'<span class="pet-row-main">'
+        +'<span class="pet-card-head">'
+        +'<span class="pet-card-name">'+petName+'</span>'
         +'<span class="pet-card-rarity">'+p.rarity+'</span>'
+        +'</span>'
+        +'<span class="pet-card-status">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+(inj?' · '+inj:'')+'</span>'
+        +'</span>'
+        /* 操作折叠的开关：1 次点开 + 1 次点动作 = 2 次点击（热区 44×44，见 .pet-row-more） */
+        +'<button class="speed-btn pet-row-more" type="button" data-pet-more="'+i+'" data-pet-name="'+petName+'"'
+        +' aria-expanded="'+(open?'true':'false')+'" aria-controls="petActs'+i+'"'
+        +' aria-label="'+(open?'收起':'展开')+petName+'的操作">'+(open?'▴':'⋯')+'</button>'
         +'</div>'
-        +'<div class="pet-card-status">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+(inj?' · '+inj:'')+'</div>'
-        // 进度条
-        +'<div class="pet-card-bar"><i style="width:'+Math.min(100,prog)+'%"></i></div>'
-        // 操作按钮（大按钮 44px）
-        +'<div class="pet-card-actions">'
+        // 操作按钮（大按钮 44px）—— 默认收起，展开后与改前完全一致
+        +'<div class="pet-card-actions" id="petActs'+i+'"'+(open?'':' hidden')+'>'
         +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">🍖喂</button>'
         +((p.stage==='egg'||(p.stage==='mature'&&!p.isDead))?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(p.injured?';border-color:var(--red);color:var(--red)':'')+'">🧪营养</button>':'')
         +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">✨炼化</button>':'')
@@ -262,6 +331,40 @@ function renderPetPanel() {
     if (rx.ok) { savePetStore(d5); toast('🔄 '+rx.spent+' 普通炼化石 → '+rx.gained+' 高级炼化石', 's') }
     else { toast(rx.reason || '兑换失败', 'e') }
     renderPetPanel()
+  })
+  /* v2.15：🧪 营养液 ⇄ 🍖 宠物粮 互兑 —— 逻辑与落盘**全在** pet-store.js 的
+     `exchangePetMaterials()`（它再调 pet-materials.js 的唯一来源）；本处只负责提示与重渲染。
+     按钮不足整组时已 `disabled`，正常点不到这里；仍保留失败分支（防 stale DOM 下的竞态）。 */
+  ov.querySelectorAll('[data-pet-exch]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var from = btn.getAttribute('data-pet-exch')
+      var rx = (typeof exchangePetMaterials === 'function')
+        ? exchangePetMaterials(from, 1)
+        : { ok: false, reason: '宠物模块未加载' }
+      if (rx.ok) {
+        var labels = (typeof PET_MAT_EXCHANGE_LABELS !== 'undefined') ? PET_MAT_EXCHANGE_LABELS : {}
+        toast('🔁 ' + rx.spent + ' 个' + (labels[rx.from] || rx.from) + ' → ' + rx.gained + ' 个'
+          + (labels[rx.to] || rx.to) + '（余 ' + rx.fromBalance + ' / ' + rx.toBalance + '）', 's')
+      } else {
+        toast(rx.reason || '兑换失败', 'e')
+      }
+      renderPetPanel()   // 立即刷新面板（落盘已在 exchangePetMaterials 内完成）
+    })
+  })
+  /* v2.15：宠物行的「⋯」开关 —— **就地展开/收起**，不整页重渲染（保住滚动位置与焦点）。
+     展开后按钮就是改前的同一批（data-pet-op 未变），事件由下面的通用绑定负责。 */
+  ov.querySelectorAll('[data-pet-more]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = parseInt(btn.getAttribute('data-pet-more'), 10)
+      var nm = btn.getAttribute('data-pet-name') || '该宠物'
+      _petRowOpen = (_petRowOpen === idx) ? null : idx
+      var open = (_petRowOpen === idx)
+      var box = document.getElementById('petActs' + idx)
+      if (box) box.hidden = !open
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false')
+      btn.setAttribute('aria-label', (open ? '收起' : '展开') + nm + '的操作')
+      btn.textContent = open ? '▴' : '⋯'
+    })
   })
   /* v2.2 WP-H5：一键修复受伤（自动消耗营养液）—— 逻辑全在 pet-store.js 的 healAllInjuredPets()，
      这里只负责提示。已阵亡 / 未成熟 / 未受伤的宠物在那边就已被排除，不会误治、不会误耗。 */

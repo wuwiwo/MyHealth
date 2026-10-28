@@ -249,6 +249,30 @@ function savePetBattlePicks(ids) {
   return d.battlePicks.slice();
 }
 
+/* ============================================================
+   v2.15：**营养液 ⇄ 宠物粮 互兑的唯一落盘入口**（作者原话「让营养液与宠物粮
+   可以 1:2 互相兑换（2 换 1）」）
+   · 比例 / 整组 / 不足判据 / 原因文案**全部**在 pet-materials.js 的
+     `exchangeNutritionFeed()`（唯一来源），本函数只做「读存档 → 兑换 → 立即落盘」；
+   · UI **只调这里**（不自己 get/save、不自己写 2 这个数字）；
+   · 失败不写盘（与 exchangeRefineStones 的既有行为一致：不足就一个都不扣）。
+   @param {'nutrition'|'feed'} from 用哪种材料去换（另一端自动推导）
+   @param {number} times 整组次数（缺省 1）
+   @returns {{ok,from?,to?,spent?,gained?,fromBalance?,toBalance?,reason?}} */
+function exchangePetMaterials(from, times) {
+  var d = getPetStore();
+  if (typeof exchangeNutritionFeed !== 'function') return { ok: false, reason: '材料模块未加载' };
+  var r = exchangeNutritionFeed(d.materials, from, times);
+  if (r.ok) savePetStore(d);       // 立即落盘：刷新/重开后台都保持
+  return r;
+}
+
+/* 只读：面板渲染互兑按钮的可用态与原因（**不写存档**） */
+function petMatExchangeInfo() {
+  if (typeof matExchangeView !== 'function') return { rate: 0, rows: [] };
+  return matExchangeView(getPetStore().materials);
+}
+
 /* v2.2 WP-A3：参战宠物上限 2 → 4（dundun 2026-09-29 裁决）——
    全项目唯一来源，别在调用点再写死数字。 */
 var PET_BATTLE_MAX = 4;
@@ -487,6 +511,8 @@ if (typeof window !== 'undefined') {
   window.petCompareFinal = petCompareFinal;
   window.getPetBattlePicks = getPetBattlePicks;
   window.savePetBattlePicks = savePetBattlePicks;
+  window.exchangePetMaterials = exchangePetMaterials;
+  window.petMatExchangeInfo = petMatExchangeInfo;
   window.createPetUnitsForBattle = createPetUnitsForBattle;
   window.teamCohesionBonus = teamCohesionBonus;
   window.benchBonusSum = benchBonusSum;
@@ -516,6 +542,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.petCompareFinal = petCompareFinal;
   globalThis.getPetBattlePicks = getPetBattlePicks;
   globalThis.savePetBattlePicks = savePetBattlePicks;
+  globalThis.exchangePetMaterials = exchangePetMaterials;
+  globalThis.petMatExchangeInfo = petMatExchangeInfo;
   globalThis.createPetUnitsForBattle = createPetUnitsForBattle;
   globalThis.teamCohesionBonus = teamCohesionBonus;
   globalThis.benchBonusSum = benchBonusSum;
