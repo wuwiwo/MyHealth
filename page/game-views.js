@@ -87,6 +87,10 @@ function renderTrainView() {
   // 技能区块
   h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚡ 技能 <span style="font-size:var(--fs-xs);color:var(--text3)">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
   h += '<button class="speed-btn" data-open-skill style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--blue);color:var(--blue)">⚡ 技能培养面板</button>'
+  /* v2.14.3：📖 图鉴（只读）—— 主入口。宠物面板 / 技能面板就在上面两行，
+     图鉴要查的正是这三样东西（宠物 / 技能 / 天赋），放成一排最顺手。
+     不新增 tab、不新增路由：点开复用 #panelOverlay，渲染在 page/codex.js。 */
+  h += '<button class="speed-btn" data-open-codex style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--bd-l);color:var(--text2);margin-top:10px">📖 图鉴（宠物 / 技能 / 天赋）</button>'
   h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">🔮 炼魂 <span style="font-size:var(--fs-xs);color:var(--text3)">角色属性强化</span></div>'
   h += '<button class="speed-btn" data-open-refine style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">🔮 炼魂系统</button>'
   // 材料区块：获取说明 + 获取记录
@@ -122,6 +126,12 @@ function renderTrainView() {
   if (petBtn) petBtn.addEventListener('click', function () { renderPetPanel() })
   var skillBtn = v.querySelector('[data-open-skill]')
   if (skillBtn) skillBtn.addEventListener('click', function () { renderSkillPanel() })
+  /* v2.14.3：📖 图鉴（只读面板，渲染在 page/codex.js）—— 模块未加载时提示，不留死按钮 */
+  var codexBtn = v.querySelector('[data-open-codex]')
+  if (codexBtn) codexBtn.addEventListener('click', function () {
+    if (typeof renderCodexPanel === 'function') renderCodexPanel()
+    else toast('图鉴模块未加载', 'e')
+  })
   var refineBtn = v.querySelector('[data-open-refine]')
   if (refineBtn) refineBtn.addEventListener('click', function () { if (typeof showRefineDialog === 'function') showRefineDialog(); else toast('炼魂系统未解锁（需通关解锁）','e') })
 }

@@ -1120,3 +1120,53 @@ box-shadow:0 2px 8px rgba(var(--brand-rgb),.25)}
 .sk-t{height:14px;margin-bottom:8px}
 .sk-b{height:44px;border-radius:var(--rad-md);margin-bottom:8px}
 .loading-mask{position:fixed;inset:0;z-index:var(--z-modal);background:var(--overlay);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text);font-size:var(--fs-base)}
+
+/* ========== v2.14.3：图鉴（page/codex.js） ==========
+   作者需求：「可以查看技能、天赋、宠物介绍」。
+   三类分栏（🐾 宠物 / ⚡ 技能 / ✨ 天赋）+ 搜索 + 筛选，全部只读。
+   ⚠️ 不新字号、不新颜色：本区块只出现既有令牌（--fs-* / --text* / --bg2 / --bd / --rad-*），
+      **不含任何颜色字面量**（连 fallback 都不写 —— scripts/test-pet-exchange-list.js §4 会扫）。
+   ⚠️ 长描述不溢出：正文类元素统一 word-break + overflow-wrap:anywhere，
+      卡片头部 min-width:0 + 名称 nowrap+省略号（同 .pet-card-name 的既有口径），
+      禁止任何元素把可视宽度顶出去（390×844 与 360×640 都要 0 横向滚动）。
+   ⚠️ 触控：分栏按钮复用 .tab-btn（min-height:var(--tabbar-h)=48px），
+      筛选 chip 复用 .car-type（min-height:var(--touch-min)=44px）。
+   ⚠️ 位置：刻意放在文件**最末尾**（LOADING / SKELETON 之后）——
+      别的套件按「区块标记 → 下一个 ========== 标记」切片扫描 CSS（如 v2.15 紧凑行），
+      插在中间会把本区块算进它们的切片里。 */
+.codex-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.codex-title{font-size:var(--fs-lg);font-weight:700}
+.codex-hint{font-size:var(--fs-2xs);color:var(--text3)}
+.codex-tabs{display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid var(--bd)}
+.codex-tab{flex:1 1 0;min-width:0;padding:0 var(--sp-1);white-space:nowrap}
+.codex-tab-n{font-size:var(--fs-2xs);color:var(--text3);font-weight:600}
+.codex-tab.active .codex-tab-n{color:var(--orange)}
+.codex-search{margin-bottom:10px}
+.codex-filters{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.codex-filter{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.codex-filter-lbl{flex-shrink:0;font-size:var(--fs-2xs);color:var(--text3)}
+.codex-chip{min-height:var(--touch-min);padding:0 var(--sp-3);font-size:var(--fs-xs)}
+.codex-count{font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px}
+.codex-count b{color:var(--text)}
+.codex-note{font-size:var(--fs-2xs);line-height:1.7;color:var(--text3);background:var(--bg2);border:1px solid var(--bd-l);border-radius:var(--rad-sm);padding:8px 10px;margin-bottom:10px;word-break:break-word;overflow-wrap:anywhere}
+.codex-card{background:var(--bg2);border-radius:var(--rad-lg);padding:12px;margin-bottom:10px;box-shadow:var(--shadow)}
+.codex-card-hd{display:flex;align-items:center;gap:8px;min-width:0}
+.codex-name{flex:1;min-width:0;font-size:var(--fs-md);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.codex-badge{flex-shrink:0;font-size:var(--fs-2xs);line-height:1.6;color:var(--text3);border:1px solid var(--bd);border-radius:var(--rad-full);padding:1px 8px;white-space:nowrap}
+.codex-badge-rarity{color:var(--purple);border-color:var(--purple)}
+.codex-src-player{color:var(--blue)}
+.codex-src-pet{color:var(--green)}
+.codex-src-enemy{color:var(--orange)}
+.codex-pet-ico{flex-shrink:0;border-radius:var(--rad-sm);background:var(--surface-2)}
+.codex-skill-ico{flex-shrink:0;border-radius:var(--rad-sm);background:var(--surface-2)}
+.codex-pet-ico-fallback{font-size:var(--fs-2xl);line-height:1;flex-shrink:0}
+.codex-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:10px}
+.codex-stat{font-size:var(--fs-xs);color:var(--text2);background:var(--surface);border-radius:var(--rad-sm);padding:4px 6px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.codex-k{color:var(--text3);font-weight:600}
+.codex-line{font-size:var(--fs-xs);line-height:1.7;color:var(--text2);margin-top:8px;word-break:break-word;overflow-wrap:anywhere}
+.codex-line b{color:var(--text)}
+.codex-skill-row{margin-top:4px;padding-left:2px;word-break:break-word;overflow-wrap:anywhere}
+.codex-num{font-size:var(--fs-xs);line-height:1.7;color:var(--text);margin-top:8px;font-variant-numeric:tabular-nums;word-break:break-word;overflow-wrap:anywhere}
+.codex-desc{font-size:var(--fs-xs);line-height:1.7;color:var(--text2);margin-top:6px;word-break:break-word;overflow-wrap:anywhere}
+.codex-sub{font-size:var(--fs-2xs);line-height:1.7;color:var(--text3);margin-top:6px;word-break:break-word;overflow-wrap:anywhere}
+.codex-dim{color:var(--text3)}

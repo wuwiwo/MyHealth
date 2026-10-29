@@ -382,6 +382,18 @@ function renderSettingsGame(){
   var recs=store.get('records')||{};
   var h='<div class="section-hdr">📖 属性计算</div>';
   h+='<button class="sb-btn" id="setAttrInfoBtn" style="background:var(--bg);color:var(--text);border:1px solid var(--bd);margin-bottom:16px">📖 查看属性计算方式</button>';
+  /* ===== v2.14.3：图鉴入口（宠物 / 技能 / 天赋，只读）=====
+     两个入口指向同一个只读面板（page/codex.js 的 renderCodexPanel）：
+       · **主入口**在「挑战 → 🐾 培养」（game-views.js，宠物面板 / 技能面板旁边）——
+         图鉴要查的正是那三样东西，放在一起最顺手；
+       · **次入口**就是这里「设置 → 🎮 挑战」，理由：本节既有的「属性计算方式 / 属性变更日志」
+         同属**查阅类资料**（只读、不影响任何流程），图鉴在这里归档不会混进玩法流程；
+         设置页在任何界面都能一步进入（主导航常驻）。
+     不新增 tab、不新增路由、不碰培养/战斗/记录三视图的行为。
+     渲染在 page/codex.js —— 模块未加载时降级提示，不留死按钮。 */
+  h+='<div class="section-hdr" style="margin-top:16px">📖 图鉴</div>';
+  h+='<button class="sb-btn" id="setCodexBtn" style="background:var(--bg);color:var(--text);border:1px solid var(--bd)">📖 查看图鉴（宠物 / 技能 / 天赋）</button>';
+  h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">只读资料 · 内容全部来自既有定义，不改动任何数值</div>';
   h+='<div class="section-hdr">📜 属性变更日志</div>';
   h+='<button class="sb-btn" id="setAttrLogBtn" style="background:var(--bg);color:var(--text);border:1px solid var(--bd)">📜 查看日志</button>';
   h+='<div class="section-hdr" style="margin-top:16px">🏆 历史最佳记录</div>';
@@ -426,6 +438,11 @@ function onSettingsEvent(el,id,act){
     return true}
   if(id==='setAttrLogBtn'){showAttrLog();return true}
   if(id==='setAttrInfoBtn'){showAttrInfo();return true}
+  /* v2.14.3：图鉴（只读面板，渲染在 page/codex.js） */
+  if(id==='setCodexBtn'){
+    if(typeof renderCodexPanel==='function'){renderCodexPanel()}
+    else{toast('图鉴模块未加载','e')}
+    return true}
   if(id==='setResetGameBtn'){
     if(confirm('确定重置所有挑战进度？此操作不可撤销')){
       var g=getGame();g.cleared=[];g.current='1-1';g.attempts={};setGame(g);renderSettingsGame();renderGame();

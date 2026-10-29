@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.2
+> Personal Health Manager — 个人健身健康管理应用 v2.14.3
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -414,4 +414,6 @@ Vercel 项目设置：
 
 | **v2.14.2** | **2026-10-01** | **修复：宠物加成"就地累加"**（作者同步后反馈「宠物面板加成一直增加」）。**根因**：`page/pet-store.js` 的 `applyBattlePetBaseBonuses()` 写的是 **`u.base[k] = (u.base[k] || 0) + add`** —— **就地累加**；实测同一批 units 连调 10 次 **hp 317 → 434 → 551 → …**（每次 +117 hp / +13 atk / +5 def），**永不收敛**。`petStatBreakdown()` 里同样把凝聚/共鸣**写回 `u.base`**，再由 `boostPetForGroup(u)` 就地乘掉 → 一旦入参不是克隆，**每渲染一次多叠一层**。⚠️ **纠正主控初判**：在**宠物面板**路径上修前实测**并没有涨**（`createPetUnit()` 每次返回新克隆，旧代码**靠这个偶然前提**才没炸）；但**函数本身不纯**，且 `applyBattlePetBaseBonuses` 在 units 路径上 **100% 复现复利** → 仍属必须修的真 bug。**修法**：① 新增**纯计算核心 `petBaseBonusView(units)`**（只返回 `{cohesion, resonance, total, resonanceRate, benchCount}`，**零写入参**；面板与实战加成共用 → 单源）② **`applyBattlePetBaseBonuses` 改为幂等**（删 `+=`，改「当前 base − 上次那层 + 本次那层」，上次那层记在 **`WeakMap`**，不在单位上留可枚举字段 → 不进快照/日志/JSON；反算而非基线快照，以**保住两次调用间别人加的合法 base**，如等级增益）③ **`petStatBreakdown(pet)` 完全纯**（删掉写回 `u.base`/`u.hp` 的两行，带加成值只进局部 `withBonus` 并经 `out.baseWithBonus` 显式返回，`boostPetForGroup` 只作用于浅副本）。两函数注释均写明「**不得修改入参**」。⚠️ **一处刻意保留**：`applyBattlePetBaseBonuses` 仍写 `u.base` 一次 —— `buildGroupBattlePets` 管道与两套**禁改**既有断言依赖该契约 → 折中为**幂等**（第 2..10 次连 JSON 都不变），"纯"的能力由 `petBaseBonusView` 提供。**存档结论：不需要处理**（落盘结构无派生属性，单位只活在内存 → "被叠过"的值不可能进存档，也无法安全区分）；**云同步结论：宠物确实参与**（`sync.js` 的 `keys` 段 / `collectOtherKeys()`，`test-sync-coverage` 有往返断言），但只同步**宠物状态**（无派生属性）→ **异常不是云端传入的**；仓库根 `sync-data.json` 是 v2 时代夹具（`version: 2`、无 `keys`），不能当云端数据看。新增 `scripts/test-pet-bonus-stability.js`（**39 断言**：breakdown ×10 逐字节不变、`petBaseBonusView` ×10 不变、`applyBattlePetBaseBonuses` ×10 不变含**旧算法翻倍的反证**与保住等级增益正证、`buildGroupBattlePets` ×3 一致、4 条源码守卫），全量 **68 套件 / 5359 断言 / 0 失败**（同运行器对 HEAD 基线 67/5320，差值 +39 = 新套件）；**真实 Chrome 复验**：面板 5 次开关 + 切 tab 4 轮数值**恒定且等于修前正确基线**（5445/600/345/330/180/8），`applyBattlePetBaseBonuses` 修前 317→434→551、修后 **317 恒定** |
 
-> 当前版本：**v2.14.2**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+| **v2.14.3** | **2026-10-01** | **云数据完全同步与适配 + 新增图鉴**（两条线并行，主控验收发版）。**① 云同步**：同步范围从**硬编码清单**改为**自动派生**（从 `store` 的 schema 注册表 / `getAll()` 派生）→ **以后新增的存档键自动被带上、不会再漏**；**旧载荷适配** —— 没有 `keys` 段的老载荷（v2 夹具形态）走**扁平字段回退合并**，新载荷按 `keys` 段合并，两条路径都有测试；老 schema 版本走 `store` 既有的 migrate 链（不另写一套），缺失键与 `-bak` 回落保持既有约定；守卫扩展为「**store 的每个已注册键都必须在同步载荷里**」（从注册表派生，键数量变化自动生效），另新增 `test-sync-compat` 覆盖兼容路径。**② 图鉴**（新模块 `page/codex.js`，主控本版补挂 `<script>`）：三个分栏 —— **🐾 宠物**（头像 + 名字 + 稀有度 + 基础属性 + 天赋 + 技能）、**⚡ 技能**（玩家 / 宠物 / 敌群，含类型、满级或区间、描述）、**✨ 天赋**（敌群 + 宠物专属，含描述与适用对象）；**只读**，数字全部来自既有数据源、**不新增也不修改任何数值**（发现"描述与实现不一致"只登记不改）；头像沿用 `petIconHtml` 且尺寸遵守评审结论（**16 的倍数**）。⚠️ **两线收尾不完整（如实记录）**：云同步线跑到 **42 轮时某工具权限被拒**而中断（**键对照表与"新键是否会被同步"的逐条结论缺失**）；图鉴线**撞 100 轮上限**、停在"即将浏览器复验"处（方案说明与截图缺失）—— 主控已核查两线文件与测试均在、全量绿，并**补挂 `codex.js` 的 `<script>` 行**（缺它模块根本不会加载）。**待补**：图鉴的 390×844 / 360×640 复验（三分栏、长描述不溢出、头像清楚）与云同步的**真实两端往返**验证。全量 **70 套件 / 5434 断言 / 0 失败**；台账指针 2.14.3 → 2.14.4 |
+
+> 当前版本：**v2.14.3**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

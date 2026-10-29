@@ -81,89 +81,168 @@ function dataSummary(d){
     hasExtra:!!d.keys}
 }
 
-/* 已由 getAllData 的扁平字段承载的短键 —— 不要再重复进 keys */
-var SYNC_FLAT_KEYS = ['strength', 'plans', 'missed', 'cardio', 'weight', 'profile',
-  'game', 'prs', 'records', 'attrLog', 'cardioTypes', 'exercises', 'refine', 'challenge'];
+/* ========== 同步范围：全部从 store 派生，不维护键清单 ==========
+   v2.15（「完全同步」）：改前有两处会**静默漏键**的设计：
+     ① `getAllData()` 的 14 个扁平字段是手写的，而 `SYNC_FLAT_KEYS` 是**另一份**手写排除清单 ——
+        两份一旦不同步（在排除清单里加了键、却没写对应的扁平投影），这个键既不在扁平字段里、
+        又被排除在 `keys` 段之外 → 推送时留在本地、拉取时无处可写，就是「换设备全丢」；
+     ② 「哪些键已由扁平字段承载」是**声明**的，不是**实测**的。
+   现在：
+     · `SYNC_FLAT_PROJECTION` 是扁平段（载荷顶层历史字段）的**唯一**声明点；
+     · `buildFlatSection()` 边写扁平字段边登记「本次真的写了哪些键」（carried），
+       `keys` 段的排除**只**依据这份运行期记录 —— 不存在第二份清单可以对不上；
+     · 投影表里没有的键（包括以后新增的任何 store 键）**自动**进 `keys` 段；
+     · 取键两路合并：`store.getAll()`（当前有值的键）+ `store.schemaNames()`（注册表），
+       注册过但当前没进缓存的键也会补读一次。
+   → 新增 store 键**不需要改本文件**；`scripts/test-sync-coverage.js` 从注册表派生地守着。 */
+function syncHasItems(v) { return Array.isArray(v) ? v.length > 0 : false }
+function syncHasKeys(v) { return v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0 }
+/* ⚠️ 松判定：沿用既有实现（`typeof v === 'object'`），故意**不**收紧为「非数组」——
+   收紧会改变对奇怪载荷的接受范围（＝改用户数据的胜负规则），不在本轮范围。 */
+function syncLooseObj(v) { return !!v && typeof v === 'object' }
+
+/* 扁平投影表：store 短键 → 载荷顶层字段名（v5 载荷的历史格式，仅为兼容旧客户端 / 旧快照）
+   field  载荷顶层字段名
+   pack   store 值 → 扁平字段值（缺省＝原样）
+   unpack 载荷 → store 值（null ＝「载荷没给这个键」，本地保持不动）
+   accept 额外的业务守卫（缺省＝都接受） */
+var SYNC_FLAT_PROJECTION = {
+  strength:   { field: 'entries',
+                pack: function (v) { return (v || { entries: [] }).entries },
+                unpack: function (d) { return syncHasItems(d.entries) ? { entries: d.entries } : null } },
+  plans:      { field: 'plans',
+                pack: function (v) { return (v || { plans: [] }).plans },
+                unpack: function (d) {
+                  if (syncHasItems(d.plans)) return { plans: d.plans }
+                  if (d.plans && syncHasItems(d.plans.plans)) return { plans: d.plans.plans }
+                  return null } },
+  missed:     { field: 'missed',
+                pack: function (v) { return (v || { notes: {} }).notes },
+                unpack: function (d) {
+                  if (syncHasKeys(d.missed)) return { notes: d.missed }
+                  if (d.missed && syncHasKeys(d.missed.notes)) return { notes: d.missed.notes }
+                  return null } },
+  cardio:     { field: 'cardio',
+                pack: function (v) { return (v || { entries: [] }).entries },
+                unpack: function (d) {
+                  if (syncHasItems(d.cardio)) return { entries: d.cardio }
+                  if (d.cardio && syncHasItems(d.cardio.entries)) return { entries: d.cardio.entries }
+                  return null } },
+  weight:     { field: 'weight',
+                pack: function (v) { return (v || { records: [] }).records },
+                unpack: function (d) {
+                  if (syncHasItems(d.weight)) return { records: d.weight }
+                  if (d.weight && syncHasItems(d.weight.records)) return { records: d.weight.records }
+                  return null } },
+  /* profile / game 的 pack 走 getProf() / getGame()：这两个读取函数**自带默认值**，
+     直接用 store.get() 会在空库里推空对象上去（改前就是带默认值，保持一致）。 */
+  profile:    { field: 'profile', pack: function () { return getProf() },
+                unpack: function (d) { return syncHasKeys(d.profile) ? d.profile : null } },
+  game:       { field: 'game', pack: function () { return getGame() },
+                unpack: function (d) { return syncLooseObj(d.game) ? d.game : null } },
+  prs:        { field: 'prs', unpack: function (d) { return syncLooseObj(d.prs) ? d.prs : null } },
+  records:    { field: 'records', unpack: function (d) { return syncLooseObj(d.records) ? d.records : null } },
+  attrLog:    { field: 'attrLog', unpack: function (d) { return Array.isArray(d.attrLog) ? d.attrLog : null } },
+  cardioTypes:{ field: 'cardioTypes', unpack: function (d) { return Array.isArray(d.cardioTypes) ? d.cardioTypes : null } },
+  exercises:  { field: 'exercises', unpack: function (d) { return Array.isArray(d.exercises) ? d.exercises : null } },
+  refine:     { field: 'refine', unpack: function (d) { return syncLooseObj(d.refine) ? d.refine : null } },
+  challenge:  { field: 'challenge',
+                unpack: function (d) { return syncLooseObj(d.challenge) ? d.challenge : null },
+                accept: function (v) { return syncChallengeMayReplace(v) } }
+};
+/* 由投影表派生，只用于诊断 / 测试（**不是**排除清单 —— 排除看运行期的 carried） */
+var SYNC_FLAT_KEYS = Object.keys(SYNC_FLAT_PROJECTION);
+
+/* challenge 合并保护（**既有语义，勿改**）：seasonBonus 按月重置，
+   仅当本地无存档、或云端月份不旧于本地时才接受云端整键；否则保留本地。
+   比较的是 `lastSeasonMonth`（'YYYY-MM' 字符串，直接字典序比较）。 */
+function syncChallengeMayReplace(remote) {
+  var localCh = store.get('challenge')
+  var remoteMonth = ((remote && remote.lastSeasonMonth) || '') + ''
+  var localMonth = (localCh && localCh.lastSeasonMonth) || ''
+  return !localCh || remoteMonth >= localMonth
+}
 
 /* v2.1.20：除扁平字段之外的**其余全部 store 键**。
    改前 getAllData 是硬编码的 14 个键，v2.x 新增的系统（宠物/材料/宝珠/敌群进度/技能/主题/
    有氧计划）一个都没进来 —— 推送时它们留在本地，拉取时又无处可写，等于「换设备就全丢」。
    实测：19 个在用的键里丢 5 个（groupProgress / pets / skills / cardioPlans / theme）。
-   现在改为从 store.getAll() 自动派生 —— 以后新增 store 键不需要再改这里，
-   有 test-sync-coverage.js 守着。 */
-function collectOtherKeys() {
+   v2.15：`carried` 由 getAllData **运行期实测**传入（＝扁平段真的写了哪些键），
+   不再有任何手写排除清单；注册表里的键即使没进缓存也会补读一次。 */
+function collectOtherKeys(carried) {
+  carried = carried || {};
   var out = {};
+  function put(k, v) {
+    if (carried[k]) return;                       // 已由扁平字段承载（运行期实测）
+    if (k === 'mod-time') return;                 // 本地时间戳，不同步（防御性：它本不是 store 键）
+    if (v == null) return;
+    out[k] = v;
+  }
   try {
     var all = (typeof store !== 'undefined' && store.getAll) ? store.getAll() : {};
-    Object.keys(all).forEach(function (k) {
-      if (SYNC_FLAT_KEYS.indexOf(k) > -1) return;   // 已由扁平字段承载
-      if (k === 'mod-time') return;                 // 本地时间戳，不同步
-      var v = all[k];
-      if (v == null) return;
-      out[k] = v;
+    Object.keys(all).forEach(function (k) { put(k, all[k]); });
+    /* 注册表兜底：注册过但当前不在内存缓存里的键，逐个读一次（get 会走既有迁移链） */
+    var reg = (typeof store !== 'undefined' && store.schemaNames) ? store.schemaNames() : [];
+    reg.forEach(function (k) {
+      if (carried[k] || all.hasOwnProperty(k)) return;
+      put(k, store.get(k));
     });
   } catch (e) { console.warn('[sync] 收集扩展键失败', e); }
   return out;
 }
 
+/* 扁平段：按投影表生成，并登记**本次实际写入**的键（keys 段排除的唯一依据） */
+function buildFlatSection() {
+  var flat = {}, carried = {};
+  Object.keys(SYNC_FLAT_PROJECTION).forEach(function (name) {
+    var p = SYNC_FLAT_PROJECTION[name];
+    flat[p.field] = p.pack ? p.pack(store.get(name)) : store.get(name);
+    carried[name] = true;
+  });
+  return { flat: flat, carried: carried };
+}
+
 /* Data assembler */
 function getAllData(){
-  var s=store.get('strength')||{entries:[]};
-  var p=store.get('plans')||{plans:[]};
-  var m=store.get('missed')||{notes:{}};
-  var c=store.get('cardio')||{entries:[]};
-  var w=store.get('weight')||{records:[]};
-  return{
-    version:5,lastUpdated:store.getLastModTime()||Date.now(),
-    entries:s.entries,plans:p.plans,missed:m.notes,
-    cardio:c.entries,weight:w.records,profile:getProf(),game:getGame(),
-    prs:store.get('prs'),records:store.get('records'),
-    attrLog:store.get('attrLog'),cardioTypes:store.get('cardioTypes'),
-    exercises:store.get('exercises'),refine:store.get('refine'),challenge:store.get('challenge'),
-    keys:collectOtherKeys()
-  }
+  var sec=buildFlatSection();
+  var data={version:5,lastUpdated:store.getLastModTime()||Date.now()};
+  Object.keys(sec.flat).forEach(function(f){data[f]=sec.flat[f]});
+  data.keys=collectOtherKeys(sec.carried);
+  return data;
+}
+
+/* 把「keys 段」并入目标映射 —— 拉取与文件导入共用，语义只在这里定义一次：
+   · **云端整键覆盖本地**（不做字段级深合并）
+   · null / undefined 跳过 → 不会把本地已有的值「删掉」
+   · `mod-time` 是本地时间戳，永不同步
+   · 形状校验交给 store.mergeAll 的 validValue（未注册键一律接受，注册键走各自 validate） */
+function mergeKeySection(target, keysObj) {
+  if (!keysObj || typeof keysObj !== 'object' || Array.isArray(keysObj)) return target;
+  Object.keys(keysObj).forEach(function (k) {
+    if (k === 'mod-time') return
+    var v = keysObj[k]
+    if (v == null) return
+    target[k] = v
+  })
+  return target
 }
 
 /* Merge server response into local store */
 function mergeServerData(d){
-  function hasItems(v){return Array.isArray(v)?v.length>0:false}
-  function hasKeys(v){return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length>0}
-  if(!d||!(d.version>=2||hasItems(d.entries)||hasItems(d.cardio)||hasItems(d.weight)))return false
+  if(!d||!(d.version>=2||syncHasItems(d.entries)||syncHasItems(d.cardio)||syncHasItems(d.weight)))return false
   var merge={}
-  if(hasItems(d.entries)){merge.strength={entries:d.entries}}
-  if(hasItems(d.plans)){merge.plans={plans:d.plans}}
-  else if(d.plans?.plans&&hasItems(d.plans.plans)){merge.plans={plans:d.plans.plans}}
-  if(hasKeys(d.missed)){merge.missed={notes:d.missed}}
-  else if(d.missed?.notes&&hasKeys(d.missed.notes)){merge.missed={notes:d.missed.notes}}
-  if(hasItems(d.cardio)){merge.cardio={entries:d.cardio}}
-  else if(d.cardio?.entries&&hasItems(d.cardio.entries)){merge.cardio={entries:d.cardio.entries}}
-  if(hasItems(d.weight)){merge.weight={records:d.weight}}
-  else if(d.weight?.records&&hasItems(d.weight.records)){merge.weight={records:d.weight.records}}
-  if(d.profile&&hasKeys(d.profile)){merge.profile=d.profile}
-  if(d.game&&typeof d.game==='object'){merge.game=d.game}
-  if(d.prs&&typeof d.prs==='object'){merge.prs=d.prs}
-  if(d.records&&typeof d.records==='object'){merge.records=d.records}
-  if(d.attrLog&&Array.isArray(d.attrLog)){merge.attrLog=d.attrLog}
-  if(d.cardioTypes&&Array.isArray(d.cardioTypes)){merge.cardioTypes=d.cardioTypes}
-  if(d.exercises&&Array.isArray(d.exercises)){merge.exercises=d.exercises}
-  if(d.refine&&typeof d.refine==='object'){merge.refine=d.refine}
-  // challenge 同步保护：seasonBonus 按月重置，仅当本地无数据或云端月份不旧于本地时合并
-  if(d.challenge&&typeof d.challenge==='object'){
-    var localCh=store.get('challenge')
-    var remoteMonth=(d.challenge.lastSeasonMonth||'')+'',localMonth=(localCh&&localCh.lastSeasonMonth)||''
-    if(!localCh||remoteMonth>=localMonth)merge.challenge=d.challenge
-  }
-  /* v2.1.20：扩展键（宠物 / 材料袋 / 宝珠库存 / 敌群进度 / 玩家技能 / 主题 / 有氧计划…）。
-     没有它就会出现「本地有宠物、拉取后宠物消失」这种半截同步。
-     兼容旧云端快照：v4 及更早没有 keys 字段，这里自然跳过（不会把旧的空值写成删除）。 */
-  if(d.keys&&typeof d.keys==='object'&&!Array.isArray(d.keys)){
-    Object.keys(d.keys).forEach(function(k){
-      if(k==='mod-time')return
-      var v=d.keys[k]
-      if(v==null)return
-      merge[k]=v
-    })
-  }
+  /* ① 扁平段：v2~v4 老载荷（**没有 keys 段**）的唯一载体；v5 新载荷也照旧带着它。
+        逐键由投影表派生 —— 以后加扁平字段只改表，不会出现「清单里有、代码里没有」。 */
+  Object.keys(SYNC_FLAT_PROJECTION).forEach(function(name){
+    var p=SYNC_FLAT_PROJECTION[name]
+    var v=p.unpack(d)
+    if(v==null)return
+    if(p.accept&&!p.accept(v))return      // challenge 的按月保护（既有语义）
+    merge[name]=v
+  })
+  /* ② keys 段（v5+）：**整键覆盖**同名扁平值（云端为准）。旧载荷没有这一段 → 自然跳过，
+        不会把本地的新系统数据（宠物 / 技能 / 敌群进度…）写成空值。 */
+  mergeKeySection(merge,d.keys)
   store.mergeAll(merge)
   return true
 }
@@ -336,15 +415,11 @@ function buildImportMap(data){
   if(data.refine&&typeof data.refine==='object'){map.refine=data.refine}
   if(data.challenge&&typeof data.challenge==='object'){map.challenge=data.challenge}
   /* v2.1.20：全量导出（autoBackup / 导出全量）里也带着扩展键，
-     导入时必须一并还原 —— 否则「导出备份再导入」同样会丢宠物/材料/敌群进度。 */
-  if(data.keys&&typeof data.keys==='object'&&!Array.isArray(data.keys)){
-    Object.keys(data.keys).forEach(function(k){
-      if(k==='mod-time')return
-      var v=data.keys[k]
-      if(v==null)return
-      map[k]=v
-    })
-  }
+     导入时必须一并还原 —— 否则「导出备份再导入」同样会丢宠物/材料/敌群进度。
+     v2.15：与拉取共用 `mergeKeySection()`，语义只定义一次（跳过 null / mod-time，整键覆盖）。
+     ⚠️ 上面的扁平分支**故意保持原样**（对第三方备份文件更宽松：`data.plans.plans` 形态、
+        `data.cardio.entries` 形态都认）；新增 store 键不需要在这里加分支 —— 它们从 `keys` 段进来。 */
+  mergeKeySection(map, data.keys)
   return map
 }
 

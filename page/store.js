@@ -93,6 +93,30 @@
     try { localStorage.setItem(phys + '-bak', raw); } catch (_e) { console.warn('[store] 备份写入失败，回滚链可能不完整', _e) }
   }
 
+  /* 把**入站**值（云同步拉取 / 文件导入）升级到当前 schema 版本。
+     用的是与 loadMigrated() 完全相同的规则，不另写一套迁移链：
+       · 值上没有 version 字段 → 按 v1 处理（与读 `-v1` 物理键时 valueVersion 的回落一致）
+       · version > target（来自更高版本 App 的未来数据）→ **不降级**，原样返回
+       · 逐级调用 REG[name].migrate[v]；没有定义迁移函数时按恒等通过
+     ⚠️ 这里**不写 `-bak`**：`-bak` 的既有约定是「本地物理键在读坏 / 升级时留一份可回滚副本」
+        （见 loadMigrated / initScan）。入站载荷的原始值本来就在云端或导出文件里，
+        覆盖本地 `-bak` 只会毁掉回滚副本，所以同步路径一个 `-bak` 都不碰。 */
+  function upgradeIncoming(name, v) {
+    var reg = REG[name];
+    if (!reg) return { value: v, migrated: false };
+    var target = reg.version;
+    var from = valueVersion(v, 1);
+    if (from > target) return { value: v, migrated: false, future: true };
+    var data = v;
+    for (var mv = from; mv < target; mv++) {
+      var fn = reg.migrate ? reg.migrate[mv] : null;
+      if (fn) data = fn(data);
+    }
+    if (from >= target) return { value: data, migrated: false, from: from, to: target };
+    _migLog.push({ key: name, from: from, to: target, ok: true, src: 'inbound' });
+    return { value: data, migrated: true, from: from, to: target };
+  }
+
   /* Read + migrate chain for a not-yet-cached key.
      Returns {value, ok, empty?, future?} */
   function loadMigrated(name) {
@@ -263,6 +287,9 @@
     /**
      * Bulk-import data (from sync pull or file import).
      * Only overwrites keys that pass schema validation.
+     * v2.15：入站值先走**既有的** schema 迁移链（`upgradeIncoming`，与 `loadMigrated` 同一套
+     * migrate 定义）再落盘 —— 老版本云端快照 / 老备份文件里的旧版本键会被升到当前版本，
+     * 而不是把旧形状原样写进 `-v<当前版本>` 物理键。`-bak` 一律不动（见 upgradeIncoming）。
      * @param {object} data  { strength: {...}, cardio: {...}, ... }
      */
     mergeAll: function(data) {
@@ -270,12 +297,13 @@
       var changed = false;
       for (var k in data) {
         if (!data.hasOwnProperty(k)) continue;
-        var v = data[k];
-        if (v == null) continue;
+        if (data[k] == null) continue;
         /* v2.1.20：去掉这里的 `typeof v === 'object'` 限定。
            它会把**标量键静默丢弃** —— theme（'dark'/'light'）就是这么丢的：
            推送时带得走、拉取时写不回，表现为「同步后主题回默认」。
            形状校验统一交给 validValue（未注册键一律接受，已注册键走各自 validate）。 */
+        var up = upgradeIncoming(k, data[k]);
+        var v = up.value;
         if (validValue(k, v)) {
           _cache[k] = v;
           try {
@@ -295,6 +323,7 @@
 
     /**
      * Overwrite all keys (import). Filters invalid shapes.
+     * v2.15：与 mergeAll 同样先过 schema 迁移链（入站数据 → 当前版本）。
      * @param {object} data
      */
     setAll: function(data) {
@@ -302,10 +331,13 @@
       var changed = false;
       for (var k in data) {
         if (!data.hasOwnProperty(k)) continue;
-        if (validValue(k, data[k])) {
-          _cache[k] = data[k];
+        if (data[k] == null) continue;
+        var up = upgradeIncoming(k, data[k]);
+        var v = up.value;
+        if (validValue(k, v)) {
+          _cache[k] = v;
           try {
-            localStorage.setItem(fullKey(k), JSON.stringify(data[k]));
+            localStorage.setItem(fullKey(k), JSON.stringify(v));
             changed = true;
           } catch(e) {
             notifyQuota();
@@ -317,6 +349,19 @@
       for (var i = 0; i < _listeners.length; i++) {
         _listeners[i]('*', _cache);
       }
+    },
+
+    /**
+     * 已注册 schema 的逻辑键名（**同步 / 备份范围的唯一真源**）。
+     * 与 `getAll()` 的区别：getAll() 只给「当前有值且缓存在内存」的键；
+     * 本方法给「系统声明会用的全部键」，即使此刻还没有值 —— 于是「新增键忘了同步」
+     * 这类缺陷可以由注册表派生地断言，不用再维护任何手写键清单。
+     * @returns {string[]} 排序后的逻辑键名
+     */
+    schemaNames: function() {
+      var out = [];
+      for (var k in REG) { if (REG.hasOwnProperty(k)) out.push(k); }
+      return out.sort();
     },
 
     /**
