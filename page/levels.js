@@ -271,6 +271,29 @@ const LEVELS = {
     {id:'33-4',npc:'无极剑神',atk:7055,def:2825,hp:44820,soulAtk:3460,soulDef:1145},
     {id:'33-5',npc:'太虚代言',atk:6865,def:3040,hp:49150,soulAtk:3340,soulDef:1280},
     {id:'33-6',npc:'BOSS 太虚无极',atk:6360,def:3210,hp:60405,soulAtk:3010,soulDef:2325,boss:true,dualAffix:true}
+  ]},
+  /* 扩充：再扩 2 章（chap34 / chap35）。口径与 v2.1.36 那一轮**完全一致**：
+     每章 ≈1.113×、逐章链式外推、每项取 **5 的倍数**（公式 `Math.round(v*1.113/5)*5`），
+     编排照旧 x-1 均衡 / x-2 高攻低防 / x-3 高防高血 / x-4 最高攻 / x-5 次高攻 /
+     x-6 BOSS（`boss:true` + `dualAffix:true` 双词条）。
+     ⚠️ 数值由脚本生成、不是手抄：同一脚本从 chap30 复算 chap31~33 与既有数据**逐字相等**，
+        口径因此自证；再手抄只会引入算错的风险（`LEVELS` 本身没有斜率断言，
+        回归守卫在 `scripts/test-levels-chap34-35.js`）。 */
+  chap34:{name:'鸿蒙初辟',levels:[
+    {id:'34-1',npc:'鸿蒙守卫',atk:6745,def:3180,hp:52150,soulAtk:3000,soulDef:1200},
+    {id:'34-2',npc:'初辟猎者',atk:7400,def:2920,hp:51245,soulAtk:3555,soulDef:1135},
+    {id:'34-3',npc:'鸿蒙壁垒',atk:6190,def:3725,hp:61690,soulAtk:2725,soulDef:2265},
+    {id:'34-4',npc:'初辟剑神',atk:7850,def:3145,hp:49885,soulAtk:3850,soulDef:1275},
+    {id:'34-5',npc:'鸿蒙先知',atk:7640,def:3385,hp:54705,soulAtk:3715,soulDef:1425},
+    {id:'34-6',npc:'BOSS 鸿蒙初辟',atk:7080,def:3575,hp:67230,soulAtk:3350,soulDef:2590,boss:true,dualAffix:true}
+  ]},
+  chap35:{name:'万道归墟',levels:[
+    {id:'35-1',npc:'万道守卫',atk:7505,def:3540,hp:58045,soulAtk:3340,soulDef:1335},
+    {id:'35-2',npc:'归墟猎者',atk:8235,def:3250,hp:57035,soulAtk:3955,soulDef:1265},
+    {id:'35-3',npc:'万道壁垒',atk:6890,def:4145,hp:68660,soulAtk:3035,soulDef:2520},
+    {id:'35-4',npc:'归墟剑神',atk:8735,def:3500,hp:55520,soulAtk:4285,soulDef:1420},
+    {id:'35-5',npc:'万道代言',atk:8505,def:3770,hp:60885,soulAtk:4135,soulDef:1585},
+    {id:'35-6',npc:'BOSS 万道归墟',atk:7880,def:3980,hp:74825,soulAtk:3730,soulDef:2885,boss:true,dualAffix:true}
   ]}
 };
 

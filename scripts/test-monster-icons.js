@@ -100,7 +100,7 @@ for (const chKey of Object.keys(LEVELS)) {
     hitCount[a] = (hitCount[a] || 0) + 1;
   }
 }
-ok(stageCount === 189, `levels.js 应为 189 关，实际 ${stageCount}`);
+ok(stageCount === 201, `levels.js 应为 189 关，实际 ${stageCount}`);
 ok(badMap.length === 0, `有 ${badMap.length} 个关卡映射失败：${badMap.slice(0, 5).join(', ')}`);
 
 /* 1b group-levels.js 敌群名字池（从源码里取真实数组，不写死副本 —— 写死就测不出「池子改了没同步」） */
@@ -153,7 +153,7 @@ ok(bossCount > 0, `BOSS 关数量为 0，数据可能坏了`);
   }
   const over = Object.keys(bossPerChap).filter(k => bossPerChap[k] > 1);
   ok(over.length === 0, `以下章节有多个 BOSS：${over.join(', ')}`);
-  ok(Object.keys(LEVELS).length === 33, `章节数应为 33，实际 ${Object.keys(LEVELS).length}`);
+  ok(Object.keys(LEVELS).length === 35, `章节数应为 33，实际 ${Object.keys(LEVELS).length}`);
 }
 
 /* 1e 前缀剥离：'BOSS 暗龙' 与 'Boss·暗龙' 必须映射到同一原型 */

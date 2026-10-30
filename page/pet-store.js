@@ -539,6 +539,67 @@ function petStatMultPct(bd, k) {
   return Math.round(((bd.bench[k] || 0) * (petPoolMultPct(bd, k) || 0)) / b);
 }
 
+/* ============================================================
+   v2.14.4：② 段「可解释的两行」的**唯一数值来源**（纯展示 / 只读）
+   作者实测反馈：② 只有一个合成倍数（梦幻 UR 生命 ×2846% / 小负鼠 SSR ×8505%）
+   「看不懂」。核算下来算术与口径都对 —— 那个数其实是三件事乘在一起的结果：
+       稀有度倍率 / Σ宝珠% / 凝聚＋共鸣把基数抬高后的放大
+   UR 基数大 → 比值低；SSR 基数小、又被凝聚/共鸣垫了一层固定值 → 比值爆表。
+   所以这里把 `petStatBreakdown()` **已有的**中间量逐属性显式露出成两行：
+     · 倍率池（%）：`rarityPct ＋ orbPct[k]`（两项**相加**，= `bd.poolPct[k]`）
+     · 基数加值：`bench − base`（凝聚＋共鸣的绝对值）＋ 占基数的比例
+   ⚠️ 本组函数**不重写任何公式、不产生新数值**：每个数都直接读 bd 的既有字段
+      （唯一来源仍是 group-levels.js 的 `boostPetForGroup` ＋ 本文件的 `petBaseBonusView`），
+      UI 只把它们拼成文本，**不在 UI 里重算一遍**。
+   ⚠️ 速度不参与百分比池、也不吃凝聚/共鸣（见 `PET_BONUS_ATTRS`）：
+      participates=false、poolMultPct=100、baseAdd=0（与 v2.2 起的 ×100% 语义一致）。
+   ============================================================ */
+function petBonusRow(bd, k, rarityTag) {
+  var ok = !!(bd && bd.ok);
+  var base = ok ? ((bd.base || {})[k] || 0) : 0;
+  var bench = ok ? ((bd.bench || {})[k] || 0) : 0;
+  var inPool = PET_BONUS_ATTRS.indexOf(k) > -1;
+  var add = bench - base;                                  // 凝聚＋共鸣（速度恒 0）
+  var poolPct = ok ? ((bd.poolPct || {})[k] || 0) : 0;
+  /* 稀有度标签只在「与 bd.rarityPct 对得上」时才给（对不上就不编一个） */
+  var tag = (rarityTag && typeof PET_GROUP_SCALE !== 'undefined' &&
+             PET_GROUP_SCALE[rarityTag] === (ok ? (bd.rarityPct || 0) : 0)) ? rarityTag : null;
+  return {
+    key: k,
+    participates: inPool,                                  // 速度 = false
+    rarity: tag,
+    base: base,
+    cohesion: ok ? ((bd.cohesion || {})[k] || 0) : 0,
+    resonance: ok ? ((bd.resonance || {})[k] || 0) : 0,
+    baseAdd: add,
+    baseAddPct: (base > 0) ? Math.round(add * 100 / base) : null,
+    bench: bench,
+    rarityPct: ok ? (bd.rarityPct || 0) : 0,
+    orbPct: ok ? (((bd.orbPct || {})[k]) || 0) : 0,
+    poolPct: poolPct,                                      // 速度 = 0（不参与）
+    poolMultPct: inPool ? poolPct : 100,                   // 展示口径：速度固定 ×100%
+    final: ok ? ((bd.final || {})[k] || 0) : 0
+  };
+}
+/* 逐属性两行的整份摘要（含「谁在垫基数」所需的只数 / 档位）。
+   ⚠️ 档位同时给出**小数**（cohesionRate / resonanceRate，与 `petBaseBonusView` 同源）
+      和**已换算好的整数百分比**（cohesionPct / resonancePct）—— 后者专供 UI 打印，
+      免得 UI 里再写一次 `× 100`（口径与换算都留在本文件）。
+   @returns {{ok,rarity,benchCount,cohesionRate,resonanceRate,cohesionPct,resonancePct,rows:Array}} */
+function petBonusLines(bd, rarityTag) {
+  var resRate = (bd && bd.resonanceRate) || 0;
+  return {
+    ok: !!(bd && bd.ok),
+    rarity: rarityTag || null,
+    benchCount: (bd && bd.benchCount) || 0,
+    cohesionRate: TEAM_COHESION_RATE,
+    resonanceRate: resRate,
+    cohesionPct: Math.round(TEAM_COHESION_RATE * 100),
+    resonancePct: Math.round(resRate * 100),
+    rows: PET_STAT_KEYS.map(function (k) { return petBonusRow(bd, k, rarityTag); })
+  };
+}
+
 /* 对比：**只列主要几项**（作者要求「只显示主要几项即可，别塞满」） */
 var PET_COMPARE_KEYS = ['hp', 'atk', 'def', 'soulAtk', 'soulDef'];
 /* 对比口径（UI 必须写明）：两只宠**都用「此宠上场计算」** ——
@@ -597,6 +658,8 @@ if (typeof window !== 'undefined') {
   window.petBenchMultPct = petBenchMultPct;
   window.petPoolMultPct = petPoolMultPct;
   window.petOrbMultPct = petOrbMultPct;
+  window.petBonusRow = petBonusRow;
+  window.petBonusLines = petBonusLines;
   window.PET_COMPARE_KEYS = PET_COMPARE_KEYS;
   window.petCompareFinal = petCompareFinal;
   window.getPetBattlePicks = getPetBattlePicks;
@@ -629,6 +692,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.petBenchMultPct = petBenchMultPct;
   globalThis.petPoolMultPct = petPoolMultPct;
   globalThis.petOrbMultPct = petOrbMultPct;
+  globalThis.petBonusRow = petBonusRow;
+  globalThis.petBonusLines = petBonusLines;
   globalThis.PET_COMPARE_KEYS = PET_COMPARE_KEYS;
   globalThis.petCompareFinal = petCompareFinal;
   globalThis.getPetBattlePicks = getPetBattlePicks;
