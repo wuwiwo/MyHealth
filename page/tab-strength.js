@@ -319,6 +319,9 @@ function showWoSummary(){
     +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
   document.getElementById('woFinish').addEventListener('click',()=>{
     _woDone.forEach(d=>{addStr({date:today(),exercise:d.exercise,weight:d.weight,targetReps:d.targetReps,actualReps:d.actualReps})})
+    /* v2.17：力量记录落盘后立即补发**今日**宠物经验（力量容量 kg×5 ＋ 有氧 min×20）。
+       按增量水印发放 → 这里点多下也只会发一次「新增的那部分」（幂等，见 pet-store.js）。 */
+    if(typeof syncPetLevelExp==='function')syncPetLevelExp()
     document.getElementById('woOverlay')?.remove()
     toast('训练已记录！','s');renderStr()
   })

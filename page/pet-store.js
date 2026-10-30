@@ -19,7 +19,15 @@ if (typeof store !== 'undefined' && store.registerSchema) {
         orbs: [],            // v2.1.17 未装配的宝珠库存 [{id,type,rarity,level,exp}]
         battlePicks: [],     // v2.2 WP-H1：参战宠物选择（speciesId 数组，刷新/重开后保留）
         lastSettleDate: null,  // 宠物系统上次结算日
-        monthlyKey: null       // 月度重置键
+        monthlyKey: null,      // 月度重置键
+        /* v2.17：**宠物等级记账**（经验发放的幂等账本）。
+           monthKey = 等级清空的月度幂等键（写法同上面的 monthlyKey）
+           dayKey / dailyGranted = 当日经验**水印**（同一天只补差额，重复调用恒发 0）
+           challengeKeys = 每次挑战结算的唯一键（同一场只发一次）
+           log = 最近 20 条发放记录（含丢弃量，便于核对） */
+        levelLedger: {
+          monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: []
+        }
       };
     },
     validate: function (v) { return v && typeof v === 'object' && Array.isArray(v.pets); },
@@ -30,14 +38,19 @@ if (typeof store !== 'undefined' && store.registerSchema) {
 /* 读取宠物数据（默认值兜底） */
 function getPetStore() {
   if (typeof store === 'undefined') {
-    return { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], battlePicks: [], lastSettleDate: null, monthlyKey: null };
+    return { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], battlePicks: [], lastSettleDate: null, monthlyKey: null,
+             levelLedger: { monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: [] } };
   }
   var d = store.get('pets');
-  if (!d) { d = { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], battlePicks: [], lastSettleDate: null, monthlyKey: null }; store.set('pets', d); }
+  if (!d) { d = { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], battlePicks: [], lastSettleDate: null, monthlyKey: null,
+                 levelLedger: { monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: [] } }; store.set('pets', d); }
   if (!Array.isArray(d.orbs)) d.orbs = [];   // v2.1.17 老存档补齐宝珠库存
   /* v2.2 WP-H1：参战宠物选择持久化 —— 旧存档没有该字段时**优雅退化**为 []（＝未选择，
      行为与改动前一致：开战时自动带成熟宠物）。不迁移、不补偿，缺失即空。 */
   if (!Array.isArray(d.battlePicks)) d.battlePicks = [];
+  /* v2.17：等级记账本 —— 旧存档没有该字段时**优雅退化**为空账本（不迁移、不补偿）；
+     每只宠的 level / exp 缺失由 `petLevelInfo()` 按 lv0 / 0 exp 读（同样不迁移）。 */
+  if (typeof petLevelLedger === 'function') petLevelLedger(d);
   /* v2.2 WP-A2：**宝珠口径迁移**（幂等）—— 旧 N 档折算碎片、R/SR/SSR 品质映射 + 等级保号、
      超过新品质等级上限则截断（口径见 doc/changelog-v2.2.md「旧宝珠迁移口径定案」）。
      迁移后 N 档已不存在，再次调用不会命中任何分支，所以放在读取路径上是安全的。 */
@@ -115,6 +128,12 @@ function settleAllPets(now) {
   });
   d.lastSettleDate = today;
   savePetStore(d);
+  /* ⚠️ v2.17 刻意**不**在这里补发宠物经验：
+     `petSettleStatus()` 的 ready 判据是「逐条镜像 settlePet 的实际分支」的契约
+     （test-pet-panel-layout 会用「按钮是否 ready ⇔ 结算是否产生可观察变化」逐例比对），
+     在本函数里写账本会让「已阵亡 / 今天已结算」这类 ready=false 的场景也产生存档变化，
+     直接破坏那条既有断言。经验补发改由**不会写宠物生命周期**的三个入口触发：
+     ① 训练保存（tab-strength.js）② 挑战结算（challenge.js）③ 宠物面板打开（pet-ui.js）。 */
   return allEvents;
 }
 
@@ -538,9 +557,12 @@ function petUnitWithBase(u, base) {
 function petStatBreakdown(pet) {
   var zero = function () { var o = {}; PET_STAT_KEYS.forEach(function (k) { o[k] = 0; }); return o; };
   var out = { ok: false, base: zero(), cohesion: zero(), totalPct: zero(),
-              bench: zero(), poolPct: zero(), final: zero(), pureFinal: zero(),
+              bench: zero(), poolPct: zero(), poolFinal: zero(), final: zero(), pureFinal: zero(),
               rarityPct: 0, orbPct: {}, resonancePct: 0, cohesionRatePct: TEAM_COHESION_PCT,
               allCount: 0, matureCount: 0, resonanceRate: 0,
+              /* v2.17：宠物等级（成熟期经验等级）—— 只读视图 ＋ 等级加成（基础值层） */
+              level: { level: 0, exp: 0, inLevel: 0, need: 0, maxed: false, pct: 0, bonusPct: 0 },
+              levelPct: 0, levelBonus: zero(),
               ratePct: { cohesion: TEAM_COHESION_PCT, resonance: 0 }, boosted: false };
   if (!pet || typeof createPetUnit !== 'function') return out;
   var u = createPetUnit(pet);
@@ -588,10 +610,21 @@ function petStatBreakdown(pet) {
                          totalPct: pool.totalPct });
     boostPetForGroup(pb);
     out.boosted = true;
-    PET_STAT_KEYS.forEach(function (k) { out.final[k] = pb.base[k] || 0; });
+    /* 池后的值先记到 poolFinal，等级加成在下面统一追加（**与实战同一个插层**） */
+    PET_STAT_KEYS.forEach(function (k) { out.poolFinal[k] = pb.base[k] || 0; });
   } else {
-    PET_STAT_KEYS.forEach(function (k) { out.final[k] = pool.final[k]; });
+    PET_STAT_KEYS.forEach(function (k) { out.poolFinal[k] = pool.final[k]; });
   }
+  /* ===== v2.17：宠物等级加成（**只加基础值，不进池**）=====
+     基数 = ① 基础（out.base：图鉴＋炼化＋天赋静态），加项 = floor(基础 × 等级%)；
+     与实战 `applyPetExpLevelBonuses()` 完全同一口径（同一个 `petLevelBonusOf()`）。
+     ⚠️ 本函数**不写 pet**：等级/经验一律走只读的 `petLevelInfo(pet)`。 */
+  out.level = petLevelInfo(pet);
+  out.levelPct = out.level.bonusPct;
+  out.levelBonus = petLevelBonusOf(out.base, out.levelPct);
+  PET_STAT_KEYS.forEach(function (k) {
+    out.final[k] = (out.poolFinal[k] || 0) + (out.levelBonus[k] || 0);
+  });
   return out;
 }
 
@@ -666,6 +699,10 @@ function petBonusRow(bd, k, rarityTag) {
     resonancePct: inPool ? resPct : 0,                     // **Σ共鸣%**（进池的百分比；速度 = 0）
     poolPct: ok ? (((bd.poolPct || {})[k]) || 0) : 0,      // 子集池：稀有度 ＋ Σ宝珠（速度 = 0）
     totalPct: inPool ? totalPct : 100,                     // 加成合计%（速度 = ×100%）
+    /* v2.17：宠物等级 —— 百分比（每级 1%，满级 50%）与**数值加项**（floor(基础 × 等级%)）。
+       等级加成是「基础值层」，**不进池**（不参与稀有度 / 宝珠 / 共鸣的放大）。 */
+    levelPct: ok ? (bd.levelPct || 0) : 0,
+    levelBonus: num(bd && bd.levelBonus),
     final: ok ? (((bd.final || {})[k]) || 0) : 0
   };
 }
@@ -746,6 +783,393 @@ function petCompareFinal(petA, petB) {
 }
 
 /* ============================================================
+   v2.17：**宠物等级（成熟期经验等级）** —— 存档账本 / 经验发放 / 分配 / 接线
+   ============================================================
+   作者规格（逐字，数值不自行改写）：
+     · 增加宠物等级，**成熟期以上开始累计**；所需经验 = **目标等级 × 100**
+     · 获得经验 = **今日力量训练（kg）× 5** ／ **有氧训练（min）× 20**
+     · 获得的经验**随机分配给当前最多 10 只成熟期的宠物，每个宠物最多获得 20%**
+     · 今日触发挑战 → 额外 **本次伤害 × 1%**（同样随机分给最多 10 只、每只最多 20%）
+     · 每级 +1% 基础属性（每属性最多 +50% 基础值）、每只最高 50 级、**每月清空**、
+       **满级宠物会被跳过**；增加的属性是**基础值（不计算加成）**
+
+   🔴 **两条发放口径（本文件是唯一实现）**
+     ① **每日**（力量 / 有氧）：**按增量补发，不是每天一次性** ——
+        账本记 `dayKey ＋ dailyGranted`（当日**已发放经验**的水印）。
+        每次调用先算「今日口径的应得总量」raw = floor(kg×5) + floor(min×20)，
+        delta = raw − dailyGranted，只发 delta（≤0 一笔不发）；发完把水印抬到 raw。
+        ⇒ 同一天里重复调用**恒发 0**；先练 100kg 再练 50kg 与一次练 150kg 结果相同
+          （raw 单调 → 差额即增量）。水印**只升不降**（删记录后不会因 raw 变小而重复发）。
+     ② **挑战**（每次结算）：账本记 `challengeKeys`（每场结算一个唯一键，FIFO 50 条），
+        同一个键第二次调用直接返回 duplicate → **同一场只发一次**。
+     两条来源发出去的经验都走同一个分配器 `petLevelAllocateBatch()`。
+
+   🔴 **分配算法（伪码）**
+     cap  = floor(total × 20%)                       // 每只最多 20%
+     pool = 成熟期( stage==='mature' ) ∧ 未阵亡 ∧ 未受伤 ∧ 未满级( lv < 50 )
+     picks = shuffle(pool) 取前 10 只                 // 「最多 10 只」＝随机抽 10 只
+     repeat ≤32 轮：按随机权重把剩余量按比例分给「还有额度」的 picks（每只 ≤ cap）
+     补齐：仍有余量且有额度时，逐点随机发 1（避免取整损耗被吞）
+     剩余 = 发不出去的量 → **如实丢弃**并写进账本 log（dropped），不偷偷均摊。
+     ⚠️ 成熟期不足 5 只时（10×20%＝200% 才够吃满），20% 上限必然吃不下 →
+        超出部分就是「发不出去」，按规格丢弃。
+   ============================================================ */
+var PET_LEVEL_BATCH_MAX = 10;          // 「最多 10 只成熟期宠物」
+var PET_LEVEL_SHARE_CAP_PCT = 0.2;     // 「每个宠物最多获得 20%」
+var PET_LEVEL_STR_KG_MULT = 5;         // 「今日力量训练（kg）× 5」
+var PET_LEVEL_CARDIO_MIN_MULT = 20;    // 「有氧训练（min）× 20」
+var PET_LEVEL_CH_DMG_RATE = 0.01;      // 「本次伤害 × 1%」
+var PET_LEVEL_LOG_MAX = 20;            // 发放记录保留条数
+var PET_LEVEL_CH_KEYS_MAX = 50;        // 挑战幂等键保留条数
+
+function defaultPetLevelLedger() {
+  return { monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: [] };
+}
+
+/* 账本读取（缺字段一律补齐 —— 旧档优雅退化，不迁移、不补偿） */
+function petLevelLedger(d) {
+  d = d || getPetStore();
+  var L = d.levelLedger;
+  if (!L || typeof L !== 'object' || Array.isArray(L)) { L = defaultPetLevelLedger(); d.levelLedger = L; }
+  if (typeof L.monthKey !== 'string') L.monthKey = null;
+  if (typeof L.dayKey !== 'string') L.dayKey = null;
+  if (typeof L.dailyGranted !== 'number' || !isFinite(L.dailyGranted)) L.dailyGranted = 0;
+  if (!Array.isArray(L.challengeKeys)) L.challengeKeys = [];
+  if (!Array.isArray(L.log)) L.log = [];
+  return L;
+}
+
+/* ============================================================
+   **每月清空等级**（幂等）：幂等键 = `monthKey(now)`，写法与 `monthlyResetPets()` 的
+   `d.monthlyKey` 同款（同一套 date-roll 月度键、同一个「一个键只做一次」的模式），
+   但**独立一把锁** —— 不借 `monthlyResetPets()`，因为那个还会清材料 / 炼化 / 半减技能，
+   不能因为等级清空而被顺带触发（反之亦然）。
+   同月重复调用 → `{ok:false, reason:'本月已清空'}`，**一只宠都不碰**。
+   ============================================================ */
+function syncPetLevelMonth(now) {
+  var d = getPetStore();
+  var cur = monthKey(now || new Date());
+  var L = petLevelLedger(d);
+  if (L.monthKey === cur) return { ok: false, reason: '本月已清空', monthKey: cur, cleared: 0 };
+  var n = 0;
+  (d.pets || []).forEach(function (pet) {
+    if (!pet) return;
+    petLevelResetMonthly(pet);     // level=0 / exp=0
+    n++;
+  });
+  L.monthKey = cur;
+  L.dayKey = null;                 // 新月第一笔训练照常从头算
+  L.dailyGranted = 0;
+  L.log.unshift({ date: dateKey(now || new Date()), source: 'month-reset', total: 0, granted: 0, dropped: 0, pets: n });
+  if (L.log.length > PET_LEVEL_LOG_MAX) L.log.length = PET_LEVEL_LOG_MAX;
+  savePetStore(d);
+  return { ok: true, monthKey: cur, cleared: n };
+}
+
+/* 可吃经验的宠物：**成熟期** ∧ 未阵亡 ∧ 未受伤 ∧ 未满级（「满级宠物会被跳过」）。
+   ⚠️ 阵亡 / 受伤**排除**：沿用 `canPetBattle()` 的判据（成熟＋未阵亡＋未受伤）——
+       「成熟期以上开始累计」按「还活着、还能打」理解，受伤宠参战都不行，更不该吃经验。
+       与 `petTeamBaseScan()` 的「只筛阶段」口径**不同**（那个是凝聚/共鸣的近战池，未动）。 */
+function petLevelEligiblePets(d) {
+  d = d || getPetStore();
+  return (d.pets || []).filter(function (pet) {
+    if (!pet) return false;
+    if (!canPetBattle(pet)) return false;                 // 成熟 + 未阵亡 + 未受伤
+    return petLevelInfo(pet).level < PET_LEVEL_MAX;
+  });
+}
+
+/* 洗牌（rnd 注入 → 测试可复现） */
+function petLevelShuffle(list, rnd) {
+  var a = (list || []).slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(rnd() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+/* ============================================================
+   分配器（**纯计算**，不改任何宠物）：把 `total` 点经验拆成「每只多少」。
+   @returns {{total, cap, picks:Object[], amounts:number[], granted, dropped, reason?}}
+     · cap = floor(total × 20%)  —— 每只上限（**整点**向下取整）
+     · picks 最多 10 只、随抽取顺序确定（同一 rnd 序列结果可复现）
+     · granted + dropped === total（经验守恒，不偷偷均摊）
+   ⚠️ total < 5 时 cap = 0（20% 向下取整）⇒ 全部丢弃 —— 如实记录，不特例放水。
+   ============================================================ */
+function petLevelAllocateBatch(total, pets, rnd) {
+  var totalExp = Math.max(0, Math.floor((typeof total === 'number' && isFinite(total)) ? total : 0));
+  var r = (typeof rnd === 'function') ? rnd : Math.random;
+  var cap = Math.floor(totalExp * PET_LEVEL_SHARE_CAP_PCT);
+  var out = { total: totalExp, cap: cap, picks: [], amounts: [], granted: 0, dropped: totalExp, reason: null };
+  if (totalExp <= 0) { out.dropped = 0; out.reason = '总量为 0'; return out; }
+  var pool = (pets || []).filter(function (pet) {
+    return !!pet && typeof canPetBattle === 'function' && canPetBattle(pet) &&
+           petLevelInfo(pet).level < PET_LEVEL_MAX;
+  });
+  if (!pool.length) { out.reason = '没有可吃经验的成熟期宠物'; return out; }
+  if (cap <= 0) { out.reason = '单只上限取整为 0（总量 < ' + Math.ceil(1 / PET_LEVEL_SHARE_CAP_PCT) + '）'; return out; }
+  var picks = petLevelShuffle(pool, r).slice(0, PET_LEVEL_BATCH_MAX);
+  var weights = picks.map(function () { return 1 + Math.floor(r() * 100); });
+  var got = picks.map(function () { return 0; });
+  var remaining = totalExp;
+
+  function openIdx() {
+    var a = [];
+    for (var i = 0; i < picks.length; i++) if (got[i] < cap) a.push(i);
+    return a;
+  }
+  /* ① 按随机权重比例分配（≤32 轮；每轮只往「还有额度」的宠身上发） */
+  var round = 0;
+  while (remaining > 0 && round++ < 32) {
+    var open = openIdx();
+    if (!open.length) break;
+    var wsum = 0, i;
+    for (i = 0; i < open.length; i++) wsum += weights[open[i]];
+    var given = 0;
+    for (i = 0; i < open.length; i++) {
+      var idx = open[i];
+      var q = Math.floor(remaining * weights[idx] / wsum);
+      var room = cap - got[idx];
+      var add = Math.max(0, Math.min(q, room));
+      got[idx] += add;
+      given += add;
+    }
+    if (given === 0) {
+      /* 取整损耗 → 随机挑一只还有额度的先 +1（下一轮继续按权重分） */
+      var pick = open[Math.floor(r() * open.length)];
+      got[pick] += 1;
+      given = 1;
+    }
+    remaining -= given;
+  }
+  /* ② 补齐：仍有额度就逐点发（随机顺序），避免取整把经验吞掉 */
+  var guard = 0;
+  while (remaining > 0 && guard++ < totalExp + 1) {
+    var op = openIdx();
+    if (!op.length) break;
+    got[op[Math.floor(r() * op.length)]] += 1;
+    remaining -= 1;
+  }
+  out.picks = picks;
+  out.amounts = got;
+  out.granted = totalExp - remaining;
+  out.dropped = remaining;
+  if (remaining > 0) out.reason = '单只 20% 上限吃不下（可吃宠物 ' + picks.length + ' 只，容量 ' + (cap * picks.length) + ' < ' + totalExp + '）';
+  return out;
+}
+
+/* 把一批分配结果**写进宠物**（唯一的等级写入点）并记一笔账。返回每只的变化明细。 */
+function petLevelGrantExp(d, totalExp, meta, rnd) {
+  d = d || getPetStore();
+  var batch = petLevelAllocateBatch(totalExp, d.pets, rnd);
+  var ups = [];
+  (batch.picks || []).forEach(function (pet, i) {
+    var amt = batch.amounts[i] || 0;
+    if (!pet || amt <= 0) return;
+    var before = petLevelInfo(pet).level;
+    var cur = (typeof pet.exp === 'number' && isFinite(pet.exp)) ? Math.floor(pet.exp) : 0;
+    pet.exp = Math.max(0, cur) + amt;
+    var r = petLevelSync(pet);
+    ups.push({ speciesId: pet.speciesId, name: (getPetCodex(pet.speciesId) || {}).name || pet.name || pet.speciesId,
+               amount: amt, from: before, to: r.level, leveledUp: r.level > before });
+  });
+  var L = petLevelLedger(d);
+  L.log.unshift({ date: dateKey((meta && meta.now) || new Date()),
+                  source: (meta && meta.source) || 'unknown',
+                  total: batch.total, granted: batch.granted, dropped: batch.dropped, pets: ups.length });
+  if (L.log.length > PET_LEVEL_LOG_MAX) L.log.length = PET_LEVEL_LOG_MAX;
+  return { ok: true, total: batch.total, cap: batch.cap, granted: batch.granted,
+           dropped: batch.dropped, allocations: ups, reason: batch.reason };
+}
+
+/* ============================================================
+   「今日」口径（唯一取数口）：沿用全站的日期口径 `dateKey()`（＝ `today()`，'YYYY-MM-DD'），
+   从 `strength` / `cardio` 两个既有 store 里筛 `date === todayKey` 的记录：
+     · 力量容量（kg） = `sumVolume()` —— 与训练页/等级页**同一个函数**（动作 ratio 加权）
+     · 有氧时长（min） = `sumDuration()` —— **原始分钟数**（不乘强度；规格写的是 min）
+   `sumVolume` / `sumDuration` 未加载时（个别测试沙箱）就地算同口径，保证函数可独立调用。
+   ============================================================ */
+function petLevelStoreEntries(key) {
+  if (typeof store === 'undefined' || !store.get) return [];
+  var d = store.get(key);
+  return (d && Array.isArray(d.entries)) ? d.entries : [];
+}
+function petLevelStrengthVolume(entries) {
+  if (typeof sumVolume === 'function') return sumVolume(entries, (typeof getExerciseMap === 'function') ? getExerciseMap() : null);
+  var map = (typeof getExerciseMap === 'function') ? getExerciseMap() : null;
+  return (entries || []).reduce(function (s, e) {
+    if (!e) return s;
+    var ratio = (map && map[e.exercise] && map[e.exercise].ratio != null) ? map[e.exercise].ratio : 100;
+    var w = (e.eqWeight != null) ? e.eqWeight : (e.weight || 0);
+    var n = e.actualReps || (e.duration ? e.duration : 0);
+    return s + w * n * (ratio / 100);
+  }, 0);
+}
+function petLevelCardioMinutes(entries) {
+  if (typeof sumDuration === 'function') return sumDuration(entries);
+  return (entries || []).reduce(function (s, e) { return s + ((e && e.duration) || 0); }, 0);
+}
+function petLevelTodayBasis(todayKey) {
+  var key = todayKey || dateKey(new Date());
+  var strEntries = petLevelStoreEntries('strength').filter(function (e) { return e && e.date === key; });
+  var carEntries = petLevelStoreEntries('cardio').filter(function (e) { return e && e.date === key; });
+  var volume = petLevelStrengthVolume(strEntries);
+  var minutes = petLevelCardioMinutes(carEntries);
+  var strExp = Math.floor(Math.max(0, volume) * PET_LEVEL_STR_KG_MULT);
+  var carExp = Math.floor(Math.max(0, minutes) * PET_LEVEL_CARDIO_MIN_MULT);
+  return { dayKey: key, volume: volume, minutes: minutes,
+           strengthExp: strExp, cardioExp: carExp, exp: strExp + carExp };
+}
+
+/* ============================================================
+   **每日经验**（力量 / 有氧）—— 按增量补发 + 当日水印幂等。
+   任何调用点（训练保存、面板打开、每日结算）都安全：没有新增训练量时恒发 0。
+   ============================================================ */
+function syncPetLevelExp(now, rnd) {
+  var m = syncPetLevelMonth(now);
+  var d = getPetStore();
+  var todayKey = dateKey(now || new Date());
+  var L = petLevelLedger(d);
+  if (L.dayKey !== todayKey) { L.dayKey = todayKey; L.dailyGranted = 0; }
+  var basis = petLevelTodayBasis(todayKey);
+  var delta = basis.exp - L.dailyGranted;
+  if (delta <= 0) {
+    return { ok: true, duplicate: true, total: 0, granted: 0, dropped: 0, cap: 0,
+             basis: basis, dailyGranted: L.dailyGranted, monthReset: m.ok, allocations: [] };
+  }
+  L.dailyGranted = basis.exp;          // 水印：先记「已发放总量」，再发差额
+  var r = petLevelGrantExp(d, delta, { source: 'daily', now: now }, rnd);
+  savePetStore(d);
+  return { ok: true, duplicate: false, total: delta, granted: r.granted, dropped: r.dropped,
+           cap: r.cap, basis: basis, dailyGranted: L.dailyGranted, monthReset: m.ok,
+           allocations: r.allocations, reason: r.reason };
+}
+
+/* ============================================================
+   **挑战额外经验**：本次伤害 × 1%，**每次结算发一次**（幂等键 = 调用方给的唯一键）。
+   `runKey` 由 challenge.js 在**开打时**生成并挂在 state 上 → 同一次结算被重复调用时
+   用的是同一个键，因此不会重复发放。
+   ⚠️ 兜底键（未传 runKey）= `'challenge@' + 日期 + '#' + 伤害`：同一天两场**伤害完全相同**的
+      挑战会被误判成同一场 —— 这是**降级路径**，线上调用方始终传 runKey。
+   ============================================================ */
+function grantPetLevelChallengeExp(damage, runKey, now, rnd) {
+  var m = syncPetLevelMonth(now);
+  var d = getPetStore();
+  var L = petLevelLedger(d);
+  var dmg = (typeof damage === 'number' && isFinite(damage)) ? damage : 0;
+  var key = (runKey == null || runKey === '') ? ('challenge@' + dateKey(now || new Date()) + '#' + Math.floor(Math.max(0, dmg))) : String(runKey);
+  if (L.challengeKeys.indexOf(key) > -1) {
+    return { ok: true, duplicate: true, key: key, exp: 0, total: 0, granted: 0, dropped: 0, cap: 0, allocations: [], monthReset: m.ok };
+  }
+  L.challengeKeys.unshift(key);
+  if (L.challengeKeys.length > PET_LEVEL_CH_KEYS_MAX) L.challengeKeys.length = PET_LEVEL_CH_KEYS_MAX;
+  var total = Math.floor(Math.max(0, dmg) * PET_LEVEL_CH_DMG_RATE);
+  var r = { granted: 0, dropped: 0, cap: 0, allocations: [], reason: (total > 0 ? null : '本次伤害 × 1% 取整为 0') };
+  if (total > 0) r = petLevelGrantExp(d, total, { source: 'challenge', now: now }, rnd);
+  savePetStore(d);
+  return { ok: true, duplicate: false, key: key, exp: total, total: total, granted: r.granted,
+           dropped: r.dropped, cap: r.cap, allocations: r.allocations, reason: r.reason, monthReset: m.ok };
+}
+
+/* ============================================================
+   等级加成的**单位级**取数：单位 → 宠物等级%。
+   优先读单位上的显式 `_petLevel`（测试/调试可注入）；否则按 `_petSpecies` 回存档查。
+   只读，**不写任何宠物对象**。
+   ============================================================ */
+function petUnitLevelPct(u, d) {
+  if (!u) return 0;
+  if (typeof u._petLevel === 'number' && isFinite(u._petLevel)) return petLevelBonusPct(u._petLevel);
+  var sid = u._petSpecies;
+  if (!sid) return 0;
+  var store2 = d || getPetStore();
+  var list = (store2 && store2.pets) || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].speciesId === sid) return petLevelInfo(list[i]).bonusPct;
+  }
+  return 0;
+}
+
+/* 池前的「纯基础」缓存（**非枚举**，不进快照 / 日志 / JSON）——
+   等级% 的基数只能是 ① 基础（图鉴＋炼化＋天赋静态），不能是乘过稀有度池之后的数。 */
+var _petPureBase = (typeof WeakMap === 'function') ? new WeakMap() : null;
+function petSetPureBase(u, base) {
+  if (!u || !base) return;
+  if (_petPureBase) { _petPureBase.set(u, base); return; }
+  try {
+    Object.defineProperty(u, '_petPureBase', { value: base, enumerable: false, configurable: true, writable: true });
+  } catch (e) {
+    console.log('[pet-level] 无法定义不可枚举的 _petPureBase，退回普通字段（只影响快照体积，口径不变）', e);
+    u._petPureBase = base;
+  }
+}
+function petPureBaseOf(u) {
+  if (!u) return null;
+  if (_petPureBase) return _petPureBase.get(u) || null;
+  return u._petPureBase || null;
+}
+function petCapturePureBase(units) {
+  (units || []).forEach(function (u) {
+    if (!u || !u.base) return;
+    var copy = {};
+    PET_STAT_KEYS.forEach(function (k) { copy[k] = (typeof u.base[k] === 'number') ? u.base[k] : 0; });
+    petSetPureBase(u, copy);
+  });
+  return units;
+}
+
+/* ============================================================
+   🔴 v2.17 **等级加成的唯一落点**：在 `boostPetForGroup()`（百分比池出口）**之后**加。
+   为什么必须放池之后（而不是塞进 `u.base` 再被放大）：
+     作者原话「增加的属性是**基础值（不计算加成）**」「每级 +1% 基础属性，最多 +50% 基础值」
+     —— 若把它加进 base 再走池，它会先被「稀有度 1200%~1600% ＋ Σ宝珠 ＋ Σ共鸣」放大
+     （实测 lv50 的 +50% 会变成 +800%），既违反规格，也会让「每月清空」变成属性断崖。
+   所以：levelBonus[k] = floor(①基础[k] × 等级%)，**独立加项**、**不进池**、也不进凝聚的基数。
+   ⚠️ 幂等：本函数只用 `petPureBaseOf(u) || u.base` 算出**固定**的加项；
+      重复调用不会叠加（每次先减掉上次加过的那一份，见下方 `_petLevelBonus` 记账）。
+   ============================================================ */
+function applyPetExpLevelBonuses(units) {
+  if (!units || !units.length) return units;
+  var d = getPetStore();
+  units.forEach(function (u) {
+    if (!u || !u.base) return;
+    var prev = u._petLevelBonus || null;
+    /* 先撤掉上次加的（同一 unit 被连续应用时不会越加越多） */
+    if (prev) {
+      PET_STAT_KEYS.forEach(function (k) { if (typeof prev[k] === 'number') u.base[k] = (u.base[k] || 0) - prev[k]; });
+    }
+    var pct = petUnitLevelPct(u, d);
+    var baseSrc = petPureBaseOf(u) || u.base;
+    var bonus = petLevelBonusOf(baseSrc, pct);
+    if (pct > 0) {
+      PET_STAT_KEYS.forEach(function (k) {
+        if (typeof bonus[k] === 'number' && bonus[k] !== 0) u.base[k] = (u.base[k] || 0) + bonus[k];
+      });
+    }
+    try {
+      Object.defineProperty(u, '_petLevelBonus', { value: bonus, enumerable: false, configurable: true, writable: true });
+      Object.defineProperty(u, '_petLevelPct', { value: pct, enumerable: false, configurable: true, writable: true });
+    } catch (e) {
+      console.log('[pet-level] 无法定义不可枚举的 _petLevelBonus，退回普通字段（只影响快照体积，口径不变）', e);
+      u._petLevelBonus = bonus; u._petLevelPct = pct;
+    }
+    if (u.base.hp != null) u.hp = u.base.hp;   // 与 boostPetForGroup 的收尾一致
+  });
+  return units;
+}
+
+/* 展示用只读视图（**不写存档、不写宠物**） */
+function petLevelBonusView(pet, base) {
+  var info = petLevelInfo(pet);
+  var b = base || {};
+  var bonus = petLevelBonusOf(b, info.bonusPct);
+  return { level: info.level, exp: info.exp, inLevel: info.inLevel, need: info.need,
+           maxed: info.maxed, pct: info.pct, bonusPct: info.bonusPct, bonus: bonus,
+           maxLevel: PET_LEVEL_MAX, expMult: PET_LEVEL_EXP_MULT,
+           ratePct: PET_LEVEL_BONUS_PCT, capPct: PET_LEVEL_BONUS_CAP_PCT };
+}
+
+/* ============================================================
    v2.2 WP-A3/A4（v2.16 改口径，接线不变）：敌群参战宠物的**唯一入口**
    = 建单位 → 挂 S凝聚（固定值）／S共鸣%（`applyBattlePetBaseBonuses`）→ 等级基础化 → **池出口**
      `boostPetForGroup`（(基础 ＋ S凝聚) × (稀有度% ＋ Σ宝珠% ＋ S共鸣%) ÷ 100 后取整）。
@@ -758,11 +1182,17 @@ function petCompareFinal(petA, petB) {
    ============================================================ */
 function buildGroupBattlePets(petIds, maxRoster) {
   var units = createPetUnitsForBattle(petIds, maxRoster);
+  /* v2.17：**先留一份纯基础**（图鉴＋炼化＋天赋静态）—— 宠物等级% 的基数只能是它，
+     不能是乘过稀有度池之后的数。只写非枚举 `_petPureBase`，不改 base / hp。 */
+  petCapturePureBase(units);
   applyBattlePetBaseBonuses(units);
   /* WP-G：角色等级系统的**宠物档**效果 —— 仍是**基础属性**部分，必须排在池出口之前。
      未加载 level-system.js 时静默跳过。 */
   if (typeof applyPetLevelBaseBonuses === 'function') applyPetLevelBaseBonuses(units);
   units.forEach(function (u) { if (typeof boostPetForGroup === 'function') boostPetForGroup(u); });
+  /* v2.17：**宠物等级加成** —— 必须排在池出口**之后**（等级加成只加「基础值」这一层，
+     不参与稀有度 / 宝珠 / 共鸣的放大；详见 applyPetExpLevelBonuses 的说明）。 */
+  applyPetExpLevelBonuses(units);
   /* v2.2.5（WP-B 共享桥，推翻 OQ-11）：玩家**已装配**的暴击/格挡/气力恢复 → 按**宠物档**挂到参战宠物。
      单向（玩家 → 宠物），不反向污染玩家档；本模块未加载时静默跳过。 */
   if (typeof attachPetSharedSkills === 'function') attachPetSharedSkills(units);
@@ -814,6 +1244,25 @@ if (typeof window !== 'undefined') {
   window.petBaseBonusView = petBaseBonusView;
   window.applyBattlePetBaseBonuses = applyBattlePetBaseBonuses;
   window.buildGroupBattlePets = buildGroupBattlePets;
+  /* v2.17：宠物等级（成熟期经验等级） */
+  window.PET_LEVEL_BATCH_MAX = PET_LEVEL_BATCH_MAX;
+  window.PET_LEVEL_SHARE_CAP_PCT = PET_LEVEL_SHARE_CAP_PCT;
+  window.PET_LEVEL_STR_KG_MULT = PET_LEVEL_STR_KG_MULT;
+  window.PET_LEVEL_CARDIO_MIN_MULT = PET_LEVEL_CARDIO_MIN_MULT;
+  window.PET_LEVEL_CH_DMG_RATE = PET_LEVEL_CH_DMG_RATE;
+  window.petLevelLedger = petLevelLedger;
+  window.syncPetLevelMonth = syncPetLevelMonth;
+  window.petLevelEligiblePets = petLevelEligiblePets;
+  window.petLevelAllocateBatch = petLevelAllocateBatch;
+  window.petLevelGrantExp = petLevelGrantExp;
+  window.petLevelTodayBasis = petLevelTodayBasis;
+  window.syncPetLevelExp = syncPetLevelExp;
+  window.grantPetLevelChallengeExp = grantPetLevelChallengeExp;
+  window.applyPetExpLevelBonuses = applyPetExpLevelBonuses;
+  window.petLevelBonusView = petLevelBonusView;
+  window.petUnitLevelPct = petUnitLevelPct;
+  window.petCapturePureBase = petCapturePureBase;
+  window.petPureBaseOf = petPureBaseOf;
 }
 if (typeof globalThis !== 'undefined') {
   globalThis.PET_BATTLE_MAX = PET_BATTLE_MAX;
@@ -859,4 +1308,23 @@ if (typeof globalThis !== 'undefined') {
   globalThis.petBaseBonusView = petBaseBonusView;
   globalThis.applyBattlePetBaseBonuses = applyBattlePetBaseBonuses;
   globalThis.buildGroupBattlePets = buildGroupBattlePets;
+  /* v2.17：宠物等级（成熟期经验等级） */
+  globalThis.PET_LEVEL_BATCH_MAX = PET_LEVEL_BATCH_MAX;
+  globalThis.PET_LEVEL_SHARE_CAP_PCT = PET_LEVEL_SHARE_CAP_PCT;
+  globalThis.PET_LEVEL_STR_KG_MULT = PET_LEVEL_STR_KG_MULT;
+  globalThis.PET_LEVEL_CARDIO_MIN_MULT = PET_LEVEL_CARDIO_MIN_MULT;
+  globalThis.PET_LEVEL_CH_DMG_RATE = PET_LEVEL_CH_DMG_RATE;
+  globalThis.petLevelLedger = petLevelLedger;
+  globalThis.syncPetLevelMonth = syncPetLevelMonth;
+  globalThis.petLevelEligiblePets = petLevelEligiblePets;
+  globalThis.petLevelAllocateBatch = petLevelAllocateBatch;
+  globalThis.petLevelGrantExp = petLevelGrantExp;
+  globalThis.petLevelTodayBasis = petLevelTodayBasis;
+  globalThis.syncPetLevelExp = syncPetLevelExp;
+  globalThis.grantPetLevelChallengeExp = grantPetLevelChallengeExp;
+  globalThis.applyPetExpLevelBonuses = applyPetExpLevelBonuses;
+  globalThis.petLevelBonusView = petLevelBonusView;
+  globalThis.petUnitLevelPct = petUnitLevelPct;
+  globalThis.petCapturePureBase = petCapturePureBase;
+  globalThis.petPureBaseOf = petPureBaseOf;
 }

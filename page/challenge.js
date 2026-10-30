@@ -455,6 +455,9 @@ function startHiddenChallenge(hotBuff){
     maxHit:0,
     timer:null,
     ticking:false,
+    /* v2.17：本场结算的**唯一键**（宠物等级「本次伤害 × 1%」的幂等键）。
+       开打时生成一次、整场不变 → 同一次结算被重复调用也不会重复发经验。 */
+    runId:'ch_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
     critRate:critRate,
     critDmg:critDmg,
     hotBuff:hotBuff,
@@ -575,6 +578,16 @@ function startHiddenChallenge(hotBuff){
     if(c.history.length>50)c.history=c.history.slice(-50)
     recordChallengeMonth(c,_rec)
     saveChallenge(c)
+
+    /* v2.17：**挑战额外宠物经验** —— 本次伤害 × 1%，每次结算发一次。
+       幂等键 = 本场 `state.runId`（开打时生成），账本在 pet-store.js 的 levelLedger.challengeKeys。
+       ⚠️ 放在材料掉落之前、独立一个 try：宠物系统未加载 / 出错都不影响挑战本身结算。 */
+    try {
+      if (typeof grantPetLevelChallengeExp === 'function') {
+        var chLv = grantPetLevelChallengeExp(dmg, state.runId)
+        state.petLevelExpReward = chLv
+      }
+    } catch (eLv) { console.warn('[challenge] 宠物等级经验发放失败（本场挑战成绩已正常保存）', eLv) }
 
     // 隐藏挑战材料掉落（基础掉落 + 每周次数额外奖励）
     try {

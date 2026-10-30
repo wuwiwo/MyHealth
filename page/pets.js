@@ -78,8 +78,110 @@ function createPet(spec) {
     isDead: spec.isDead || false,
     deadAt: spec.deadAt || null,
     lastSettleDate: spec.lastSettleDate || null,  // 上次结算日
-    monthlyKey: spec.monthlyKey || null   // 月度重置键（M4-3）
+    monthlyKey: spec.monthlyKey || null,  // 月度重置键（M4-3）
+    /* v2.17：**宠物等级（成熟期经验等级）** —— 旧存档没有这两个字段时
+       `petLevelInfo()` 一律按 lv0 / 0 exp 读（优雅退化，不迁移、不补偿）。 */
+    level: spec.level || 0,   // 0~PET_LEVEL_MAX（由 exp 推导，属派生缓存）
+    exp: spec.exp || 0        // 累计经验（唯一真相；每月清空）
   };
+}
+
+/* ============================================================
+   v2.17：宠物等级（成熟期经验等级）—— **纯逻辑**，无 DOM、无 store。
+   作者规格（逐字）：
+     · 「成熟期以上开始累计」；「所需经验 = 目标等级 × 100」
+     · 「宠物每级提升 1% 基础属性，即每个属性最多提升 50% 基础值」→ 最高 50 级
+     · 「每月清空等级」（幂等键在 pet-store.js 的 `petLevelLedger().monthKey`）
+   ⚠️ 与 level-system.js 的**玩家等级**（`LEVEL_TIERS` 的 pet 档）是**两套东西**：
+      那个是玩家的等级带来的宠物档加成，这里是宠物自己的经验等级。
+   ⚠️ `level` 字段是 `exp` 的**派生缓存**：唯一真相是 `exp`，
+      `petLevelSync()` 每次按 exp 重算并回写（因此旧档 / 脏档不会卡在错误等级）。
+   ============================================================ */
+var PET_LEVEL_MAX = 50;              // 「每只宠物最高 50 级」
+var PET_LEVEL_EXP_MULT = 100;        // 「所需经验 = 目标等级 × 100」
+var PET_LEVEL_BONUS_PCT = 1;         // 「每级提升 1% 基础属性」
+var PET_LEVEL_BONUS_CAP_PCT = PET_LEVEL_MAX * PET_LEVEL_BONUS_PCT;   // 50% 基础值
+
+/* 目标等级 `level` 本级所需经验 = level × 100（lv1=100 / lv2=200 … / lv50=5,000） */
+function petLevelStepExp(level) {
+  var n = Math.max(0, Math.min(PET_LEVEL_MAX, Math.floor(level || 0)));
+  return n * PET_LEVEL_EXP_MULT;
+}
+/* 从 lv0 累计升到 `level` 所需经验 = Σ_{k=1..level} k×100 = 50·level·(level+1) */
+function petLevelCumExp(level) {
+  var n = Math.max(0, Math.min(PET_LEVEL_MAX, Math.floor(level || 0)));
+  return PET_LEVEL_EXP_MULT * (n * (n + 1) / 2);
+}
+/* 经验 → 等级（lv0 起；封顶 PET_LEVEL_MAX）。纯函数，不写任何对象。 */
+function petLevelFromExp(exp) {
+  var e = (typeof exp === 'number' && isFinite(exp)) ? Math.floor(exp) : 0;
+  if (e <= 0) return 0;
+  var lv = 0;
+  /* 上限 50 级 → 循环最多 50 次（用累计公式判定，不做逐级加法累加） */
+  while (lv < PET_LEVEL_MAX && e >= petLevelCumExp(lv + 1)) lv++;
+  return lv;
+}
+/* 等级 → 属性加成百分比（lv1 = +1% … lv50 = +50%，封顶） */
+function petLevelBonusPct(level) {
+  var n = Math.max(0, Math.min(PET_LEVEL_MAX, Math.floor(level || 0)));
+  return Math.min(PET_LEVEL_BONUS_CAP_PCT, n * PET_LEVEL_BONUS_PCT);
+}
+/* 只读视图（**不写 pet**）：等级 / 经验进度 / 加成百分比。
+   · `need` = 升到下一级还需的经验（＝ 目标等级 × 100；满级 = 0）
+   · `inLevel` = 本级已攒经验（满级 = 0）
+   旧存档（缺 level/exp）→ lv0 / 0 exp。 */
+function petLevelInfo(pet) {
+  var petExp = (pet && typeof pet.exp === 'number' && isFinite(pet.exp)) ? Math.floor(pet.exp) : 0;
+  if (petExp < 0) petExp = 0;
+  var lv = petLevelFromExp(petExp);
+  var maxed = (lv >= PET_LEVEL_MAX);
+  /* 满级：累计经验封顶在 lv50 的门槛上（多出来的不累计，等级不再变） */
+  var exp = maxed ? petLevelCumExp(PET_LEVEL_MAX) : petExp;
+  var base = petLevelCumExp(lv);
+  var need = maxed ? 0 : petLevelStepExp(lv + 1);
+  var inLevel = maxed ? 0 : Math.max(0, exp - base);
+  return {
+    level: lv, exp: exp, cumBase: base, inLevel: inLevel, need: need,
+    maxed: maxed, maxLevel: PET_LEVEL_MAX,
+    pct: (maxed || need <= 0) ? (maxed ? 100 : 0) : Math.min(100, Math.round(inLevel / need * 100)),
+    bonusPct: petLevelBonusPct(lv)
+  };
+}
+/* 等级加成（**基础值层**）：levelBonus[k] = floor(基础[k] × 等级%)。
+   ⚠️ 只吃 `base`（图鉴＋炼化＋天赋静态，即 createPetUnit 的 base），
+      **不参与**稀有度 / 宝珠 / 共鸣的百分比池 —— 由调用点「池算完之后再加」保证
+      （见 pet-store.js 的 `applyPetExpLevelBonuses` / `petStatBreakdown`）。
+   ⚠️ 纯函数：不写入参、不读存档。速度也在内（「每个属性」＝基础属性六项全含）。 */
+function petLevelBonusOf(base, pct) {
+  var out = {};
+  var b = base || {};
+  var p = (typeof pct === 'number' && isFinite(pct)) ? pct : 0;
+  if (p < 0) p = 0;
+  if (p > PET_LEVEL_BONUS_CAP_PCT) p = PET_LEVEL_BONUS_CAP_PCT;
+  var keys = ['hp', 'atk', 'def', 'speed', 'spd', 'soulAtk', 'soulDef'];
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (b[k] == null) continue;
+    out[k] = Math.floor((b[k] || 0) * p / 100);
+  }
+  return out;
+}
+/* 按 exp 重算并回写 `pet.level` / `pet.exp`（**唯一**的等级写入口）。
+   满级时把 exp 截到 lv50 门槛（多出来的经验如实丢弃，等级不再变化）。 */
+function petLevelSync(pet) {
+  if (!pet || typeof pet !== 'object') return { level: 0, exp: 0, leveledUp: false };
+  var prev = (typeof pet.level === 'number' && isFinite(pet.level)) ? pet.level : petLevelFromExp(pet.exp);
+  var info = petLevelInfo(pet);
+  pet.level = info.level;
+  pet.exp = info.exp;
+  return { level: info.level, exp: info.exp, from: prev, leveledUp: info.level > prev };
+}
+/* 每月清空（**单只**；幂等闸门在 pet-store.js 的 `petLevelLedger().monthKey`） */
+function petLevelResetMonthly(pet) {
+  if (!pet || typeof pet !== 'object') return pet;
+  pet.level = 0;
+  pet.exp = 0;
+  return pet;
 }
 
 /* 喂营养液（孵化期）：+0.5%~2%，返回进度 */
@@ -249,6 +351,18 @@ if (typeof window !== 'undefined') {
   window.normalizePetStage = normalizePetStage;
   window.resonanceBonus = resonanceBonus;
   window.monthlyResetPet = monthlyResetPet;
+  window.PET_LEVEL_MAX = PET_LEVEL_MAX;
+  window.PET_LEVEL_EXP_MULT = PET_LEVEL_EXP_MULT;
+  window.PET_LEVEL_BONUS_PCT = PET_LEVEL_BONUS_PCT;
+  window.PET_LEVEL_BONUS_CAP_PCT = PET_LEVEL_BONUS_CAP_PCT;
+  window.petLevelStepExp = petLevelStepExp;
+  window.petLevelCumExp = petLevelCumExp;
+  window.petLevelFromExp = petLevelFromExp;
+  window.petLevelBonusPct = petLevelBonusPct;
+  window.petLevelInfo = petLevelInfo;
+  window.petLevelBonusOf = petLevelBonusOf;
+  window.petLevelSync = petLevelSync;
+  window.petLevelResetMonthly = petLevelResetMonthly;
 }
 if (typeof globalThis !== 'undefined') {
   globalThis.PET_CONFIG = PET_CONFIG;
@@ -260,4 +374,16 @@ if (typeof globalThis !== 'undefined') {
   globalThis.normalizePetStage = normalizePetStage;
   globalThis.resonanceBonus = resonanceBonus;
   globalThis.monthlyResetPet = monthlyResetPet;
+  globalThis.PET_LEVEL_MAX = PET_LEVEL_MAX;
+  globalThis.PET_LEVEL_EXP_MULT = PET_LEVEL_EXP_MULT;
+  globalThis.PET_LEVEL_BONUS_PCT = PET_LEVEL_BONUS_PCT;
+  globalThis.PET_LEVEL_BONUS_CAP_PCT = PET_LEVEL_BONUS_CAP_PCT;
+  globalThis.petLevelStepExp = petLevelStepExp;
+  globalThis.petLevelCumExp = petLevelCumExp;
+  globalThis.petLevelFromExp = petLevelFromExp;
+  globalThis.petLevelBonusPct = petLevelBonusPct;
+  globalThis.petLevelInfo = petLevelInfo;
+  globalThis.petLevelBonusOf = petLevelBonusOf;
+  globalThis.petLevelSync = petLevelSync;
+  globalThis.petLevelResetMonthly = petLevelResetMonthly;
 }

@@ -142,6 +142,9 @@ var _petRowOpen = null;
 function renderPetPanel() {
   var ov = document.getElementById('panelOverlay')
   if (!ov) return
+  /* v2.17：进面板先补发**今日**宠物经验（力量 kg×5 / 有氧 min×20，按增量水印 → 重复进面板恒发 0），
+     并顺带跑一跑月度清空闸门（同月只清一次）。它不写任何 UI 数字，纯记账。 */
+  if (typeof syncPetLevelExp === 'function') syncPetLevelExp()
   var d = getPetStore()
   /* v2.2 WP-H1：从存档恢复参战宠物选择（刷新/重开后保留） */
   if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
@@ -276,6 +279,9 @@ function renderPetPanel() {
       // v2.1.19 受伤状态：无法参战，需喂养把恢复进度喂到 100
       var inj = (!p.isDead && p.injured) ? '<span style="color:var(--red)">🤕 受伤 ' + Math.round(p.injuryHeal || 0) + '%</span>' : ''
       var petName = (codex.name||p.name)
+      /* v2.17：列表里就看得到等级（成熟期才累计；未成熟 / 旧档一律 Lv0） */
+      var lvInfo = (typeof petLevelInfo === 'function') ? petLevelInfo(p) : null
+      var lvTxt = (lvInfo && p.stage === 'mature') ? ' · 🏅 Lv' + lvInfo.level : ''
       var open = (_petRowOpen === i)
       h += '<div class="pet-card" data-pet-group="'+r.g+'">'
         +'<div class="pet-row">'
@@ -285,7 +291,7 @@ function renderPetPanel() {
         +'<span class="pet-card-name">'+petName+'</span>'
         +'<span class="pet-card-rarity">'+p.rarity+'</span>'
         +'</span>'
-        +'<span class="pet-card-status">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+(dead?' · '+dead:'')+(inj?' · '+inj:'')+'</span>'
+        +'<span class="pet-card-status">'+stageText+' · 饥饿 '+Math.round(p.hunger)+' · 健康 '+Math.round(p.health)+lvTxt+(dead?' · '+dead:'')+(inj?' · '+inj:'')+'</span>'
         +'</span>'
         /* 操作折叠的开关：1 次点开 + 1 次点动作 = 2 次点击（热区 44×44，见 .pet-row-more） */
         +'<button class="speed-btn pet-row-more" type="button" data-pet-more="'+i+'" data-pet-name="'+petName+'"'
@@ -714,6 +720,76 @@ function petCompareResultHtml(petA, petB) {
   return h;
 }
 
+/* ============================================================
+   v2.17：**宠物等级**区块（成熟期经验等级）—— 作者要求「需要额外显示等级获得的属性」。
+   结构（与①基础/②加成/③最终 三段并列追加一段，不改既有编号）：
+     🏅 等级 Lv N / 50 ＋ 经验进度条 ＋ 「等级加成 +N%」
+     逐属性：基础 X → ＋等级 +Y（取值＝floor(基础×等级%)）→ ＋凝聚 +C → ×加成合计 T% → 最终 F
+   ⚠️ **只重组展示**：数值全部来自 pet-store.js 的 `petLevelBonusView()`（等级/经验/加成数值）
+      与 `petBonusLines()`（凝聚 / 加成合计 / 最终）；本文件**不做乘除、不写存档、不写 pet**。
+   ⚠️ 字号/颜色一律走既有设计令牌（`--fs-*` / `--text*` / `--brand-fill` / `--surface-3`），
+      不引入新字号/颜色；本段**没有可点元素**（纯展示），故不涉及 44px 热区。
+   ============================================================ */
+function petLevelHtml(pet, bd) {
+  if (typeof petLevelBonusView !== 'function') return '';
+  var v = petLevelBonusView(pet, (bd && bd.base) ? bd.base : null);
+  var needMax = v.maxed ? 100 : (v.need > 0 ? v.need : 1);
+  var nowVal = v.maxed ? 100 : v.inLevel;
+  var h = '<div class="pet-sec">';
+  h += '<div class="pet-sec-hd">🏅 宠物等级 <span class="pet-sec-sub">（成熟期起累计 · 每级 +' + v.ratePct
+    + '% 基础属性 · 上限 +' + v.capPct + '%＝Lv' + v.maxLevel + ' · 每月清空）</span></div>';
+  h += '<div style="display:flex;align-items:baseline;gap:6px;font-weight:700;margin-bottom:6px">'
+    + '<span style="font-size:var(--fs-xs)" id="petLvTitle">🏅 Lv ' + v.level + '</span>'
+    + '<span style="font-size:var(--fs-xs);color:var(--text3)">/ ' + v.maxLevel + '</span>'
+    + '<span style="flex:1"></span>'
+    + '<span style="font-size:var(--fs-xs);color:var(--text2)">等级加成 +' + v.bonusPct + '%</span>'
+    + '</div>';
+  h += '<div style="height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden"'
+    + ' role="progressbar" aria-labelledby="petLvTitle" aria-valuenow="' + nowVal
+    + '" aria-valuemin="0" aria-valuemax="' + needMax + '">'
+    + '<div style="width:' + (v.maxed ? 100 : v.pct) + '%;height:100%;background:var(--brand-fill);border-radius:4px"></div></div>';
+  h += '<div style="font-size:var(--fs-xs);color:var(--text2);margin-top:6px">'
+    + (v.maxed
+        ? '已满级（+' + v.capPct + '% 封顶，不再累计经验）'
+        : '经验 ' + v.inLevel + ' / ' + v.need + '（累计 ' + v.exp + ' · 升级所需经验＝目标等级×' + v.expMult + '）')
+    + '</div>';
+  /* 逐属性：等级**提供的属性**（基础值层，不进池） */
+  h += '<div class="pet-sec-title">等级提供的属性 <span class="pet-sec-sub">＝ 基础 × ' + v.bonusPct
+    + '%（只加基础值，<b>不吃</b>稀有度／宝珠／共鸣的放大）</span></div>';
+  h += '<div class="pet-grid">';
+  PET_STAT_ROWS.forEach(function (r) {
+    var add = (v.bonus && typeof v.bonus[r.k] === 'number') ? v.bonus[r.k] : 0;
+    h += '<div class="pet-cell"><span class="pet-cell-ico">' + r.ico + '</span><span class="pet-cell-name">' + r.name
+      + '</span><b class="pet-cell-val">' + (add > 0 ? '+' + add : (v.level > 0 ? '+0' : '—')) + '</b></div>';
+  });
+  h += '</div>';
+  /* 链路：基础 → ＋等级 → ＋凝聚 → ×加成合计 → 最终（数值全部来自 petBonusRow / bd） */
+  if (bd && bd.ok && typeof petBonusRow === 'function') {
+    PET_STAT_ROWS.forEach(function (r) {
+      var k = r.k, row = petBonusRow(bd, k);
+      var baseV = (bd.base && bd.base[k]) || 0;
+      var add = (v.bonus && typeof v.bonus[k] === 'number') ? v.bonus[k] : 0;
+      var poolV = (bd.poolFinal && bd.poolFinal[k]) || 0;
+      var finalV = (bd.final && bd.final[k]) || 0;
+      h += '<div class="pet-chain-line">' + r.ico + ' ' + r.name + '：基础 <b>' + baseV + '</b>'
+        + ' → ＋等级 <b>' + (add > 0 ? '+' + add : '+0') + '</b>（' + v.bonusPct + '%）'
+        + (row && row.participates
+            ? ' → ＋凝聚 <b>' + (typeof petSignedValueTxt === 'function' ? petSignedValueTxt(row.cohesion) : row.cohesion) + '</b>'
+              + ' → ×加成合计 <b>' + (typeof petPctTxt === 'function' ? petPctTxt(row.totalPct) : row.totalPct + '%') + '</b>'
+              + ' → 池后 <b>' + poolV + '</b>'
+            : ' → 速度不进池（×100%）')
+        + ' → 最终 <b>' + finalV + '</b>'
+        + '<span class="pet-sec-sub">（等级加成是最后的独立加项：池后值 ' + poolV + ' ＋ 等级 ' + add + ' ＝ ' + finalV + '）</span></div>';
+    });
+    h += '<div class="pet-src-note"><b>等级加成加在哪一层</b>：① 基础 → ＋凝聚 → ×（稀有度 ＋ Σ宝珠 ＋ Σ共鸣）'
+      + ' → <b>＋等级加成</b> → 最终。等级% 的基数固定是「① 基础（图鉴＋炼化＋天赋静态）」，'
+      + '加项 <b>不进百分比池</b>、也不进凝聚的基数 —— 所以每月清空等级时，'
+      + '掉的是这 <b>+' + v.capPct + '%</b> 的基础加项，不会连带放大任何其它来源。</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
 /* 宠物详情（属性/炼化/技能/天赋）
    v2.1.3：补炼化进度条、技能指定升级
    v2.1.4：天赋改为固有展示（按 design-v2.0.md §2.6 回退「槽位解锁」） */
@@ -751,6 +827,8 @@ function renderPetDetail(pet, idx) {
       这套数值口径，v2.16 起凝聚是「固定值加在基础上」、共鸣是「进池百分比」），
      本处**不另算一套**、不写存档、不引入新字号/颜色。 */
   var bd = (typeof petStatBreakdown === 'function') ? petStatBreakdown(pet) : null
+  /* v2.17：🏅 宠物等级（成熟期经验等级）—— 等级 / 经验进度 / **等级提供的属性** */
+  h += petLevelHtml(pet, bd)
   h += petStatSectionsHtml(bd, pet.rarity)
   // v2.2 WP-I A-6：对比宠物（同口径：两只宠都按「此宠上场计算」）
   h += petCompareHtml(pet)
