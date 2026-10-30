@@ -97,7 +97,13 @@ assert('宠物战斗有行动', gb.log.some(l => l.unit !== '你'), 'units=' + g
 const saved = sb.store.get('pets');
 assert('store 已保存', saved && Array.isArray(saved.pets) && saved.pets.length >= 1);
 
-/* ============ 7. v2.2 WP-A3/A4：4 只上限 + 团队凝聚 / 共鸣 ============ */
+/* ============ 7. v2.15：参战上限 4 + 「按全部宠物计算」的凝聚 / 共鸣 ============
+   ⚠️ v2.15 口径变更（作者裁决「改成按所有宠物计算，加成之间用加算」）：
+      · 旧：凝聚/共鸣取「成熟+未受伤+未上场」的那批宠 → 作为**绝对值加进 base**，再被池放大
+      · 新：取**存档里的全部宠物**（不筛阶段/受伤/死亡/参战/本宠）→ 只作为**百分比**
+        与稀有度/宝珠并列进同一加算层（`boostPetForGroup` 四项相加）
+   本节原本编码的是旧口径（teamCohesionBonus / benchBonusSum / base 含加成），已按新口径等价改写：
+   断言目标未放宽 —— 仍是「凝聚 = 全部宠物基础 ×10%」「共鸣按持有总数取档」「基础不被改」。 */
 assert('参战上限常量 PET_BATTLE_MAX = 4', sb.PET_BATTLE_MAX === 4, String(sb.PET_BATTLE_MAX));
 
 // 造够 4 只可参战宠物（第 1 只已存在）
@@ -116,44 +122,112 @@ assert('存档现有 4 只宠物', dd2.pets.length === 4, 'len=' + dd2.pets.leng
 const fieldedPet = dd2.pets[0];
 const benchPets = dd2.pets.slice(1);
 
-// 团队凝聚 = 未上场宠物「基础属性 ×10%」的**固定值**（在稀有度放大之后叠加，不被倍率再放大）
-const coh = sb.teamCohesionBonus(benchPets);
-const expCohAtk = benchPets.reduce(function (s, p) {
-  const u = sb.createPetUnit(p);
-  return s + Math.floor(u.base.atk * 0.1);
-}, 0);
-assert('团队凝聚 = 未上场宠物属性 ×10%（攻 ' + coh.atk + '）', coh.atk === expCohAtk, coh.atk + ' vs ' + expCohAtk);
+/* 「全部宠物」的合计：独立重算一遍（不调被测函数），再与被测的取数口比对 */
+const expSumAtk = dd2.pets.reduce(function (s, p) { return s + (sb.createPetUnit(p).base.atk || 0); }, 0);
+const allSum = sb.petAllPetsBaseSum();
+assert('petAllPetsBaseSum = 存档里**全部**宠物基础之和（攻 ' + allSum.atk + '）',
+  allSum.atk === expSumAtk, allSum.atk + ' vs ' + expSumAtk);
+
+// 凝聚贡献值 = 全部宠物 ×10%（**同一个绝对值**，与谁上场无关）
+const view = sb.petBaseBonusView();
+assert('凝聚贡献值 = 全部宠物 ×10%（攻 ' + view.cohesion.atk + '）',
+  view.cohesion.atk === allSum.atk * 10 / 100, String(view.cohesion.atk));
 
 // 共鸣：按持有总数取档（4 只 → >3 → 5%），此前该函数零消费点
 const resPct = sb.resonanceBonus(dd2.pets.length);
 assert('共鸣按持有总数取档（4 只 → 5%）', resPct === 0.05, String(resPct));
+assert('共鸣档位在视图里换算成整数百分点（5）', view.resonancePct === 5, String(view.resonancePct));
+assert('共鸣贡献值 = 全部宠物 ×5%（攻 ' + view.resonance.atk + '）',
+  view.resonance.atk === allSum.atk * 5 / 100, String(view.resonance.atk));
 
+/* 🔴 新口径的核心断言：每只宠的**凝聚贡献值/共鸣贡献值完全相同**
+   （旧口径下「未上场的那批」随本宠变化，每只宠算出来的 bench 不同） */
+(function () {
+  const uA = sb.createPetUnit(dd2.pets[0]);
+  const uB = sb.createPetUnit(dd2.pets[1]);
+  const pA = sb.petBonusAdditivePool(allSum, uA.base, sb.petUnitRarityPct(uA), uA._orbPct, view.resonancePct);
+  const pB = sb.petBonusAdditivePool(allSum, uB.base, sb.petUnitRarityPct(uB), uB._orbPct, view.resonancePct);
+  assert('两只不同宠的凝聚贡献值完全相同（攻 ' + pA.cohesionValue.atk + ' / ' + pB.cohesionValue.atk + '）',
+    pA.cohesionValue.atk === pB.cohesionValue.atk && pA.cohesionValue.hp === pB.cohesionValue.hp);
+  assert('两只不同宠的共鸣贡献值完全相同',
+    pA.resonanceValue.atk === pB.resonanceValue.atk && pA.resonanceValue.hp === pB.resonanceValue.hp);
+  assert('百分比不同（÷ 各自基础）、绝对值相同',
+    pA.cohesionPct.atk !== pB.cohesionPct.atk || uA.base.atk === uB.base.atk);
+})();
+
+/* 建场：`applyBattlePetBaseBonuses` **不再改 base**（旧口径正是把绝对值加进 base） */
 const u1 = sb.createPetUnitsForBattle([fieldedPet.speciesId], sb.PET_BATTLE_MAX);
-const atkBeforeBonus = u1[0].base.atk;
+const baseBefore = JSON.stringify(u1[0].base);
+const hpBefore = u1[0].hp;
 sb.applyBattlePetBaseBonuses(u1);
-/* dundun 2026-09-29 口径：凝聚与共鸣**同形** —— 都把「未上场宠物的基础属性」按比例
-   加成到参战宠物的**基础属性**上（不是按参战宠物自身属性算百分比）。 */
-const resSum = sb.benchBonusSum(benchPets, resPct);
-const expAdd = coh.atk + resSum.atk;
-assert('参战宠物基础属性吃到「凝聚 + 共鸣」（+' + (u1[0].base.atk - atkBeforeBonus) + '）',
-  u1[0].base.atk - atkBeforeBonus === expAdd, (u1[0].base.atk - atkBeforeBonus) + ' vs ' + expAdd);
-assert('共鸣取的是未上场宠物属性（> 0）', resSum.atk > 0, 'res=' + resSum.atk);
-assert('加成后血量同步', u1[0].hp === u1[0].base.hp);
+assert('applyBattlePetBaseBonuses 不改 base（新口径：只挂百分比）',
+  JSON.stringify(u1[0].base) === baseBefore, baseBefore + ' → ' + JSON.stringify(u1[0].base));
+assert('applyBattlePetBaseBonuses 不改 hp', u1[0].hp === hpBefore, u1[0].hp + ' vs ' + hpBefore);
+const bp = sb.petBenchPctOf(u1[0]);
+assert('applyBattlePetBaseBonuses 把逐属性「凝聚% / 共鸣%」挂到单位上',
+  !!bp && !!bp.cohesion && !!bp.resonance &&
+  bp.cohesion.atk > 0 && bp.resonance.atk > 0, JSON.stringify(bp));
+const uPool = sb.petBonusAdditivePool(allSum, u1[0].base, sb.petUnitRarityPct(u1[0]), u1[0]._orbPct, view.resonancePct);
+assert('挂上去的百分比就是纯函数的产物（攻 ' + bp.cohesion.atk.toFixed(2) + '% / ' + bp.resonance.atk.toFixed(2) + '%）',
+  bp.cohesion.atk === uPool.cohesionPct.atk && bp.resonance.atk === uPool.resonancePct.atk);
 
-/* 顺序守卫：基础值加成必须排在「稀有度放大（百分比池）」之前 —— 顺序反了两类加成的性质就变了 */
+/* 端到端：boostPetForGroup 收下这层百分比后，最终值 = floor(base × 四项之和 ÷ 100)
+   ⚠️ 本套沙箱**不加载 group-levels.js**（保持 M4-5 的原始加载面）→ 池出口的端到端校验
+      由 `scripts/test-pet-bonus-additive.js`（完整沙箱）覆盖；这里只在可用时顺带复核。 */
+if (typeof sb.boostPetForGroup === 'function' && typeof sb.PET_GROUP_SCALE !== 'undefined') {
+  const sq = sb.createPetUnit(fieldedPet);
+  const rawBase = Object.assign({}, sq.base);
+  sb.applyBattlePetBaseBonuses([sq]);
+  const pct = sb.petBenchPctOf(sq);
+  sb.boostPetForGroup(sq);
+  const tags = (sq.tags || [])[1] || 'R';
+  const rarity = sb.PET_GROUP_SCALE[tags] || sb.PET_GROUP_SCALE.R;
+  const orb = sq._orbPct || {};
+  const bad = ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].filter(function (k) {
+    const want = Math.max(1, Math.floor(rawBase[k] * (rarity + (orb[k] || 0)
+      + pct.cohesion[k] + pct.resonance[k]) / 100));
+    return sq.base[k] !== want;
+  });
+  assert('池出口 = floor(基础 × (稀有度＋Σ宝珠＋凝聚％＋共鸣％) ÷ 100) 逐属性成立',
+    bad.length === 0, bad.map(k => k + ':' + sq.base[k]).join(','));
+  const plain = sb.boostPetForGroup(sb.createPetUnit(fieldedPet));
+  assert('带百分比的池 > 不带百分比的池（凝聚/共鸣真的进了同一层）',
+    sq.base.atk > plain.base.atk, sq.base.atk + ' vs ' + plain.base.atk);
+} else {
+  console.log(' · 本沙箱无 group-levels.js → 池出口端到端校验交给 test-pet-bonus-additive.js');
+}
+
+/* 顺序守卫：百分比挂载必须排在「稀有度放大（百分比池）」之前 —— 顺序反了那层百分比就没人加 */
 (function () {
   const psSrc = fs.readFileSync(path.join(__dirname, '..', 'page', 'pet-store.js'), 'utf8');
   const iBonus = psSrc.indexOf('applyBattlePetBaseBonuses(units)');
   const iBoost = psSrc.indexOf('boostPetForGroup(u)');
-  assert('基础值加成排在稀有度放大之前', iBonus >= 0 && iBoost > iBonus, iBonus + ' vs ' + iBoost);
+  assert('百分比挂载排在池出口之前', iBonus >= 0 && iBoost > iBonus, iBonus + ' vs ' + iBoost);
 })();
 
-// 受伤 / 未成熟的替补不计入凝聚
-const injuredBench = benchPets[0];
-injuredBench.injured = true;
-const cohInjured = sb.teamCohesionBonus(sb.getPetStore().pets.slice(1).filter(sb.canPetBattle));
-assert('受伤替补不贡献凝聚（' + cohInjured.atk + ' < ' + coh.atk + '）', cohInjured.atk < coh.atk);
-injuredBench.injured = false;
+/* 「全部宠物」= 不筛：受伤 / 阵亡 / 蛋期 也照样计入合计 */
+(function () {
+  const before = sb.petAllPetsBaseSum().atk;
+  const injuredBench = benchPets[0];
+  injuredBench.injured = true;
+  const afterInjured = sb.petAllPetsBaseSum().atk;
+  injuredBench.injured = false;
+  assert('受伤宠物仍计入「全部宠物」（' + before + ' → ' + afterInjured + '）', afterInjured === before);
+
+  const dead = benchPets[1];
+  const wasDead = dead.isDead;
+  dead.isDead = true;
+  const afterDead = sb.petAllPetsBaseSum().atk;
+  dead.isDead = wasDead;
+  assert('阵亡宠物仍计入「全部宠物」', afterDead === before);
+
+  const egg = benchPets[2];
+  const wasStage = egg.stage;
+  egg.stage = 'egg';
+  const afterEgg = sb.petAllPetsBaseSum().atk;
+  egg.stage = wasStage;
+  assert('蛋期宠物仍计入「全部宠物」', afterEgg === before);
+})();
 
 // 上限 4：给 5 个 id 也只建 4 个
 const manyIds = dd2.pets.map(function (p) { return p.speciesId; }).concat([fieldedPet.speciesId]);

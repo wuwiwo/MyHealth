@@ -193,14 +193,19 @@ const u0 = sb5.createPetUnit(subj);
 assert('基础含炼化加成（图鉴 ' + sb5.getPetCodex('icecrystal').base.atk + ' + 炼化 12 = ' + bd.base.atk + '）',
   bd.base.atk === sb5.getPetCodex('icecrystal').base.atk + 12, String(bd.base.atk));
 
-// ② 加成 = 团队凝聚 + 共鸣（同源函数）
-const live = sb5.getPetStore().pets.filter(function (p) { return sb5.canPetBattle(p) && p.speciesId !== subj.speciesId; });
-assert('后备名单排除受伤/阵亡（2 只）', bd.benchCount === 2 && live.length === 2, bd.benchCount + ' vs ' + live.length);
-const coh = sb5.teamCohesionBonus(live);
-const resS = sb5.benchBonusSum(live, sb5.resonanceBonus(sb5.getPetStore().pets.length));
-assert('凝聚项与 teamCohesionBonus 同源', bd.cohesion.atk === coh.atk && bd.cohesion.hp === coh.hp, JSON.stringify(bd.cohesion));
-assert('共鸣项与 benchBonusSum 同源', bd.resonance.atk === resS.atk, JSON.stringify(bd.resonance));
+// ② 加成 = 凝聚% ＋ 共鸣%（v2.15：取**全部宠物**的基础之和，不再排除受伤/阵亡/本宠）
+const live = sb5.getPetStore().pets;                       // 全部 5 只（含受伤 / 阵亡 / 本宠）
+assert('「全部宠物」= 存档里的 5 只（受伤 / 阵亡也计入）', bd.allCount === 5 && live.length === 5,
+  bd.allCount + ' vs ' + live.length);
+const view5 = sb5.petBaseBonusView();
+const coh = view5.cohesion;
+const resS = view5.resonance;
+assert('凝聚贡献值 = 全部宠物基础 ×10%', bd.cohesion.atk === coh.atk && bd.cohesion.hp === coh.hp,
+  JSON.stringify(bd.cohesion));
+assert('共鸣贡献值 = 全部宠物基础 ×档位', bd.resonance.atk === resS.atk, JSON.stringify(bd.resonance));
 assert('共鸣档位按持有总数（5 只 → 5%）', bd.resonanceRate === 0.05, String(bd.resonanceRate));
+assert('逐属性百分比 = 贡献值 ÷ 本宠基础 × 100（攻 ' + bd.cohesionPct.atk.toFixed(2) + '%）',
+  Math.abs(bd.cohesionPct.atk - bd.cohesion.atk * 100 / bd.base.atk) < 1e-9);
 
 // ③ 最终 = boostPetForGroup(applyBattlePetBaseBonuses([createPetUnit])) —— 数值口径单源守卫
 const pipe = sb5.createPetUnit(subj);
@@ -210,14 +215,20 @@ sb5.boostPetForGroup(pipe);
   assert('最终[' + k + '] 与实战管道逐值一致', bd.final[k] === (pipe.base[k] || 0), bd.final[k] + ' vs ' + pipe.base[k]);
 });
 
-// ④ 百分比池 = 稀有度倍率 + Σ宝珠%；速度不参与
+// ④ 加成合计 = 稀有度% ＋ Σ宝珠% ＋ 凝聚% ＋ 共鸣%（四项加算，同一层）；速度不参与
 assert('稀有度百分点取自 PET_GROUP_SCALE（SSR=1500）', bd.rarityPct === sb5.PET_GROUP_SCALE.SSR && bd.rarityPct === 1500, String(bd.rarityPct));
 assert('宝珠百分点进池（攻 +' + bd.orbPct.atk + '%）', bd.orbPct.atk === sb5.orbPct(orb) && bd.orbPct.atk > 0);
-assert('攻池 = 稀有度 + 宝珠', bd.poolPct.atk === 1500 + bd.orbPct.atk, String(bd.poolPct.atk));
+assert('子集池 = 稀有度 + 宝珠', bd.poolPct.atk === 1500 + bd.orbPct.atk, String(bd.poolPct.atk));
 assert('未装宝珠的属性只吃稀有度', bd.poolPct.hp === 1500, String(bd.poolPct.hp));
-assert('速度不参与百分比（池 0，最终 = 基础+加成）', bd.poolPct.spd === 0 && bd.final.spd === bd.bench.spd, bd.final.spd + ' vs ' + bd.bench.spd);
-assert('最终 = floor((基础+加成) × 池/100)（攻）',
-  bd.final.atk === Math.floor(bd.bench.atk * bd.poolPct.atk / 100), bd.final.atk + ' vs ' + Math.floor(bd.bench.atk * bd.poolPct.atk / 100));
+assert('加成合计 = 稀有度 ＋ 宝珠 ＋ 凝聚% ＋ 共鸣%（四项相加）',
+  Math.abs(bd.totalPct.atk - (1500 + bd.orbPct.atk + bd.cohesionPct.atk + bd.resonancePct.atk)) < 1e-9,
+  bd.totalPct.atk + '');
+assert('速度不参与百分比（池 0、加成合计 = 100、最终 = 基础）',
+  bd.poolPct.spd === 0 && bd.totalPct.spd === 100 && bd.final.spd === bd.base.spd,
+  bd.final.spd + ' vs ' + bd.base.spd);
+assert('最终 = floor(基础 × 加成合计% ÷ 100)（攻）',
+  bd.final.atk === Math.max(1, Math.floor(bd.base.atk * bd.totalPct.atk / 100)),
+  bd.final.atk + ' vs ' + Math.max(1, Math.floor(bd.base.atk * bd.totalPct.atk / 100)));
 
 // ⑤ 只读：拆解不得改动存档（含被拆解的宠物本体）
 const snap = JSON.stringify(sb5.getPetStore());

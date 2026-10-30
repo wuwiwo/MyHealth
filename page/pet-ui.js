@@ -456,13 +456,16 @@ function renderPetPanel() {
      「修改宠物-详情页面，属性部分将基础属性与加成分开，最后再显示最终属性，
        层次要分明，现在太乱了。加成用：×N% 显示，可以展开加成来源，属性同理；
        增加对比宠物的功能。」
-   三段固定结构：① 基础属性 → ② 加成（逐属性两行：倍率池 ×N% ／ 凝聚·共鸣 基数加值）→ ③ 最终属性。
-   ⚠️ **只重组展示**：所有数字来自 pet-store.js 的 `petStatBreakdown()`（v2.14.4 起 ② 的两行
-      统一走 `petBonusLines()`，它同样只读 bd 的既有字段；本文件**不重算**任何数值口径、
-      不引用稀有度倍率常量、不写存档）；`×N%` 只是把 bd 的既有字段换算成倍数文本
-      （换算见 petMultTxt / petPoolMultPct / petOrbMultPct，全在 pet-store.js）。
-   ⚠️ 面板前提「按此宠上场计算」**保留并讲清楚**：团队凝聚 / 共鸣只作用于参战宠，
-      故 ② 的副标题、③ 的副标题、对比区口径行都写明这一前提。
+   三段固定结构：① 基础属性 → ② 加成（**一个加成合计** ×N% ＋ 可展开的四项明细）→ ③ 最终属性。
+   v2.15（作者裁决「按所有宠物计算、加成之间用加算」）后 ② 只剩**一个百分比**：
+       加成合计% ＝ 稀有度% ＋ Σ宝珠% ＋ 凝聚% ＋ 共鸣%   （四项同一层相加）
+   作者上一版看不懂的那个数（UR 生命 ×2846% / SSR ×8505%）是「三层揉成一个乘积」的产物，
+   新口径下不再出现 —— ② 显示的就是实战用的那一个池。
+   ⚠️ **只重组展示**：所有数字来自 pet-store.js 的 `petStatBreakdown()`；② 的行级摘要走
+      `petBonusLines()`，百分比文本走 `petPctTxt()` —— 本文件**不重算**任何数值口径
+      （不做乘除、不引用稀有度倍率常量、不写存档）。
+   ⚠️ 面板前提仍写明「按此宠上场计算」；但 v2.15 起凝结/共鸣的**贡献值**与谁上场无关
+      （全部宠物之和），所以"面板比实战高 29%"那类口径差已经不存在。
    ============================================================ */
 var PET_STAT_ROWS = [
   { ico:'❤️', name:'生命', k:'hp' },
@@ -484,60 +487,83 @@ var _petSrcOpen = false;      // ②「加成来源」
 var _petStatOpen = null;      // ③ 当前展开的属性 k（null = 全收起）
 var _petCompareSel = null;    // 对比对象 speciesId（null = 未对比）
 
-/* ② 加成来源：每一项都写成 ×N% */
+/* ② 加成明细（**可展开处**）：先按「四项来源」总览，再逐属性列四项
+   v2.15：四项**同一层相加**，所以这里用「＋」串起来、末尾给「＝ 加成合计」。
+   所有文本都来自 `petBonusLines()` ＋ `petPctTxt()`（换算全在 pet-store.js），
+   本函数只拼字符串：不做乘除、不调 Math.floor、不读 bd.base / bd.bench。 */
+function petSrcList(rows, pick) {
+  var out = [];
+  rows.forEach(function (r) {
+    if (!r.participates) return;
+    out.push(petStatMeta(r.key).name + ' ' + pick(r));
+  });
+  return out.length ? out.join(' · ') : '无（×100%）';
+}
 function petBonusSrcHtml(bd) {
+  var dig = (typeof petBonusLines === 'function') ? petBonusLines(bd) : null;
+  if (!dig || !dig.ok || !dig.rows.length) return '<div class="pet-src-note">（加成明细暂不可用）</div>';
   var h = '';
-  h += '<div class="pet-src-line"><span class="pet-src-tag">稀有度倍率</span><span>' + petMultTxt(bd.rarityPct || 0) + '（全属性）</span></div>';
-  var orb = [];
-  PET_STAT_ROWS.forEach(function (r) {
-    if (r.k === 'spd') return;
-    var p = petOrbMultPct(bd, r.k);
-    if (p != null && p !== 100) orb.push(r.name + ' ' + petMultTxt(p));
-  });
+  /* 总览三条：稀有度 / 宝珠 / 凝聚＋共鸣（都写成 ×N%，与既有口径一致） */
+  h += '<div class="pet-src-line"><span class="pet-src-tag">稀有度倍率</span><span>'
+    + petMultTxt(petPctInt(dig.rows[0].rarityPct)) + '（全属性 · 四项之一）</span></div>';
   h += '<div class="pet-src-line"><span class="pet-src-tag">宝珠</span><span>'
-    + (orb.length ? orb.join(' · ') + '（与稀有度<b>相加</b>进倍率池）' : '未装配（×100%）')
-    + '</span></div>';
-  var bench = [];
-  PET_STAT_ROWS.forEach(function (r) {
-    var p = petBenchMultPct(bd, r.k);
-    if (p != null && p !== 100) bench.push(r.name + ' ' + petMultTxt(p));
-  });
+    + petSrcList(dig.rows, function (r) { return petMultTxt(petPctInt(100 + r.orbPct)); })
+    + '（未装配 = ×100%；与稀有度<b>相加</b>进同一层）</span></div>';
   h += '<div class="pet-src-line"><span class="pet-src-tag">凝聚＋共鸣</span><span>'
-    + (bench.length
-        ? bench.join(' · ') + '（未上场 ' + bd.benchCount + ' 只：凝聚 10% ＋ 共鸣 ' + Math.round((bd.resonanceRate || 0) * 100) + '%）'
-        : '无后备宠（×100%）')
-    + '</span></div>';
-  h += '<div class="pet-src-note">倍率池 ＝ 稀有度 ＋ Σ宝珠%（两项<b>相加</b>，不是相乘）；'
-    + '凝聚/共鸣是<b>直接加属性值</b>，先并入基础、再整块乘倍率池。</div>';
+    + '凝聚 ' + petSrcList(dig.rows, function (r) { return petPctTxt(r.cohesionPct); })
+    + '　·　共鸣 ' + petSrcList(dig.rows, function (r) { return petPctTxt(r.resonancePct); })
+    + '（各 ' + dig.cohesionRatePct + '% / ' + dig.resonanceRatePct + '% 的贡献值折算；全部 '
+    + dig.allCount + ' 只都计入，含未上场 ' + dig.notFieldedCount + ' 只）</span></div>';
+  /* 逐属性明细：四项相加 ＋ 合计 */
+  dig.rows.forEach(function (r) {
+    var m = petStatMeta(r.key);
+    if (!r.participates) {
+      h += '<div class="pet-src-line"><span class="pet-src-tag">' + m.ico + ' ' + m.name + '</span><span>'
+        + '不参与百分比池 <span class="pet-sec-sub">（速度只吃基础与等级，加成按 ×100% 计）</span></span></div>';
+      return;
+    }
+    h += '<div class="pet-src-line"><span class="pet-src-tag">' + m.ico + ' ' + m.name + '</span><span>'
+      + '稀有度 <b>' + petPctTxt(r.rarityPct) + '</b> ＋ Σ宝珠 <b>' + petPctTxt(r.orbPct) + '</b>'
+      + ' ＋ 凝聚 <b>' + petPctTxt(r.cohesionPct) + '</b> ＋ 共鸣 <b>' + petPctTxt(r.resonancePct) + '</b>'
+      + ' ＝ 加成合计 <b>×' + petPctTxt(r.totalPct) + '</b></span></div>';
+  });
+  h += '<div class="pet-src-note">四项<b>同一层相加</b>（不是相乘）。'
+    + '凝聚/共鸣的<b>贡献值</b>＝ 全部 ' + dig.allCount + ' 只宠该属性基础之和 ×' + dig.cohesionRatePct
+    + '% ／ ×' + dig.resonanceRatePct + '%，同一存档下<b>每只宠是同一个绝对值</b>；'
+    + '折算成「÷ 本宠基础」的百分比后，基础小的宠百分比大、基础大的百分比小 —— 绝对值仍然相同。</div>';
   return h;
 }
 
-/* ③ 单属性链路：基础 → 各来源 → 最终 */
+/* ③ 单属性链路：基础 → 最终（含 ×倍率池 与四项明细） */
 function petStatChainHtml(bd, k) {
   var m = petStatMeta(k);
-  var ch = bd.cohesion[k] || 0, rr = bd.resonance[k] || 0;
+  var row = (typeof petBonusRow === 'function') ? petBonusRow(bd, k) : null;
   var h = '<div class="pet-chain-hd">' + m.ico + ' ' + m.name + '</div>';
-  h += '<div class="pet-chain-line">基础 <b>' + (bd.base[k] || 0) + '</b>';
-  if (ch) h += ' ＋凝聚 <b>' + ch + '</b>';
-  if (rr) h += ' ＋共鸣 <b>' + rr + '</b>';
-  if (ch || rr) h += ' ＝ 上场 <b>' + (bd.bench[k] || 0) + '</b>';
-  h += ' → 最终 <b>' + (bd.final[k] || 0) + '</b>';
-  h += '<span class="pet-sec-sub"> （×倍率池 ' + petMultTxt(petPoolMultPct(bd, k)) + '，含稀有度' + (k === 'spd' ? '不参与' : '与宝珠相加') + '）</span>';
-  h += '</div>';
+  if (!row || !row.participates) {
+    h += '<div class="pet-chain-line">基础 <b>' + (bd.base[k] || 0) + '</b> → 最终 <b>' + (bd.final[k] || 0) + '</b>'
+      + '<span class="pet-sec-sub"> （速度不参与百分比池 · ×倍率池 ×100%）</span></div>';
+    return h;
+  }
+  h += '<div class="pet-chain-line">基础 <b>' + (bd.base[k] || 0) + '</b> → 最终 <b>' + (bd.final[k] || 0) + '</b>'
+    + '<span class="pet-sec-sub"> （×倍率池 ' + petMultTxt(petStatMultPct(bd, k)) + ' ＝ 稀有度＋Σ宝珠＋凝聚＋共鸣）</span></div>';
+  h += '<div class="pet-chain-line"><span class="pet-sec-sub">稀有度 ' + petPctTxt(row.rarityPct)
+    + ' ＋ Σ宝珠 ' + petPctTxt(row.orbPct) + ' ＋ 凝聚 ' + petPctTxt(row.cohesionPct)
+    + ' ＋ 共鸣 ' + petPctTxt(row.resonancePct) + ' ＝ 加成合计 ×' + petPctTxt(row.totalPct)
+    + '，向下取整</span></div>';
   return h;
 }
 
-/* ② 加成：逐属性「两行」（v2.14.4 —— 作者实测反馈「一个合成倍数看不懂」）
-     稀有度＋宝珠池    ×1600%  （UR 1600% ＋ Σ宝珠 0%）
-     凝聚/共鸣（基数）  +820     （凝聚 +410 ＋ 共鸣 +410 ＝ 基数的 80%）
-   「未上场 13 只 ×10% ＋ 共鸣 10%」这种**每只都一样**的话只写在下面那句说明里，
-   不逐行重复（省 5 行高度，也更像一张表而不是一堵字）。
-   为什么拆：原来那个 `×N%` 是「基础 → 最终」的总倍数，把三件事揉成一个数 ——
-   稀有度倍率 / Σ宝珠% / 凝聚＋共鸣把基数抬高后的放大。同样一层凝聚/共鸣，
-   UR 基数大 → 比值低；SSR 基数小 → 比值爆表，所以作者看着「不对」但其实没错。
-   现在两行各说一件事，③ 最终值一行未动（纯展示改造，数值零变化）。
-   ⚠️ 所有数字来自 pet-store.js 的 `petBonusLines()`（唯一来源），
-      本文件**只拼文本、不重算任何口径**（不读 bd.base / bd.bench 做乘除）。 */
+/* ② 加成：**一个加成合计**（v2.15 —— 作者裁决「加成全进同一加算层」）
+      ❤️ 生命  ×1700%
+      💨 速度  ×100%   （不参与）
+   为什么会变：旧版这里曾是「稀有度＋宝珠池 ×N% ／ 凝聚·共鸣 基数加值」两行，
+   那个合成倍数把三件事乘在一起（稀有度 × 宝珠 × 基数被垫高），作者看着「不对」。
+   新口径下 ② 与实战用的是同一个百分比池（四项加算），所以只显示这一个数；
+   四项明细在下方的可展开区（`petBonusSrcHtml`）。
+   ⚠️ 这里的 ×N% 四舍五入到整数（沿用全站 ×N% 的写法）；精确值在展开明细里，
+      **③ 的最终值永远由精确百分比算出**，不受显示取整影响。
+   ⚠️ 所有数字来自 pet-store.js 的 `petBonusLines()` / `petPctTxt()`（唯一来源），
+      本文件**只拼文本、不重算任何口径**（不做乘除、不读 bd.base / bd.bench 自算）。 */
 function petSignedTxt(n) {
   var v = (typeof n === 'number' && isFinite(n)) ? n : 0;
   return (v > 0) ? '+' + v : ((v < 0) ? '−' + Math.abs(v) : '+0');
@@ -545,30 +571,17 @@ function petSignedTxt(n) {
 function petBonusLinesHtml(bd, rarity) {
   var dig = (typeof petBonusLines === 'function') ? petBonusLines(bd, rarity) : null;
   if (!dig || !dig.ok || !dig.rows.length) return '<div class="pet-sec-empty">（属性拆解暂不可用）</div>';
-  var cohPct = dig.cohesionPct, resPct = dig.resonancePct;      // 已由 pet-store 换算成整数百分比
-  var h = '';
+  var h = '<div class="pet-grid">';
   dig.rows.forEach(function (r) {
     var m = petStatMeta(r.key);
-    /* 行 1 的注：倍率池 = 稀有度 ＋ Σ宝珠（两项相加）；速度明确写「不参与」 */
-    var poolNote = r.participates
-      ? ((r.rarity ? r.rarity + ' ' : '稀有度 ') + r.rarityPct + '% ＋ Σ宝珠 ' + r.orbPct + '%')
-      : '速度不参与百分比池 · 固定 ×100%';
-    /* 行 2 的注：这一层加值来自哪两只手（凝聚 / 共鸣）＋ 把基数抬了多少；速度明确写「不吃」 */
-    var baseNote = r.participates
-      ? ('凝聚 ' + petSignedTxt(r.cohesion) + ' ＋ 共鸣 ' + petSignedTxt(r.resonance)
-         + (r.baseAddPct == null ? '' : ' ＝ 基数的 ' + r.baseAddPct + '%'))
-      : '速度不吃凝聚/共鸣 · 固定 +0';
-    h += '<div class="pet-src-line"><span class="pet-src-tag">' + m.ico + ' ' + m.name + '</span><span>'
-      + '稀有度＋宝珠池 <b class="pet-cell-mult">' + petMultTxt(r.poolMultPct) + '</b>'
-      + ' <span class="pet-sec-sub">（' + poolNote + '）</span></span></div>';
-    h += '<div class="pet-src-line"><span class="pet-src-tag"></span><span>'
-      + '凝聚/共鸣（基数） <b>' + petSignedTxt(r.baseAdd) + '</b>'
-      + ' <span class="pet-sec-sub">（' + baseNote + '）</span></span></div>';
+    h += '<div class="pet-cell"><span class="pet-cell-ico">' + m.ico + '</span><span class="pet-cell-name">' + m.name
+      + '</span><b class="pet-cell-mult">' + petMultTxt(r.participates ? petPctInt(r.totalPct) : 100) + '</b></div>';
   });
-  h += '<div class="pet-src-note">最终 ＝（基础 ＋ 凝聚/共鸣）× 倍率池%，向下取整（不低于 1）；'
-    + '倍率池 ＝ 稀有度 ＋ Σ宝珠%（两项<b>相加</b>，不是相乘）。'
-    + '凝聚/共鸣 ＝ 未上场 ' + dig.benchCount + ' 只 ×' + cohPct + '% ＋ 共鸣 ' + resPct + '%，'
-    + '直接加在基数上（不乘倍率池）。</div>';
+  h += '</div>';
+  h += '<div class="pet-src-note">加成合计 ＝ 稀有度 ＋ Σ宝珠 ＋ 凝聚 ＋ 共鸣（四项<b>加算同一层</b>）；'
+    + '最终 ＝ 基础 × 加成合计%，向下取整。速度不参与（固定 ×100%）。'
+    + '凝聚/共鸣按<b>全部 ' + dig.allCount + ' 只宠</b>的属性之和计算（不排除本宠/参战/受伤/阵亡）。'
+    + '大字四舍五入到整数 %，精确值见下方明细。</div>';
   return h;
 }
 
@@ -587,9 +600,9 @@ function petStatSectionsHtml(bd, rarity) {
       + '</span><b class="pet-cell-val">' + (bd.base[r.k] || 0) + '</b></div>';
   });
   h += '</div>';
-  h += '<div class="pet-sec-title">② 加成 <span class="pet-sec-sub">属性加成（稀有度＋宝珠池 统一为 ×N%）· 凝聚/共鸣只作用于参战宠</span></div>';
+  h += '<div class="pet-sec-title">② 加成 <span class="pet-sec-sub">加成合计统一为 ×N% ＝ 稀有度＋Σ宝珠＋凝聚＋共鸣（四项同一层相加 · 按全部宠物计算）· 凝聚/共鸣只作用于参战宠</span></div>';
   h += petBonusLinesHtml(bd, rarity);
-  var srcLabel = '加成来源（未上场 ' + bd.benchCount + ' 只）';
+  var srcLabel = '加成明细（稀有度 / Σ宝珠 / 凝聚 / 共鸣 · 全部 ' + bd.allCount + ' 只）';
   h += '<button class="pet-src-toggle" id="petBonusSrcBtn" aria-expanded="' + (_petSrcOpen ? 'true' : 'false') + '" aria-controls="petBonusSrc" data-label="' + srcLabel + '">'
     + (_petSrcOpen ? '▾ ' : '▸ ') + srcLabel + '</button>';
   h += '<div class="pet-src" id="petBonusSrc"' + (_petSrcOpen ? '' : ' hidden') + '>' + petBonusSrcHtml(bd) + '</div>';
@@ -647,7 +660,7 @@ function petCompareResultHtml(petA, petB) {
   var nb = (getPetCodex(petB.speciesId) || {}).name || petB.name;
   var cmp = (typeof petCompareFinal === 'function') ? petCompareFinal(petA, petB) : null;
   var h = '<div class="pet-cmp-res">';
-  h += '<div class="pet-cmp-note">口径：两只宠<b>都按「此宠上场计算」</b>（含凝聚/共鸣 ＋ 稀有度/宝珠倍率池）'
+  h += '<div class="pet-cmp-note">口径：两只宠<b>都按「此宠上场计算」</b>（加成合计 ＝ 稀有度＋Σ宝珠＋凝聚＋共鸣% 同一层）'
     + '—— 不是「本宠的上场值比对比宠的基础值」。</div>';
   if (!cmp || !cmp.ok) { h += '<div class="pet-sec-empty">（对比暂不可用）</div></div>'; return h; }
   h += '<table class="pet-cmp-table"><thead><tr><th scope="col">属性</th><th scope="col">本宠·' + na
@@ -696,10 +709,10 @@ function renderPetDetail(pet, idx) {
     +'<div style="height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:var(--brand-fill);border-radius:4px;transition:width .3s"></div></div>'
     +'<div style="margin-top:6px;color:var(--text3)">成功率：普通石 '+(rateN ? rateN+'%' : '不可用（Lv≥50）')+'　·　高级石 '+rateH+'%</div>'
     +'</div>'
-  /* v2.2 WP-I A-6：属性区重组 —— ① 基础属性 → ② 加成（统一 ×N%）→ ③ 最终属性。
+  /* v2.2 WP-I A-6：属性区重组 —— ① 基础属性 → ② 加成（加成合计 ×N%）→ ③ 最终属性。
      ⚠️ **只重组展示与表达**：所有数字来自 pet-store.js 的 `petStatBreakdown()`
-     （它又直接复用 createPetUnit / benchBonusSum / resonanceBonus / boostPetForGroup
-     这套数值口径），本处**不另算一套**、不写存档、不引入新字号/颜色。 */
+     （它又直接复用 createPetUnit / petAllPetsBaseSum / petBonusAdditivePool / boostPetForGroup
+     这套数值口径，v2.15 起四项加成同一层加算），本处**不另算一套**、不写存档、不引入新字号/颜色。 */
   var bd = (typeof petStatBreakdown === 'function') ? petStatBreakdown(pet) : null
   h += petStatSectionsHtml(bd, pet.rarity)
   // v2.2 WP-I A-6：对比宠物（同口径：两只宠都按「此宠上场计算」）

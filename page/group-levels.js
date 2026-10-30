@@ -80,20 +80,26 @@ function inheritGroupStats(stats, ratio) {
   return out;
 }
 /* 宠物放大到与玩家同量级（就地改 base，仅在敌群参战时调用）
-   **v2.2 WP-A1：公式改为「基础属性 × 百分比池」**，逐属性独立、速度不参与：
-     百分比池 = 稀有度倍率（1200/1400/1500/1600）+ Σ宝珠%（宠物已装配宝珠的百分点之和）
-   ⚠️ 宝珠自 v2.2 起是**百分比**（不是扁平加点），所以 v2.1.17 那个
-      「宝珠加成不参与放大、原样保留」的历史特例**已删除** ——
-      百分比进池后天然与稀有度倍率同尺度，不会再被放大成天文数字。
-      （该特例原本靠一个 orbBonus 增量字段实现，本文件已不再出现该字段。） */
+   **v2.15（作者裁决）：百分比池 = 稀有度% ＋ Σ宝珠% ＋ 凝聚% ＋ 共鸣%（四项【加算】，同一层）**
+   · 稀有度：`PET_GROUP_SCALE[tags[1]]`（1200/1400/1500/1600）
+   · Σ宝珠%：`unit._orbPct`（v2.2 起是百分比，不是扁平加点）
+   · 凝聚% / 共鸣%：由调用方（pet-store.js 的 `petAttachBenchPct` → `petBonusAdditivePool`）
+     逐属性挂到 `unit._benchPct`，本函数**只负责相加与取整** —— 「池的唯一出口」不变。
+     未挂载时（老调用点 / 单测直接造单位）按 0% 处理，行为与 v2.14 一致。
+   速度不参与（逐属性独立；`spd` 不在列表里，天然不被乘）。
+   ⚠️ 这里刻意保持「四项在这个顺序相加」：`petBonusAdditivePool()` 用的是同一顺序，
+      两处浮点结果逐位相同 → 「面板 = 实战」不是近似相等，而是同一组 double。 */
 function boostPetForGroup(unit) {
   if (!unit || !unit.base) return unit;
   var tag = ((unit.tags || [])[1] || 'R');
   var rarityPct = PET_GROUP_SCALE[tag] || PET_GROUP_SCALE.R;
   var orbMap = unit._orbPct || {};
+  var bp = (typeof petBenchPctOf === 'function') ? petBenchPctOf(unit) : null;
+  var cohMap = (bp && bp.cohesion) || {};
+  var resMap = (bp && bp.resonance) || {};
   ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].forEach(function (s) {
     if (unit.base[s] == null) return;
-    var poolPct = rarityPct + (orbMap[s] || 0);
+    var poolPct = rarityPct + (orbMap[s] || 0) + (cohMap[s] || 0) + (resMap[s] || 0);
     unit.base[s] = Math.max(1, Math.floor(unit.base[s] * poolPct / 100));
   });
   // 宠物同样给魂防下限，否则被敌人魂攻打全额
