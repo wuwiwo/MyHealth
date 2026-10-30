@@ -80,27 +80,32 @@ function inheritGroupStats(stats, ratio) {
   return out;
 }
 /* 宠物放大到与玩家同量级（就地改 base，仅在敌群参战时调用）
-   **v2.15（作者裁决）：百分比池 = 稀有度% ＋ Σ宝珠% ＋ 凝聚% ＋ 共鸣%（四项【加算】，同一层）**
+   **v2.16（作者裁决）：(基础 ＋ S凝聚) × (稀有度% ＋ Σ宝珠% ＋ S共鸣%) ÷ 100**
    · 稀有度：`PET_GROUP_SCALE[tags[1]]`（1200/1400/1500/1600）
    · Σ宝珠%：`unit._orbPct`（v2.2 起是百分比，不是扁平加点）
-   · 凝聚% / 共鸣%：由调用方（pet-store.js 的 `petAttachBenchPct` → `petBonusAdditivePool`）
-     逐属性挂到 `unit._benchPct`，本函数**只负责相加与取整** —— 「池的唯一出口」不变。
-     未挂载时（老调用点 / 单测直接造单位）按 0% 处理，行为与 v2.14 一致。
-   速度不参与（逐属性独立；`spd` 不在列表里，天然不被乘）。
-   ⚠️ 这里刻意保持「四项在这个顺序相加」：`petBonusAdditivePool()` 用的是同一顺序，
-      两处浮点结果逐位相同 → 「面板 = 实战」不是近似相等，而是同一组 double。 */
+   · **S凝聚（固定值）** / **S共鸣%（进池百分比）**：由调用方（pet-store.js 的
+     `petAttachBenchPct` → `petBonusAdditivePool`）逐单位挂到 `unit._benchPct`，
+     本函数**只负责「(基础＋凝聚) × 池%」与取整** —— 「池的唯一出口」不变。
+     未挂载时（老调用点 / 单测直接造单位）按 0 处理，行为与 v2.14 一致。
+   ⚠️ 池里**只有三项**：稀有度 ＋ Σ宝珠 ＋ Σ共鸣。v2.15 那两个「贡献值 ÷ 本宠基础」的
+      百分项已随裁决删除，这里**没有任何残留项**。
+   速度不参与（逐属性独立；`spd` 不在列表里，天然不被乘也不被加凝聚）。
+   ⚠️ 这里刻意保持与 `petBonusAdditivePool()` **相同的运算顺序**
+      （先 `base + cohesion`，再 `× poolPct / 100`，最后 floor）→
+      「面板 = 实战」不是近似相等，而是同一组 double。 */
 function boostPetForGroup(unit) {
   if (!unit || !unit.base) return unit;
   var tag = ((unit.tags || [])[1] || 'R');
   var rarityPct = PET_GROUP_SCALE[tag] || PET_GROUP_SCALE.R;
   var orbMap = unit._orbPct || {};
   var bp = (typeof petBenchPctOf === 'function') ? petBenchPctOf(unit) : null;
-  var cohMap = (bp && bp.cohesion) || {};
-  var resMap = (bp && bp.resonance) || {};
+  var cohMap = (bp && bp.cohesion) || {};                                  // S凝聚：固定值
+  var resPct = (bp && typeof bp.resonancePct === 'number' && isFinite(bp.resonancePct))
+    ? bp.resonancePct : 0;                                                 // S共鸣：进池百分比
   ['atk', 'def', 'hp', 'soulAtk', 'soulDef'].forEach(function (s) {
     if (unit.base[s] == null) return;
-    var poolPct = rarityPct + (orbMap[s] || 0) + (cohMap[s] || 0) + (resMap[s] || 0);
-    unit.base[s] = Math.max(1, Math.floor(unit.base[s] * poolPct / 100));
+    var poolPct = rarityPct + (orbMap[s] || 0) + resPct;
+    unit.base[s] = Math.max(1, Math.floor((unit.base[s] + (cohMap[s] || 0)) * poolPct / 100));
   });
   // 宠物同样给魂防下限，否则被敌人魂攻打全额
   unit.base.soulDef = Math.max(unit.base.soulDef || 0, Math.floor((unit.base.def || 0) * 0.5));

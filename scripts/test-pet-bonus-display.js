@@ -1,33 +1,29 @@
 #!/usr/bin/env node
-/* v2.15 测试：宠物详情「② 属性加成」＋ 加成口径改造
-   （作者裁决：「**改成按所有宠物计算，加成之间用加算**」→ 选项一：加成全进同一加算层）
+/* v2.16 测试：宠物详情「② 属性加成」＋ 加成口径改造
+   （作者裁决，**以第二段为准**：凝聚＝固定值、共鸣＝进池百分比，两者只统计【成熟期】）
 
    新口径（唯一真相，实现在 page/pet-store.js 的 petBonusAdditivePool ＋ page/group-levels.js 的
    boostPetForGroup）：
-       基础        = 图鉴基础 ＋ 炼化 ＋ 天赋静态           （createPetUnit 口径，未改）
-       加成合计%   = 稀有度% ＋ Σ宝珠% ＋ 凝聚% ＋ 共鸣%     （四项【加算】，同一层）
-         凝聚贡献值 = (全部宠物该属性基础之和) × 10%
-         共鸣贡献值 = (全部宠物该属性基础之和) × resonanceBonus(持有总数)
-         凝聚%      = 凝聚贡献值 ÷ 本宠该属性基础 × 100
-         共鸣%      = 共鸣贡献值 ÷ 本宠该属性基础 × 100
-       最终        = floor(基础 × 加成合计% / 100)
-       速度        = 不参与百分比池（×100%）
+       凝聚 S凝聚[k] = 3% × Σ(所有【成熟期】宠物该属性 base)      （固定值，与基础相加）
+       共鸣 S共鸣%   = Σ(每只【成熟期】宠物的稀有度档位)          UR 10 / SSR 8 / SR 7 / R 6（相加）
+       加成合计%[k]  = 稀有度%(本宠) ＋ Σ宝珠%[k](本宠) ＋ S共鸣%
+       最终[k]       = floor( (基础[k] ＋ S凝聚[k]) × 加成合计%[k] / 100 )
+       速度 spd      = 基础（不参与凝聚、不参与百分比池）
 
-   与旧口径（v2.2~v2.14，git HEAD）的三处区别：
-     ① 「全部宠物」= 存档里的**所有**宠物（不排除本宠/参战/受伤/死亡/阶段）
-     ② 凝聚/共鸣**不再加进基数再被池放大**，而是与稀有度/宝珠并列成百分比、同层相加
-     ③ 面板口径 = 实战口径（不再有「面板比实战高 29%」）
+   与 v2.15（凝聚/共鸣都折成「贡献值 ÷ 本宠基础」的百分比进池）的区别：
+     ① 凝聚从「百分比」改回「**固定值**加在基础上」；
+     ② 共鸣从「贡献值折算」改为「按稀有度**逐只相加**」；
+     ③ 两者**只统计成熟期**（蛋期/成长期不计；受伤/阵亡不另外筛）。
 
-   本套守五件事：
+   本套守六件事：
      1) **新口径黄金值**（写死在下面）＋ 真实引擎管道复核（建场 → 面板 → 纯函数 三链同值）；
-     2) **公式自洽**：final = max(1, floor(基础 × 加成合计% ÷ 100)) 逐属性成立；
-        速度不参与（加成合计 = 100、final = 基础）；
-     3) **除零安全**：本宠某属性基础为 0 时不产生 Infinity / NaN；
-     4) **② 段形态**：一个加成合计 ＋ 可展开的四项明细；不出现旧的合成倍数（×2846% / ×8505%）；
-        展示的大字与实战百分比同源（差 ≤ 0.5 个百分点 = 只做了显示取整）；
+     2) **公式自洽**：final = max(1, floor((基础＋凝聚) × 加成合计% ÷ 100)) 逐属性成立；
+        速度不参与（凝聚 0、加成合计 = 100、final = 基础）；
+     3) **全局常量**：S凝聚 / S共鸣% 对每只宠完全相同（含 UR vs SSR 的直接对照）；
+     4) **② 段形态**：一排「凝聚固定值」＋一排「加成合计 ×N%」—— 数值 vs 百分比一眼可分；
      5) **口径单一来源 + 设计体系**：UI 只拼文本（不做乘除、不读 bd.base / bd.bench 自算、
-        不引 PET_GROUP_SCALE、无新字号 / 新颜色 / 新热区）。
-   另附 [8] **改前 → 改后**逐属性对照（git HEAD 的 pet-store.js ＋ group-levels.js 重算）。
+        不引 PET_GROUP_SCALE、无新字号 / 新颜色 / 新热区）；
+     6) [8] **改前（git HEAD = v2.15）× 改后**逐属性对照（真跑 HEAD 源码，不是估算）。
 
    Run: node scripts/test-pet-bonus-display.js */
 'use strict';
@@ -87,8 +83,8 @@ function makeSandbox(opts) {
 /* ---- 夹具（与浏览器复验用的那份同形：14 只，含 UR 与 SSR 各一）----
    · dream（UR）：图鉴 300 ＋ 炼化 720 = **生命基础 1020** ← 作者截图里的那个基数
    · possum（SSR）：图鉴 **200** ← 作者截图里的那个基数
-   · 其余 12 只做「全部宠物」的一份子，各炼化 +150 生命
-   · 持有 14 只 → 共鸣档位 10%（resonanceBonus(14) = 0.10） */
+   · 其余 12 只做「成熟期」的一份子，各炼化 +150 生命
+   · 14 只全部成熟期 → Σ共鸣 = 108%（UR 3 / SSR 4 / SR 4 / R 3 → 30+32+28+18） */
 const BENCH = ['nonebear', 'kirin', 'darkcrow', 'icecrystal', 'lightspirit',
   'flamechick', 'rocksteady', 'chirpbird', 'thunderdog', 'sparkle', 'waterdrop', 'pongpong'];
 function mkPet(sb, speciesId, over) {
@@ -125,11 +121,16 @@ assert('夹具 14 只（含 UR 梦幻 / SSR 小负鼠）', pets.length === 14 &&
 assert('拆解可用', bd.ok === true && bdSsr.ok === true);
 assert('UR 生命基础 = 1020（图鉴 300 ＋ 炼化 720）', bd.base.hp === 1020, String(bd.base.hp));
 assert('SSR 生命基础 = 200', bdSsr.base.hp === 200, String(bdSsr.base.hp));
-assert('「全部宠物」= 14 只（含本宠 / 含参战 / 不筛阶段与伤死）',
-  bd.allCount === 14 && bdSsr.allCount === 14, String(bd.allCount));
-assert('共鸣档位 = 10%（14 只 > 10）', bd.ratePct.resonance === 10 && bd.resonanceRate === 0.1,
+assert('「全部宠物」= 14 只 / 「成熟期」= 14 只', bd.allCount === 14 && bd.matureCount === 14 && bdSsr.allCount === 14,
+  bd.allCount + ' / ' + bd.matureCount);
+assert('凝聚档位 = 3%（常量唯一来源 TEAM_COHESION_PCT）', sb.TEAM_COHESION_PCT === 3 && bd.ratePct.cohesion === 3,
+  sb.TEAM_COHESION_PCT + ' / ' + bd.ratePct.cohesion);
+assert('Σ共鸣 = 108%（14 只成熟期：UR 3 / SSR 4 / SR 4 / R 3）',
+  bd.ratePct.resonance === 108 && bd.resonancePct === 108 && bd.resonanceRate === 1.08,
   bd.ratePct.resonance + ' / ' + bd.resonanceRate);
-assert('凝聚档位 = 10%（常量唯一来源 TEAM_COHESION_PCT）', sb.TEAM_COHESION_PCT === 10 && bd.ratePct.cohesion === 10);
+assert('S凝聚（固定值，逐属性）= 成熟期之和 × 3%',
+  BONUS_KEYS.every(k => Math.abs(bd.cohesion[k] - sb.petMatureBaseSum()[k] * 3 / 100) < 1e-9),
+  JSON.stringify(bd.cohesion));
 
 /* ============================================================
    1) 新口径黄金值（写死；由本文件 [8] 的 git HEAD 对照独立复算过）
@@ -138,11 +139,11 @@ console.log('\n[1] 新口径黄金值（逐属性 final）');
 const GOLDEN = {
   dream: {
     base: { hp: 1020, atk: 60, def: 40, spd: 9, soulAtk: 40, soulDef: 30 },
-    final: { hp: 17344, atk: 1017, def: 679, spd: 9, soulAtk: 679, soulDef: 506 }
+    final: { hp: 20045, atk: 1173, def: 783, spd: 9, soulAtk: 784, soulDef: 580 }
   },
   possum: {
     base: { hp: 200, atk: 20, def: 15, spd: 8, soulAtk: 15, soulDef: 10 },
-    final: { hp: 4024, atk: 358, def: 264, spd: 8, soulAtk: 264, soulDef: 176 }
+    final: { hp: 5685, atk: 461, def: 335, spd: 8, soulAtk: 336, soulDef: 224 }
   }
 };
 [['dream', bd], ['possum', bdSsr]].forEach(function (t) {
@@ -150,7 +151,7 @@ const GOLDEN = {
   STAT_KEYS.forEach(function (k) {
     assert(name + '·final[' + k + '] = ' + GOLDEN[name].final[k], b.final[k] === GOLDEN[name].final[k],
       b.final[k] + ' vs ' + GOLDEN[name].final[k]);
-    assert(name + '·base[' + k + '] 仍是 createPetUnit 原值（加成不再进基础）',
+    assert(name + '·base[' + k + '] 仍是 createPetUnit 原值（凝聚不进基础）',
       b.base[k] === GOLDEN[name].base[k], b.base[k] + ' vs ' + GOLDEN[name].base[k]);
   });
 });
@@ -167,42 +168,42 @@ STAT_KEYS.forEach(function (k) {
   assert('UR 纯函数 pureFinal[' + k + '] = 面板 final[' + k + ']', bd.pureFinal[k] === bd.final[k],
     bd.pureFinal[k] + ' vs ' + bd.final[k]);
 });
-/* 「全部宠物」与谁上场无关 → 参战阵容不同，同一只宠吃到的贡献值不变 */
+/* S凝聚 / S共鸣% 是全局常量 → 参战阵容不同，同一只宠吃到的加成不变 */
 const built3 = sb.buildGroupBattlePets([ur.speciesId, ssr.speciesId, 'chirpbird'], sb.PET_BATTLE_MAX);
-assert('换一套参战阵容，UR 的 final 逐属性不变（口径不再依赖「谁上场」）',
+assert('换一套参战阵容，UR 的 final 逐属性不变（口径不依赖「谁上场」）',
   STAT_KEYS.every(k => built3[0].base[k] === built[0].base[k]),
   JSON.stringify(built3[0].base) + ' vs ' + JSON.stringify(built[0].base));
 
 /* ============================================================
-   3) 公式自洽：final = max(1, floor(基础 × 加成合计% ÷ 100))；速度不参与
+   3) 公式自洽：(基础 ＋ 凝聚) × 加成合计% ÷ 100；速度不参与
    ============================================================ */
-console.log('\n[3] 公式自洽（四项加算 → 一个百分比 → floor）');
+console.log('\n[3] 公式自洽（凝聚固定值 → 三项池 → floor）');
 [['UR', bd], ['SSR', bdSsr]].forEach(function (t) {
   const tag = t[0], b = t[1];
   BONUS_KEYS.forEach(function (k) {
-    const total = b.rarityPct + (b.orbPct[k] || 0) + b.cohesionPct[k] + b.resonancePct[k];
-    assert(tag + '·[' + k + '] 加成合计 = 稀有度＋宝珠＋凝聚%＋共鸣%（' + total.toFixed(3) + '%）',
+    const total = b.rarityPct + (b.orbPct[k] || 0) + b.resonancePct;
+    assert(tag + '·[' + k + '] 加成合计 = 稀有度＋Σ宝珠＋Σ共鸣（' + total.toFixed(3) + '%）',
       Math.abs(b.totalPct[k] - total) < 1e-9, b.totalPct[k] + ' vs ' + total);
-    const want = Math.max(1, Math.floor(b.base[k] * b.totalPct[k] / 100));
-    assert(tag + '·[' + k + '] final = max(1, floor(' + b.base[k] + ' × ' + b.totalPct[k].toFixed(3) + '% ÷ 100)) = ' + want,
-      b.final[k] === want, b.final[k] + ' vs ' + want);
+    const want = Math.max(1, Math.floor((b.base[k] + b.cohesion[k]) * b.totalPct[k] / 100));
+    assert(tag + '·[' + k + '] final = floor((' + b.base[k] + ' ＋ ' + b.cohesion[k] + ') × '
+      + b.totalPct[k].toFixed(3) + '% ÷ 100) = ' + want, b.final[k] === want, b.final[k] + ' vs ' + want);
   });
-  assert(tag + '·速度不参与：加成合计 = 100、final = 基础',
-    b.totalPct.spd === 100 && b.final.spd === b.base.spd && b.bench.spd === b.base.spd);
+  assert(tag + '·速度不参与：凝聚 0、加成合计 = 100、final = 基础',
+    b.totalPct.spd === 100 && b.final.spd === b.base.spd && b.cohesion.spd === 0 && b.bench.spd === b.base.spd);
   assert(tag + '·魂防下限规则仍在（final.soulDef ≥ ⌊final.def ÷ 2⌋）',
     b.final.soulDef >= Math.floor(b.final.def * 0.5), b.final.soulDef + ' vs ' + Math.floor(b.final.def * 0.5));
 });
-/* 同一存档下，每只宠的凝聚/共鸣**贡献值**完全相同（新口径的核心性质） */
+/* 全局常量：UR 与 SSR 的 S凝聚 / S共鸣% **完全相同** */
 (() => {
-  const a = sb.petBonusAdditivePool(bd.allBaseSum || sb.petBaseBonusView().allBaseSum, bd.base, bd.rarityPct, bd.orbPct, 10);
-  const b = sb.petBonusAdditivePool(sb.petBaseBonusView().allBaseSum, bdSsr.base, bdSsr.rarityPct, bdSsr.orbPct, 10);
-  assert('UR 与 SSR 的凝聚贡献值完全相同',
-    BONUS_KEYS.every(k => a.cohesionValue[k] === b.cohesionValue[k]), JSON.stringify(a.cohesionValue));
-  assert('UR 与 SSR 的共鸣贡献值完全相同',
-    BONUS_KEYS.every(k => a.resonanceValue[k] === b.resonanceValue[k]), JSON.stringify(a.resonanceValue));
-  assert('但折算成百分比后不同（÷ 各自基础）：UR 生命 ' + a.cohesionPct.hp.toFixed(2)
-    + '% vs SSR ' + b.cohesionPct.hp.toFixed(2) + '%',
-    a.cohesionPct.hp !== b.cohesionPct.hp && a.cohesionPct.hp < b.cohesionPct.hp);
+  assert('UR 与 SSR 的 S凝聚完全相同（每只宠同一个固定值）',
+    BONUS_KEYS.every(k => bd.cohesion[k] === bdSsr.cohesion[k]), JSON.stringify(bd.cohesion));
+  assert('UR 与 SSR 的 S共鸣% 完全相同（同一个全局百分比）',
+    bd.resonancePct === bdSsr.resonancePct, bd.resonancePct + ' vs ' + bdSsr.resonancePct);
+  assert('差异只来自稀有度档位与基础：加成合计差正好 = 稀有度差（1600 − 1500）',
+    BONUS_KEYS.every(k => Math.abs((bd.totalPct[k] - bdSsr.totalPct[k]) - 100) < 1e-9),
+    bd.totalPct.hp + ' vs ' + bdSsr.totalPct.hp);
+  console.log('   凝聚（固定值）UR = ' + JSON.stringify(bd.cohesion) + ' ／ SSR 相同');
+  console.log('   Σ共鸣% = ' + bd.resonancePct + '%（两只完全相同）· 稀有度 1600% vs 1500%');
 })();
 
 /* ============================================================
@@ -210,41 +211,58 @@ console.log('\n[3] 公式自洽（四项加算 → 一个百分比 → floor）'
    ============================================================ */
 console.log('\n[4] 纯函数契约（不写入参 / 幂等 / 除零）');
 (() => {
-  const allSum = { hp: 5120, atk: 290, def: 195, spd: 98, soulAtk: 198, soulDef: 133 };
+  const matureSum = { hp: 5120, atk: 290, def: 195, spd: 98, soulAtk: 198, soulDef: 133 };
   const selfBase = { hp: 1020, atk: 60, def: 40, spd: 9, soulAtk: 40, soulDef: 30 };
   const orb = { atk: 10 };
-  const snap = JSON.stringify({ allSum, selfBase, orb });
-  const r1 = sb.petBonusAdditivePool(allSum, selfBase, 1600, orb, 10);
-  const r2 = sb.petBonusAdditivePool(allSum, selfBase, 1600, orb, 10);
-  assert('**不修改入参**（allBaseSum / selfBase / orbPct 一字不变）', JSON.stringify({ allSum, selfBase, orb }) === snap);
+  const snap = JSON.stringify({ matureSum, selfBase, orb });
+  const r1 = sb.petBonusAdditivePool(matureSum, selfBase, 1600, orb, 108);
+  const r2 = sb.petBonusAdditivePool(matureSum, selfBase, 1600, orb, 108);
+  assert('**不修改入参**（matureBaseSum / selfBase / orbPct 一字不变）', JSON.stringify({ matureSum, selfBase, orb }) === snap);
   assert('连续两次调用结果逐字一致', JSON.stringify(r1) === JSON.stringify(r2));
   const runs = [];
-  for (let i = 0; i < 20; i++) runs.push(JSON.stringify(sb.petBonusAdditivePool(allSum, selfBase, 1600, orb, 10)));
+  for (let i = 0; i < 20; i++) runs.push(JSON.stringify(sb.petBonusAdditivePool(matureSum, selfBase, 1600, orb, 108)));
   assert('连续 20 次调用逐字一致（无内部状态）', runs.every(s => s === runs[0]));
-  /* 除零：本宠该属性基础 0 → 百分比按 0 记，不产生 Infinity / NaN */
+  assert('凝聚 = 5120 × 3% = 153.6（固定值，不是百分比）', r1.cohesion.hp === 153.6, String(r1.cohesion.hp));
+  /* 除零 / 脏存档：基础全 0 时不产生 Infinity / NaN */
   const zeroBase = { hp: 0, atk: 0, def: 0, spd: 0, soulAtk: 0, soulDef: 0 };
-  const rz = sb.petBonusAdditivePool(allSum, zeroBase, 1600, orb, 10);
+  const rz = sb.petBonusAdditivePool(matureSum, zeroBase, 1600, orb, 108);
   assert('基础为 0 时不产生 NaN / Infinity',
     JSON.stringify(rz).indexOf('null') < 0 && !/NaN|Infinity/.test(JSON.stringify(rz)), JSON.stringify(rz).slice(0, 120));
-  assert('基础为 0 时凝聚%/共鸣% 记 0（不做除法）',
-    rz.cohesionPct.hp === 0 && rz.resonancePct.hp === 0);
   assert('基础为 0 时速度 final 仍为 0（不被 max(1) 抬成 1）', rz.final.spd === 0);
+  /* 空池（未成熟期）时凝聚 / Σ共鸣 都是 0 → final 只剩稀有度层 */
+  const re = sb.petBonusAdditivePool({}, selfBase, 1600, {}, 0);
+  assert('没有成熟期宠物 → 凝聚 0、Σ共鸣 0、final = floor(基础 × 1600%)',
+    re.cohesion.hp === 0 && re.resonancePct === 0 && re.final.hp === Math.floor(1020 * 1600 / 100));
 })();
 
 /* ============================================================
-   5) HTML 形态：② 一个加成合计 ＋ 可展开四项明细；③ 仍是 bd.final
+   5) HTML 形态：② 段「凝聚固定值 ＋ 加成合计 ×N%」；③ 仍是 bd.final
    ============================================================ */
 console.log('\n[5] HTML 输出（真调 UI 生成函数）');
 const html = sb.petStatSectionsHtml(bd, 'UR');
-assert('② 段仍在（标题含「② 加成」）', html.indexOf('② 加成') >= 0);
-assert('② 段副标题讲明新口径（×N% / 四项同一层相加 / 按全部宠物计算 / 凝聚/共鸣只作用于参战宠）',
-  html.indexOf('统一为 ×N%') >= 0 && html.indexOf('四项同一层相加') >= 0 &&
-  html.indexOf('按全部宠物计算') >= 0 && html.indexOf('凝聚/共鸣只作用于参战宠') >= 0);
+assert('① / ② / ③ 三个标题都在（三段契约不变）',
+  html.indexOf('① 基础属性') >= 0 && html.indexOf('② 加成') >= 0 && html.indexOf('③ 最终属性') >= 0);
+assert('② 段副标题写明「凝聚＝固定值（加在①上）」与「加成合计统一为 ×N%＝稀有度＋Σ宝珠＋Σ共鸣」',
+  html.indexOf('凝聚＝<b>固定值</b>') >= 0 && html.indexOf('统一为 ×N%') >= 0 &&
+  html.indexOf('凝聚/共鸣只作用于参战宠') >= 0);
+/* 凝聚：**数值**形态（+153.6），速度显示「—」 */
+assert('② 段给出 6 个凝聚固定值（数值形态 +X / 速度 —）', (function () {
+  const seg = html.slice(html.indexOf('② 加成'), html.indexOf('pet-cell-mult'));
+  const vals = (seg.match(/pet-cell-val">([+\-—−][\d.—]*|—)</g) || []);
+  return vals.length === 6 && seg.indexOf('+' + sb.petValueTxt(bd.cohesion.hp)) >= 0 &&
+    /速度<\/span><b class="pet-cell-val">—<\/b>/.test(seg);
+})(), (html.slice(html.indexOf('② 加成'), html.indexOf('pet-cell-mult')).match(/pet-cell-val">[^<]*/g) || []).join('|'));
+assert('② 段写明「凝聚是固定值 …… 直接加在①上（不是百分比、不进池）」',
+  html.indexOf('凝聚是固定值') >= 0 && html.indexOf('直接加在①上') >= 0 && html.indexOf('不进池') >= 0);
+assert('② 段写明「同一存档下每只宠拿到的凝聚完全相同」', html.indexOf('每只宠拿到的凝聚') >= 0 && html.indexOf('完全相同') >= 0);
+/* 加成合计：**百分比**形态（6 个 ×N%），速度 = ×100% */
 assert('② 段逐属性给**一个加成合计**（6 个 ×N%）',
   (html.match(/pet-cell-mult">×\d+%<\/b>/g) || []).length === 6,
   String((html.match(/pet-cell-mult">[^<]*/g) || []).length));
-assert('② 段不再出现旧的合成倍数（×2846% / ×8505%）',
-  html.indexOf('×2846%') < 0 && html.indexOf('×8505%') < 0);
+assert('② 段不再出现「＋加成 42（凝聚 30＋共鸣 12）」这类绝对加值写法', html.indexOf('＋加成') < 0);
+assert('② 段写明最终公式＝(基础 ＋ 凝聚) × 加成合计%，且 Σ共鸣按成熟期只数逐只相加',
+  html.indexOf('(基础 ＋ 凝聚)') >= 0 && html.indexOf('逐只相加') >= 0 && html.indexOf('UR 10 / SSR 8 / SR 7 / R 6') >= 0);
+assert('② 段不再出现旧的合成倍数（×2846% / ×8505%）', html.indexOf('×2846%') < 0 && html.indexOf('×8505%') < 0);
 /* 展示的大字与实战百分比同源（只做了显示取整：|display − totalPct| ≤ 0.5） */
 (() => {
   const shown = (html.match(/pet-cell-mult">×(\d+)%<\/b>/g) || []).map(m => Number(/×(\d+)%/.exec(m)[1]));
@@ -253,17 +271,23 @@ assert('② 段不再出现旧的合成倍数（×2846% / ×8505%）',
     STAT_KEYS.every((k, i) => Math.abs(shown[i] - (k === 'spd' ? 100 : bd.totalPct[k])) <= 0.5),
     STAT_KEYS.map((k, i) => k + ':' + shown[i] + '/' + (k === 'spd' ? 100 : bd.totalPct[k].toFixed(2))).join(' '));
 })();
-/* 可展开处：四项明细逐属性齐全 */
+/* 可展开处：来源明细 —— 稀有度 / Σ宝珠（进池）＋ 凝聚（固定值）/ 共鸣（Σ%，进池） */
 sb._petSrcOpen = true;
 const htmlOpen = sb.petStatSectionsHtml(bd, 'UR');
 sb._petSrcOpen = false;
-assert('展开区列出四项明细：稀有度 / Σ宝珠 / 凝聚 / 共鸣（逐属性 5 行）',
-  (htmlOpen.match(/稀有度 <b>[\d.]+%<\/b> ＋ Σ宝珠 <b>[\d.]+%<\/b> ＋ 凝聚 <b>[\d.]+%<\/b> ＋ 共鸣 <b>[\d.]+%<\/b>/g) || []).length === 5,
+assert('展开区逐属性列「稀有度 ＋ Σ宝珠 ＋ Σ共鸣 ＝ 加成合计」（逐属性 5 行）',
+  (htmlOpen.match(/稀有度 <b>[\d.]+%<\/b> ＋ Σ宝珠 <b>[\d.]+%<\/b> ＋ Σ共鸣 <b>[\d.]+%<\/b> ＝ 加成合计 <b>×[\d.]+%<\/b>/g) || []).length === 5,
   String((htmlOpen.match(/稀有度 <b>/g) || []).length));
-assert('展开区写明「同一层相加」与「每只宠同一个绝对值」',
-  htmlOpen.indexOf('同一层相加') >= 0 && htmlOpen.indexOf('每只宠是同一个绝对值') >= 0);
-assert('展开区写明「全部 14 只」的取数口径', /全部 14 只/.test(htmlOpen));
-assert('展开区速度行明确「不参与百分比池」', /不参与百分比池/.test(htmlOpen));
+assert('展开区把「凝聚」单列成**固定值**并注明「已加在①上」',
+  htmlOpen.indexOf('凝聚 <b>固定值</b>') >= 0 && htmlOpen.indexOf('已加在①上') >= 0 &&
+  htmlOpen.indexOf('+' + sb.petValueTxt(bd.cohesion.hp)) >= 0);
+assert('展开区写明 Σ共鸣 = 成熟期逐只稀有度相加（进池）', htmlOpen.indexOf('进池') >= 0 &&
+  htmlOpen.indexOf('UR 10 / SSR 8 / SR 7 / R 6') >= 0);
+assert('展开区写明「同一层相加」与「每只宠看到的这两个值完全相同」',
+  htmlOpen.indexOf('同一层相加') >= 0 && htmlOpen.indexOf('每只宠看到的这两个值完全相同') >= 0);
+assert('展开区写明成熟期只数 / 全部只数与未上场只数',
+  /成熟期 14 只/.test(htmlOpen) && /全部 14 只/.test(htmlOpen) && /未上场 \d+ 只/.test(htmlOpen));
+assert('展开区速度行明确「凝聚 — · 不参与百分比池」', /凝聚 — · 不参与百分比池/.test(htmlOpen));
 assert('③ 段仍是 6 行、数字逐项等于 bd.final', STAT_KEYS.every(function (k) {
   const m = new RegExp('data-pet-stat="' + k + '[\\s\\S]{0,220}?pet-cell-val">(-?\\d+)<').exec(html);
   return !!m && Number(m[1]) === bd.final[k];
@@ -275,7 +299,7 @@ assert('展示值无 undefined / NaN / Infinity',
   !/undefined|NaN|Infinity/.test(html), (html.match(/undefined|NaN|Infinity/) || [])[0]);
 assert('② 段正文没有可点元素（热区口径不变：没有新按钮/新热区）', (function () {
   const seg = html.slice(html.indexOf('<div class="pet-sec-title">② 加成'), html.indexOf('<button class="pet-src-toggle"'));
-  return seg.length > 200 && seg.indexOf('<button') < 0 && seg.indexOf('data-') < 0;
+  return seg.length > 400 && seg.indexOf('<button') < 0 && seg.indexOf('data-') < 0;
 })());
 assert('只读：渲染不改存档、不改宠物本体', (function () {
   const before = JSON.stringify(sb.getPetStore());
@@ -283,13 +307,13 @@ assert('只读：渲染不改存档、不改宠物本体', (function () {
   sb.petStatSectionsHtml(sb.petStatBreakdown(ur), 'UR');
   return JSON.stringify(sb.getPetStore()) === before && JSON.stringify(ur) === petBefore;
 })());
-/* ③ 展开链路：基础 → 最终，含 ×倍率池 与四项 */
+/* ③ 展开链路：基础 ＋ 凝聚 → 最终，含 ×倍率池 与三项明细 */
 sb._petStatOpen = 'atk';
 const htmlChain = sb.petStatSectionsHtml(bd, 'UR');
 sb._petStatOpen = null;
-assert('③ 展开给出「基础 → 最终」链路 ＋ ×倍率池 ＋ 四项明细',
-  /基础 <b>\d+<\/b>[\s\S]{0,80}最终 <b>\d+<\/b>/.test(htmlChain) &&
-  /×倍率池 ×\d+%/.test(htmlChain) && htmlChain.indexOf('稀有度') > 0 && htmlChain.indexOf('凝聚') > 0);
+assert('③ 展开给出「基础 ＋ 凝聚 → 最终」链路 ＋ ×倍率池 ＋ 三项明细',
+  /基础 <b>\d+<\/b>[\s\S]{0,80}凝聚 [+\-−][\d.]+<\/b>[\s\S]{0,80}最终 <b>\d+<\/b>/.test(htmlChain) &&
+  /×倍率池 ×\d+%/.test(htmlChain) && htmlChain.indexOf('稀有度') > 0 && htmlChain.indexOf('Σ共鸣') > 0);
 /* 宠物图鉴缺失（拆解不可用）时不崩、不打印脏数 */
 assert('bd 不可用 → ② 显示「暂不可用」而不是脏数',
   sb.petStatSectionsHtml({ ok: false }, 'UR').indexOf('属性拆解暂不可用') >= 0);
@@ -311,10 +335,13 @@ function fnBody(source, name) {
 }
 const bodyHtml = fnBody(uiSrc, 'petBonusLinesHtml');
 const bodySrc = fnBody(uiSrc, 'petBonusSrcHtml');
+const bodyCohesion = fnBody(uiSrc, 'petCohesionHtml');
 assert('UI 的 ② 渲染函数走 petBonusLines（唯一来源）', bodyHtml.indexOf('petBonusLines(') >= 0);
-assert('UI 的四项明细也走 petBonusLines / petPctTxt（不自己换算）',
-  bodySrc.indexOf('petBonusLines(') >= 0 && bodySrc.indexOf('petPctTxt(') >= 0);
-[['petBonusLinesHtml', bodyHtml], ['petBonusSrcHtml', bodySrc]].forEach(function (t) {
+assert('UI 的凝聚行也走 petBonusLines（不自己算 3%）',
+  bodyCohesion.indexOf('petBonusLines(') >= 0 && bodyCohesion.indexOf('TEAM_COHESION') < 0);
+assert('UI 的四项明细也走 petBonusLines / petPctTxt / petValueTxt（不自己换算）',
+  bodySrc.indexOf('petBonusLines(') >= 0 && bodySrc.indexOf('petPctTxt(') >= 0 && bodySrc.indexOf('petValueTxt(') >= 0);
+[['petBonusLinesHtml', bodyHtml], ['petBonusSrcHtml', bodySrc], ['petCohesionHtml', bodyCohesion]].forEach(function (t) {
   assert(t[0] + ' 内不做乘除 / 不调 Math.floor（口径与取整都在 pet-store）',
     !/Math\.floor|\*\s*100|\/\s*100/.test(t[1]), (t[1].match(/Math\.floor|\*\s*100|\/\s*100/) || [])[0]);
   assert(t[0] + ' 内不读 bd.base / bd.bench 自算', t[1].indexOf('bd.base') < 0 && t[1].indexOf('bd.bench') < 0);
@@ -322,8 +349,8 @@ assert('UI 的四项明细也走 petBonusLines / petPctTxt（不自己换算）'
   assert(t[0] + ' 内没有新增颜色（hex / rgba）', !/#[0-9a-fA-F]{3}\b|rgba?\(\s*\d/.test(t[1]));
 });
 assert('UI 仍不引用稀有度倍率常量 PET_GROUP_SCALE（口径留在 pet-store）', uiSrc.indexOf('PET_GROUP_SCALE') < 0);
-assert('复用既有样式类（pet-grid / pet-cell / pet-cell-mult / pet-src-line / pet-src-tag / pet-src-note）',
-  ['pet-grid', 'pet-cell', 'pet-cell-mult', 'pet-src-line', 'pet-src-tag', 'pet-src-note'].every(c => uiSrc.indexOf(c) >= 0));
+assert('复用既有样式类（pet-grid / pet-cell / pet-cell-mult / pet-cell-val / pet-src-line / pet-src-tag / pet-src-note）',
+  ['pet-grid', 'pet-cell', 'pet-cell-mult', 'pet-cell-val', 'pet-src-line', 'pet-src-tag', 'pet-src-note'].every(c => uiSrc.indexOf(c) >= 0));
 const storeRowBody = fnBody(src('pet-store.js'), 'petBonusRow');
 assert('pet-store 侧也不重造取整公式（petBonusRow 内无 Math.floor）',
   storeRowBody.length > 200 && storeRowBody.indexOf('Math.floor') < 0);
@@ -331,35 +358,36 @@ assert('速度语义常量仍是 PET_BONUS_ATTRS（速度不参与）',
   src('pet-store.js').indexOf("var PET_BONUS_ATTRS = ['hp', 'atk', 'def', 'soulAtk', 'soulDef']") >= 0);
 assert('唯一公式实现 petBonusAdditivePool 定义在 pet-store.js',
   src('pet-store.js').indexOf('function petBonusAdditivePool') >= 0);
-assert('池的唯一出口 boostPetForGroup 仍是四项相加（group-levels.js）',
-  /var poolPct = rarityPct \+ \(orbMap\[s\] \|\| 0\) \+ \(cohMap\[s\] \|\| 0\) \+ \(resMap\[s\] \|\| 0\)/
-    .test(src('group-levels.js')));
+assert('池的唯一出口 boostPetForGroup 仍是三项相加（稀有度 ＋ Σ宝珠 ＋ Σ共鸣）',
+  /var poolPct = rarityPct \+ \(orbMap\[s\] \|\| 0\) \+ resPct/.test(src('group-levels.js')) &&
+  /unit\.base\[s\] \+ \(cohMap\[s\] \|\| 0\)/.test(src('group-levels.js')));
+assert('新口径的档位常量唯一来源（3% / UR10·SSR8·SR7·R6）',
+  /var TEAM_COHESION_PCT = 3;/.test(src('pet-store.js')) &&
+  /var PET_RESONANCE_SCALE = \{ UR: 10, SSR: 8, SR: 7, R: 6 \};/.test(src('pet-store.js')));
 
 /* ============================================================
-   7) 作者场景：为什么 SSR 的旧百分比会爆表（新口径下这个数不再存在）
+   7) 凝聚 vs 共鸣 的形态差异（数值 / 百分比）
    ============================================================ */
-console.log('\n[7] 旧版「×8505%」的成因（改造后不再出现）');
-assert('旧口径下 SSR 生命的总倍数远高于 UR（旧：×' + 8505 + '% vs ×' + 2846 + '%）',
-  (8505 / 2846) > 2.9);
-/* 新口径下两只宠「超出稀有度层」的那部分**完全相同** —— 那正是凝聚＋共鸣的贡献值。
-   （加成合计% 本身不可跨宠比较：它 = 稀有度 ＋ 贡献值 ÷ **本宠基础**，基础越小百分比越大） */
-assert('超出「稀有度层」的部分完全相同（= 凝聚＋共鸣贡献值 ' + bd.cohesion.hp + '＋' + bd.resonance.hp + '）',
-  (bd.final.hp - bd.base.hp * 16) === (bdSsr.final.hp - bdSsr.base.hp * 15) &&
-  (bd.final.hp - bd.base.hp * 16) === Math.round(bd.cohesion.hp + bd.resonance.hp),
-  (bd.final.hp - bd.base.hp * 16) + ' vs ' + (bdSsr.final.hp - bdSsr.base.hp * 15));
-assert('加成合计% 跨宠不可比：SSR 基础小 → 百分比更大（' + bd.totalPct.hp.toFixed(2)
-  + '% vs ' + bdSsr.totalPct.hp.toFixed(2) + '%），但**绝对值相同**',
-  bdSsr.totalPct.hp > bd.totalPct.hp && bd.cohesion.hp === bdSsr.cohesion.hp);
-assert('新口径下「基础小的宠百分比更大、绝对值相同」',
-  bd.cohesionPct.hp < bdSsr.cohesionPct.hp && bd.cohesion.hp === bdSsr.cohesion.hp);
+console.log('\n[7] 凝聚是「数值」、共鸣是「百分比」（作者要求一眼可分）');
+assert('凝聚是**绝对值**：UR 与 SSR 拿到同一组固定值（' + JSON.stringify(bd.cohesion) + '）',
+  BONUS_KEYS.every(k => bd.cohesion[k] === bdSsr.cohesion[k]));
+assert('共鸣是**百分比**：两只宠同为 ' + bd.resonancePct + '%，且直接参与乘池',
+  bdSsr.resonancePct === bd.resonancePct && bd.totalPct.hp === 1600 + bd.resonancePct);
+assert('凝聚不被池「重复计一层」：final = floor((基础＋凝聚)×池%)，不是 floor(基础×池%)＋凝聚',
+  bd.final.hp === Math.floor((bd.base.hp + bd.cohesion.hp) * bd.totalPct.hp / 100) &&
+  bd.final.hp !== Math.floor(bd.base.hp * bd.totalPct.hp / 100) + Math.round(bd.cohesion.hp),
+  bd.final.hp + ' / ' + (Math.floor(bd.base.hp * bd.totalPct.hp / 100) + Math.round(bd.cohesion.hp)));
+assert('旧版 ×8505%（SSR）/ ×2846%（UR）这类合成倍数不再是展示口径（② 只给两项池）',
+  (8505 / 2846) > 2.9 && html.indexOf('×8505%') < 0 && html.indexOf('×2846%') < 0);
 
 /* ============================================================
-   8) 改前（git HEAD）× 改后对照
+   8) 改前（git HEAD = v2.15）× 改后对照
    ============================================================ */
 console.log('\n[8] 改前 → 改后逐属性对照（git HEAD:page/pet-store.js ＋ page/group-levels.js）');
+/* 改前（v2.15）实测值：凝聚/共鸣都折成「贡献值 ÷ 本宠基础」的百分比进池 */
 const OLD_FINAL = {
-  dream: { hp: 29440, atk: 1632, def: 1024, spd: 9, soulAtk: 1024, soulDef: 672 },
-  possum: { hp: 17760, atk: 1050, def: 675, spd: 8, soulAtk: 675, soulDef: 390 }
+  dream: { hp: 17344, atk: 1017, def: 679, spd: 9, soulAtk: 679, soulDef: 506 },
+  possum: { hp: 4024, atk: 358, def: 264, spd: 8, soulAtk: 264, soulDef: 176 }
 };
 function headSrc(f) {
   return cp.execSync('git -C "' + ROOT.replace(/\\/g, '/') + '" show HEAD:page/' + f,
@@ -368,29 +396,35 @@ function headSrc(f) {
 let oldStore = null, oldGl = null;
 try { oldStore = headSrc('pet-store.js'); oldGl = headSrc('group-levels.js'); }
 catch (e) { console.log(' · git 取不到改前文件（' + (e && e.message ? e.message.split('\n')[0] : 'unknown') + '）→ 改用写死的改前黄金值'); }
-/* 若 HEAD 里已经是新口径（本版提交之后），实时对照没有意义 → 退回写死值 */
-const headIsOld = !!oldStore && oldStore.indexOf('function petBonusAdditivePool') < 0;
+/* 判据：HEAD 是「v2.15（四项加算）」而不是本轮新口径（新口径才含 PET_RESONANCE_SCALE） */
+const headIsOld = !!oldStore && oldStore.indexOf('PET_RESONANCE_SCALE') < 0;
 if (oldStore && oldGl && headIsOld) {
   const sbOld = makeSandbox({ storeSrc: oldStore, glSrc: oldGl });
   const oldPets = seedFixture(sbOld);
   const oUr = sbOld.petStatBreakdown(oldPets.filter(p => p.speciesId === 'dream')[0]);
   const oSsr = sbOld.petStatBreakdown(oldPets.filter(p => p.speciesId === 'possum')[0]);
+  const pct = (a, b) => ((b / a - 1) * 100).toFixed(1) + '%';
   STAT_KEYS.forEach(function (k) {
     console.log('   UR[' + k.padEnd(7) + '] ' + String(oUr.final[k]).padStart(7) + ' → ' + String(bd.final[k]).padStart(7)
-      + '  (' + ((bd.final[k] / oUr.final[k] - 1) * 100).toFixed(1) + '%)');
+      + '  (' + pct(oUr.final[k], bd.final[k]) + ')');
     assert('改前 UR[' + k + '] = 记录的旧值 ' + OLD_FINAL.dream[k], oUr.final[k] === OLD_FINAL.dream[k],
       oUr.final[k] + ' vs ' + OLD_FINAL.dream[k]);
   });
   STAT_KEYS.forEach(function (k) {
     console.log('   SSR[' + k.padEnd(6) + '] ' + String(oSsr.final[k]).padStart(7) + ' → ' + String(bdSsr.final[k]).padStart(7)
-      + '  (' + ((bdSsr.final[k] / oSsr.final[k] - 1) * 100).toFixed(1) + '%)');
+      + '  (' + pct(oSsr.final[k], bdSsr.final[k]) + ')');
     assert('改前 SSR[' + k + '] = 记录的旧值 ' + OLD_FINAL.possum[k], oSsr.final[k] === OLD_FINAL.possum[k],
       oSsr.final[k] + ' vs ' + OLD_FINAL.possum[k]);
   });
-  assert('口径确实变了：UR 生命 ' + oUr.final.hp + ' → ' + bd.final.hp + '（旧口径把凝聚/共鸣也乘进了池）',
-    oUr.final.hp !== bd.final.hp && oUr.final.hp > bd.final.hp);
-  assert('改前版本没有 petBonusAdditivePool（唯一公式实现是本轮新增）',
-    typeof sbOld.petBonusAdditivePool === 'undefined' && typeof sb.petBonusAdditivePool === 'function');
+  const total = (bd2, keys) => BONUS_KEYS.reduce((s, k) => s + bd2.final[k], 0);
+  console.log('   整体强度（5 项之和）UR  ' + total(oUr) + ' → ' + total(bd)
+    + '  (' + pct(total(oUr), total(bd)) + ')');
+  console.log('   整体强度（5 项之和）SSR ' + total(oSsr) + ' → ' + total(bdSsr)
+    + '  (' + pct(total(oSsr), total(bdSsr)) + ')');
+  assert('口径确实变了（UR 生命 ' + oUr.final.hp + ' → ' + bd.final.hp + '）',
+    oUr.final.hp !== bd.final.hp);
+  assert('改前版本没有 PET_RESONANCE_SCALE（新共鸣档位表是本轮新增）',
+    typeof sbOld.PET_RESONANCE_SCALE === 'undefined' && !!sb.PET_RESONANCE_SCALE);
   assert('改前 base 也不含加成（旧口径写的是 bench，base 一直干净）',
     STAT_KEYS.every(k => oUr.base[k] === bd.base[k]));
 } else {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>💪 MyHealth</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
-<link rel="stylesheet" href="index.css?v169">
+<link rel="stylesheet" href="index.css?v170">
 </head>
 <body>
 <div id="app">
@@ -280,64 +280,64 @@
 <!-- 全屏可滚动面板容器（宠物/技能培养）：战斗用的 .battle-overlay 是 flex 布局且不支持滚动，勿复用 -->
 <div class="panel-overlay" id="panelOverlay" role="dialog" aria-modal="true" aria-label="培养面板"></div>
 
-<script src="store.js?v169"></script>
-<script src="battle-history.js?v169"></script>
-<script src="data/exercises-dataset.js?v169"></script>
-<script src="ex-dataset.js?v169"></script>
-<script src="config.js?v169"></script>
-<script src="utils.js?v169"></script>
-<script src="levels.js?v169"></script>
+<script src="store.js?v170"></script>
+<script src="battle-history.js?v170"></script>
+<script src="data/exercises-dataset.js?v170"></script>
+<script src="ex-dataset.js?v170"></script>
+<script src="config.js?v170"></script>
+<script src="utils.js?v170"></script>
+<script src="levels.js?v170"></script>
 <!-- v2.3.0 怪兽头像原型映射：只依赖 levels.js 的数据形状，放在 levels.js 之后即可 -->
-<script src="monster-archetype.js?v169"></script>
+<script src="monster-archetype.js?v170"></script>
 <!-- v2.3.2 技能图标渲染唯一入口：只含合法 id 白名单 + 路径拼接，
      不依赖任何其他模块，因此放在所有消费方（skill-ui / game-render）之前即可。
      注意：必须早于 game-render.js（316 行），否则其内部 typeof 守卫会判为未定义。 -->
-<script src="skill-icon.js?v169"></script>
-<script src="date-roll.js?v169"></script>
-<script src="monthly-reset.js?v169"></script>
-<script src="stats.js?v169"></script>
-  <script src="level-titles.js?v169"></script>
-  <script src="level-system.js?v169"></script>
-<script src="state-core.js?v169"></script>
-<script src="status-defs.js?v169"></script>
-<script src="fx-semantics.js?v169"></script>
-<script src="unit.js?v169"></script>
-<script src="talent.js?v169"></script>
-<script src="affix.js?v169"></script>
-<script src="skill.js?v169"></script>
-<script src="enemy.js?v169"></script>
-<script src="battle.js?v169"></script>
-<script src="battle-group.js?v169"></script>
-<script src="terrain.js?v169"></script>
-<script src="group-levels.js?v169"></script>
-<script src="group-progress.js?v169"></script>
-<script src="ai.js?v169"></script>
-<script src="challenge.js?v169"></script>
-<script src="linechart.js?v169"></script>
-<script src="app.js?v169"></script>
-<script src="sync.js?v169"></script>
-<script src="tab-strength.js?v169"></script>
-<script src="tab-cardio.js?v169"></script>
-<script src="tab-profile.js?v169"></script>
-<script src="game-render.js?v169"></script>
-<script src="game-battle.js?v169"></script>
-<script src="game-records.js?v169"></script>
-<script src="game-refine.js?v169"></script>
-<script src="tab-game.js?v169"></script>
-<script src="tab-settings.js?v169"></script>
-<script src="pets.js?v169"></script>
-<script src="pet-materials.js?v169"></script>
-<script src="pet-codex.js?v169"></script>
-<script src="pet-store.js?v169"></script>
-<script src="pet-ui.js?v169"></script>
-<script src="skills.js?v169"></script>
-<script src="player-skill-hooks.js?v169"></script>
-<script src="skill-store.js?v169"></script>
-<script src="skill-ui.js?v169"></script>
-<script src="orbs.js?v169"></script>
-<script src="game-views.js?v169"></script>
-<script src="debug.js?v169"></script>
-  <script src="codex.js?v169"></script>
+<script src="skill-icon.js?v170"></script>
+<script src="date-roll.js?v170"></script>
+<script src="monthly-reset.js?v170"></script>
+<script src="stats.js?v170"></script>
+  <script src="level-titles.js?v170"></script>
+  <script src="level-system.js?v170"></script>
+<script src="state-core.js?v170"></script>
+<script src="status-defs.js?v170"></script>
+<script src="fx-semantics.js?v170"></script>
+<script src="unit.js?v170"></script>
+<script src="talent.js?v170"></script>
+<script src="affix.js?v170"></script>
+<script src="skill.js?v170"></script>
+<script src="enemy.js?v170"></script>
+<script src="battle.js?v170"></script>
+<script src="battle-group.js?v170"></script>
+<script src="terrain.js?v170"></script>
+<script src="group-levels.js?v170"></script>
+<script src="group-progress.js?v170"></script>
+<script src="ai.js?v170"></script>
+<script src="challenge.js?v170"></script>
+<script src="linechart.js?v170"></script>
+<script src="app.js?v170"></script>
+<script src="sync.js?v170"></script>
+<script src="tab-strength.js?v170"></script>
+<script src="tab-cardio.js?v170"></script>
+<script src="tab-profile.js?v170"></script>
+<script src="game-render.js?v170"></script>
+<script src="game-battle.js?v170"></script>
+<script src="game-records.js?v170"></script>
+<script src="game-refine.js?v170"></script>
+<script src="tab-game.js?v170"></script>
+<script src="tab-settings.js?v170"></script>
+<script src="pets.js?v170"></script>
+<script src="pet-materials.js?v170"></script>
+<script src="pet-codex.js?v170"></script>
+<script src="pet-store.js?v170"></script>
+<script src="pet-ui.js?v170"></script>
+<script src="skills.js?v170"></script>
+<script src="player-skill-hooks.js?v170"></script>
+<script src="skill-store.js?v170"></script>
+<script src="skill-ui.js?v170"></script>
+<script src="orbs.js?v170"></script>
+<script src="game-views.js?v170"></script>
+<script src="debug.js?v170"></script>
+  <script src="codex.js?v170"></script>
 <script>init()</script>
 </body>
 </html>

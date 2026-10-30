@@ -1,24 +1,22 @@
 #!/usr/bin/env node
-/* v2.15 新增套件：宠物加成**加算层**（作者裁决「改成按所有宠物计算，加成之间用加算」）
+/* v2.16 套件：宠物加成**口径**（作者裁决，**以第二段为准**）
+   —— 凝聚是「固定值」、共鸣是「进池百分比」，两者都只统计【成熟期】宠物。
 
    被钉死的口径（唯一真相）：
-       基础        = 图鉴基础 ＋ 炼化 ＋ 天赋静态            （createPetUnit，未改）
-       加成合计%   = 稀有度% ＋ Σ宝珠% ＋ 凝聚% ＋ 共鸣%      （四项【加算】，同一层）
-         凝聚贡献值 = (全部宠物该属性基础之和) × 10%
-         共鸣贡献值 = (全部宠物该属性基础之和) × resonanceBonus(持有总数)   ← 3/5/7/10% 取档
-         凝聚%      = 凝聚贡献值 ÷ 本宠该属性基础 × 100
-         共鸣%      = 共鸣贡献值 ÷ 本宠该属性基础 × 100
-       最终        = floor(基础 × 加成合计% / 100)
-       速度        = 不参与百分比池（×100%）
+       凝聚 S凝聚[k] = 3% × Σ(所有【成熟期】宠物该属性 base)      k ∈ {hp,atk,def,soulAtk,soulDef}
+       共鸣 S共鸣%   = Σ(每只【成熟期】宠物的稀有度档位)            UR 10 / SSR 8 / SR 7 / R 6（相加）
+       加成合计%[k]  = 稀有度%(本宠) ＋ Σ宝珠%[k](本宠) ＋ S共鸣%
+       最终[k]       = floor( (base[k] ＋ S凝聚[k]) × 加成合计%[k] / 100 )
+       速度 spd      = base.spd（不参与凝聚、不参与百分比池）
 
    本套 7 组断言：
-     [1] 纯函数逐属性恒等式：final = floor(基础 × (稀有度＋宝珠＋凝聚＋共鸣) ÷ 100)
-     [2] **同一存档下每只宠的凝聚/共鸣贡献值完全相同**（旧口径下人人不同）
-     [3] 面板链（petStatBreakdown）与实战链（buildGroupBattlePets）给出**同一组 final**
-     [4] 池的唯一出口 boostPetForGroup：只有它做「四项相加 + 取整」
-     [5] 纯函数：不写入参 / 连续 N 次不变 / 除零与脏存档安全
-     [6] 「全部宠物」的取数口径：含蛋期 / 受伤 / 阵亡 / 本宠 / 参战，一个都不筛
-     [7] 源码级守卫：池唯一出口 / 单一公式实现 / applyBattlePetBaseBonuses 不写 base
+     [1] 纯函数逐属性恒等式：final = floor((基础 ＋ 凝聚) × (稀有度＋宝珠＋Σ共鸣) ÷ 100)
+     [2] **S凝聚 / S共鸣% 对每只宠完全相同**（全局常量），且等于契约值
+     [3] 面板链（petStatBreakdown）与实战链（buildGroupBattlePets）**逐属性同值**
+     [4] 池的唯一出口 boostPetForGroup：池**只有三项**（稀有度 ＋ Σ宝珠 ＋ Σ共鸣），无残留项
+     [5] 纯函数：不写入参 / 连续 N 次不变 / 脏存档安全
+     [6] **只统计成熟期**：蛋期 / 成长期不影响两值（含反证）；受伤 / 阵亡**不另外筛**
+     [7] 源码级守卫：池唯一出口 / 单一公式实现 / 只筛阶段 / applyBattlePetBaseBonuses 不写 base
 
    Run: node scripts/test-pet-bonus-additive.js */
 'use strict';
@@ -90,9 +88,9 @@ const petsA = [
   mkPet(sb, 'possum', { orbs: { atk: { id: 'orb-a', type: 'atk', rarity: 'SR', level: 3 } } }),                   // SSR + 宝珠
   mkPet(sb, 'icecrystal', { refineLevel: 2, refineStats: { hp: 60, atk: 8 } }),                                    // SSR
   mkPet(sb, 'chirpbird'),                                                                                          // SR
-  mkPet(sb, 'sparkle', { injured: true, injuryHeal: 40 }),                                                         // 受伤
-  mkPet(sb, 'nonebear', { isDead: true, health: 0 }),                                                              // 阵亡
-  Object.assign(mkPet(sb, 'kirin'), { stage: 'egg', hatchProgress: 30 }),                                          // 蛋期
+  mkPet(sb, 'sparkle', { injured: true, injuryHeal: 40 }),                                                         // 受伤（仍是成熟期）
+  mkPet(sb, 'nonebear', { isDead: true, health: 0 }),                                                              // 阵亡（仍是成熟期）
+  Object.assign(mkPet(sb, 'kirin'), { stage: 'egg', hatchProgress: 30 }),                                          // 蛋期 → 不计入
   mkPet(sb, 'lightspirit'),
   mkPet(sb, 'darkcrow'),
   mkPet(sb, 'flamechick'),
@@ -105,64 +103,82 @@ assert('12 只宠全部进了存档', sb.getPetStore().pets.length === 12);
 assert('含 1 只受伤 / 1 只阵亡 / 1 只蛋期',
   petsA.filter(p => p.injured).length === 1 && petsA.filter(p => p.isDead).length === 1 &&
   petsA.filter(p => p.stage === 'egg').length === 1);
+const view = sb.petBaseBonusView();
+assert('成熟期只数 = 11（12 只减去 1 只蛋期）', view.matureCount === 11 && view.allCount === 12,
+  view.matureCount + ' / ' + view.allCount);
+assert('凝聚档位常量 = 3%（TEAM_COHESION_PCT）', sb.TEAM_COHESION_PCT === 3 && view.cohesionRatePct === 3);
+assert('共鸣档位表 = UR 10 / SSR 8 / SR 7 / R 6',
+  JSON.stringify(sb.PET_RESONANCE_SCALE) === JSON.stringify({ UR: 10, SSR: 8, SR: 7, R: 6 }),
+  JSON.stringify(sb.PET_RESONANCE_SCALE));
 
 /* ============================================================
    [1] 纯函数逐属性恒等式
    ============================================================ */
-console.log('\n[1] final = floor(基础 × (稀有度＋Σ宝珠＋凝聚%＋共鸣%) ÷ 100) 逐属性成立');
+console.log('\n[1] final = floor((基础 ＋ 凝聚) × (稀有度＋Σ宝珠＋Σ共鸣) ÷ 100) 逐属性成立');
+const matureSum = sb.petMatureBaseSum();
 const allSum = sb.petAllPetsBaseSum();
-const view = sb.petBaseBonusView();
-assert('petAllPetsBaseSum 是逐属性的合计（全部 12 只）',
-  BONUS_KEYS.every(k => allSum[k] > 0) && view.allCount === 12);
+assert('petMatureBaseSum 逐属性 > 0（11 只成熟期）',
+  BONUS_KEYS.every(k => matureSum[k] > 0) && matureSum.spd > 0);
+assert('成熟期之和 < 全部之和（蛋期那只被排除在外）',
+  BONUS_KEYS.every(k => matureSum[k] < allSum[k]),
+  JSON.stringify(matureSum) + ' vs ' + JSON.stringify(allSum));
 petsA.forEach(function (pet) {
   const u = sb.createPetUnit(pet);
   const rar = sb.petUnitRarityPct(u);
-  const pool = sb.petBonusAdditivePool(allSum, u.base, rar, u._orbPct, view.resonancePct);
+  const pool = sb.petBonusAdditivePool(matureSum, u.base, rar, u._orbPct, view.resonancePct);
   const bad = BONUS_KEYS.filter(function (k) {
-    const total = rar + (u._orbPct[k] || 0) + pool.cohesionPct[k] + pool.resonancePct[k];
-    return pool.totalPct[k] !== total || pool.final[k] !== Math.max(1, Math.floor(u.base[k] * total / 100));
+    const total = rar + (u._orbPct[k] || 0) + view.resonancePct;
+    return pool.cohesion[k] !== matureSum[k] * 3 / 100 ||
+      pool.totalPct[k] !== total ||
+      pool.final[k] !== Math.max(1, Math.floor((u.base[k] + pool.cohesion[k]) * total / 100));
   });
   assert(pet.speciesId + '（' + pet.rarity + '）5 个参与属性全部满足恒等式', bad.length === 0,
     bad.map(k => k + ':' + pool.final[k]).join(','));
-  assert(pet.speciesId + '·速度不参与（加成合计 = 100、final = 基础）',
-    pool.totalPct.spd === 100 && pool.final.spd === u.base.spd && pool.cohesionPct.spd === 0 &&
-    pool.resonancePct.spd === 0);
+  assert(pet.speciesId + '·速度不参与（凝聚 0、加成合计 = 100、final = 基础）',
+    pool.totalPct.spd === 100 && pool.final.spd === u.base.spd && pool.cohesion.spd === 0);
 });
-/* 恒等式的**等价绝对形式**：final ≈ 基础×稀有度/100 + Σ宝珠 + 凝聚贡献值 + 共鸣贡献值
-   （floor 之前等值；用它证明「凝聚/共鸣不再被池放大」） */
+/* 恒等式的**等价展开形式**：final = floor(基础×稀有度% + 基础×宝珠% + 基础×Σ共鸣% + 凝聚×池%)
+   —— 用来证明「凝聚只被池放大一次、且加在基础上」（不是被重复计一层） */
 (() => {
   const u = sb.createPetUnit(petsA[0]);
-  const pool = sb.petBonusAdditivePool(allSum, u.base, 1600, u._orbPct, view.resonancePct);
+  const pool = sb.petBonusAdditivePool(matureSum, u.base, 1600, u._orbPct, view.resonancePct);
   const k = 'hp';
-  const exact = u.base[k] * pool.totalPct[k] / 100;
-  const byParts = u.base[k] * 1600 / 100 + pool.cohesionValue[k] + pool.resonanceValue[k];
-  assert('绝对值形式与百分比形式同值（凝聚/共鸣按面值进入，不被池放大）',
+  const exact = (u.base[k] + pool.cohesion[k]) * pool.totalPct[k] / 100;
+  const byParts = u.base[k] * 1600 / 100 + u.base[k] * view.resonancePct / 100 + pool.cohesion[k] * pool.totalPct[k] / 100;
+  assert('展开形式与合并形式同值（凝聚确实与基础同乘一个池）',
     Math.abs(exact - byParts) < 1e-6, exact + ' vs ' + byParts);
 })();
 
 /* ============================================================
-   [2] 同一存档下每只宠的凝聚/共鸣**贡献值完全相同**
+   [2] S凝聚 / S共鸣% 对**每只宠完全相同**（全局常量）
    ============================================================ */
-console.log('\n[2] 每只宠的凝聚贡献值 / 共鸣贡献值完全相同（旧口径下人人不同）');
-const contribs = petsA.map(function (pet) {
+console.log('\n[2] 每只宠看到的 S凝聚 / S共鸣% 完全相同（作者硬性不变量）');
+const pools = petsA.map(function (pet) {
   const u = sb.createPetUnit(pet);
-  return sb.petBonusAdditivePool(allSum, u.base, sb.petUnitRarityPct(u), u._orbPct, view.resonancePct);
+  return { pet: pet, pool: sb.petBonusAdditivePool(matureSum, u.base, sb.petUnitRarityPct(u), u._orbPct, view.resonancePct) };
 });
 BONUS_KEYS.forEach(function (k) {
-  const cohSet = new Set(contribs.map(p => p.cohesionValue[k]));
-  const resSet = new Set(contribs.map(p => p.resonanceValue[k]));
-  assert('[' + k + '] 12 只宠的凝聚贡献值只有 1 个值（' + [...cohSet][0] + '）', cohSet.size === 1,
+  const cohSet = new Set(pools.map(p => p.pool.cohesion[k]));
+  assert('[' + k + '] 12 只宠的 S凝聚只有 1 个值（' + [...cohSet][0] + '）', cohSet.size === 1,
     [...cohSet].join(','));
-  assert('[' + k + '] 12 只宠的共鸣贡献值只有 1 个值（' + [...resSet][0] + '）', resSet.size === 1,
-    [...resSet].join(','));
-  assert('[' + k + '] 契约值 = 全部宠物之和 × 10% / × ' + view.resonancePct + '%',
-    contribs[0].cohesionValue[k] === allSum[k] * 10 / 100 &&
-    contribs[0].resonanceValue[k] === allSum[k] * view.resonancePct / 100);
+  assert('[' + k + '] 契约值 = 成熟期之和 ' + matureSum[k] + ' × 3% = ' + (matureSum[k] * 3 / 100),
+    pools[0].pool.cohesion[k] === matureSum[k] * 3 / 100);
 });
-assert('百分比却各不相同（÷ 各自基础）—— 基础小的宠百分比更大',
-  new Set(contribs.map(p => p.cohesionPct.hp)).size > 1 &&
-  contribs[1].cohesionPct.hp > contribs[0].cohesionPct.hp,   // possum(200) 的基础 < dream(1020)
-  contribs[0].cohesionPct.hp + '% vs ' + contribs[1].cohesionPct.hp + '%');
+assert('S共鸣% 只有一个值（' + view.resonancePct + '%）',
+  new Set(pools.map(p => p.pool.resonancePct)).size === 1, String(view.resonancePct));
+/* Σ共鸣% 的契约值：逐只按稀有度相加（成熟期） */
+(() => {
+  const expect = petsA.filter(p => p.stage === 'mature')
+    .reduce((s, p) => s + sb.petRarityResonancePct(((sb.createPetUnit(p).tags || [])[1] || 'R')), 0);
+  assert('S共鸣% = 成熟期逐只稀有度档位之和（' + expect + '%）', view.resonancePct === expect,
+    view.resonancePct + ' vs ' + expect);
+  const byRarity = {};
+  petsA.filter(p => p.stage === 'mature').forEach(p => { byRarity[p.rarity] = (byRarity[p.rarity] || 0) + 1; });
+  console.log('   成熟期稀有度分布：' + JSON.stringify(byRarity)
+    + ' → Σ共鸣 ' + view.resonancePct + '%');
+})();
+assert('但 final 各不相同（差异只来自各自的基础与稀有度档位）',
+  new Set(pools.map(p => p.pool.final.hp)).size > 3);
 
 /* ============================================================
    [3] 面板链 ≡ 实战链（同一组 final）
@@ -192,31 +208,36 @@ built.forEach(function (u) {
   assert('petStatBreakdown 的 final 来自 boostPetForGroup（boosted = true）', bd.boosted === true);
   assert('BD 的纯函数值 pureFinal 也等于 final（两条独立实现互校）',
     STAT_KEYS.every(k => bd.final[k] === bd.pureFinal[k]), JSON.stringify(bd.final));
+  assert('面板上的 S凝聚 / S共鸣% 与视图同值（同一份取数口）',
+    BONUS_KEYS.every(k => bd.cohesion[k] === view.cohesion[k]) && bd.resonancePct === view.resonancePct);
 })();
 
 /* ============================================================
-   [4] 池的唯一出口 boostPetForGroup
+   [4] 池的唯一出口 boostPetForGroup —— 池**只有三项**
    ============================================================ */
-console.log('\n[4] 池的唯一出口：boostPetForGroup 做「四项相加 + 取整」');
+console.log('\n[4] 池的唯一出口：boostPetForGroup 做「(基础＋凝聚) × 三项之和 ÷ 100」');
 (() => {
   const u = sb.createPetUnit(petsA[2]);
   const raw = Object.assign({}, u.base);
   sb.applyBattlePetBaseBonuses([u]);              // 只挂 _benchPct
   assert('applyBattlePetBaseBonuses 不改 base（旧口径会在这里加绝对值）',
     JSON.stringify(u.base) === JSON.stringify(raw));
-  const pct = sb.petBenchPctOf(u);
-  assert('挂载点存在且逐属性有凝聚% / 共鸣%',
-    !!pct && BONUS_KEYS.every(k => pct.cohesion[k] > 0 || raw[k] === 0), JSON.stringify(pct.cohesion));
+  const bp = sb.petBenchPctOf(u);
+  assert('挂载点存在：cohesion 是**固定值**表、resonancePct 是**一个数**',
+    !!bp && BONUS_KEYS.every(k => bp.cohesion[k] > 0) && typeof bp.resonancePct === 'number' && bp.resonancePct > 0,
+    JSON.stringify(bp));
+  assert('挂载的 cohesion 就是 S凝聚（成熟期之和 × 3%，每只宠相同）',
+    BONUS_KEYS.every(k => bp.cohesion[k] === matureSum[k] * 3 / 100));
   sb.boostPetForGroup(u);
   const bad = BONUS_KEYS.filter(function (k) {
-    const want = Math.max(1, Math.floor(raw[k] * (sb.petUnitRarityPct(u) + (u._orbPct[k] || 0)
-      + pct.cohesion[k] + pct.resonance[k]) / 100));
+    const want = Math.max(1, Math.floor((raw[k] + bp.cohesion[k]) * (sb.petUnitRarityPct(u) + (u._orbPct[k] || 0) + bp.resonancePct) / 100));
     return u.base[k] !== want;
   });
-  assert('boostPetForGroup 逐属性 = floor(基础 × 四项之和 ÷ 100)', bad.length === 0, bad.join(','));
+  assert('boostPetForGroup 逐属性 = floor((基础＋凝聚) × 三项之和 ÷ 100)', bad.length === 0, bad.join(','));
   assert('boostPetForGroup 之后 hp 与 base.hp 同步', u.hp === u.base.hp);
+  assert('速度不被 boostPetForGroup 改动（也不加凝聚）', u.base.spd === raw.spd, u.base.spd + ' vs ' + raw.spd);
 })();
-/* 没有挂载点时（老调用点 / 单测直接造单位）行为与旧版一致：池 = 稀有度 ＋ Σ宝珠 */
+/* 没有挂载点时（老调用点 / 单测直接造单位）池 = 稀有度 ＋ Σ宝珠（行为与 v2.14 一致） */
 (() => {
   const a = sb.boostPetForGroup(sb.createUnit({ id: 'p1', side: 'ally', name: '宠', tags: ['pet', 'SSR'],
     base: { hp: 200, atk: 20, def: 15, spd: 8, soulAtk: 15, soulDef: 10 } }));
@@ -227,20 +248,28 @@ console.log('\n[4] 池的唯一出口：boostPetForGroup 做「四项相加 + �
   const b = sb.boostPetForGroup(bUnit);
   assert('未挂载 + 宝珠 → 稀有度 ＋ Σ宝珠（1510%）', b.base.atk === Math.floor(20 * 1510 / 100), String(b.base.atk));
 })();
+/* v2.15 的两个「贡献值百分比」项必须**彻底消失**（不残留成第四项） */
+(() => {
+  const u = sb.createPetUnit(petsA[1]);
+  const pool = sb.petBonusAdditivePool(matureSum, u.base, sb.petUnitRarityPct(u), u._orbPct, view.resonancePct);
+  assert('旧口径字段 cohesionPct / resonanceValue / cohesionValue 已下线',
+    pool.cohesionPct === undefined && pool.cohesionValue === undefined && pool.resonanceValue === undefined);
+  assert('总数里没有第四项：totalPct = 稀有度 ＋ Σ宝珠 ＋ Σ共鸣（逐属性）',
+    BONUS_KEYS.every(k => pool.totalPct[k] === sb.petUnitRarityPct(u) + (u._orbPct[k] || 0) + view.resonancePct));
+})();
 
 /* ============================================================
    [5] 纯函数契约：不写入参 / 连续 N 次不变 / 除零安全
    ============================================================ */
 console.log('\n[5] 纯函数契约（不写入参 / 幂等 / 除零与脏存档）');
 (() => {
-  const s = JSON.stringify({ a: allSum, b: sb.createPetUnit(petsA[0]).base });
   const u = sb.createPetUnit(petsA[0]);
-  const snap = JSON.stringify(u);
-  const r1 = sb.petBonusAdditivePool(allSum, u.base, 1600, u._orbPct, 10);
-  assert('不修改入参（allBaseSum / selfBase / 单位本体 JSON 一字不变）',
-    JSON.stringify({ a: allSum, b: u.base }) === s && JSON.stringify(u) === snap);
+  const snap = JSON.stringify({ sum: matureSum, base: u.base, unit: u });
+  const r1 = sb.petBonusAdditivePool(matureSum, u.base, 1600, u._orbPct, view.resonancePct);
+  assert('不修改入参（matureBaseSum / selfBase / 单位本体 JSON 一字不变）',
+    JSON.stringify({ sum: matureSum, base: u.base, unit: u }) === snap);
   const series = [];
-  for (let i = 0; i < 50; i++) series.push(JSON.stringify(sb.petBonusAdditivePool(allSum, u.base, 1600, u._orbPct, 10)));
+  for (let i = 0; i < 50; i++) series.push(JSON.stringify(sb.petBonusAdditivePool(matureSum, u.base, 1600, u._orbPct, view.resonancePct)));
   assert('连续 50 次调用结果逐字节一致', series.every(x => x === series[0]));
   assert('返回值里没有 NaN / Infinity / undefined',
     !/NaN|Infinity|undefined/.test(JSON.stringify(r1)));
@@ -258,119 +287,135 @@ console.log('\n[5] 纯函数契约（不写入参 / 幂等 / 除零与脏存档�
 })();
 (() => {
   const zero = { hp: 0, atk: 0, def: 0, spd: 0, soulAtk: 0, soulDef: 0 };
-  const r = sb.petBonusAdditivePool(allSum, zero, 1600, {}, 10);
-  assert('基础全 0 → 不产生 NaN / Infinity（除法被跳过）',
-    !/NaN|Infinity/.test(JSON.stringify(r)), JSON.stringify(r).slice(0, 100));
-  assert('基础全 0 → 凝聚%/共鸣% 记 0、速度 final = 0',
-    r.cohesionPct.hp === 0 && r.resonancePct.hp === 0 && r.final.spd === 0);
-  assert('空存档（0 只宠）→ 合计全 0、贡献值 0、不报错', (function () {
+  const r = sb.petBonusAdditivePool(matureSum, zero, 1600, {}, view.resonancePct);
+  assert('基础全 0 → 不产生 NaN / Infinity', !/NaN|Infinity/.test(JSON.stringify(r)), JSON.stringify(r).slice(0, 100));
+  assert('基础全 0 → 凝聚仍是全局值、final = 凝聚×池%（速度 final = 0）',
+    r.cohesion.hp === matureSum.hp * 3 / 100 && r.final.spd === 0 &&
+    r.final.hp === Math.floor(r.cohesion.hp * (1600 + view.resonancePct) / 100));
+  assert('空存档（0 只宠）→ 凝聚 / Σ共鸣 全 0、不报错', (function () {
     const sbEmpty = makeSandbox(7);
     seedStore(sbEmpty, []);
     const v = sbEmpty.petBaseBonusView();
-    const rr = sbEmpty.petBonusAdditivePool(v.allBaseSum, { hp: 100, atk: 10, def: 5, spd: 3, soulAtk: 4, soulDef: 2 },
+    const rr = sbEmpty.petBonusAdditivePool(v.matureBaseSum, { hp: 100, atk: 10, def: 5, spd: 3, soulAtk: 4, soulDef: 2 },
       sbEmpty.PET_GROUP_SCALE.SSR, {}, v.resonancePct);
-    return v.allCount === 0 && rr.cohesionValue.hp === 0 && rr.final.hp === 1500 &&
-      !/NaN|Infinity/.test(JSON.stringify(rr));
+    return v.allCount === 0 && v.matureCount === 0 && v.resonancePct === 0 &&
+      rr.cohesion.hp === 0 && rr.final.hp === 1500 && !/NaN|Infinity/.test(JSON.stringify(rr));
   })());
 })();
 
 /* ============================================================
-   [6] 「全部宠物」的取数口径
+   [6] 只统计【成熟期】—— 阶段是**唯一**的筛选条件
    ============================================================ */
-console.log('\n[6] 「全部宠物」= 存档里的所有宠物（一个都不筛）');
+console.log('\n[6] 只统计成熟期（蛋期 / 成长期不影响两值；受伤 / 阵亡不另外筛）');
 (() => {
-  const base = sb.petAllPetsBaseSum();
-  const mutate = (fn) => { const pets = sb.getPetStore().pets; const save = pets.map(p => JSON.stringify(p)); fn(pets);
-    const after = sb.petAllPetsBaseSum(); pets.forEach((p, i) => { const o = JSON.parse(save[i]); for (const k in o) p[k] = o[k]; });
-    return after; };
+  const base = { sum: sb.petMatureBaseSum(), res: sb.petTeamResonancePct() };
+  const mutate = (fn) => {
+    const pets = sb.getPetStore().pets; const save = pets.map(p => JSON.stringify(p));
+    fn(pets);
+    const after = { sum: sb.petMatureBaseSum(), res: sb.petTeamResonancePct() };
+    pets.forEach((p, i) => { const o = JSON.parse(save[i]); for (const k in o) p[k] = o[k]; });
+    return after;
+  };
   const injured = mutate(ps => { ps.forEach(p => { p.injured = true; }); });
-  assert('全部受伤 → 合计不变（受伤只影响能不能上场）', JSON.stringify(injured) === JSON.stringify(base));
+  assert('全部受伤 → 凝聚/Σ共鸣不变（受伤不另外筛，只筛阶段）',
+    JSON.stringify(injured) === JSON.stringify(base));
   const dead = mutate(ps => { ps.forEach(p => { p.isDead = true; }); });
-  assert('全部阵亡 → 合计不变', JSON.stringify(dead) === JSON.stringify(base));
+  assert('全部阵亡 → 凝聚/Σ共鸣不变（阵亡不另外筛）', JSON.stringify(dead) === JSON.stringify(base));
   const eggs = mutate(ps => { ps.forEach(p => { p.stage = 'egg'; }); });
-  assert('全部蛋期 → 合计不变（阶段不影响基础值口径）', JSON.stringify(eggs) === JSON.stringify(base));
+  assert('全部蛋期 → 凝聚全 0、Σ共鸣 0（阶段筛生效）',
+    BONUS_KEYS.every(k => eggs.sum[k] === 0) && eggs.res === 0, JSON.stringify(eggs));
   const grow = mutate(ps => { ps.forEach(p => { p.stage = 'grow'; }); });
-  assert('全部成长期 → 合计不变', JSON.stringify(grow) === JSON.stringify(base));
+  assert('全部成长期 → 凝聚全 0、Σ共鸣 0', BONUS_KEYS.every(k => grow.sum[k] === 0) && grow.res === 0);
+  /* 反证：只把「那一只蛋期宠」变成成熟期 → 两值都必须变大 */
+  const oneMore = mutate(ps => { ps.forEach(p => { if (p.stage === 'egg') p.stage = 'mature'; }); });
+  assert('反证：唯一那只蛋期宠转成熟后，S凝聚 与 S共鸣% 都严格变大',
+    BONUS_KEYS.every(k => oneMore.sum[k] > base.sum[k]) && oneMore.res > base.res,
+    JSON.stringify(oneMore) + ' vs ' + JSON.stringify(base));
+  /* 反证：把一只成熟期宠降回蛋期 → 两值都必须变小 */
+  const oneLess = mutate(ps => { ps[0].stage = 'egg'; });
+  assert('反证：一只成熟宠转蛋期后，S凝聚 与 Σ共鸣 都严格变小',
+    BONUS_KEYS.every(k => oneLess.sum[k] < base.sum[k]) && oneLess.res < base.res);
 })();
 (() => {
-  /* 本宠也在合计里：去掉本宠后，合计严格变小 */
-  const full = sb.petAllPetsBaseSum();
-  const withoutSelf = petsA.slice(1).reduce(function (s, p) {
-    const u = sb.createPetUnit(p);
-    BONUS_KEYS.forEach(k => { s[k] = (s[k] || 0) + (u.base[k] || 0); });
-    return s;
-  }, {});
-  assert('本宠自己也在「全部宠物」里（合计 > 去掉本宠的合计）',
-    BONUS_KEYS.every(k => full[k] > withoutSelf[k]), JSON.stringify(full) + ' vs ' + JSON.stringify(withoutSelf));
-})();
-(() => {
-  /* 参战宠也在合计里：参战 4 只不会从「全部」里被剔掉 */
-  const full = sb.petAllPetsBaseSum();
+  /* 参战宠 / 本宠都在成熟期口径里（不是「未上场后备」） */
   const bd = sb.petStatBreakdown(petsA[0]);
-  const cnt = sb.getPetStore().pets.length;
-  assert('参战宠不被剔除（allCount = 存档只数 ' + cnt + '）', bd.allCount === cnt, String(bd.allCount));
-  assert('合计 = 逐只 createPetUnit 的 base 之和（独立重算）',
-    BONUS_KEYS.concat(['spd']).every(function (k) {
-      const s = sb.getPetStore().pets.reduce((acc, p) => acc + (sb.createPetUnit(p).base[k] || 0), 0);
-      return full[k] === s;
-    }));
+  assert('本宠（成熟期）自己也在合计里：去掉它合计严格变小', (function () {
+    const u = sb.createPetUnit(petsA[0]);
+    const without = {};
+    BONUS_KEYS.forEach(k => { without[k] = (sb.getPetStore().pets.slice(1)
+      .filter(p => p.stage === 'mature')
+      .reduce((s, p) => s + (sb.createPetUnit(p).base[k] || 0), 0)); });
+    return BONUS_KEYS.every(k => bd.cohesion[k] > without[k] * 3 / 100);
+  })());
+  assert('参战宠不被剔除（matureCount = 11 / allCount = 12）',
+    bd.matureCount === 11 && bd.allCount === 12, bd.matureCount + ' / ' + bd.allCount);
 })();
 (() => {
-  /* 共鸣档位随持有总数变化（3/5/7/10%），阈值由 pets.js 唯一决定 */
+  /* 共鸣档位与「持有总数」无关（旧口径 resonanceBonus 已下线） */
   const sb2 = makeSandbox(11);
   const tiers = [];
   [1, 2, 4, 7, 11].forEach(function (n) {
-    seedStore(sb2, petsA.slice(0, n).map(p => JSON.parse(JSON.stringify(p))));
+    seedStore(sb2, petsA.slice(0, n).map(p => { const q = JSON.parse(JSON.stringify(p)); q.stage = 'mature'; return q; }));
     tiers.push(sb2.petBaseBonusView().resonancePct);
   });
-  assert('共鸣档位 1/2/4/7/11 只 → 0/3/5/7/10%', JSON.stringify(tiers) === JSON.stringify([0, 3, 5, 7, 10]),
-    JSON.stringify(tiers));
+  assert('Σ共鸣% 由「成熟期只数 × 稀有度」决定，1/2/4/7/11 只各不相同',
+    new Set(tiers).size === 5 && tiers[0] < tiers[4], JSON.stringify(tiers));
+  const one = sb2.petBaseBonusView();
+  assert('Σ共鸣% 不再按只数取档（旧档位 0/3/5/7/10 已无意义）',
+    !/NaN|Infinity/.test(String(one.resonancePct)) && one.resonancePct > 10);
 })();
 
 /* ============================================================
    [7] 源码级守卫
    ============================================================ */
-console.log('\n[7] 源码守卫（唯一出口 / 单一实现 / 不写 base）');
+console.log('\n[7] 源码守卫（唯一出口 / 单一实现 / 只筛阶段 / 不写 base）');
 const ps = src('pet-store.js');
 const gl = src('group-levels.js');
 const ui = src('pet-ui.js');
 const stripComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 const psCode = stripComments(ps);
 const glCode = stripComments(gl);
+const fnBody = (s, name) => {
+  const i = s.indexOf('function ' + name + '(');
+  if (i < 0) return '';
+  let depth = 0, started = false;
+  for (let j = i; j < s.length; j++) {
+    if (s[j] === '{') { depth++; started = true; }
+    else if (s[j] === '}') { depth--; if (started && depth === 0) return s.slice(i, j + 1); }
+  }
+  return s.slice(i);
+};
 assert('唯一公式实现 petBonusAdditivePool 在 pet-store.js', psCode.indexOf('function petBonusAdditivePool') >= 0);
 assert('池的唯一出口 boostPetForGroup 在 group-levels.js', glCode.indexOf('function boostPetForGroup') >= 0);
-assert('其他地方没有第二个「四项相加」的池（boostPetForGroup 是唯一出处）',
-  (psCode.match(/rarityPct\s*\+\s*\(orbMap/g) || []).length === 0 &&
-  (glCode.match(/rarityPct \+ \(orbMap\[s\] \|\| 0\) \+ \(cohMap\[s\] \|\| 0\) \+ \(resMap\[s\] \|\| 0\)/g) || []).length === 1);
-assert('凝聚/共鸣的百分比只在 petAttachBenchPct 里挂（唯一写入口）',
-  (psCode.match(/petSetBenchPct\(/g) || []).length >= 1 &&
-  /function petAttachBenchPct/.test(psCode));
-assert('boostPetForGroup 只读 _benchPct（通过 petBenchPctOf），不自己算百分比',
+assert('其他地方没有第二个「三项相加」的池（boostPetForGroup 是唯一出处）',
+  (glCode.match(/var poolPct = rarityPct \+ \(orbMap\[s\] \|\| 0\) \+ resPct/g) || []).length === 1);
+assert('boostPetForGroup 只读 _benchPct（通过 petBenchPctOf），不自己算 3% / 稀有度档位',
   /petBenchPctOf\(unit\)/.test(glCode) && glCode.indexOf('TEAM_COHESION_PCT') < 0 &&
-  glCode.indexOf('resonanceBonus') < 0);
+  glCode.indexOf('PET_RESONANCE_SCALE') < 0 && glCode.indexOf('resonanceBonus') < 0);
+assert('凝聚/共鸣的唯一挂载点是 petAttachBenchPct → petSetBenchPct',
+  (psCode.match(/petSetBenchPct\(/g) || []).length >= 1 && /function petAttachBenchPct/.test(psCode));
 assert('applyBattlePetBaseBonuses 不写 base / hp',
-  !/\.(base|hp)\s*(\[[^\]]*\])?\s*=[^=]/.test((function () {
-    const i = psCode.indexOf('function applyBattlePetBaseBonuses');
-    let d = 0, j = psCode.indexOf('{', i), k = j;
-    for (; k < psCode.length; k++) { if (psCode[k] === '{') d++; else if (psCode[k] === '}') { d--; if (d === 0) break; } }
-    return psCode.slice(j, k + 1);
-  })()));
-assert('「全部宠物」的唯一取数口是 petAllPetsBaseSum（不做 canPetBattle 筛选）', (function () {
-  const i = psCode.indexOf('function petAllPetsBaseSum');
-  let d = 0, j = psCode.indexOf('{', i), k = j;
-  for (; k < psCode.length; k++) { if (psCode[k] === '{') d++; else if (psCode[k] === '}') { d--; if (d === 0) break; } }
-  const body = psCode.slice(j, k + 1);
-  return body.indexOf('canPetBattle') < 0 && body.indexOf('.filter(') < 0 &&
-         body.indexOf('stage') < 0 && body.indexOf('injured') < 0 && body.indexOf('isDead') < 0;
+  !/\.(base|hp)\s*(\[[^\]]*\])?\s*=[^=]/.test(fnBody(psCode, 'applyBattlePetBaseBonuses')));
+assert('「成熟期」的唯一筛选口是 petTeamBaseScan，且只用 `pet.stage === \'mature\'`', (function () {
+  const body = fnBody(psCode, 'petTeamBaseScan');
+  return body.length > 200 && body.indexOf("pet.stage === 'mature'") >= 0 &&
+    body.indexOf('injured') < 0 && body.indexOf('isDead') < 0 && body.indexOf('canPetBattle') < 0 &&
+    (body.match(/'mature'/g) || []).length === 1;
 })());
-assert('旧口径的三个函数已下线（benchBonusSum / teamCohesionBonus / benchPetList）',
+assert('旧口径按只数取档的 petResonancePct 已下线（不再调用 resonanceBonus）',
+  psCode.indexOf('function petResonancePct') < 0 && psCode.indexOf('resonanceBonus(') < 0);
+assert('旧口径的三个函数仍不在（benchBonusSum / teamCohesionBonus / benchPetList）',
   ps.indexOf('function benchBonusSum') < 0 && ps.indexOf('function teamCohesionBonus') < 0 &&
   ps.indexOf('function benchPetList') < 0);
+assert('凝聚档位常量 = 3、共鸣档位表 = UR10/SSR8/SR7/R6（唯一来源）',
+  /var TEAM_COHESION_PCT = 3;/.test(psCode) &&
+  /var PET_RESONANCE_SCALE = \{ UR: 10, SSR: 8, SR: 7, R: 6 \};/.test(psCode));
 assert('UI 不重写口径（不引 PET_GROUP_SCALE / 不定义 petStatBreakdown / 不调 applyBattlePetBaseBonuses）',
   ui.indexOf('PET_GROUP_SCALE') < 0 && ui.indexOf('function petStatBreakdown') < 0 &&
   ui.indexOf('applyBattlePetBaseBonuses') < 0);
-assert('UI 的 ② 与明细都走 pet-store 的出口（petBonusLines / petPctTxt / petBonusRow）',
-  ui.indexOf('petBonusLines(') >= 0 && ui.indexOf('petPctTxt(') >= 0 && ui.indexOf('petBonusRow(') >= 0);
+assert('UI 的 ② 与明细都走 pet-store 的出口（petBonusLines / petPctTxt / petValueTxt / petBonusRow）',
+  ui.indexOf('petBonusLines(') >= 0 && ui.indexOf('petPctTxt(') >= 0 &&
+  ui.indexOf('petValueTxt(') >= 0 && ui.indexOf('petBonusRow(') >= 0);
 assert('速度语义常量仍是「不含 spd」的那五个',
   ps.indexOf("var PET_BONUS_ATTRS = ['hp', 'atk', 'def', 'soulAtk', 'soulDef']") >= 0);
 
