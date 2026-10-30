@@ -48,9 +48,94 @@ assert('普攻造成伤害', enemy1.hp < beforeHP, beforeHP + '→' + enemy1.hp)
 // ---- 3. 技能施放 ----
 const healer = sandbox.createUnit({ id: 'heal-0', side: 'ally', name: '奶妈', skills: ['heal'], base: { hp: 100, atk: 5, def: 5, soulAtk: 50 } });
 const gb2 = sandbox.createGroupBattle({ allies: [ally, healer], enemies: [enemy1.clone ? enemy1 : sandbox.createUnit({ id: 'e9', side: 'enemy', name: '敌', base: { hp: 100, atk: 10, def: 5, spd: 2 } })] });
-ally.hp = 100;
-const healEvents = sandbox.castSkill(gb2, healer, 'heal');
-assert('治疗技能恢复', ally.hp > 100, 'hp=' + ally.hp);
+ally.hp = 100; healer.hp = 100;
+const hpSum0 = ally.hp + healer.hp;
+/* v2.14.8（作者规格 3）：「治愈」改为**蓄力 1 回合**（下回合释放）→ 首次施放只挂 charging、不回血 */
+const healCharge = sandbox.castSkill(gb2, healer, 'heal');
+assert('治愈需蓄力 1 回合：首次施放只进入蓄力、不回血',
+  ally.hp + healer.hp === hpSum0 && sandbox.hasStatus(healer, 'charging') === true
+  && healCharge.some(e => /蓄力/.test(e.msg || '')),
+  'hp=' + (ally.hp + healer.hp) + ' statuses=' + JSON.stringify((healer.statuses || []).map(s => s.id)));
+/* 下回合由 groupUnitTurn 以 {releasing:true} 释放本技能自身（此处直接驱动同一条释放路径） */
+const healEvents = sandbox.castSkill(gb2, healer, 'heal', { releasing: true });
+assert('治疗技能恢复（释放蓄力载荷后回血）', ally.hp + healer.hp > hpSum0,
+  'hp=' + ally.hp + '+' + healer.hp);
+/* 治疗量 = 魂攻 ×80%~160% + 目标最大生命 ×5%~10%（v2.14.8 数值照抄，t=0 取下限） */
+{
+  const tgt = sandbox.createUnit({ id: 'heal-t', side: 'ally', name: '靶', base: { hp: 400, atk: 5, def: 5, spd: 1 } });
+  const hl = sandbox.createUnit({ id: 'heal-h', side: 'ally', name: '奶2', skills: ['heal'], base: { hp: 100, atk: 5, def: 5, soulAtk: 50 } });
+  tgt.hp = 100;
+  const gbH = sandbox.createGroupBattle({ allies: [tgt, hl], enemies: [sandbox.createUnit({ id: 'e-h', side: 'enemy', name: '敌', base: { hp: 100, atk: 10, def: 5, spd: 2 } })] });
+  sandbox.castSkill(gbH, hl, 'heal', { releasing: true });
+  const got = tgt.hp - 100;
+  const lo = Math.floor(50 * 0.8 + 400 * 0.05), hi = Math.floor(50 * 1.6 + 400 * 0.10);
+  assert('治愈量落在「魂攻×80%~160% + 目标最大生命×5%~10%」区间内',
+    got >= lo && got <= hi, 'got=' + got + ' 期望区间[' + lo + ',' + hi + ']');
+}
+
+/* v2.14.8（作者规格 3）：**治愈抗性** —— 同一目标 5 回合内再次受治愈 -40%，最多叠到 -80%。
+   驱动方式：同一场战斗连续释放治愈（{releasing:true} 绕开蓄力），只改 gb.turn 推进窗口。 */
+{
+  const tgt = sandbox.createUnit({ id: 'hf-t', side: 'ally', name: '靶', base: { hp: 2000, atk: 5, def: 5, spd: 1 } });
+  const hl = sandbox.createUnit({ id: 'hf-h', side: 'ally', name: '奶', skills: ['heal'], base: { hp: 100, atk: 5, def: 5, soulAtk: 100 } });
+  tgt.hp = 100;
+  const gbHf = sandbox.createGroupBattle({
+    allies: [tgt, hl],
+    enemies: [sandbox.createUnit({ id: 'hf-e', side: 'enemy', name: '敌', base: { hp: 500, atk: 5, def: 5, spd: 2 } })]
+  });
+  const healOnce = function (turn) {
+    gbHf.turn = turn;
+    const before = tgt.hp;
+    const evs = sandbox.castSkill(gbHf, hl, 'heal', { releasing: true }) || [];
+    return { got: tgt.hp - before, log: evs.map(e => e.msg || '').join(' | ') };
+  };
+  const full = healOnce(1);
+  const second = healOnce(2);
+  const third = healOnce(3);
+  const deep = healOnce(4);
+  /* 减幅 = 扣掉的量，故「-80%」= 只剩 20%；断言口径必须是 got ≈ full×0.2。
+     ±1 是浮点口径：实现里是 `amount * (1 - 0.8)`，而 `1 - 0.8` 在二进制里
+     等于 0.19999999999999996（< 0.2），floor 后会比 `Math.floor(full * 0.2)` 少 1，
+     这是 floor 噪声而不是规格偏差，故用绝对误差 1 兜住，同时用日志里「-80%」锁定档位。 */
+  assert('治愈抗性：第 1 次受治全额', full.got > 0, '1st=' + full.got);
+  assert('治愈抗性：5 回合内第 2 次受治 -40%（只剩 60%）',
+    second.got === Math.floor(full.got * 0.6) && /-40%/.test(second.log),
+    '2nd=' + second.got + ' 期望 ' + Math.floor(full.got * 0.6) + ' log=' + second.log);
+  assert('治愈抗性：第 3 次受治 -80%（叠满封顶，只剩 20%）',
+    Math.abs(third.got - full.got * 0.2) <= 1 && /-80%/.test(third.log),
+    '3rd=' + third.got + ' 期望≈' + (full.got * 0.2) + ' log=' + third.log);
+  assert('治愈抗性：封顶后不再加深（第 4 次仍是 -80%）',
+    Math.abs(deep.got - full.got * 0.2) <= 1 && deep.got === third.got && /-80%/.test(deep.log),
+    '4th=' + deep.got + ' 3rd=' + third.got + ' log=' + deep.log);
+  assert('治愈抗性：窗口每次受治刷新（5 回合内不掉档）',
+    tgt._healFatigue && tgt._healFatigue.stacks === 2 && tgt._healFatigue.until === 9,
+    JSON.stringify(tgt._healFatigue));
+  const afterWindow = healOnce(9);          // until=9 → turn 9 已出窗 → 回到全额
+  assert('治愈抗性：停手满 5 回合后窗口失效，下次受治恢复全额',
+    afterWindow.got === full.got && !/治愈抗性 -/.test(afterWindow.log),
+    'after=' + afterWindow.got + ' full=' + full.got + ' log=' + afterWindow.log);
+  assert('治愈抗性：窗口失效后从 1 层重新计（不残留 2 层）',
+    tgt._healFatigue && tgt._healFatigue.stacks === 1 && tgt._healFatigue.until === 14,
+    JSON.stringify(tgt._healFatigue));
+  /* 窗口边界：until-1 仍在窗口内（沿用 1 层 → -40%），到 until 当回合即出窗（全额） */
+  const boundaryIn = healOnce(13);
+  assert('治愈抗性：窗口边界 until-1 仍在窗口内（仍 -40%）',
+    boundaryIn.got === Math.floor(full.got * 0.6) && /-40%/.test(boundaryIn.log),
+    'got=' + boundaryIn.got + ' log=' + boundaryIn.log);
+  const boundaryOut = healOnce(18);        // until=18 → 已出窗
+  assert('治愈抗性：窗口到 until 当回合即失效（再恢复全额）',
+    boundaryOut.got === full.got && !/治愈抗性 -/.test(boundaryOut.log),
+    'got=' + boundaryOut.got + ' full=' + full.got + ' log=' + boundaryOut.log);
+  /* 作用面：只对敌群技能「治愈」生效 —— 「净化」的附带回血不施加、也不读取抗性 */
+  const t2 = sandbox.createUnit({ id: 'hf-t2', side: 'ally', name: '靶2', base: { hp: 2000, atk: 5, def: 5, spd: 1 } });
+  t2.hp = 100;
+  const hl2 = sandbox.createUnit({ id: 'hf-h2', side: 'ally', name: '奶2', skills: ['cleanse'], base: { hp: 100, atk: 5, def: 5, soulAtk: 100 } });
+  const gbCl = sandbox.createGroupBattle({ allies: [t2, hl2], enemies: [sandbox.createUnit({ id: 'hf-e2', side: 'enemy', name: '敌2', base: { hp: 500, atk: 5, def: 5, spd: 2 } })] });
+  gbCl.turn = 1;
+  sandbox.castSkill(gbCl, hl2, 'cleanse');
+  assert('治愈抗性：净化附带回血不回写抗性（作用面仅「治愈」）',
+    t2.hp > 100 && t2._healFatigue === undefined, 'hp=' + t2.hp + ' fatigue=' + JSON.stringify(t2._healFatigue));
+}
 
 // 遗言
 const martyr = sandbox.createUnit({ id: 'martyr', side: 'enemy', name: '遗言者', skills: ['lastword'], base: { hp: 50, atk: 10, def: 5 } });
@@ -281,7 +366,8 @@ function hitIds(evs) {
   for (let i = 0; i < 20; i++) {
     m1.hp = 400; m2.hp = 400; healer.hp = 400;
     const gb = sandbox.createGroupBattle({ allies: [al], enemies: [healer, m1, m2], seed: 3000 + i });
-    sandbox.castSkill(gb, healer, 'heal', { forcedTarget: m1 });
+    /* v2.14.8：治愈自带蓄力 1 回合；本用例验的是「随机选靶忽略声明」，故直接释放载荷 */
+    sandbox.castSkill(gb, healer, 'heal', { forcedTarget: m1, releasing: true });
     if (m1.hp > 400) healed.m1 = (healed.m1 || 0) + 1;
     if (m2.hp > 400) healed.m2 = (healed.m2 || 0) + 1;
   }

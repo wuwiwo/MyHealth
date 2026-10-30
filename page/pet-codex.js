@@ -11,7 +11,7 @@ var PET_CODEX = {
   /* ---- R 级 ---- */
   sparkle: { id:'sparkle', name:'闪闪星', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:[], skills:['p_shine'] },
   waterdrop:{ id:'waterdrop', name:'水水滴', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:[], skills:['p_drench'] },
-  pongpong:{ id:'pongpong', name:'彭彭猪', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:[], skills:['p_sleep'] },
+  pongpong:{ id:'pongpong', name:'彭彭猪', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:['pig_snore'], skills:['p_sleep'] },
   /* ---- SR 级 ---- */
   flamechick:{ id:'flamechick', name:'火焰鸡', rarity:'SR', role:'攻击', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:[], skills:['p_flamepeck'] },
   rocksteady:{ id:'rocksteady', name:'坚强岩', rarity:'SR', role:'辅助', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:[], skills:['fortify'] },
@@ -33,6 +33,7 @@ var PET_CODEX = {
      小负鼠=幸运口袋 / 黑暗鸦=漆黑之眼 / 小冰晶=凛冬之核 / 光之精灵=圣光守护
      梦幻=镜像结界+灵感涌动 / 无念熊=心眼+斗者本能 / 圣光麒麟=不动如山+威压领域
      R / SR 级无天赋。
+     ⚠️ v2.14.8 起有 1 个例外：**彭彭猪（R）= 鼾睡 `pig_snore`**（作者平衡调整新增）。
    ⚠ 历史教训：v2.1.3 曾实现「按稀有度开池解锁天赋」，结果 SSR 宠物能同时装上
    凛冬之核 + 漆黑之眼 + 圣光守护（三只不同宠物的专属天赋挤在一只身上）。
    已按设计文档回退为固有天赋。 */
@@ -135,18 +136,20 @@ if (typeof registerSkill === 'function') {
     ============================================================ */
 
 
-/* R：闪耀（敌方全体命中率 -0~40%）—— v2.1.22 接区间；持续 2 回合（§2.16-2 裁决）。
+/* R：闪耀（敌方全体命中率 **0%~50%**）—— v2.1.22 接区间；持续 2 回合（§2.16-2 裁决）。
+   v2.14.8 作者平衡调整（数值照抄）：命中削减区间上限 40% → **50%**（区间下端 0 不变）。
    WP-C（§2.1 评审「蓄力 1 回合，下回合释放，持续 2 回合」）：
      · 「持续 2 回合」现实现已符合（`_hitModTurns = 2`，由 battle-group 按目标回合递减）；
      · 「蓄力 1 回合、下回合释放」**本轮实装** —— 走通用蓄力载荷（`charge: true`）：
        首次施放只挂 charging（承伤 +25%），下回合由 groupUnitTurn 释放**本技能自身**
        （battle-group 原先把蓄力写死成「攻击 ×400% 单体物理」，承载不了辅助/全体/命中削减）。 */
 registerSkill({ id:'p_shine', name:'闪耀', type:'support', target:'all', cooldown:4, charge:true,
-  range:{ acc:[0, 40] },
+  range:{ acc:[0, 50] },
   effects:[function(c,ts,r,ctx){ var acc=ctx.sv('acc')/100; ts.forEach(function(t){ t._accMod = (t._accMod || 0) - acc; t._hitModTurns = 2; }); r.events.push({msg:'✨ ' + (c.name||'宠物') + ' 闪耀：' + ts.map(function(t){return t.name;}).join('、') + ' 命中率 -' + Math.round(acc*100) + '%（2 回合）'}); }] });
 
-/* R：打湿（目标更易被命中 + 魂防降低）—— v2.1.22 接区间：魂防 0~25%、命中 +0~30% */
-registerSkill({ id:'p_drench', name:'打湿', type:'support', target:'random1', cooldown:5,
+/* R：打湿（目标更易被命中 + 魂防降低）—— v2.1.22 接区间：魂防 0~25%、命中 +0~30%
+   v2.14.8 作者平衡调整（数值照抄）：**冷却 5 → 3**（区间与持续 2 回合不变）。 */
+registerSkill({ id:'p_drench', name:'打湿', type:'support', target:'random1', cooldown:3,
   range:{ soulDefDown:[0, 25], hit:[0, 30] },
   /* v2.1.15：去掉这里手写的 t._eva -= 0.3（命中加成由「潮湿」统一提供，两边都写会互相抵消）。
      v2.1.22：幅度改为按基础属性成长换算后**传给状态实例** ——
@@ -212,9 +215,10 @@ registerSkill({ id:'p_sing', name:'歌唱', type:'attack', target:'all', power:2
         故「本次对目标造成的伤害」就是那一次命中；`recoil` 的消费端
         （battle-group.js 的 castSkill）按「**逐目标实际伤害求和**」再乘比率实现 ——
         将来若有**多目标**技能带 recoil，口径就是「各目标伤害分别计算后相加」，不做静默改写。
-     ⚠️ 是否过自身防御/减伤：文档未给 → 取**最保守**的「直接扣血、不再过减伤」，
-        详见 battle-group.js 消费端的注释。 */
-registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target:'random1', power:350, range:{power:[260,440]}, dmgType:'soul', cooldown:4,
+   ⚠️ 是否过自身防御/减伤：文档未给 → 取**最保守**的「直接扣血、不再过减伤」，
+         详见 battle-group.js 消费端的注释。
+   v2.14.8 作者平衡调整（数值照抄）：**冷却 4 → 3**（蓄力 / 反冲 / 区间均不变）。 */
+registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target:'random1', power:350, range:{power:[260,440]}, dmgType:'soul', cooldown:3,
   charge:true, condBonus:{ statuses:['wet','freeze'], value:0.25 }, recoil:0.35 });
 
 /* SSR：双撞（最多 2 名敌人各 1 次 + 降攻防 + 窃取转移）
@@ -224,8 +228,9 @@ registerSkill({ id:'p_thundercharge', name:'雷霆冲撞', type:'attack', target
      · 伤害区间 [150,240] → **[180,270]**；
      · 降攻 / 降防幅度接区间（0~10% / 0~20%，随基础属性成长），落在实例 `pulled.modsPct`；
      · 窃取：把**同一次**降幅作为正面加成（stolen）转给我方随机 1 名角色 2 回合。
-   （旧实现只有 armorbroken 每层 -10% 防御，既无降攻、也无窃取转移。） */
-registerSkill({ id:'p_doublehit', name:'双撞', type:'attack', target:'enemy2', power:200, range:{power:[180,270], atkDown:[0,10], defDown:[0,20]}, dmgType:'physical', cooldown:5,
+   （旧实现只有 armorbroken 每层 -10% 防御，既无降攻、也无窃取转移。）
+   v2.14.8 作者平衡调整（数值照抄）：**冷却 5 → 4**（区间与窃取转移不变）。 */
+registerSkill({ id:'p_doublehit', name:'双撞', type:'attack', target:'enemy2', power:200, range:{power:[180,270], atkDown:[0,10], defDown:[0,20]}, dmgType:'physical', cooldown:4,
   effects:[function(c,ts,r,ctx){
     var atkDown = ctx.sv('atkDown')/100, defDown = ctx.sv('defDown')/100;
     ts.forEach(function(t){
@@ -278,11 +283,20 @@ registerSkill({ id:'p_holylight', name:'圣光治愈', type:'support', target:'a
      · 单次伤害 [200,290] → **[220,310]**；
      · `charge:true` —— 蓄力 1 回合、下回合释放；
      · `bounce` —— 全场随机弹射（引擎见 skill.js 的 calcSkillDamage + battle-group 的自愈结算）：
-       每次先掷阵营（敌方概率 55%→82%，我方 = 互补 45%→18%），再在该阵营未命中池里随机取 1 名；
+       每次先掷阵营（**v2.14.8 起敌方概率恒 1 = 不再攻击友方**，见下方本版说明），
+       再在该阵营未命中池里随机取 1 名；
        每次弹射伤害累计 +10%（本次施放内累加，下次发动重置）；该阵营无可打单位时退另一边，
-       两边都空则该次「未发动」→ 按未发动次数 × 单次伤害为自身回血。 */
-registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'random1', power:250, range:{power:[220,310]}, dmgType:'soul', cooldown:5,
-  charge:true, bounce:{ times:3, dmgUp:0.10, foeChance:[0.55,0.82] } });
+       两者都空则该次「未发动」→ 按未发动次数 × 单次伤害为自身回血。
+   v2.14.8 作者平衡调整（数值照抄）：
+     · **不再攻击友方** —— `foeChance` 由「随成长 55%~82%」改为**恒 1**（我方阵营概率归零）；
+       旧的「对友方弹射几率随等级降低（45%→18%）」口径**已删除**，不再是成长区间。
+       **引擎侧同步收口**（skill.js 的 bounce 分支）：`foeChance ≥ 1` 时**取消跨阵营回落** ——
+       敌方候选枯竭（弹射次数 > 敌方存活数）的剩余次数按「未发动」处理，转为自身回血，
+       不会像改前那样回落到友军身上。故「不攻击友方」在任意阵容下恒成立。
+     · **每次弹射使下次弹射伤害 +10%** —— 既有实现（`dmgUp:0.10` 累加），本轮只钉不改；
+     · **冷却 5 → 4**。 */
+registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'random1', power:250, range:{power:[220,310]}, dmgType:'soul', cooldown:4,
+  charge:true, bounce:{ times:3, dmgUp:0.10, foeChance:[1,1] } });
 
 /* UR：无影拳
    WP-C（§2.13 评审「总计 4 次攻击，每次 55%-100%，视为普通攻击，会触发普通攻击相关效果与判定」）：
@@ -295,8 +309,9 @@ registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'ra
        （v2.2.17 的实现只是在技能通道上补一个 onAfterDamage 派发，其余判定仍是技能通道 → 不符裁决。）
      · 吸血去重（§2.14 互斥裁决）：文档写明「每次视为普通攻击」→ 它**只触发普攻吸血**
        （状态 warmight 的 data.ls），**不**触发技能吸血（data.sls）。
-   设计原文（design-v2.0.md:249）写「随机可重复」，故仍由 ctx.pool 随机取目标。 */
-registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'random1', power:70, range:{power:[55,100]}, multiHit:4, dmgType:'physical', cooldown:4, asNormalAttack:true,
+   设计原文（design-v2.0.md:249）写「随机可重复」，故仍由 ctx.pool 随机取目标。
+   v2.14.8 作者平衡调整（数值照抄）：**冷却 4 → 3**（4 段 / 55%~100% / 视为普攻均不变）。 */
+registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'random1', power:70, range:{power:[55,100]}, multiHit:4, dmgType:'physical', cooldown:3, asNormalAttack:true,
   effects:[function(c,ts,r){ r.events.push({msg:'👊 ' + (c.name||'宠物') + ' 无影拳：4 连击（目标随机可重复）'}); }] });
 
 /* UR：战意灌注
@@ -306,19 +321,30 @@ registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'rand
      · 增益只加**攻击/魂攻中较高的一项**（按目标单位属性选定 modsPct 的键）；
      · 附带吸血 / 技能吸血 —— 按 §6.3 裁决做成「**挂在持有者身上的增益**」（状态 warmight），
        与天赋「嗜血」**叠加**，并可按镜像结界的阵营 ±25% 缩放（缩放发生在 castSkill 落 buff 时）。
-   技能吸血区间取评审给的口径 **7.5%~32.5%**（设计原文写 2.5%~25%，§2.16-5 已确认改用评审值）。 */
+   技能吸血区间取评审给的口径 **7.5%~32.5%**（设计原文写 2.5%~25%，§2.16-5 已确认改用评审值）。
+   v2.14.8 作者平衡调整（数值照抄）：
+     · 攻击提升区间 **3%~30% → 150%~300%**。口径判定 =「**在现攻击上再 +150%~300%**」
+       （落在 `modsPct`，effectiveStat = base ×(1+1.5) ~ ×(1+3.0)），**不是**乘 1.5~3.0 倍
+       —— 依据是既有实现的口径：`atkup` 状态一直按 `modsPct` 的「百分比加成」语义结算，
+       乘 1.5~3.0 倍会让 t=0 的 150% 写成 modsPct=0.5、与文本「提升 150%」自相矛盾。
+     · **先制度 +1** —— 落在 buff 载荷 `priorityBonus:1`，由 battle-group 写进 `warmight` 状态实例的
+       `data.priority`，再由 `unitPriorityRank` → `warmightPriorityBonus` 真正参与出手分档
+       （v2.14.8 已接通；此前引擎只有「技能级先制度」，没有任何单位级通道）。
+       **不**给本技能自身加 `priority` —— 那是「施法者先手」，与「被灌注的 2 名友方先手」不是一回事。
+     · CD 维持 4（规格「CD 4」）。 */
 registerSkill({ id:'p_warmight', name:'战意灌注', type:'support', target:'ally2', cooldown:4,
-  range:{ atkBoost:[3, 30], lifesteal:[5, 50], skillLifesteal:[7.5, 32.5] },
+  range:{ atkBoost:[150, 300], lifesteal:[5, 50], skillLifesteal:[7.5, 32.5] },
   effects:[function(c,ts,r,ctx){
     var v = ctx.sv('atkBoost')/100, ls = ctx.sv('lifesteal')/100, sls = ctx.sv('skillLifesteal')/100;
     ts.forEach(function(t){
       var atk = (t.base && t.base.atk) || 0, soul = (t.base && t.base.soulAtk) || 0;
       var key = soul > atk ? 'soulAtk' : 'atk';       // 较高一项
       var mods = {}; mods[key] = v;
-      r.buffs.push({ unitId:t.id, key:'warmight', value:v, modsPct:mods, lifesteal:ls, skillLifesteal:sls, duration:2 });
+      r.buffs.push({ unitId:t.id, key:'warmight', value:v, modsPct:mods, lifesteal:ls, skillLifesteal:sls, duration:2,
+        priorityBonus:1 });
     });
     r.events.push({ msg:'🔥 ' + (c.name||'宠物') + ' 战意灌注 → ' + ts.map(function(t){return t.name;}).join('、')
-      + '：攻击/魂攻较高项 +' + Math.round(v*100) + '%、吸血 ' + Math.round(ls*100) + '% / 技能吸血 ' + Math.round(sls*100) + '%（2 回合）' });
+      + '：攻击/魂攻较高项 +' + Math.round(v*100) + '%、吸血 ' + Math.round(ls*100) + '% / 技能吸血 ' + Math.round(sls*100) + '%、先制度 +1（2 回合）' });
   }] });
 
 }
@@ -341,6 +367,20 @@ if (typeof registerTalent === 'function') {
      lucky_pocket（§3.1 三类独立判定 **已于本版收口**，见该条注释）/ dark_eye / winter_core / inspiration / mind_eye
    v2.2.10 已收口（本版跳过）：fighter_instinct（§3.8 30% 触发 + §3.11A/§3.12-1 暴击取最高）
    §3.11B 裁决「天赋不需要升级」→ 本文件所有天赋**一律不接成长区间**，保持固定值。
+
+   ============================================================
+   v2.14.8 作者平衡调整（数值照抄，本轮 3 条天赋 + 1 条新增）：
+     · holy_guard     —— 自身受伤 -10% → **-20%**；>50% 血分担 20% → **25%**；
+                         新增「每回合结束 40% 几率回复 最大生命×5%」。
+     · immovable      —— 单档（>95%：免普通~高级 + 受伤 -50%）改为**三档**：
+                         >90% 免普通~高级负面 + 受伤 -50% / >50% 免普通负面 + 受伤 -30% /
+                         >10% 受伤 -20%。**取当前血量对应的那一档，互不叠加**。
+     · pressure_field —— 敌方全体治疗由「-10%，>70% 血翻倍 -20%」改为**恒 -20%**；
+                         新增「我方每次受到伤害 50% 几率使随机 1 名受伤友方回复最大生命×4%，
+                         每回合最多 2 次」。
+     · **新增 pig_snore**（彭彭猪，R）——「睡眠期间受到其他异常状态效果 -25%」。
+       ⚠️ 这是一条**新天赋**：`PET_CODEX.pongpong.talents` 由 `[]` 改为 `['pig_snore']`。
+       「R / SR 级无天赋」的历史描述从本版起有 1 个例外（彭彭猪）。
    ============================================================ */
 
 /* 小负鼠：幸运口袋 —— 战斗胜利结算期生效，消费端见 game-render.js 的 groupVictoryReward()
@@ -375,6 +415,31 @@ function luckyPocketDrops(rnd) {
 }
 registerTalent({ id:'lucky_pocket', name:'幸运口袋', desc:'战斗胜利结算几率获得随机额外材料', petOnly:true });
 
+/* 彭彭猪：鼾睡（v2.14.8 作者平衡调整新增）—— 睡眠期间受到**其他**异常状态效果 -25%
+   语义判定（见 v2.14.8 报告）：取「**状态效果数值（强度）**」这一维度。
+   「持续时间更短」与「施加几率更低」两种读法**不采纳**：
+     · 时长在 `castSkill` 的 `sa.duration` 上、几率在 `sa.chance` 上，二者都不是「效果 -25%」的意思；
+     · 玩家能看见的「效果」是状态实际改了多少属性/伤害，这就是强度。
+   落点：`onBeforeStatus` 返回 `statusAmp` mutation（倍率 0.75），由 battle-group 的 statusApps
+   循环消费 —— 它对**两条载体**同时生效（v2.14.8 在 battle-group 补的消费端）：
+     · 实例幅度 `modsPct`（打湿的魂防削减 / 双撞的降攻防 / 战意灌注的升幅…）；
+     · 定义驱动幅度 `statModsPct`（破甲 / 遗言诅咒 / 弱化…）→ 走 applyStatus 的 `defScale`。
+   ⚠️ 边界（如实登记）：二元 / 无幅度类异常（冰冻、畏缩、迷惑、睡眠本身…）没有「效果数值」可缩，
+      天然 0 变化；不免疫、不改层数、不改判定。 */
+registerTalent({ id:'pig_snore', name:'鼾睡', desc:'睡眠期间受到其他异常状态效果-25%', petOnly:true,
+  hooks: {
+    onBeforeStatus: function (unit, ctx) {
+      if (!unit || !ctx || !ctx.statusId) return;
+      /* 「其他」：睡眠本身不算（否则会把自己身上的睡眠也削掉） */
+      if (ctx.statusId === 'sleep') return;
+      /* 只在**睡眠中**生效 */
+      if (typeof hasStatus !== 'function' || !hasStatus(unit, 'sleep')) return;
+      /* 只作用于异常（负面）状态：增益不削 */
+      if (typeof isPositiveStatus === 'function' && isPositiveStatus(ctx.statusId)) return;
+      return { mutations: [{ key:'statusAmp', value:0.75 }] };
+    }
+  } });
+
 /* 黑暗鸦：漆黑之眼 —— 必定命中 */
 registerTalent({ id:'dark_eye', name:'漆黑之眼', desc:'自身攻击必定命中', petOnly:true,
   hooks: { onBeforeHit: function () { return { mutations: [{ key:'guaranteedHit', value:true }] }; } } });
@@ -392,18 +457,36 @@ registerTalent({ id:'winter_core', name:'凛冬之核', desc:'自身在场时我
      分担部分（>50% 血才生效）维持 v2.1.5 的实现不变；
      新增 `onDamage` → `dmgTakenReduce 0.1`，**无条件、全程生效**（不看过血线）。
      消费端是 battle-group.js 既有的两条伤害通道（普攻 line ~403 / 技能 line ~496，
-     与「广域防御」「不动如山」同一条），无需新增派发点。 */
-registerTalent({ id:'holy_guard', name:'圣光守护', desc:'血量>50%时承担队友20%伤害；自身受到伤害-10%', petOnly:true,
+     与「广域防御」「不动如山」同一条），无需新增派发点。
+   v2.14.8 作者平衡调整（数值照抄）：
+     · 自身受到伤害 **-10% → -20%**（`dmgTakenReduce 0.2`，仍无条件全程）；
+     · 血量 >50% 时承担队友 **20% → 25%** 伤害（分担额 `floor(ctx.amount × 0.25)`，下限 1）；
+     · **新增**：自身每回合结束 **40% 几率**回复**最大生命 ×5%**。
+       落点 = `onTurnEnd`（battle-group 判定阶段的 talentDispatch，每回合一次、只对存活单位派发）；
+       恢复量 `Math.floor(base.hp × 0.05)`（下限 1），**不超过最大生命**。 */
+registerTalent({ id:'holy_guard', name:'圣光守护', desc:'血量>50%时承担队友25%伤害；自身受到伤害-20%；每回合结束40%几率回复最大生命5%', petOnly:true,
   hooks: {
     onAllyDamage: function (unit, ctx) {
+      /* v2.14.8：`isSelf` = 「被击者就是自己」（battle-group 的 applyAllyDamageShare 为
+         「我方每次受到伤害」这类后置天赋补发的自派发）。分担是**替队友挨**，自己挨打不分担。 */
+      if (ctx.isSelf) return;
       if (unit.hp > unit.base.hp * 0.5 && ctx.amount > 0) {
-        var share = Math.max(1, Math.floor(ctx.amount * 0.2));
+        var share = Math.max(1, Math.floor(ctx.amount * 0.25));
         unit.hp = Math.max(0, unit.hp - share);
         return { mutations: [{ key:'damageShare', value: share }], events: [{ msg:'✨ 圣光守护: ' + unit.name + ' 分担 ' + share }] };
       }
     },
     onDamage: function () {
-      return { mutations: [{ key:'dmgTakenReduce', value:0.1 }] };
+      return { mutations: [{ key:'dmgTakenReduce', value:0.2 }] };
+    },
+    onTurnEnd: function (unit) {
+      if (!unit || unit.hp <= 0) return;
+      if (battleRnd() >= 0.4) return;                       // 40% 几率
+      var heal = Math.max(1, Math.floor((unit.base.hp || 0) * 0.05));
+      var real = Math.min(heal, Math.max(0, unit.base.hp - unit.hp));
+      if (real <= 0) return;                                // 满血不空放、不写日志
+      unit.hp = Math.min(unit.base.hp, unit.hp + real);
+      return { events: [{ type:'heal', unitId: unit.id, msg:'✨ 圣光守护: ' + unit.name + ' 回复 ' + real }] };
     }
   } });
 
@@ -481,29 +564,89 @@ registerTalent({ id:'fighter_instinct', name:'斗者本能', desc:'普攻/技能
      触发阈值由原来的「满血（hp ≥ base.hp）」放宽为「**血量 > 95%**」（严格大于）。
      两个 hook（onBeforeStatus / onDamage）用同一个阈值，保持「免疫」与「减伤」同时开合。
      ⚠️ 该效果与「广域防御」「圣光守护自身 -10%」共用 battle-group 的 dmgTakenReduce 通道，
-        多个来源会按 (1-v) 连乘，属既有口径。 */
-registerTalent({ id:'immovable', name:'不动如山', desc:'血量>95%时免疫普通~高级负面，受伤-50%', petOnly:true,
+        多个来源会按 (1-v) 连乘，属既有口径。
+   v2.14.8 作者平衡调整（数值照抄）—— **单档改三档，取当前血量对应的那一档、互不叠加**：
+     ① 血量 > 90%：免疫**普通~高级**负面（grade ≤ 2）＋ 受伤 **-50%**
+     ② 血量 > 50%：免疫**普通**负面（grade ≤ 1）＋ 受伤 **-30%**
+     ③ 血量 > 10%：受伤 **-20%**（不免负面）
+     ④ 血量 ≤ 10%：无任何档（原样承伤、可被施加任意异常）
+   互斥实现 = 三个 `if` 依次 return **单条** mutation（不是三条相加）。
+   边界口径：严格大于（正好 90% / 50% / 10% 落到下一档）—— 与 v2.3.0 的「>95% 严格大于」同口径。
+   ⚠️ 命中口径：免疫判定看的是**受击方当前血量**（`unit.hp / unit.base.hp`），
+      不看「承伤后血量」；减伤与免疫在同一个 `onDamage` / `onBeforeStatus` 时点各自读一次。 */
+registerTalent({ id:'immovable', name:'不动如山', desc:'血量>90%免疫普通~高级负面且受伤-50%；>50%免疫普通负面且受伤-30%；>10%受伤-20%', petOnly:true,
   hooks: {
     onBeforeStatus: function (unit, ctx) {
-      if (unit.hp > unit.base.hp * 0.95 && (!ctx.grade || ctx.grade <= 2)) {
+      var ratio = (unit.base && unit.base.hp) ? (unit.hp / unit.base.hp) : 0;
+      var grade = ctx.grade || 1;
+      /* 规格写的是「免疫**负面**」：增益/中性状态不该被挡。
+         （旧实现没这道闸 → 高血线的圣光麒麟连队友给的「攻击提升」都免疫了，
+           属 v2.5 之前的实现缺口，本版一并按规格收口。） */
+      if (typeof isPositiveStatus === 'function' && isPositiveStatus(ctx.statusId)) return;
+      if (ratio > 0.90 && grade <= 2) {
+        return { skipAction:true, events: [{ msg:'🛡️ 不动如山: ' + unit.name + ' 免疫' + (ctx.statusId || '负面') }] };
+      }
+      if (ratio > 0.50 && grade <= 1) {
         return { skipAction:true, events: [{ msg:'🛡️ 不动如山: ' + unit.name + ' 免疫' + (ctx.statusId || '负面') }] };
       }
     },
     onDamage: function (unit) {
-      if (unit.hp > unit.base.hp * 0.95) return { mutations: [{ key:'dmgTakenReduce', value:0.5 }] };
+      var ratio = (unit.base && unit.base.hp) ? (unit.hp / unit.base.hp) : 0;
+      if (ratio > 0.90) return { mutations: [{ key:'dmgTakenReduce', value:0.5 }] };
+      if (ratio > 0.50) return { mutations: [{ key:'dmgTakenReduce', value:0.3 }] };
+      if (ratio > 0.10) return { mutations: [{ key:'dmgTakenReduce', value:0.2 }] };
     }
   } });
 
-/* 圣光麒麟：威压领域 —— 敌方全体治疗效果 -10%；自身血量>70% 时翻倍为 -20%
+/* 圣光麒麟：威压领域 —— 敌方全体治疗效果 -20%；我方每次受到技能伤害 50% 几率回血
    v2.3.0 WP-D（§3.10 评审「降低敌方全体受到的10%治疗效果，如果自身生命值高于70%则这个天赋
      效果变为2倍」）：原实现为「血量>75% 时 -20%，否则完全不生效」——
      现在改为**无条件 -10%**，仅在高血线（>70%）时翻倍。
-     消费端仍是 battle-group.js 的 talentAura(foes, 'onFoeHeal') → healReduce。 */
-registerTalent({ id:'pressure_field', name:'威压领域', desc:'敌方全体治疗-10%；自身血量>70%时翻倍为-20%', petOnly:true,
-  hooks: { onFoeHeal: function (unit) {
-    var doubled = unit.hp > unit.base.hp * 0.70;
-    return { mutations: [{ key:'healReduce', value: doubled ? 0.2 : 0.1 }] };
-  } } });
+     消费端仍是 battle-group.js 的 talentAura(foes, 'onFoeHeal') → healReduce。
+   v2.14.8 作者平衡调整（数值照抄）：
+     ① 敌方全体治疗 **恒 -20%**（不再是 -10%/-20% 两档，血线条件删除）；
+     ② **新增**：我方每次受到**技能伤害**，**50% 几率**使我方**随机 1 名受伤友方**
+        回复**最大生命 ×4%**，**每回合最多触发 2 次**。
+        落点 = `onAllyDamage`（battle-group 的 `applyAllyDamageShare` 派发 —— 普攻与技能两条通道
+        都走这里；ctx 现在带 `isSkill` 与 `isSelf`，见该函数注释）。
+        · 「技能伤害」口径：`ctx.isSkill === false`（普攻通道）直接返回 —— **只有技能伤害触发**；
+        · 「我方」含持有者自己：引擎对**被击者本人**也会补发一次 `onAllyDamage`（`isSelf:true`），
+          故持有者自己挨技能打同样会掷骰（旧实现只有 mates，少了自己这一份）。
+        计数：`unit._pfHealCount`，每次成功回复 +1，`onTurnEnd` 清零（= 每回合最多 2 次）。
+        随机池：`unit._pfMates`（`onBattleStart` 缓存的**同阵营单位表，活引用**），
+        筛 `hp>0 && hp<base.hp`（受伤友方）。 */
+registerTalent({ id:'pressure_field', name:'威压领域', desc:'敌方全体治疗-20%；我方每次受到技能伤害50%几率使随机1名受伤友方回复最大生命4%（每回合最多2次）', petOnly:true,
+  hooks: {
+    onFoeHeal: function () {
+      return { mutations: [{ key:'healReduce', value: 0.2 }] };
+    },
+    onBattleStart: function (unit, ctx) {
+      if (unit && ctx && ctx.allyUnits) unit._pfMates = ctx.allyUnits;   // 活引用：战中被创建/阵亡都能看到
+    },
+    onTurnEnd: function (unit) {
+      if (unit) unit._pfHealCount = 0;
+    },
+    onAllyDamage: function (unit, ctx) {
+      if (!unit || unit.hp <= 0) return;
+      /* 「受到**技能**伤害」：普攻通道（isSkill:false）不触发 */
+      if (ctx && ctx.isSkill === false) return;
+      if (ctx && !(ctx.amount > 0)) return;                    // 0 伤害不掷骰
+      if (typeof unit._pfHealCount !== 'number') unit._pfHealCount = 0;
+      if (unit._pfHealCount >= 2) return;                     // 每回合最多 2 次
+      var pool = (unit._pfMates || []).filter(function (u) {
+        return u && u.hp > 0 && u.base && u.hp < u.base.hp;    // 受伤友方
+      });
+      if (!pool.length) return;
+      if (battleRnd() >= 0.5) return;                          // 50% 几率
+      var pick = pool[Math.floor(battleRnd() * pool.length)];
+      var heal = Math.max(1, Math.floor((pick.base.hp || 0) * 0.04));
+      var real = Math.min(heal, Math.max(0, pick.base.hp - pick.hp));
+      if (real <= 0) return;
+      pick.hp = Math.min(pick.base.hp, pick.hp + real);
+      unit._pfHealCount++;
+      return { events: [{ type:'heal', unitId: pick.id, msg:'🕊️ 威压领域: ' + pick.name + ' 回复 ' + real }] };
+    }
+  } });
 
 }
 

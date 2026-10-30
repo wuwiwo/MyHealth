@@ -55,10 +55,35 @@ function aiPickTarget(gb, actor, skillDef) {
   return pool[0];
 }
 
+/* v2.14.8（作者规格 1「**Boss 不应施放 lastword**」）：
+   Boss 的**技能候选里**去掉「遗言」——**不从技能池删除**（SKILLS / group-levels 的
+   敌方技能池一字未改，普通精英仍然带得出、放得出），也不算「获得但不许放」：
+   技能仍在单位自己的 `skills` 列表里（详情页/日志可见），只是 AI 永不把它选出来。
+   为什么是「生成时不给」的反面：技能编成由 group-levels.js 的确定性技能流决定
+   （test-talent-fixation 的种子哨兵锁着它），在建场处过滤会把整条随机流打乱；
+   而且「Boss 带遗言但永不发动」对玩家是可解释的行为（图鉴/详情仍能看到该技能）。
+   判据：`_tier === 'boss'`（enemy.js 的 createEnemyUnit 写入），
+   兜底也认 `tags` 里的 'boss'（tags 与 _tier 同源写入，防快照/手搓单位缺字段）。 */
+function aiIsBoss(actor) {
+  if (!actor) return false;
+  if (actor._tier === 'boss') return true;
+  return Object.prototype.toString.call(actor.tags) === '[object Array]' && actor.tags.indexOf('boss') >= 0;
+}
+
 /* 选技能：策略化（不纯随机）
    优先级：能斩杀残血 → 治疗残血 → Boss 大招（低血触发）→ 冷却就绪的强技能 → 随机 */
 function aiPickSkill(gb, actor) {
   var usable = usableSkills(actor);
+  /* 🔴 v2.14.8：Boss 的候选列表剔除「遗言」。
+     落点是**候选入口**而不是最后那条分支 —— `lastword` 有 3 条进入路径：
+       ③ 低血大招（`sid === 'doom' || sid === 'lastword'`）
+       ④ 70% 取最强 / 30% 随机取一个（`sorted[0]` / `sorted[随机]`）
+     只在其中一条上拦必定漏掉另外两条（只在 ③ 拦：满血 Boss 仍会从 ④ 摸到遗言）。
+     过滤后**可能变空**（Boss 只带了 lastword 一个技能）→ 原样返回 null，
+     调用方 groupUnitTurn 会走普攻，与「没有可用技能」的既有路径完全一致。 */
+  if (aiIsBoss(actor)) {
+    usable = usable.filter(function (sid) { return sid !== 'lastword'; });
+  }
   if (!usable.length) return null;
   var opponents = aliveOpponents(gb, actor);
   var myAllies = aliveAllies(gb, actor);

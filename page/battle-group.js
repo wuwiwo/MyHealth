@@ -237,15 +237,29 @@ function supportEffectMul(unit, source) {
 }
 
 /* 伤害结算前的通用处理：目标阵营的「圣光守护」分担 + 天赋承伤修正
-   返回 {dmg, events}，dmg 已扣掉被队友分担的部分 */
-function applyAllyDamageShare(gb, target, dmg, events) {
+   返回 {dmg, events}，dmg 已扣掉被队友分担的部分
+
+   v2.14.8（宠物「威压领域」新增项）：本派发点是**唯一**的「我方挨打」通知口，故一并补齐两件事：
+     · `ctx.isSkill` —— 普攻通道传 false、技能通道传 true。威压领域要的是「**受到技能伤害**」，
+       此前 ctx 里没有这个标记，只能退化成「受到任何伤害」都掷骰（比规格宽）。
+     · **被击者自己也收一次**（`ctx.isSelf === true`）—— 规格写「我方每次受到技能伤害」，
+       持有者自己挨打也算；旧实现只派发给 `mates`（不含被击者本人），少了自己这一份。
+       分担类钩子（圣光守护）必须跳过 isSelf，否则会「给自己分担自己的伤害」= 双扣。 */
+function applyAllyDamageShare(gb, target, dmg, events, opts) {
+  opts = opts || {};
+  var ctxBase = { target: target, amount: dmg, isSkill: !!opts.isSkill };
   var mates = (target.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) {
     return u.hp > 0 && u.id !== target.id;
   });
-  var res = talentAura(mates, 'onAllyDamage', { target: target, amount: dmg });
+  var res = talentAura(mates, 'onAllyDamage', ctxBase);
   var share = 0;
   res.mutations.forEach(function (m) { if (m.key === 'damageShare') share += m.value; });
   res.events.forEach(function (e) { events.push({ msg: e.msg }); });
+  /* 被击者自身：ctx 相同 + isSelf 标记（只给「挨打后置」类天赋用，不参与伤害分担） */
+  var selfRes = talentDispatch(target, 'onAllyDamage', {
+    target: target, amount: dmg, isSkill: !!opts.isSkill, isSelf: true
+  });
+  selfRes.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg }); });
   return share > 0 ? Math.max(1, dmg - share) : dmg;
 }
 
@@ -416,13 +430,17 @@ function priorityRankOfSkill(skillId) {
 }
 function unitPriorityRank(u, gb) {
   if (!u || typeof SKILLS === 'undefined') return 0;   // 未加载技能表的最小沙箱：无先制可言
+  /* v2.14.8（宠物「战意灌注」）：单位级的先制度加成（`warmight` 实例的 data.priority）。
+     它**叠加在**「技能先制档」之上而不是替代它：两者都是「先制度」这一个维度上的加档，
+     故 ① 与 ② 两条口径都要带上。没有该增益时恒为 0，既有行为一字不变。 */
+  var bonus = warmightPriorityBonus(u);
   /* ① v2.4.8：本回合已预声明 → 只有「声明要用的技能」算先制。
       声明失效（技能进了冷却 / 声明者被禁技）时这里返回 0：
       队列已经建好，它这一档的先手权本来就该在「声明那一刻」定 ——
       行动阶段发现失效会当场重选（见 takeDeclaredAction），重选**不重排队列**（口径见函数注释）。 */
   if (gb && gb._declaredTurn === gb.turn) {
     var dec = (u._declaredTurn === gb.turn) ? u._declared : null;
-    return dec ? priorityRankOfSkill(dec.skillId) : 0;
+    return (dec ? priorityRankOfSkill(dec.skillId) : 0) + bonus;
   }
   /* ② 兜底（v2.4.7 held 口径）：未做预声明的直接调用方（单测 / 调试脚本自建队列） */
   var ids = (typeof usableSkills === 'function') ? usableSkills(u) : (u.skills || []);
@@ -431,7 +449,7 @@ function unitPriorityRank(u, gb) {
     var d = SKILLS[ids[i]];
     if (d && d.priority > rank) rank = d.priority;
   }
-  return rank;
+  return rank + bonus;
 }
 
 /* ============================================================
@@ -771,7 +789,8 @@ function normalAttack(gb, actor, target, dmgMult) {
     if (blockDmg < dmg) { dmg = blockDmg; events.push({ msg: '🛡️ ' + target.name + ' 格挡！' }); }
   }
   // 圣光守护：队友分担伤害（目标少受，分担者自己掉血）
-  dmg = applyAllyDamageShare(gb, target, dmg, events);
+  // v2.14.8：`isSkill:false` —— 这是**普攻**通道（威压领域的「受到技能伤害」口径据此收窄）
+  dmg = applyAllyDamageShare(gb, target, dmg, events, { isSkill: false });
   // v2.1.15：护盾先行吸收（金身护盾此前只写字段、无人消费）
   var sh = absorbShield(target, dmg);
   if (sh.absorbed > 0) {
@@ -896,6 +915,77 @@ function warmightSkillLifesteal(unit) {
   return sum;
 }
 
+/* ============================================================
+   v2.14.8（作者规格 3）：**治愈抗性** —— 同一目标 5 回合内再次受到治愈 → -40%，最多叠加 -80%
+
+   承载 = **目标单位上的记账字段** `unit._healFatigue = { stacks, until }`，不是状态定义：
+     · 它不改变任何属性、没有 hook、不可驱散，玩家看不到「治愈抗性」这个状态图标；
+     · 项目的不变式（scripts/test-fx-matrix.js）要求「每个状态 id 都在 fx-semantics 里有标记或
+       带理由的排除」—— 本轮白名单不含 page/fx-semantics.js，凭空新增一个状态 id 就只能留下
+       一条永久的漏登记，故按「机制记账」而不是「状态」承载。
+   三个常量是唯一来源（读/写都只在本文件）：
+     · HEAL_FATIGUE_STEP  每次受治后的减幅增量（40%）
+     · HEAL_FATIGUE_CAP   封顶减幅（80%）
+     · HEAL_FATIGUE_TURNS 窗口（5 回合，**每次受治刷新**）
+   口径（见报告「歧义判定」）：
+     · 第 1 次受治 → 全额；第 2 次 → -40%；第 3 次及以后 → -80%（封顶，不再涨）；
+     · 窗口每次受治**重新计 5 回合**：`until = 受治回合 + 5`，只要还在窗口内挨奶就续上并继续
+       叠层，停手满 5 回合后窗口失效、下次受治回到全额。
+   ⚠️ 作用面：只作用于敌群技能「治愈」（castSkill 里以 `def.id === 'heal'` 守卫）。
+      宠物治疗（圣光治愈 p_heal / 睡觉 p_sleep）与「净化」的附带回血不施加也不读取。 */
+var HEAL_FATIGUE_STEP = 0.40;
+var HEAL_FATIGUE_CAP = 0.80;
+var HEAL_FATIGUE_TURNS = 5;
+
+/* 目标在**当前回合**的抗性层数（0 = 没有抗性 / 窗口已过）。 */
+function healFatigueStacks(unit, turn) {
+  var f = unit && unit._healFatigue;
+  if (!f || typeof f.until !== 'number') return 0;
+  if (typeof turn === 'number' && turn >= f.until) return 0;   // 窗口已过
+  return Math.max(1, f.stacks || 1);
+}
+
+/* 本次治疗应扣的减幅（0 / 0.40 / 0.80）。读的是**结算前**的层数：
+   第 1 次受治时层数为 0（本次全额），之后每多一次多 40%，封顶 80%。 */
+function healFatigueReduce(unit, turn) {
+  var stacks = healFatigueStacks(unit, turn);
+  if (stacks <= 0) return 0;
+  return Math.min(HEAL_FATIGUE_CAP, HEAL_FATIGUE_STEP * stacks);
+}
+
+/* 结算之后：叠层 + 刷新窗口。返回本次事件（便于落日志）。 */
+function markHealFatigue(unit, turn) {
+  var events = [];
+  if (!unit) return events;
+  var t = (typeof turn === 'number') ? turn : 0;
+  var before = healFatigueStacks(unit, t);
+  var stacks = Math.min(2, before + 1);
+  unit._healFatigue = { stacks: stacks, until: t + HEAL_FATIGUE_TURNS };
+  var nextRed = Math.min(HEAL_FATIGUE_CAP, HEAL_FATIGUE_STEP * stacks);
+  events.push({
+    msg: '🧪 ' + (unit.name || '单位') + ' 获得【治愈抗性】' + stacks + '/2 层'
+      + '（' + HEAL_FATIGUE_TURNS + ' 回合）'
+      + (nextRed >= HEAL_FATIGUE_CAP
+        ? '，再次受治愈 -' + Math.round(nextRed * 100) + '%（已封顶）'
+        : '，再次受治愈 -' + Math.round(nextRed * 100) + '%'),
+    targetId: unit.id, type: 'status'
+  });
+  return events;
+}
+
+/* 先制度：单位身上的「战意灌注」增益带来的 +1（v2.14.8）。
+   读**状态实例**而不是另存单位字段 —— 吸血/技能吸血同在一个 `warmight` 实例上，
+   先制度跟着它的 duration 一起到期，不会出现「buff 掉了但先手权还在」的残留。
+   先制度在本项目是**独立分档**（见 unitPriorityRank），因此这里是「加档」而不是加速。 */
+function warmightPriorityBonus(unit) {
+  var sum = 0;
+  if (!unit || !unit.statuses) return 0;
+  unit.statuses.forEach(function (s) {
+    if (s.id === 'warmight' && s.data && typeof s.data.priority === 'number') sum += s.data.priority;
+  });
+  return sum;
+}
+
 /* 施放技能
    WP-C：新增第 4 参数 opts。`opts.releasing = true` 表示这是**蓄力载荷的释放**（见 groupUnitTurn）——
    此时不再进入蓄力、也不再重设冷却（冷却在蓄力当回合已起算）。 */
@@ -1004,7 +1094,8 @@ function castSkill(gb, actor, skillId, opts) {
              被移除的旧注释要点保留：技能暴击曾与普攻同一套判据（各自掷骰、取较高倍率、只结算一次），
              这正是本裁决要取消的口径。 */
           // 圣光守护：队友分担
-          dmg = applyAllyDamageShare(gb, t, dmg, events);
+          // v2.14.8：`isSkill:true` —— 技能通道（威压领域的「受到技能伤害」口径据此命中）
+          dmg = applyAllyDamageShare(gb, t, dmg, events, { isSkill: true });
           // v2.1.15：护盾吸收
           var shk = absorbShield(t, dmg);
           if (shk.absorbed > 0) {
@@ -1143,6 +1234,25 @@ function castSkill(gb, actor, skillId, opts) {
       /* 朴实：只挡「直接影响属性」的增益/减益（§5.6-1）；不动如山：血量>95% 免疫普通~高级（§3.9）。
          `modsPct` 一并下传，供朴实判断「本次实例是否直接改属性」（用**缩放后**的幅度）。 */
       var selfGuard = talentDispatch(t, 'onBeforeStatus', { statusId: sa.id, grade: grade, modsPct: applyModsPct });
+      /* v2.14.8（宠物「彭彭猪 · 鼾睡」）：`statusAmp` —— 受方天赋对**本次状态效果数值**的缩放。
+         语义：倍率，本条状态落库时的幅度 ×该值（0.75 = 「其他异常状态效果 -25%」）。
+         两条载体都要缩：
+           · 实例幅度 `modsPct`（打湿的魂防削减 / 双撞的降攻防 / 战意灌注的升幅…）→ 另建对象就地乘；
+           · 定义驱动幅度 `statModsPct`（破甲 / 遗言诅咒 / 弱化…）→ 走 applyStatus 的 `defScale`。
+         ⚠️ 只缩「效果数值」：持续回合（sa.duration）与施加几率（sa.chance）不是这个维度的东西，
+            刻意不碰（见 v2.14.8 报告的歧义判定）。 */
+      var ampMul = 1;
+      selfGuard.mutations.forEach(function (m) {
+        if (m.key === 'statusAmp' && typeof m.value === 'number') ampMul *= m.value;
+      });
+      if (ampMul !== 1 && ampMul >= 0) {
+        if (applyModsPct) {
+          var ampedMods = {};
+          for (var ak in applyModsPct) ampedMods[ak] = applyModsPct[ak] * ampMul;
+          applyModsPct = ampedMods;
+        }
+        defScale = (defScale == null ? 1 : defScale) * ampMul;
+      }
       /* v2.3.0：朴实对「既有增减益又有附加效果」的状态只剥属性部分（stripStatMods → noStatMods） */
       var stripMods = false;
       selfGuard.mutations.forEach(function (m) { if (m.key === 'stripStatMods') stripMods = true; });
@@ -1194,9 +1304,27 @@ function castSkill(gb, actor, skillId, opts) {
         var pf = talentAura(foes, 'onFoeHeal', { target: t, amount: amount });
         pf.mutations.forEach(function (m) { if (m.key === 'healReduce') amount = Math.floor(amount * (1 - m.value)); });
         pf.events.forEach(function (e) { events.push({ msg: e.msg }); });
+        /* v2.14.8（作者规格 3）：**治愈抗性** —— 读结算**前**的层数扣减幅，
+           结算**后**再叠层/刷新窗口（第 1 次全额，第 2 次 -40%，第 3 次起 -80% 封顶）。
+           位置刻意放在所有既有乘法之后（镜像结界 / 威压领域 / 治疗阻断都在前面）：
+           它是"目标侧最后一层"的抗性，与天赋那两条叠加顺序无关，
+           放在末尾可保证「先算完整治疗量，最后按抗性打折」，也让日志里的数字是最终值。
+           作用面 = 只对敌群技能「治愈」（def.id === 'heal'）—— 见 HEAL_FATIGUE_* 的说明。 */
+        var fatigueRed = (def.id === 'heal') ? healFatigueReduce(t, gb.turn) : 0;
+        if (fatigueRed > 0) {
+          var beforeFatigue = amount;
+          amount = Math.max(0, Math.floor(amount * (1 - fatigueRed)));
+          events.push({
+            msg: '🧪 ' + t.name + ' 治愈抗性 -' + Math.round(fatigueRed * 100) + '%（' + beforeFatigue + ' → ' + amount + '）',
+            targetId: t.id, type: 'status'
+          });
+        }
         if (amount < 0) amount = 0;
         t.hp = Math.min(t.base.hp, t.hp + amount);
         events.push({ msg: '💚 ' + actor.name + ' → ' + t.name + ' 治疗 +' + amount, targetId: t.id, type: 'heal' });
+        if (def.id === 'heal') {
+          markHealFatigue(t, gb.turn).forEach(function (e) { events.push(e); });
+        }
       } else events.push({ msg: '🌑 ' + t.name + ' 被末日阻断治疗', targetId: t.id, type: 'status' });
     }
   });
@@ -1237,7 +1365,12 @@ function castSkill(gb, actor, skillId, opts) {
         var scaled = {};
         for (var pk in srcPct) scaled[pk] = srcPct[pk] * mul;
         applyStatus(t, { id: 'atkup', duration: dur, modsPct: scaled });
-        applyStatus(t, { id: 'warmight', duration: dur, data: { ls: (b.lifesteal || 0) * mul, sls: (b.skillLifesteal || 0) * mul } });
+        /* v2.14.8（作者规格「战意灌注 … 先制度 +1」）：先制度记在**同一实例**的 data.priority 上，
+           由 unitPriorityRank → warmightPriorityBonus 读取（先制度是独立分档，不是速度加成）。
+           跟着 warmight 的 duration 一起到期 —— 不另存单位字段，避免「buff 掉了先手还在」。 */
+        var wmData = { ls: (b.lifesteal || 0) * mul, sls: (b.skillLifesteal || 0) * mul };
+        if (b.priorityBonus) wmData.priority = b.priorityBonus;
+        applyStatus(t, { id: 'warmight', duration: dur, data: wmData });
       }
       /* WP-C（§2.8 双撞）：把窃得的攻击/防御转给我方随机 1 名角色（正面，幅度同样可被镜像缩放）。 */
       else if (b.key === 'stolen') {
@@ -1252,7 +1385,8 @@ function castSkill(gb, actor, skillId, opts) {
     if (!applied.length) return;
     var label = (b.key === 'dmgReduce') ? ('受到伤害 -' + Math.round(b.value * 100) + '%')
       : (b.key === 'atkBoost') ? ('攻击 +' + Math.round(b.value * 100) + '%')
-        : (b.key === 'warmight') ? ('战意：攻击/魂攻 +' + Math.round(b.value * 100) + '%，吸血 ' + Math.round((b.lifesteal || 0) * 100) + '% / 技能吸血 ' + Math.round((b.skillLifesteal || 0) * 100) + '%')
+        : (b.key === 'warmight') ? ('战意：攻击/魂攻 +' + Math.round(b.value * 100) + '%，吸血 ' + Math.round((b.lifesteal || 0) * 100) + '% / 技能吸血 ' + Math.round((b.skillLifesteal || 0) * 100) + '%'
+          + (b.priorityBonus ? '，先制度 +' + b.priorityBonus : ''))
           : (b.key === 'stolen') ? ('窃取之力 攻击 +' + Math.round((b.modsPct && b.modsPct.atk || 0) * 100) + '%、防御 +' + Math.round((b.modsPct && b.modsPct.def || 0) * 100) + '%')
             : ('增益 +' + Math.round(b.value * 100) + '%');
     events.push({ msg: '🛡️ ' + actor.name + ' ' + def.name + ' → ' + applied.join('、') + ' ' + label + mirrorNote + '（' + dur + ' 回合）', type: 'buff' });

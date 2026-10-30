@@ -77,32 +77,49 @@ assert('无此天赋 → 暴击率 0', sandbox.talentCrit(mkUnit('none')).chance
 const wc = mkUnit('wc', ['winter_core']);
 assert('凛冬之核 → 免疫冰冻', sandbox.talentDispatch(wc, 'onAllyStatus', { statusId: 'freeze' }).skipAction === true);
 assert('凛冬之核 → 不免疫中毒', sandbox.talentDispatch(wc, 'onAllyStatus', { statusId: 'poison' }).skipAction === false);
-// 不动如山（v2.3.0 §3.9：触发阈值由「满血」改为「血量 **> 95%**」，两个 hook 同一阈值）
+// 不动如山（v2.3.0 §3.9：触发阈值由「满血」改为「血量 **> 95%**」；
+//   v2.14.8 作者平衡调整：单档 → **三档**（>90% 免普通~高级+受伤-50% / >50% 免普通+受伤-30% /
+//   >10% 受伤-20%），**取当前血量对应的那一档、互不叠加**，边界一律「严格大于」）
 const im = mkUnit('im', ['immovable']);
-assert('不动如山 → 血量>95% 免疫普通负面(grade1)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === true);
-assert('不动如山 → 血量>95% 免疫高级负面(grade2)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'freeze', grade: 2 }).skipAction === true);
+assert('不动如山 → 血量>90% 免疫普通负面(grade1)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === true);
+assert('不动如山 → 血量>90% 免疫高级负面(grade2)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'freeze', grade: 2 }).skipAction === true);
 assert('不动如山 → 特级负面免疫不了(grade3)', sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'doomed', grade: 3 }).skipAction === false);
-assert('不动如山 → 血量>95% 受伤 -50%', sandbox.talentDispatch(im, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.5));
+assert('不动如山 → 血量>90% 受伤 -50%', sandbox.talentDispatch(im, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.5));
 im.hp = 96;
-assert('不动如山 → 96% 血仍触发（>95%）',
+assert('不动如山 → 96% 血仍触发（>90%）',
   sandbox.talentDispatch(im, 'onDamage', {}).mutations.length === 1
   && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === true);
-im.hp = 95;
-assert('不动如山 → 恰好 95% 血不触发（严格大于 95%）',
-  sandbox.talentDispatch(im, 'onDamage', {}).mutations.length === 0
-  && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === false);
+im.hp = 90;
+assert('不动如山 → 恰好 90% 血落到第 2 档（严格大于 90%：受伤 -30%、只免普通负面）',
+  JSON.stringify(sandbox.talentDispatch(im, 'onDamage', {}).mutations) === JSON.stringify([{ key: 'dmgTakenReduce', value: 0.3 }])
+  && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === true
+  && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'freeze', grade: 2 }).skipAction === false);
+im.hp = 51;
+assert('不动如山 → >50% 档：受伤 -30%、只免普通负面（高级负面不再免疫）',
+  JSON.stringify(sandbox.talentDispatch(im, 'onDamage', {}).mutations) === JSON.stringify([{ key: 'dmgTakenReduce', value: 0.3 }])
+  && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'freeze', grade: 2 }).skipAction === false);
 im.hp = 50;
-assert('不动如山 → 半血不减伤也不免疫', sandbox.talentDispatch(im, 'onDamage', {}).mutations.length === 0
+assert('不动如山 → 恰好 50% 血落到第 3 档（受伤 -20%、不免任何负面）',
+  JSON.stringify(sandbox.talentDispatch(im, 'onDamage', {}).mutations) === JSON.stringify([{ key: 'dmgTakenReduce', value: 0.2 }])
   && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === false);
-// 威压领域（v2.3.0 §3.10：无条件 -10%；自身血量 **>70%** 时翻倍为 -20%）
+im.hp = 11;
+assert('不动如山 → 11% 血仍 -20%（>10%）',
+  JSON.stringify(sandbox.talentDispatch(im, 'onDamage', {}).mutations) === JSON.stringify([{ key: 'dmgTakenReduce', value: 0.2 }]));
+im.hp = 10;
+assert('不动如山 → 恰好 10% 血无任何档（不再减伤、不免负面）', sandbox.talentDispatch(im, 'onDamage', {}).mutations.length === 0
+  && sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'slow', grade: 1 }).skipAction === false);
+im.hp = 100;
+assert('不动如山 → 只免疫**负面**：增益（攻击提升）高血线也不挡',
+  sandbox.talentDispatch(im, 'onBeforeStatus', { statusId: 'atkup', grade: 1 }).skipAction === false);
+// 威压领域（v2.14.8：敌方治疗 **恒 -20%**，血线条件删除）
 const pf = mkUnit('pf', ['pressure_field']);
-assert('威压领域 → 满血(>70%) 治疗 -20%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
+assert('威压领域 → 满血 治疗 -20%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
 pf.hp = 71;
-assert('威压领域 → 71% 血（>70%）仍 -20%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
+assert('威压领域 → 71% 血仍 -20%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
 pf.hp = 70;
-assert('威压领域 → 恰好 70% 血回落为 -10%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.1));
+assert('威压领域 → 恰好 70% 血不再翻倍/回落，仍是 -20%', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
 pf.hp = 1;
-assert('威压领域 → 残血仍有 -10%（不再「完全不生效」）', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.1));
+assert('威压领域 → 残血仍 -20%（恒定额，与血线无关）', sandbox.talentDispatch(pf, 'onFoeHeal', {}).mutations.some(m => m.key === 'healReduce' && m.value === 0.2));
 // 镜像结界：治疗通道（v2.1.5 起）+ 其它辅助通道（v2.3.0 §3.5 + §3.12-2 全通道）
 const mf = mkUnit('mf', ['mirror_field']);
 assert('镜像结界 → 治疗：受我方辅助 +25%', sandbox.talentDispatch(mf, 'onBeforeHeal', { isSupport: true, source: { side: 'ally' } })
@@ -119,15 +136,31 @@ assert('supportEffectMul → 我方 1.25 / 敌方 0.75 / 无天赋 1',
   sandbox.supportEffectMul(mf, { side: 'ally', id: 'a' }) === 1.25
   && sandbox.supportEffectMul(mf, { side: 'enemy', id: 'e' }) === 0.75
   && sandbox.supportEffectMul(mkUnit('noTalent'), { side: 'ally', id: 'a' }) === 1);
-// 圣光守护（v2.3.0 §3.4：分担不变 + 新增「自身受到伤害 -10%」，**全程无条件**）
+// 圣光守护（v2.14.8 作者平衡调整：分担 20% → **25%**；自身受伤 -10% → **-20%**，仍全程无条件）
 const hg = mkUnit('hg', ['holy_guard'], { hp: 100 });
-assert('圣光守护 → 血量>50% 分担 20%', sandbox.talentDispatch(hg, 'onAllyDamage', { amount: 100 })
-  .mutations.some(m => m.key === 'damageShare' && m.value === 20));
-assert('圣光守护 → 分担者自己掉血 20', hg.hp === 80, 'hp=' + hg.hp);
+assert('圣光守护 → 血量>50% 分担 25%', sandbox.talentDispatch(hg, 'onAllyDamage', { amount: 100 })
+  .mutations.some(m => m.key === 'damageShare' && m.value === 25));
+assert('圣光守护 → 分担者自己掉血 25', hg.hp === 75, 'hp=' + hg.hp);
 hg.hp = 40;
 assert('圣光守护 → 血量≤50% 不再分担', sandbox.talentDispatch(hg, 'onAllyDamage', { amount: 100 }).mutations.length === 0);
-assert('圣光守护 → 自身受到伤害 -10%（半血时仍生效 = 与血线无关）',
-  sandbox.talentDispatch(hg, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.1));
+assert('圣光守护 → 不给自己分担（isSelf 一律跳过）',
+  sandbox.talentDispatch(hg, 'onAllyDamage', { amount: 100, isSelf: true }).mutations.length === 0);
+assert('圣光守护 → 自身受到伤害 -20%（半血时仍生效 = 与血线无关）',
+  sandbox.talentDispatch(hg, 'onDamage', {}).mutations.some(m => m.key === 'dmgTakenReduce' && m.value === 0.2));
+/* v2.14.8 新增：每回合结束 40% 几率回复最大生命 ×5%（battleRnd 钉死以便断言） */
+{
+  const rnd0 = sandbox.battleRnd;
+  const hg2 = mkUnit('hg2', ['holy_guard'], { hp: 100 });
+  hg2.hp = 50;
+  sandbox.battleRnd = function () { return 0.39; };            // < 0.4 → 触发
+  const ev = sandbox.talentDispatch(hg2, 'onTurnEnd', { turn: 3 });
+  sandbox.battleRnd = function () { return 0.40; };            // >= 0.4 → 不触发
+  const ev2 = sandbox.talentDispatch(hg2, 'onTurnEnd', { turn: 3 });
+  sandbox.battleRnd = rnd0;
+  assert('圣光守护 → 回合结束 40% 几率回复最大生命 ×5%（50 → 55）',
+    hg2.hp === 55 && (ev.events || []).some(e => e.type === 'heal'), 'hp=' + hg2.hp);
+  assert('圣光守护 → 40% 未命中则不回血（rng=0.40 边界）', ev2.events.length === 0, JSON.stringify(ev2.events));
+}
 // 灵感涌动
 const insB = { hp: 100, atk: 10, def: 5, spd: 5, soulAtk: 50 };
 const ins = mkUnit('ins', ['inspiration'], insB);
@@ -181,7 +214,7 @@ const vHp0 = victim.hp, gHp0 = guardUnit.hp;
 sandbox.normalAttack(gb, foe, victim);
 assert('普攻命中（rng=0 < 0.95）且伤害被分担', victim.hp < vHp0 && victim.hp > vHp0 - (100 + 1), 'victim ' + vHp0 + '→' + victim.hp);
 assert('圣光守护者承担了伤害', guardUnit.hp < gHp0, 'guard ' + gHp0 + '→' + guardUnit.hp);
-assert('目标实际承伤 = 全额 − 分担额', (vHp0 - victim.hp) === 101 - Math.floor(101 * 0.2),
+assert('目标实际承伤 = 全额 − 分担额（v2.14.8：分担 25%）', (vHp0 - victim.hp) === 101 - Math.floor(101 * 0.25),
   '受 ' + (vHp0 - victim.hp));
 
 /* ---- 5. WP-D（v2.3.0）：page/talent.js 14 条的对齐改动 ---- */
@@ -342,21 +375,23 @@ function takeHit(talents) {
   return TGT.hp - t.hp;
 }
 const hitPlain = takeHit(null);
-assert('§3.4 圣光守护 E2E → 自身承伤 ×0.9', hitPlain > 0 && takeHit(['holy_guard']) === Math.floor(hitPlain * 0.9),
+assert('§3.4 圣光守护 E2E → 自身承伤 ×0.8（v2.14.8：-10% → -20%）', hitPlain > 0 && takeHit(['holy_guard']) === Math.floor(hitPlain * 0.8),
   'plain=' + hitPlain + ' guard=' + takeHit(['holy_guard']));
 
-/* §3.9 不动如山：>95% 血 → 真实普攻受伤减半 */
-assert('§3.9 不动如山 E2E → 血量>95% 时受伤 ×0.5', hitPlain > 0 && takeHit(['immovable']) === Math.floor(hitPlain * 0.5),
+/* §3.9 不动如山：>90% 血 → 真实普攻受伤减半（v2.14.8：三档的第一档） */
+assert('§3.9 不动如山 E2E → 血量>90% 时受伤 ×0.5', hitPlain > 0 && takeHit(['immovable']) === Math.floor(hitPlain * 0.5),
   'plain=' + hitPlain + ' immovable=' + takeHit(['immovable']));
 
-/* §3.10 威压领域：无条件 -10%，自身>70% 血翻倍为 -20%（真实治疗通道消费 healReduce）
+/* §3.10 威压领域：**恒 -20%**（v2.14.8：血线条件删除）（真实治疗通道消费 healReduce）
    ⚠️ v2.4.3 口径更新：此前这里靠「敌方施放『治愈』会治疗 gb.allies」来构造场景 —— 那正是
       v2.4.3 修掉的 bug（selectTargets 的 ally1/ally2 写死了玩家方；设计文档《2.0 敌群设计》
       第 160~171 行明确这三个技能作用于施法者**自己一方**）。
       修后敌方「治愈」治的是敌方自己，故本用例改为**我方治疗者**治疗我方 vict。
       这不改变本用例要验的东西：onFoeHeal 的派发看的是**被治疗者**阵营，与谁施放无关 ——
       `battle-group.js` 里 `foes = (t.side === 'ally' ? gb.enemies : gb.allies)`，
-      被治疗者是我方 → 参与判定的仍是**敌方**的威压领域持有者。 */
+      被治疗者是我方 → 参与判定的仍是**敌方**的威压领域持有者。
+   ⚠️ v2.14.8：敌群「治愈」改为**蓄力 1 回合**（下回合释放），本用例只验治疗通道的折算，
+      故直接以 `{releasing:true}` 释放载荷，绕开蓄力那一步（蓄力本身由 test-group-battle 覆盖）。 */
 function pfHeal(holderHpRatio) {
   const vict = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 5 });
   vict.hp = 100;
@@ -369,13 +404,61 @@ function pfHeal(holderHpRatio) {
   foes.push(mkSide('enemy', { hp: 500, atk: 10, def: 5, spd: 6, soulAtk: 100 }, null, 10));
   const healer = mkSide('ally', { hp: 300, atk: 10, def: 5, spd: 2, soulAtk: 100 });
   const gb = sandbox.createGroupBattle({ allies: [vict, healer], enemies: foes, rng: function () { return 0; } });
-  sandbox.castSkill(gb, healer, 'heal');
+  sandbox.castSkill(gb, healer, 'heal', { releasing: true });
   return vict.hp - 100;
 }
 const pfBase = pfHeal(null);
 assert('§3.10 威压领域 E2E → 无持有者时全额治疗（对照）', pfBase > 0, 'base=' + pfBase);
-assert('§3.10 威压领域 E2E → 持有者 >70% 血时治疗 ×0.8', pfHeal(1) === Math.floor(pfBase * 0.8), 'got=' + pfHeal(1) + ' base=' + pfBase);
-assert('§3.10 威压领域 E2E → 持有者 70% 血时治疗 ×0.9（不再完全不生效）', pfHeal(0.70) === Math.floor(pfBase * 0.9), 'got=' + pfHeal(0.70));
+assert('§3.10 威压领域 E2E → 持有者满血时治疗 ×0.8（-20% 恒定额）', pfHeal(1) === Math.floor(pfBase * 0.8), 'got=' + pfHeal(1) + ' base=' + pfBase);
+assert('§3.10 威压领域 E2E → 持有者 70% 血时仍是 ×0.8（不再分档）', pfHeal(0.70) === Math.floor(pfBase * 0.8), 'got=' + pfHeal(0.70));
+assert('§3.10 威压领域 E2E → 持有者残血（1%）仍 ×0.8（不再「完全不生效」）', pfHeal(0.01) === Math.floor(pfBase * 0.8), 'got=' + pfHeal(0.01));
+
+/* §3.10 v2.14.8 新增项：我方每次受到**技能伤害** → 50% 几率给随机 1 名受伤友方回复最大生命 ×4%，
+   每回合最多 2 次；**普攻伤害不触发**（规格写「技能伤害」）。
+   构造：holder（威压领域持有者）与 mate 同为我方（此处用敌群侧承载「我方」语义，只看阵营内部一致性）。
+    · 打 mate → `talentAura(mates…)` 派发到 holder（isSelf=false）；
+    · 打 holder 自己 → 引擎补发的自派发（isSelf=true）也要能触发（规格「我方」含自己）。
+   随机池来自 `_pfMates`（onBattleStart 缓存），故先显式派发开战钩子。 */
+function pfSkillDamageHit(hitWho, isSkill) {
+  const holder = mkSide('ally', { hp: 400, atk: 10, def: 5, spd: 1 }, ['pressure_field']);
+  const mate = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 6, soulAtk: 10 }, null, 10);
+  mate.hp = 400;                                          // 受伤友方（随机池里唯一一名；最大生命 500）
+  const foe = mkSide('enemy', { hp: 500, atk: 100, def: 0, spd: 9, soulAtk: 10 }, null, 10);
+  /* 「冲撞」的描述含「随机」→ skillAiCanDesignate 为假，forcedTarget 被引擎忽略
+     （battle-group.selectTargets / v2.9.1 裁决 4），所以用**站位**决定谁挨这一下：
+     rng=0 → 单体随机技能取候选池第 0 个。 */
+  const order = hitWho === 'mate' ? [mate, holder] : [holder, mate];
+  const gb = sandbox.createGroupBattle({ allies: order, enemies: [foe], rng: function () { return 0; } });
+  sandbox.dispatchBattleStartTalents(gb);                 // 缓存 _pfMates
+  const evs = isSkill ? sandbox.castSkill(gb, foe, 'charge') : (sandbox.normalAttack(gb, foe, mate), []);
+  const log = (evs || []).map(function (e) { return e.msg || ''; }).join(' | ');
+  /* 判据取 `_pfHealCount`（每次**成功回复** +1）+ 日志里的实际回复量，
+     不用被测单位自己的 hp 差 —— mate 同时是「挨打者」和「被治者」，hp 差会被伤害抵掉。 */
+  return { count: holder._pfHealCount || 0, log: log, mateHp: mate.hp };
+}
+{
+  const rnd0 = sandbox.battleRnd;
+  sandbox.battleRnd = function () { return 0; };          // 命中 + 50% 必触发 + 随机池取第 0 个
+  const hitMate = pfSkillDamageHit('mate', true);          // 技能打 mate → talentAura(mates) 派发（isSelf=false）
+  const hitSelf = pfSkillDamageHit('holder', true);        // 技能打持有者 → 引擎补发的自派发（isSelf=true）
+  const hitPlain = pfSkillDamageHit('mate', false);        // 普攻打 mate → 不得触发
+  sandbox.battleRnd = rnd0;
+  /* 回复量基数 = 目标的**最大生命**（base.hp=500）×4% = 20（当前 400 → 420）。
+     旧断言把当前血量 400 当基数（期望 16），是规格口径写错，不是实现错。 */
+  assert('§3.10 威压领域 → 我方受技能伤害 50% 几率让随机 1 名受伤友方回复最大生命 ×4%（400 → 420）',
+    hitMate.count === 1 && /威压领域: .* 回复 20/.test(hitMate.log), JSON.stringify(hitMate));
+  assert('§3.10 威压领域 → 持有者自己挨技能伤害同样触发（「我方」含自己）',
+    hitSelf.count === 1 && /威压领域: .* 回复 20/.test(hitSelf.log), JSON.stringify(hitSelf));
+  assert('§3.10 威压领域 → 普攻伤害不触发（规格是「受到技能伤害」）',
+    hitPlain.count === 0 && !/威压领域/.test(hitPlain.log), JSON.stringify(hitPlain));
+  /* 50% 门槛真的读了掷骰（掷骰 ≥0.5 → 不回）：同一发技能伤害，只改随机源 */
+  const rndBack = sandbox.battleRnd;
+  sandbox.battleRnd = function () { return 0.9; };
+  const noProc = pfSkillDamageHit('mate', true);
+  sandbox.battleRnd = rndBack;
+  assert('§3.10 威压领域 → 50% 门槛生效（掷骰 0.9 时技能伤害不回血）',
+    noProc.count === 0 && !/威压领域/.test(noProc.log), JSON.stringify(noProc));
+}
 
 /* §3.5 / §3.12-2 镜像结界全通道 */
 // ① 治疗通道：友方「治愈」落到持有者 → +25%
@@ -384,7 +467,8 @@ function mirrorHeal(withMirror) {
   const t = mkSide('ally', { hp: 500, atk: 10, def: 5, spd: 5 }, withMirror ? ['mirror_field'] : null);
   t.hp = 100;
   const gb = sandbox.createGroupBattle({ allies: [healer, t], enemies: [], rng: function () { return 0; } });
-  sandbox.castSkill(gb, healer, 'heal');
+  /* v2.14.8：敌群「治愈」自带**蓄力 1 回合**，本用例只验治疗幅度 → 直接释放载荷 */
+  sandbox.castSkill(gb, healer, 'heal', { releasing: true });
   return t.hp - 100;
 }
 const healBase = mirrorHeal(false);

@@ -434,17 +434,17 @@ function unitFullTurn(gb, actor) {
   const hi = sb.applySkillEffects(sb.getSkill('p_holylight'), petAt(60), [mate], {}).heals[0].amount;
   assert('治疗量随基础属性（圣光治愈 炼化0=150% × 100魂攻 = 150 → 满炼化 240）', lo === 150 && hi === 240, lo + '/' + hi);
 
-  // 战意灌注：增益幅度 3%~30%
+  // 战意灌注：增益幅度 150%~300%（v2.14.8 作者平衡调整，原 3%~30%）
   const bLo = sb.applySkillEffects(sb.getSkill('p_warmight'), petAt(0), [mate], {}).buffs[0].value;
   const bHi = sb.applySkillEffects(sb.getSkill('p_warmight'), petAt(60), [mate], {}).buffs[0].value;
-  assert('增益幅度随基础属性（战意灌注 3% → 30%）', Math.abs(bLo - 0.03) < 1e-9 && Math.abs(bHi - 0.30) < 1e-9, bLo + '/' + bHi);
+  assert('增益幅度随基础属性（战意灌注 150% → 300%）', Math.abs(bLo - 1.5) < 1e-9 && Math.abs(bHi - 3.0) < 1e-9, bLo + '/' + bHi);
 
-  // 闪耀：降命 0%~40%
+  // 闪耀：降命 0%~50%（v2.14.8 作者平衡调整，原 0%~40%）
   const t1 = sb.createUnit({ id: 's1', side: 'enemy', name: '敌1', base: { hp: 100, atk: 10, def: 5, spd: 5 } });
   const t2 = sb.createUnit({ id: 's2', side: 'enemy', name: '敌2', base: { hp: 100, atk: 10, def: 5, spd: 5 } });
   sb.applySkillEffects(sb.getSkill('p_shine'), petAt(0), [t1], {});
   sb.applySkillEffects(sb.getSkill('p_shine'), petAt(60), [t2], {});
-  assert('降命幅度随基础属性（闪耀 0% → 40%）', t1._accMod === 0 && Math.abs(t2._accMod + 0.4) < 1e-9, t1._accMod + '/' + t2._accMod);
+  assert('降命幅度随基础属性（闪耀 0% → 50%）', t1._accMod === 0 && Math.abs(t2._accMod + 0.5) < 1e-9, t1._accMod + '/' + t2._accMod);
 
   // 打湿：魂防 0%~25%（实例 modsPct 覆盖定义值，不叠加）+ 被命中 0%~30%（塞进状态 data）
   // 注意：applySkillEffects 只**产出** statusApps，真正施加在 castSkill 里（要把 modsPct/data 透传下去）

@@ -15,6 +15,7 @@ var SKILLS = {};   // id → skill def
    WP-C 新增可选字段：
      · charge:true      —— 「蓄力 1 回合、下回合释放」：首次施放只挂 charging（承伤 +25%），
                             下回合由 battle-group 的 groupUnitTurn 释放技能自身
+                            （v2.14.8 起敌群「治愈」heal 也走这条通用载荷）
      · condBonus:{statuses,value} —— 目标处于指定状态时本次伤害 ×(1+value)
      · bounce:{times,dmgUp,foeChance} —— 全场随机弹射（梦幻光球）
      · wounded:true     —— target:'ally1' 时只挑未满血的友方（圣光治愈）
@@ -253,11 +254,15 @@ function calcSkillDamage(skill, caster, targets, ctx) {
   var selfHealAmount = 0;
   if (skill.bounce) {
     /* WP-C（§2.12 梦幻光球「全场随机弹射 3 次、每单位最多 1 次」）：
-       skill.bounce = { times:3, dmgUp:0.10, foeChance:[0.55,0.82] }
-       每次弹射**先掷阵营**（敌方概率 foeChance，随成长升高；我方 = 1 − foeChance，随成长降低
-       —— 即评审的「我方 45%→18% / 敌方 55%→82%」，两者互补），再在该阵营的未命中池里随机取 1 名；
-       伤害每次累计 +dmgUp（下一次发动重置 = 每次施放都从 ×1.0 起）。
-       该阵营没有可打单位时退到另一阵营；两边都空则该次「未发动」→ 结算为自身回血（selfHealAmount）。 */
+       skill.bounce = { times:3, dmgUp:0.10, foeChance:[1,1] }
+       每次弹射**先掷阵营**（敌方概率 foeChance；我方 = 1 − foeChance），再在该阵营的未命中池里
+       随机取 1 名；伤害每次累计 +dmgUp（下一次发动重置 = 每次施放都从 ×1.0 起）。
+       该阵营没有可打单位时退到另一阵营；两边都空则该次「未发动」→ 结算为自身回血（selfHealAmount）。
+       v2.14.8（作者平衡调整「**不攻击友方**」）：
+         `foeChance` 恒 [1,1] → `foeCh` = 1 → **敌方阵营概率 100%**。
+         此时**不再跨阵营回落到我方**：`foeCh >= 1` 视为「只打敌方」，敌方候选枯竭时该次视为
+         「未发动」（转成自身回血），而不是像以前那样把剩余弹射打到友军身上。
+         这也顺带守住了「每次弹射使下次弹射伤害 +10%」的语义 —— 自愈的那几次不推进伤害档。 */
     out = [];
     var b = skill.bounce;
     var all = (ctx.allPool && ctx.allPool.length) ? ctx.allPool : targets;
@@ -267,6 +272,7 @@ function calcSkillDamage(skill, caster, targets, ctx) {
       return arr[0] + (arr[1] - arr[0]) * bt;
     };
     var foeCh = lerp(b.foeChance);
+    var foeOnly = foeCh >= 1;          // v2.14.8：恒敌方 → 永不回落到我方
     var rngB = (typeof ctx.rng === 'function') ? ctx.rng : battleRnd;
     var hitIds = {};
     var landed = 0, missed = 0;
@@ -279,7 +285,7 @@ function calcSkillDamage(skill, caster, targets, ctx) {
         return all.filter(function (u) { return u.hp > 0 && u.side === side && !hitIds[u.id]; });
       }
       var cand = candOf(wantFoe ? foeSide : allySide);
-      if (!cand.length) cand = candOf(wantFoe ? allySide : foeSide);
+      if (!cand.length && !foeOnly) cand = candOf(wantFoe ? allySide : foeSide);
       if (!cand.length) { missed++; continue; }
       var pick = cand[Math.floor(rngB() * cand.length)];
       hitIds[pick.id] = true;
@@ -517,12 +523,17 @@ registerSkill({
   }]
 });
 registerSkill({
-  id: 'bulwark', name: '广域防御', type: 'support', target: 'all', cooldown: 6,
+  id: 'bulwark', name: '广域防御', type: 'support', target: 'all', cooldown: 7,
   /* v2.1.26：减伤幅度与持续回合接区间（低值 = 改前固定值 0.2 / 3 回合）
      v2.3.0（作者裁决）：减伤**上限 0.40 → 0.30**，下限仍 0.20（继续随等级/炼化成长）。
      影响面：21 个敌方单位携带，g10 及以上的精英/Boss 群体减伤从 40% 收敛到 30%
-     （v2.2.14 曾从「恒 20%」放开到 0.40，本版收回一档）。 */
-  range: { dmgReduce: [0.20, 0.30], dur: [3, 5] },
+     （v2.2.14 曾从「恒 20%」放开到 0.40，本版收回一档）。
+     v2.14.8（作者规格 2「敌群技能平衡调整」）：
+       · 持续 **3~5 → 2~3 回合**（`range.dur`），冷却 **6 → 7**（`cooldown`）；
+       · 减伤幅度 `range.dmgReduce` **[0.20, 0.30] 不变** —— 作者本轮只动持续与冷却；
+       · `status-defs.js` 的 wideguard 兜底 0.20 与「无 data 实例」口径不受影响
+         （`data.reduce` 仍是幅度单源，见 castSkill 的 buff 落地）。 */
+  range: { dmgReduce: [0.20, 0.30], dur: [2, 3] },
   effects: [function (c, ts, r, ctx) {
     r.buffs.push({ all: true, key: 'dmgReduce', value: ctx.sv('dmgReduce'), duration: Math.round(ctx.sv('dur')) });
   }]
@@ -544,8 +555,21 @@ registerSkill({
 registerSkill({
   id: 'heal', name: '治愈', type: 'support', target: 'ally1', cooldown: 2,
   /* v2.1.26：治疗量接区间。低值 = 改前的固定值（魂攻×0.8 + 目标血×10%），
-     高值暂定 ×2 并标 [PLACEHOLDER]（设计文档未给治愈的上限，待定案）。 */
-  range: { healSoul: [0.8, 1.6], healHp: [0.10, 0.20] },
+     高值暂定 ×2 并标 [PLACEHOLDER]（设计文档未给治愈的上限，待定案）。
+     v2.14.8（作者规格 3「敌群技能平衡调整」）：
+       · **蓄力 1 回合**（`charge: true`）—— 复用 WP-C 既有蓄力载荷机制（见 battle-group.js
+         的 castSkill 蓄力分支 + status-defs.js 的 charging.onExpire）：首次施放只挂
+         `charging`（承伤 +25%）并把 **本技能 id** 写进蓄力实例，**下回合开始时**由
+         groupUnitTurn 以 `{releasing:true}` 释放**本技能**（重新选靶 + 按当时的活人结算）。
+         ⚠️ 与「蓄力重击」（chargeup）**不冲突**：chargeup 不带 `charge` 标记、不带载荷，
+            仍走 resolveChargeStrike 的「攻击×400% 单体物理」旧路径（一行未改）。
+       · 治疗量 = **魂攻 ×80%~160% + 目标最大生命 ×5%~10%**（区间按既有成长口径 `skillRangeT`：
+         炼化/等级推进 → 低值到高值线性插值）。上限由 20% 收回到 **10%**。
+       · **治愈抗性**（同一目标 5 回合内再次受治 → -40%，可叠到 -80%）不写在这里 ——
+         它按**目标**承载（状态 `healfatigue`），由 battle-group.js 的治疗结算处读取/施加，
+         属于跨技能的目标侧规则，不是本技能自己的数值。 */
+  charge: true,
+  range: { healSoul: [0.8, 1.6], healHp: [0.05, 0.10] },
   effects: [function (c, ts, r, ctx) {
     var kSoul = ctx.sv('healSoul'), kHp = ctx.sv('healHp');
     ts.forEach(function (t) {
@@ -566,6 +590,12 @@ registerSkill({
 });
 registerSkill({
   id: 'lastword', name: '遗言', type: 'support', target: 'random1', cooldown: 7, startCooldown: 10,
+  /* v2.14.8（作者规格 1「Boss 不应施放 lastword」）：
+     ⚠️ 排除点**不在技能池**（本注册项与 group-levels.js 的 SKILLS_HIGH 一字未改 ——
+        普通精英仍然可以带、可以放），而在 **AI 的技能选择**：
+        `ai.js` 的 `aiPickSkill` 一进来就按 `aiIsBoss(actor)` 把候选里的 `lastword` 滤掉。
+        为什么放在候选入口而不是某一条分支：lastword 有 3 条进入路径
+        （③ 低血大招的 `doom || lastword`、④ 70% 最强 / 30% 随机），拦一条必漏两条。 */
   effects: [function (c, ts, r) {
     // 自身阵亡，敌方随机1攻击魂攻大幅降低 + 每回合最大生命伤害
     r.events.push({ msg: '💀 ' + (c.name || '单位') + ' 遗言：自我牺牲（自身阵亡）' });
@@ -638,9 +668,9 @@ var SKILL_DOCS = {
   taunt:      { desc: '自身进入嘲讽 1 回合：敌方单体攻击优先选中自身，且自身速度 ×2 参与出手排序。' },
   doom:       { desc: '使随机 1 名敌人末日 4 回合：无法被治疗、技能不可用、普攻伤害减半，且每回合开始受到施加者魂攻×50% 的伤害（无视防御与减伤）。' },
   drainbuff:  { desc: '随机 1 名敌人的增益状态时长减半，被削掉的攻击加成折算给自身（+N% 攻击，3 回合）。' },
-  bulwark:    { desc: '我方全体受到的伤害降低 20%~30%（随等级/炼化成长），持续 3~5 回合。' },
+  bulwark:    { desc: '我方全体受到的伤害降低 20%~30%（随等级/炼化成长），持续 2~3 回合。' },
   cleanse:    { desc: '解除我方 1 名队友的普通~高级负面，并回复其 魂攻×50% + 20 点生命（特级负面不解除）。' },
-  heal:       { desc: '使我方随机 1 名队友回复 魂攻×80% + 其最大生命 10% 的生命。' },
+  heal:       { desc: '本回合进入蓄力（承伤 +25%，持续 1 回合）；下回合开始时使我方**随机** 1 名队友回复 魂攻×80%~160% + 其最大生命 5%~10% 的生命。被治愈的目标获得「治愈抗性」5 回合：期间再次受到治愈效果 -40%，最多叠加 -80%。' },
   empower:    { desc: '使我方 1 名角色攻击 +30%，持续 2 回合。' },
   lastword:   { desc: '施放后自身立即阵亡，使随机 1 名敌人中「遗言诅咒」7 回合：攻击与魂攻 -25%，且每回合开始受到其最大生命 5% 的伤害（**该伤害受其魂防半数减免**）。开场即进入冷却。' },
   fortify:    { desc: '自身防御与魂防 +10%，可重复施放叠加（最多 5 层 → +50%），持续到战斗结束。' },
