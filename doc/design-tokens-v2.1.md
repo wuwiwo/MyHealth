@@ -395,3 +395,118 @@ node scripts/test-group-ui-presentation.js       # 群战表现层不受影响
 #     对比度<4.5 / 触控<44 / 横向溢出 = 全部 0
 ```
 
+---
+
+## 15. v2.17 科技蓝主题（Tech Blue）+ 宠物视图验收
+
+> 作者反馈「当前主题色不好看且刺眼」。本节**只换品牌强调色**，并把大面积饱和填充降级为
+> 「浅底 + 2px 蓝边 + 蓝字」。**§14.4 里「主题色沿用 #FB923C / #F97316 / #C2410C」一句已被本节取代**，
+> 其余 §14 条款（无阴影 / 无渐变 / 圆角归零 / 2px 结构边 / 0~75ms 过渡）全部继续有效。
+
+### 15.1 令牌映射方式（为什么保留 `--orange*` 这个名字）
+
+采用「**新增语义名 `--brand*`，旧名 `--orange*` 用 `var()` 转接**」：
+
+```css
+:root{                     /* 深色（默认主题） */
+  --brand:#60A5FA; --brand-l:#93C5FD; --brand-d:#1D4ED8;
+  --orange:var(--brand); --orange-l:var(--brand-l); --orange-d:var(--brand-d);
+  --orange-g:var(--brand);
+  --brand-rgb:96,165,250;
+  --brand-fill:#2563EB; --brand-fill-d:#1D4ED8; --on-brand:#ffffff;
+}
+[data-theme="light"]{
+  --brand:#1D4ED8; --brand-l:#2563EB; --brand-d:#1E3A8A;
+  --orange:var(--brand); …（同上转接）
+  --brand-rgb:29,78,216;
+  --brand-fill:#2563EB; --brand-fill-d:#1D4ED8; --on-brand:#ffffff;
+}
+```
+
+理由（三选一里选它的原因）：
+
+1. `--orange*` 在全站被引用 ~110 处，其中 **`page/*.js` 的内联 `style`** 里也有；本轮白名单禁止改 JS，
+   只有「同名换值（值改成 `var(--brand)`）」这一条路能一次覆盖全部引用，零遗漏。
+2. 旧名保留是**零风险**问题，不是命名偏好：新代码一律用 `--brand*`，旧名只作别名。
+3. 反方案（只改 `--orange` 的值、不建 `--brand*`）会让「科技蓝」永远叫 `orange` —— 下一个人不敢动它。
+4. `--brand-fill` / `--brand-rgb` / `--on-brand` 本来就是中性名，直接换值即可。
+
+### 15.2 最终色值 + 对比度实测
+
+| 用途 | 浅色主题 | 深色主题 | 实测对比度 |
+|---|---|---|---|
+| 主色（文字 / 边框 / focus 环），`--brand`（= `--orange`） | `#1D4ED8` | `#60A5FA` | 浅 白底 **6.70:1**、`--bg #fafaf9` 6.42:1；深 `--surface #111827` **6.98:1**、`--bg` 7.41:1、`--surface-2` 5.72:1 |
+| 实心填充底，`--brand-fill`（**只配白字**） | `#2563EB` | `#2563EB` | `--on-brand #ffffff` 上 **5.17:1**（两套主题同值） |
+| 实心填充 hover，`--brand-fill-d` | `#1D4ED8` | `#1D4ED8` | 白字 6.70:1 |
+| 激活态 hover 底，`--brand-d`（= `--orange-d`） | `#1E3A8A` | `#1D4ED8` | 白字 10.32:1 / 6.70:1 |
+| 浅色变体，`--brand-l`（= `--orange-l`，当前无引用） | `#2563EB` | `#93C5FD` | — |
+| 固定深底容器，`--on-dark-brand` | `#60A5FA` | `#60A5FA` | — |
+
+> 口径：`node scripts/test-a11y-tokens.js` 的三段式 WCAG 2.1 计算 + Chrome CDP `getComputedStyle` 实测双跑，
+> 两边数字一致。深色主题最弱项 = 实心按钮白字 **5.17:1**；浅色主题最弱项 = 成功色/表面 5.02:1。
+
+### 15.3 实心填充收敛（降刺眼）
+
+**规则**：`--brand-fill` 实心底**只留给主 CTA 与激活态**，其余大面积动作一律「浅底 + 2px 蓝边 + 蓝字」。
+
+| 位置 | 改前 | 改后 |
+|---|---|---|
+| `.sb-btn`（**全站用得最多的大面积按钮**：设置 / 同步 / 导出 / 训练完成，宽 100% + 16px 内边距） | 满块 `--brand-fill` + 白字 | `transparent` + 2px `--brand` 边 + `--brand` 字（hover/active 仍高对比反色） |
+| `#syncPush`（`page/sync.js:362` 内联 `background:var(--orange);color:white`） | 满块橙底白字（旧橙 2.26:1，本就不达标） | `transparent` + 2px `--brand` 边 + `--brand` 字（CSS 属性选择器收回，未改 JS） |
+| `.empty-cta`（空态主按钮） | `--brand-fill` 当文字色（3.43:1） | 文字与 2px 边框都改 `--brand` |
+| `.pet-cell-mult`（宠物详情 ×N%） | `--brand-fill` 当文字色（3.43:1） | `--brand`（6.98 / 6.70:1） |
+| `.pet-final-cell.active`（③ 最终属性选中格） | 1…2px `--brand-fill` 边框（2.42:1） | 2px `--brand` 边框（5.72:1） |
+| 旧橙色叠底 `rgba(249,115,22,…)`（`game-render.js:336` Boss 词缀卡 / `sync.js:338` 同步建议卡） | 橙色相叠底 | `rgba(var(--brand-rgb),.10)`（只换色相，透明度取中间值） |
+
+**保留实心（有意为之）**：`.m-btn-save` / `.md-save`（弹层确认）、`.be-btn-next`（战斗结算主按钮）、
+`.header-logo`（38px 品牌标记）、`.hm-cell[data-l="5"]`（热力图最高档的一端）、
+以及全部 `.active` / `.selected` / `.on` 激活态（`.tab-btn.active` / `.gb-tab.active` / `.speed-btn.active` /
+`.wt-btn.selected` / `.car-type.selected` / `.gb-log-filter.on`）。进度条填充（`.ec-fill` / `.gl-bar-fill` /
+`.snap-fill` / `.ch-timer-bar`）属数据可视化的细条，保持品牌色。
+
+### 15.4 明确**没有**动的（作者红线）
+
+- **状态色**：受伤 / 阵亡红（`--red`）、治疗绿（`--green`）、警告黄（`--yellow`）—— 两套主题逐字节未改。
+- **稀有度色**：宠物稀有度仍走 `--purple`（`.pet-card-rarity` / `.codex-badge-rarity`），
+  浅色 `#7E22CE` / 深色 `#C084FC` 未动。本次蓝与稀有度**不冲突**（稀有度是紫，不是蓝）；
+  但 `--brand` 与语义 `--blue`（info）在浅色下同值 `#1D4ED8`、深色下同值 `#60A5FA` —— 这是**刻意**的：
+  二者同属蓝，语义上不需要区分，且 info 蓝本来就取自同一色阶。若日后要拉开，改 `--brand` 一侧，别动稀有度。
+- **多色相语义标签**：动作库 8 色标签已在 v2.16 统一为中性 chip，本轮未回退。
+- 字号 / 间距 / 圆角 / 阴影 / 过渡：一行未动。
+
+### 15.5 宠物视图验收（v2.16 阶段 2 半成品补完）
+
+**`3325ff7` 半成品的接线检查（全部通过）**
+
+| 检查项 | 实测 | 结论 |
+|---|---|---|
+| `#petCalcDet`（② 计算口径）/ `#petLvChainDet`（逐属性等级链路）是否在 `.pet-sec` 内闭合平衡 | `<details>` 开合配平、无嵌套 details、两条 summary 都在 | ✅ 已正确接线 |
+| `<summary>` 44px 热区 | `322×44`（`min-height:var(--touch-min)`） | ✅ |
+| 键盘可达 | `summary` 原生可聚焦（`document.activeElement===summary`）、Enter/Space 由 UA 原生切换、`:focus-visible` 2px `--brand` 描边、未写 `tabindex="-1"` | ✅ |
+| 是否误折叠主数值 | `<details>` 内 `.pet-grid / .pet-final-cell / .pet-cell-val` = **0 个**；①②③ 三排数值格、Lv/经验条、「等级提供的属性」数值格全部常显 | ✅ 未误折叠 |
+| 折叠是否真生效 | `.pet-det` 外框高度 **45px**（44px summary + 1px `--bw-thin` 分隔线）；详情总高 1644px / 1.95 屏 | ✅ |
+
+**重出的违规表（修前 → 修后）**
+
+| # | 元素 | 违规项 | 实测值（修前） | 修法 | 修后 |
+|---|---|---|---|---|---|
+| 1 | `b.pet-cell-mult`「×1437% / ×1413% / ×100%」 | 文字对比度 | **3.43:1** @12px/700 —— 换蓝后 `--brand-fill #2563EB` 被当作**文字色**压在 `--surface #111827` 上 | 文字改用**文字/边框档** `--brand`，`--brand-fill` 只留作实心底 | 6.98:1（深）/ 6.70:1（浅） |
+| 2 | `.empty-cta`（空态主按钮，宠物空态走这条） | 文字 + 边框对比度 | 3.43:1 @14px/700（同因） | 文字与 2px 边框都改 `--brand` | 深 6.98 / 浅 6.70 |
+| 3 | `.pet-final-cell.active`（③ 最终属性选中格） | 非文字边框对比度（WCAG 1.4.11 ≥3:1） | #2563EB on #1e293b = **2.42:1** | 边框改 `--brand` | 5.72:1 |
+| 4 | 详情「✨ 炼化 Lv12」（`page/pet-ui.js:850` 内联） | 文字对比度（大字贴边） | 3.43:1 @20px/700 —— 走大字 3:1 豁免但余量只有 0.43 | 内联色改 `var(--brand)` | 6.98:1 |
+| 5 | `.hm-cell[data-l="4"]`（热力图，非宠物视图，被 `--on-brand` 翻转波及） | 文字对比度 | 深色 **3.60:1** —— 深色 `--on-brand` 由近黑 `#1c1917` 翻成白 | 底色 alpha `.80→.55` + 文字改 `--text` | 深 5.38 / 浅 6.70 |
+
+**修后复测**：390×844 与 360×640 × 深/浅共 4 组，每组 3 个视图（宠物列表 86 元素 / 详情 279 元素 /
+⚖️ 对比 315 元素）→ `box-shadow / 中间圆角 / background-image / transition-duration / opacity /
+backdrop-filter / 四边 border-width / 文字对比度 / 触控尺寸 / 横向溢出` **全部 0**，`console error` **0 条**。
+
+### 15.6 复验口径
+
+```bash
+node scripts/test-a11y-tokens.js                 # 40/40 ALL PASS（本轮未改断言）
+# 全量 75 个 scripts/test-*.js：0 失败
+# 真浏览器（agent-browser + CDP Runtime.evaluate，静态服务根=page/，不用 file://）
+#   390×844 / 360×640 × 深色 / 浅色 共 4 组；宠物列表 + 详情 + ⚖️ 对比 各一次计算样式审计
+#   → 阴影 / 中间圆角 / 渐变 / 过渡>75ms / opacity<0.5 / 模糊 / 1px 结构边 / 对比度<4.5 / 触控<44 / 横向溢出 = 全部 0
+```
+

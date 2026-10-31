@@ -237,7 +237,7 @@ function renderPetPanel() {
   h += orbBagHtml(d)
   // 宠物列表
   if (!d.pets.length) {
-    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:var(--fs-base);background:var(--bg2);border-radius:16px">还没有宠物 🐾<br><span style="font-size:var(--fs-xs)">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:var(--fs-md);border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
+    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:var(--fs-base);background:var(--bg2);border-radius:var(--r)">还没有宠物 🐾<br><span style="font-size:var(--fs-xs)">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:var(--fs-md);border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
   } else {
     /* ===== v2.15：**列表缩短**（作者原话：「优化宠物列表，现在列表太长了」）=====
        改前：每只 141px（标题行 + 状态行 + 6px 进度条 + 独立 44px 按钮行）——
@@ -575,7 +575,17 @@ function petStatChainHtml(bd, k) {
    这里刻意用 `pet-cell-val`（数值）而不是 `pet-cell-mult`（×N%）—— 一眼区分两种东西。
    所有数字来自 `petBonusLines()` ＋ `petValueTxt()`（格式化在 pet-store.js），
    本函数只拼字符串：不做乘除、不调 Math.floor、不读 bd.base / bd.bench。 */
-function petCohesionHtml(bd) {
+/* ② 凝聚的口径长文（默认折叠，见 petStatSectionsHtml 的 <details>）：
+   文本只有这一份 —— 展开时由 petCohesionNoteHtml() 取，收起时不计高度。
+   ⚠️ 与凝聚数值本身无关：所有数字仍来自 `petBonusLines()`，此处只拼句子。 */
+function petCohesionNoteHtml(bd) {
+  var dig = (typeof petBonusLines === 'function') ? petBonusLines(bd) : null;
+  if (!dig || !dig.ok || !dig.rows.length) return '';
+  return '<div class="pet-src-note"><b>凝聚是固定值</b>：成熟期 ' + dig.matureCount + ' 只宠该属性基础之和 ×'
+    + dig.cohesionRatePct + '%，<b>直接加在①上</b>（不是百分比、不进池）；速度不参与（—）。'
+    + '同一存档下每只宠拿到的凝聚<b>完全相同</b>。</div>';
+}
+function petCohesionHtml(bd, noNote) {
   var dig = (typeof petBonusLines === 'function') ? petBonusLines(bd) : null;
   if (!dig || !dig.ok || !dig.rows.length) return '';
   var h = '<div class="pet-grid">';
@@ -586,9 +596,8 @@ function petCohesionHtml(bd) {
       + (r.participates ? ('+' + petValueTxt(r.cohesion)) : '—') + '</b></div>';
   });
   h += '</div>';
-  h += '<div class="pet-src-note"><b>凝聚是固定值</b>：成熟期 ' + dig.matureCount + ' 只宠该属性基础之和 ×'
-    + dig.cohesionRatePct + '%，<b>直接加在①上</b>（不是百分比、不进池）；速度不参与（—）。'
-    + '同一存档下每只宠拿到的凝聚<b>完全相同</b>。</div>';
+  /* noNote=true → 只出数值格（长文由调用方统一放进折叠区，主信息更短） */
+  if (!noNote) h += petCohesionNoteHtml(bd);
   return h;
 }
 
@@ -603,7 +612,18 @@ function petSignedTxt(n) {
   var v = (typeof n === 'number' && isFinite(n)) ? n : 0;
   return (v > 0) ? '+' + v : ((v < 0) ? '−' + Math.abs(v) : '+0');
 }
-function petBonusLinesHtml(bd, rarity) {
+/* ② 加成合计的口径长文（默认折叠，见 petStatSectionsHtml 的 <details>）：
+   文本只有这一份。所有数字/百分比仍来自 `petBonusLines()`，本函数只拼句子。 */
+function petBonusNoteHtml(bd, rarity) {
+  var dig = (typeof petBonusLines === 'function') ? petBonusLines(bd, rarity) : null;
+  if (!dig || !dig.ok || !dig.rows.length) return '';
+  return '<div class="pet-src-note">加成合计 ＝ 稀有度 ＋ Σ宝珠 ＋ Σ共鸣（<b>进池百分比</b>，三项<b>加算同一层</b>）；'
+    + '最终 ＝ <b>(基础 ＋ 凝聚)</b> × 加成合计%，向下取整。速度不参与（固定 ×100%）。'
+    + 'Σ共鸣按<b>成熟期 ' + dig.matureCount + ' 只宠</b>的稀有度<b>逐只相加</b>'
+    + '（UR 10 / SSR 8 / SR 7 / R 6），同一存档下每只宠相同。'
+    + '大字四舍五入到整数 %，精确值见下方明细。</div>';
+}
+function petBonusLinesHtml(bd, rarity, noNote) {
   var dig = (typeof petBonusLines === 'function') ? petBonusLines(bd, rarity) : null;
   if (!dig || !dig.ok || !dig.rows.length) return '<div class="pet-sec-empty">（属性拆解暂不可用）</div>';
   var h = '<div class="pet-grid">';
@@ -613,11 +633,8 @@ function petBonusLinesHtml(bd, rarity) {
       + '</span><b class="pet-cell-mult">' + petMultTxt(r.participates ? petPctInt(r.totalPct) : 100) + '</b></div>';
   });
   h += '</div>';
-  h += '<div class="pet-src-note">加成合计 ＝ 稀有度 ＋ Σ宝珠 ＋ Σ共鸣（<b>进池百分比</b>，三项<b>加算同一层</b>）；'
-    + '最终 ＝ <b>(基础 ＋ 凝聚)</b> × 加成合计%，向下取整。速度不参与（固定 ×100%）。'
-    + 'Σ共鸣按<b>成熟期 ' + dig.matureCount + ' 只宠</b>的稀有度<b>逐只相加</b>'
-    + '（UR 10 / SSR 8 / SR 7 / R 6），同一存档下每只宠相同。'
-    + '大字四舍五入到整数 %，精确值见下方明细。</div>';
+  /* noNote=true → 只出 ×N% 数值格（长文由调用方统一放进折叠区） */
+  if (!noNote) h += petBonusNoteHtml(bd, rarity);
   return h;
 }
 
@@ -642,8 +659,16 @@ function petStatSectionsHtml(bd, rarity) {
   });
   h += '</div>';
   h += '<div class="pet-sec-title">② 加成 <span class="pet-sec-sub">凝聚＝<b>固定值</b>（成熟期宠物基础 ×3%，加在①上）· 加成合计统一为 ×N% ＝ 稀有度＋Σ宝珠＋<b>Σ共鸣</b>（进池百分比）· 凝聚/共鸣只作用于参战宠</span></div>';
-  h += petCohesionHtml(bd);
-  h += petBonusLinesHtml(bd, rarity);
+  h += petCohesionHtml(bd, true);
+  h += petBonusLinesHtml(bd, rarity, true);
+  /* v2.16 阶段 2：② 的两段口径长文**默认折叠**（<details>），主信息只留两排数值格。
+     折叠后「凝聚＝固定值 / 共鸣＝进池 %」这两件事仍写在 ② 标题行里（常显），
+     长文（如何相加、UR/SSR/SR/R 的逐只数值、取整规则）点开才出现。
+     ⚠️ 不新增任何按钮/热区以外的东西：summary 自带 44px 热区与原生 aria-expanded。 */
+  h += '<details class="pet-det" id="petCalcDet">'
+    + '<summary class="pet-det-sum">② 计算口径：凝聚＝固定值（加在①上）· 共鸣＝进池 %（点开看换算）</summary>'
+    + '<div class="pet-det-body">' + petCohesionNoteHtml(bd) + petBonusNoteHtml(bd, rarity) + '</div>'
+    + '</details>';
   var srcLabel = '加成明细（凝聚 / 稀有度 / Σ宝珠 / Σ共鸣 · 成熟期 ' + bd.matureCount + ' 只 / 全部 ' + bd.allCount + ' 只）';
   h += '<button class="pet-src-toggle" id="petBonusSrcBtn" aria-expanded="' + (_petSrcOpen ? 'true' : 'false') + '" aria-controls="petBonusSrc" data-label="' + srcLabel + '">'
     + (_petSrcOpen ? '▾ ' : '▸ ') + srcLabel + '</button>';
@@ -744,10 +769,10 @@ function petLevelHtml(pet, bd) {
     + '<span style="flex:1"></span>'
     + '<span style="font-size:var(--fs-xs);color:var(--text2)">等级加成 +' + v.bonusPct + '%</span>'
     + '</div>';
-  h += '<div style="height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden"'
+  h += '<div style="height:8px;background:var(--surface-3);border-radius:var(--r);overflow:hidden"'
     + ' role="progressbar" aria-labelledby="petLvTitle" aria-valuenow="' + nowVal
     + '" aria-valuemin="0" aria-valuemax="' + needMax + '">'
-    + '<div style="width:' + (v.maxed ? 100 : v.pct) + '%;height:100%;background:var(--brand-fill);border-radius:4px"></div></div>';
+    + '<div style="width:' + (v.maxed ? 100 : v.pct) + '%;height:100%;background:var(--brand-fill);border-radius:var(--r)"></div></div>';
   h += '<div style="font-size:var(--fs-xs);color:var(--text2);margin-top:6px">'
     + (v.maxed
         ? '已满级（+' + v.capPct + '% 封顶，不再累计经验）'
@@ -763,8 +788,14 @@ function petLevelHtml(pet, bd) {
       + '</span><b class="pet-cell-val">' + (add > 0 ? '+' + add : (v.level > 0 ? '+0' : '—')) + '</b></div>';
   });
   h += '</div>';
-  /* 链路：基础 → ＋等级 → ＋凝聚 → ×加成合计 → 最终（数值全部来自 petBonusRow / bd） */
+  /* 链路：基础 → ＋等级 → ＋凝聚 → ×加成合计 → 最终（数值全部来自 petBonusRow / bd）
+     v2.16 阶段 2：这 6 行链路 + 结语属「详细说明」→ **默认折叠**（<details>），
+     主信息保留 Lv／经验进度／「等级提供的属性」数值格。
+     用原生 <details>/<summary>：Tab 可达、Enter/Space 展开、aria-expanded 由浏览器映射。 */
   if (bd && bd.ok && typeof petBonusRow === 'function') {
+    h += '<details class="pet-det" id="petLvChainDet">'
+      + '<summary class="pet-det-sum">逐属性等级加成链路（基础 → ＋等级 → ＋凝聚 → ×加成合计 → 最终）</summary>'
+      + '<div class="pet-det-body">';
     PET_STAT_ROWS.forEach(function (r) {
       var k = r.k, row = petBonusRow(bd, k);
       var baseV = (bd.base && bd.base[k]) || 0;
@@ -785,6 +816,7 @@ function petLevelHtml(pet, bd) {
       + ' → <b>＋等级加成</b> → 最终。等级% 的基数固定是「① 基础（图鉴＋炼化＋天赋静态）」，'
       + '加项 <b>不进百分比池</b>、也不进凝聚的基数 —— 所以每月清空等级时，'
       + '掉的是这 <b>+' + v.capPct + '%</b> 的基础加项，不会连带放大任何其它来源。</div>';
+    h += '</div></details>';
   }
   h += '</div>';
   return h;
@@ -815,10 +847,10 @@ function renderPetDetail(pet, idx) {
   var rateH = Math.round(refineSuccessRate(pet, 'refineHigh') * 100)
   h += '<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">'
     +'<div style="display:flex;align-items:baseline;gap:6px;font-weight:700;margin-bottom:6px">'
-    +'<span>✨ 炼化</span><span style="font-size:var(--fs-xl);color:var(--brand-fill)">Lv'+rl+'</span>'
+    +'<span>✨ 炼化</span><span style="font-size:var(--fs-xl);color:var(--brand)">Lv'+rl+'</span>'
     +'<span style="color:var(--text3)">/ '+maxLv+'</span><span style="flex:1"></span>'
     +'<span style="color:var(--text3);font-weight:400">'+pct+'%</span></div>'
-    +'<div style="height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:var(--brand-fill);border-radius:4px;transition:width .3s"></div></div>'
+    +'<div style="height:8px;background:var(--surface-3);border-radius:var(--r);overflow:hidden"><div style="width:'+pct+'%;height:100%;background:var(--brand-fill);border-radius:var(--r);transition:width var(--dur-2) var(--ease-out)"></div></div>'
     +'<div style="margin-top:6px;color:var(--text3)">成功率：普通石 '+(rateN ? rateN+'%' : '不可用（Lv≥50）')+'　·　高级石 '+rateH+'%</div>'
     +'</div>'
   /* v2.2 WP-I A-6：属性区重组 —— ① 基础属性 → ② 加成（凝聚固定值 ＋ 加成合计 ×N%）→ ③ 最终属性。
