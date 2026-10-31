@@ -44,7 +44,7 @@ function renderExLibrary(){
   }
 
   h+='<button class="add-btn" id="exNewBtn" style="margin-top:12px">＋ 新建动作</button>';
-  h+='<button class="add-btn" id="exWikiBtn" style="margin-top:8px;background:var(--bg);color:var(--text);border:1px solid var(--bd)">📖 动作百科'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
+  h+='<button class="add-btn" id="exWikiBtn" style="margin-top:8px;background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">📖 动作百科'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
   h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">力量 ratio 影响容量计算（100%=满容量）</div>';
   el.innerHTML=h;
   var wikiBtn=document.getElementById('exWikiBtn');
@@ -66,7 +66,7 @@ function exCardHtml(ex,badge,isCardio){
     var m=EXD.mediaUrls(linked.img);
     // 图片外侧大图 + 中文主/英文次
     h+='<div style="display:flex;gap:12px;margin-top:10px;align-items:center">'
-      +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:72px;height:72px;border-radius:12px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
+      +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:72px;height:72px;border-radius:12px;object-fit:cover;background:var(--bg2);border:var(--bw) solid var(--bd);flex-shrink:0">'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:var(--fs-md);font-weight:700;color:var(--text1)">'+linked.zh+'</div>'
       +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-top:2px">'+linked.name+'</div>'
@@ -80,7 +80,7 @@ function exCardHtml(ex,badge,isCardio){
   if(ex.description){
     var first=mdFirstLine(ex.description);
     h+='<div style="margin-top:8px;font-size:var(--fs-sm);color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span style="color:var(--text3);font-size:var(--fs-xs)"> …展开</span></div>';
-    h+='<div class="ex-desc-full" style="display:none;margin-top:6px;padding:10px 12px;background:var(--bg);border-radius:var(--rs);border:1px solid var(--bd)">'+renderMd(ex.description)+'</div>';
+    h+='<div class="ex-desc-full" style="display:none;margin-top:6px;padding:10px 12px;background:var(--bg);border-radius:var(--rs);border:var(--bw) solid var(--bd)">'+renderMd(ex.description)+'</div>';
   }
   h+='</div>';
   return h;
@@ -122,7 +122,7 @@ function showExEditor(editId){
       if(it){
         var m=EXD.mediaUrls(it.img);
         area.innerHTML='<div class="ec" style="margin-top:2px"><div style="display:flex;gap:12px;align-items:center">'
-          +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
+          +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:var(--bg2);border:var(--bw) solid var(--bd);flex-shrink:0">'
           +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">'+it.zh+'</div>'
           +'<div style="font-size:var(--fs-2xs);color:var(--text3)">'+it.name+'</div>'
           +'<div style="margin-top:4px">'+tagHtml(it.cat,'cat')+tagHtml(it.eq,'eq')+tagHtml(it.target,'cat')+'</div></div>'
@@ -137,10 +137,10 @@ function showExEditor(editId){
     cands.forEach(function(c){
       var m=EXD.mediaUrls(c.item.img);
       ch+='<button type="button" data-dsid="'+c.item.id+'" class="ec" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer">'
-        +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg2);border:1px solid var(--bd);flex-shrink:0">'
+        +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg2);border:var(--bw) solid var(--bd);flex-shrink:0">'
         +'<div style="flex:1;min-width:0"><div style="font-size:var(--fs-base);font-weight:700;color:var(--text1)">'+c.item.zh+'</div>'
         +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-top:2px">'+c.item.name+'</div></div>'
-        +'<span style="font-size:var(--fs-3xs);color:var(--purple);border:1px solid var(--purple);border-radius:var(--rp);padding:2px 7px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
+        +'<span style="font-size:var(--fs-3xs);color:var(--purple);border:var(--bw) solid var(--purple);border-radius:var(--rp);padding:2px 7px">'+c.reason+' '+Math.round(c.s)+'</span></button>';
     });
     ch+='<button type="button" id="exLinkPick" class="add-btn" style="margin-top:8px;font-size:var(--fs-sm);padding:8px">🔍 从数据集选择'+(EXD.ready()?' ('+EXD.count()+')':'')+'</button>';
     area.innerHTML=ch;
@@ -317,7 +317,7 @@ function showDsDetail(id){
   var it=EXD.get(id);if(!it)return;
   var list=document.getElementById('dsList'),det=document.getElementById('dsDetail');
   var mi=EXD.mediaUrls(it.img),mg=EXD.mediaUrls(it.gif);
-  var secTags=(it.sec||[]).map(function(s){return '<span style="font-size:var(--fs-3xs);background:var(--bg);border:1px solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+s+'</span>'}).join(' ');
+  var secTags=(it.sec||[]).map(function(s){return '<span style="font-size:var(--fs-3xs);background:var(--bg);border:var(--bw) solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+s+'</span>'}).join(' ');
   var steps=(it.steps||[]).map(function(s,i){return '<li style="font-size:var(--fs-xs);line-height:1.65;margin-bottom:5px">'+s+'</li>'}).join('');
   det.innerHTML='<div style="position:absolute;inset:0;background:var(--bg);z-index:2;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column">'
     +'<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg)"><button class="ec-act" id="dsBack">◀</button><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-base)">'+it.zh+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">'+it.name+'</div></div></div>'
@@ -366,7 +366,7 @@ function renderSettingsPlans(){
         var ct=getAllCardioTypes().find(function(x){return x.id===s.type})||{emoji:'🏃',name:s.type};
         return ct.emoji+s.duration+'min';
       }).slice(0,6);
-      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditCarPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelCarPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>';
+      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditCarPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelCarPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:var(--bw) solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>';
     });
   }else{
     h+='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有有氧计划</div></div>';
@@ -381,7 +381,7 @@ function renderSettingsGame(){
   var g=getGame();
   var recs=store.get('records')||{};
   var h='<div class="section-hdr">📖 属性计算</div>';
-  h+='<button class="sb-btn" id="setAttrInfoBtn" style="background:var(--bg);color:var(--text);border:1px solid var(--bd);margin-bottom:16px">📖 查看属性计算方式</button>';
+  h+='<button class="sb-btn" id="setAttrInfoBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd);margin-bottom:16px">📖 查看属性计算方式</button>';
   /* ===== v2.14.3：图鉴入口（宠物 / 技能 / 天赋，只读）=====
      两个入口指向同一个只读面板（page/codex.js 的 renderCodexPanel）：
        · **主入口**在「挑战 → 🐾 培养」（game-views.js，宠物面板 / 技能面板旁边）——
@@ -392,10 +392,10 @@ function renderSettingsGame(){
      不新增 tab、不新增路由、不碰培养/战斗/记录三视图的行为。
      渲染在 page/codex.js —— 模块未加载时降级提示，不留死按钮。 */
   h+='<div class="section-hdr" style="margin-top:16px">📖 图鉴</div>';
-  h+='<button class="sb-btn" id="setCodexBtn" style="background:var(--bg);color:var(--text);border:1px solid var(--bd)">📖 查看图鉴（宠物 / 技能 / 天赋）</button>';
+  h+='<button class="sb-btn" id="setCodexBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">📖 查看图鉴（宠物 / 技能 / 天赋）</button>';
   h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">只读资料 · 内容全部来自既有定义，不改动任何数值</div>';
   h+='<div class="section-hdr">📜 属性变更日志</div>';
-  h+='<button class="sb-btn" id="setAttrLogBtn" style="background:var(--bg);color:var(--text);border:1px solid var(--bd)">📜 查看日志</button>';
+  h+='<button class="sb-btn" id="setAttrLogBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">📜 查看日志</button>';
   h+='<div class="section-hdr" style="margin-top:16px">🏆 历史最佳记录</div>';
   h+='<div class="stats-grid">';
   if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">📖 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
@@ -404,7 +404,7 @@ function renderSettingsGame(){
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>';
   h+='</div>';
   h+='<div class="section-hdr" style="margin-top:16px">↺ 重置挑战进度</div>';
-  h+='<button class="sb-btn" id="setResetGameBtn" style="background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3)">↺ 重置挑战进度（已通关 '+g.cleared.length+' 关）</button>';
+  h+='<button class="sb-btn" id="setResetGameBtn" style="background:rgba(var(--danger-rgb),.1);color:var(--red);border:var(--bw) solid rgba(var(--danger-rgb),.3)">↺ 重置挑战进度（已通关 '+g.cleared.length+' 关）</button>';
   el.innerHTML=h;
 }
 
@@ -416,7 +416,7 @@ function renderSettingsData(){
   h+='<button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="exportDataBtn">📤 导出数据</button>';
   h+='<button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="importDataBtn">📥 导入数据</button>';
   h+='</div>';
-  h+='<button class="sb-btn" id="syncDataBtn" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--bd)">🔄 手动云同步</button>';
+  h+='<button class="sb-btn" id="syncDataBtn" style="width:100%;background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">🔄 手动云同步</button>';
   h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">用于手动备份或跨设备转移数据</div>';
   el.innerHTML=h;
 }

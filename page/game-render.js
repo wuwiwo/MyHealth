@@ -95,7 +95,7 @@ function renderGame(){
     var gameContent=document.getElementById('gameContent')
     if(gameContent&&!document.getElementById('penaltyBanner')){
       var banner=document.createElement('div');banner.id='penaltyBanner'
-      banner.style='background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)'
+      banner.style='background:rgba(var(--danger-rgb),.12);border:var(--bw) solid rgba(var(--danger-rgb),.3);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)'
       var pen=calculatePeriodPenalty(stats.lastPeriodDays)
       banner.innerHTML='<span style="font-size:var(--fs-xl)">⚠️</span><span style="flex:1;color:var(--red)">上'+stats.lastPeriodName+'只练了 '+stats.lastPeriodDays+' 天，永久扣除攻击 -'+pen.atkPen+'，防御 -'+pen.defPen+'。本旬练满 6 天可避免下旬惩罚。</span><button class="speed-btn" id="dismissPenalty" style="border-color:var(--red);color:var(--red);padding:4px 12px">知道了</button>'
       gameContent.parentNode.insertBefore(banner,gameContent)
@@ -115,7 +115,7 @@ function renderGame(){
   if(oldGuide)oldGuide.remove()
   if(!localStorage.getItem('dh-game-guide-done')){
     var guide=document.createElement('div');guide.id='gameGuide'
-    guide.style='background:var(--bg2);border:1px solid var(--orange-g);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;font-size:var(--fs-xs);line-height:1.7'
+    guide.style='background:var(--bg2);border:var(--bw) solid var(--orange-g);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;font-size:var(--fs-xs);line-height:1.7'
     guide.innerHTML='<div style="font-weight:700;color:var(--orange);margin-bottom:6px">🎮 游戏规则</div>'
       +'<div>💪 力量训练 → <b>攻击/生命</b> ｜ 🏃 有氧训练 → <b>防御/生命</b></div>'
       +'<div>🗓️ 每旬（10天）练满 6 天且容量达标 → 永久属性奖励</div>'
@@ -333,7 +333,7 @@ function showLevelPreview(id){
   // Boss affix info
   if(lv.boss){
     var affixes=BOSS_AFFIXES.map(function(a){return a.name+': '+a.desc})
-    h+='<div style="background:rgba(249,115,22,.08);border:1px solid var(--orange-g);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text2)">'
+    h+='<div style="background:rgba(var(--brand-rgb),.08);border:var(--bw) solid var(--orange-g);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text2)">'
       +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">👑 Boss 词缀'+(lv.dualAffix?' (随机2种·机制叠加)':' (随机1种)')+'</div>'
       +affixes.map(function(a){return'<div style="padding:2px 0">• '+a+'</div>'}).join('')
       +(lv.dualAffix?'<div style="margin-top:4px;color:var(--yellow)">⚠️ 本 BOSS 同时携带 2 条词条，效果叠加</div>':'')

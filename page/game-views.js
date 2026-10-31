@@ -65,7 +65,7 @@ function renderTrainView() {
   var d = getPetStore()
 
   // 角色属性卡
-  var h = '<div style="background:linear-gradient(135deg,var(--bg2),var(--bg2));border:1px solid var(--orange-g);border-radius:16px;padding:18px;margin-bottom:16px">'
+  var h = '<div style="background:linear-gradient(135deg,var(--bg2),var(--bg2));border:var(--bw) solid var(--orange-g);border-radius:16px;padding:18px;margin-bottom:16px">'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-2xl);width:56px;height:56px;background:var(--bg2);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--orange)">🧑</div>'
     +'<div style="flex:1"><div style="font-size:var(--fs-lg);font-weight:700">我的角色</div>'
@@ -204,11 +204,11 @@ function renderBattleView() {
   h += '<div style="background:var(--bg2);border-radius:16px;padding:16px;margin-bottom:16px">'
     +'<div style="font-size:var(--fs-lg);font-weight:700;margin-bottom:10px">🗓️ 本旬目标 · '+p.name+'</div>'
     +'<div style="display:flex;gap:10px">'
-    +'<div style="flex:1;background:var(--bg2);border:1px solid var(--orange-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--orange)">'+stats.periodDays+'<span style="font-size:var(--fs-xs)">/6天</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">训练天数</div></div>'
+    +'<div style="flex:1;background:var(--bg2);border:var(--bw) solid var(--orange-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--orange)">'+stats.periodDays+'<span style="font-size:var(--fs-xs)">/6天</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">训练天数</div></div>'
     /* v2.2 WP-H3：`sumVolume()` 返回浮点，直接内插会渲染出 2862.1000000000004kg 这类尾数。
        展示层取整（与 tab-strength.js:39 / game-render.js:36 的同名「旬容量」显示一致），不动数值本身。 */
-    +'<div style="flex:1;background:var(--bg2);border:1px solid var(--blue-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--blue)">'+Math.round(stats.periodVol)+'<span style="font-size:var(--fs-xs)">kg</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">旬容量</div></div>'
-    +'<div style="flex:1;background:var(--bg2);border:1px solid var(--green-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--green)">'+wkStatus+'</div><div style="font-size:var(--fs-xs);color:var(--text3)">状态</div></div>'
+    +'<div style="flex:1;background:var(--bg2);border:var(--bw) solid var(--blue-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--blue)">'+Math.round(stats.periodVol)+'<span style="font-size:var(--fs-xs)">kg</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">旬容量</div></div>'
+    +'<div style="flex:1;background:var(--bg2);border:var(--bw) solid var(--green-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--green)">'+wkStatus+'</div><div style="font-size:var(--fs-xs);color:var(--text3)">状态</div></div>'
     +'</div></div>'
 
   // 敌群战斗（v2.1.7：12 大关 × 10 小关；文案与进度均由数据派生，不再写死）
@@ -289,7 +289,7 @@ function renderBattleHistoryBlock() {
   BH_MODES.forEach(function (m) {
     var mk = m[0]
     var st = (typeof battleHistoryStats === 'function') ? battleHistoryStats(mk) : null
-    h += '<div style="background:var(--bg2);border:1px solid var(--bd-l);border-radius:14px;padding:14px;margin-bottom:10px">'
+    h += '<div style="background:var(--bg2);border:var(--bw) solid var(--bd-l);border-radius:14px;padding:14px;margin-bottom:10px">'
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
       + '<span style="font-size:var(--fs-base);font-weight:700">' + m[1] + '</span>'
       + '<span style="flex:1"></span>'
@@ -387,10 +387,10 @@ function renderRecordView() {
     h += '<div style="max-height:280px;overflow-y:auto">'
     months.forEach(function (m) {
       var isCur = m.month === curMk
-      h += '<div style="background:var(--bg2);border:1px solid ' + (isCur ? 'var(--orange-g)' : 'var(--bd-l)') + ';border-radius:12px;padding:12px;margin-bottom:8px">'
+      h += '<div style="background:var(--bg2);border:var(--bw) solid ' + (isCur ? 'var(--orange-g)' : 'var(--bd-l)') + ';border-radius:12px;padding:12px;margin-bottom:8px">'
         + '<div style="display:flex;align-items:center;gap:8px">'
         +   '<span style="font-size:var(--fs-base);font-weight:700">' + m.month + '</span>'
-        +   (isCur ? '<span style="font-size:var(--fs-3xs);color:var(--orange);border:1px solid var(--orange-g);border-radius:var(--rad-full);padding:1px 6px">本月</span>' : '')
+        +   (isCur ? '<span style="font-size:var(--fs-3xs);color:var(--orange);border:var(--bw) solid var(--orange-g);border-radius:var(--rad-full);padding:1px 6px">本月</span>' : '')
         +   '<span style="flex:1"></span>'
         +   '<span style="font-size:var(--fs-xs);color:var(--text3)">' + (m.count || 0) + ' 次</span>'
         + '</div>'

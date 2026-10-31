@@ -282,9 +282,9 @@ function renderSummonPanel(){
       +'<div class="summon-title">⚡ 今日隐藏挑战已完成</div>'
       +'<div class="summon-info">'+(madeUpLocked?'昨日补召已完成，可恢复今日召唤资格':'明日继续，每月 1 号重置奖励')+'</div>'
       +(bonus.atk+bonus.def+bonus.hp>0?'<div class="summon-bonus">本月已获得: ⚔️+'+bonus.atk+' 🛡️+'+bonus.def+' ❤️+'+bonus.hp+'</div>':'')
-      +(info.can&&info.mode==='makeup'?'<button class="summon-btn" id="makeupBtn" style="margin-top:8px;background:rgba(34,197,94,.1);border-color:var(--green);color:var(--green);padding:10px;font-size:var(--fs-sm)">🔁 补召昨日挑战（剩 '+info.remainBorrow+' 次，不占今日名额）</button>':'')
-      +(showRecover?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);padding:10px;font-size:var(--fs-sm)">↩️ '+(madeUpLocked?'补召已结算？恢复今日召唤资格':'今日未完成？恢复挑战')+'</button>':'')
-      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
+      +(info.can&&info.mode==='makeup'?'<button class="summon-btn" id="makeupBtn" style="margin-top:8px;background:rgba(var(--success-rgb),.1);border-color:var(--green);color:var(--green);padding:10px;font-size:var(--fs-sm)">🔁 补召昨日挑战（剩 '+info.remainBorrow+' 次，不占今日名额）</button>':'')
+      +(showRecover?'<button class="summon-btn" id="summonBtn" style="margin-top:8px;background:rgba(var(--danger-rgb),.1);border-color:var(--red);color:var(--red);padding:10px;font-size:var(--fs-sm)">↩️ '+(madeUpLocked?'补召已结算？恢复今日召唤资格':'今日未完成？恢复挑战')+'</button>':'')
+      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:var(--bw) solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
       +'</div>'
       +chDebugBlock(info,strVol,c,'done')
     mountSummonExtras(el,info,strVol,c,'done')
@@ -321,7 +321,7 @@ function renderSummonPanel(){
       +'<div class="summon-title">🔮 隐藏挑战</div>'
       +'<div class="summon-info">'+(info.reason||'今日不可召唤')+'</div>'
       +(isFinite(info.total)?'<div class="summon-info" style="font-size:var(--fs-3xs);color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+Math.max(0,isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
-      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
+      +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:var(--bw) solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
       +'</div>'
       +chDebugBlock(info,strVol,c,'cannot')
     mountSummonExtras(el,info,strVol,c,'cannot')
@@ -347,7 +347,7 @@ function renderSummonPanel(){
     +'<button class="summon-btn" id="summonBtn">🔮 召唤</button>'
     +'<div style="font-size:var(--fs-3xs);color:var(--text3);text-align:center;margin-top:6px">成功率阶梯 10/25/40/55/80/100% · 每天最多成功召唤1次</div>'
     +'</div>'
-    +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:1px solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
+    +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:var(--bw) solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
     +chDebugBlock(info,strVol,c,'normal')
   var btn=document.getElementById('summonBtn')
   if(btn)btn.addEventListener('click',attemptSummon)

@@ -25,7 +25,7 @@ function renderSkillPanel() {
   for (var i = 0; i < _slotTotal; i++) {
     var sid = (st.loadout || [])[i] || null
     var s = sid ? getPlayerSkill(sid) : null
-    h += '<div style="flex:1;min-width:96px;border:1px solid var(--bg2);border-radius:12px;padding:10px 8px;text-align:center;'+(i>=st.slotsUnlocked?'opacity:.35':'')+'">'
+    h += '<div style="flex:1;min-width:96px;border:var(--bw) solid var(--bg2);border-radius:12px;padding:10px 8px;text-align:center;'+(i>=st.slotsUnlocked?'opacity:.35':'')+'">'
       +(sid ? '<div style="font-size:var(--fs-base);font-weight:600">'+s.name+'</div><div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">Lv'+(st.levels[sid]||0)+' · '+s.type+'</div>'
             +'<button class="speed-btn" data-skill-uneq="'+i+'" style="padding:8px 10px;min-height:40px;margin-top:8px;font-size:var(--fs-xs)">卸下</button>'
             :'<div style="font-size:var(--fs-sm);color:var(--text3);padding:10px 0">空槽'+(i<st.slotsUnlocked?'':' 🔒')+'</div>')

@@ -788,8 +788,26 @@ box-shadow:none}
 .gb-arena-row .gb-side-hdr{flex-basis:100%;justify-content:center;margin:0}
 .gb-arena-row .gb-side-hdr.enemy{margin-top:0}
 .gb-arena-mid{height:var(--gb-mid-h);position:relative}
-/* 焦点只作用于广场里的芯片：暗化非行动者（行动者另有光环 + 强调条 + 放大） */
-.gb-focus .gb-arena-unit:not(.gb-acting):not(.gb-dead){opacity:.5}
+/* 焦点只作用于广场里的芯片：**标出**非行动者（行动者另有光环 + 强调条 + 放大）。
+   ⚠️ v2.18 作者裁决：不再用 opacity 整体降透明。opacity:.5 会把芯片名字一起压到
+      浅色 2.05:1 / 深色 2.50:1，跌破 AA 4.5:1 —— 那正是 §14.1 明令禁止的「半透明表达禁用/次要」。
+      改成「2px 中性描边 + 弱化文字」这一对允许的表达：
+        · 描边 `var(--bw) solid var(--bd)`（2px 中性，不抢品牌色）；用 outline 而不是 border，
+          因为 outline 不参与布局 —— 广场行高是按 360×640 逐像素钉死的（v2.8.0/v2.8.2 两次因裁切返工），
+          加 border 会让每枚芯片长高 4px、把最后一行顶出 `.gb-arena{overflow:hidden}`；
+          内偏移 -2px 让 2px 描边画在盒子内侧，视觉上与「容器加了一圈 2px 边框」一致。
+        · 文字 `var(--text3)`：规范允许的「刻意灰字」，浅色 #6f6862 / 深色 #94a3b8，
+          两套主题实测 ≥5.2:1（见 scripts/test-group-ui-presentation.js 的对比度判据）。
+      「现在轮到别人」仍是一眼可辨：行动者 = 品牌色描边 + scale(1.1) + 左侧脉冲强调条；
+      非行动者 = 只有一条中性灰框 + 灰字，形制与行动者完全不同。 */
+.gb-focus .gb-arena-unit:not(.gb-acting):not(.gb-dead){
+  outline:var(--bw) solid var(--bd);outline-offset:calc(-1 * var(--bw))}
+.gb-focus .gb-arena-unit:not(.gb-acting):not(.gb-dead) .gb-name,
+.gb-focus .gb-arena-unit:not(.gb-acting):not(.gb-dead) .gb-arena-ico-txt,
+.gb-focus .gb-arena-unit:not(.gb-acting):not(.gb-dead) .gb-arena-st-more{color:var(--text3)}
+/* 键盘焦点环不能被上面那条中性描边吃掉（同属性 outline，特异性更高者胜）：
+   聚焦的非行动芯片仍显示品牌色 2px 环，与行动者光环宽度相同、颜色不同（a11y 不降级）。 */
+.gb-focus .gb-arena-unit:not(.gb-acting):not(.gb-dead):focus-visible{outline-color:var(--orange)}
 /* 当前行动者：放大 + 光环 + 左侧强调条（三重表达，不靠颜色单独传达）。
    ⚠️ 放大只在 .gb-arena（overflow:hidden）内 —— 见本节开头，
       绝不能迁进 .gb-pane，否则必然出现横向滚动条（v2.4.0 实测）。 */

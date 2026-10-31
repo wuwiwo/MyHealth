@@ -49,7 +49,7 @@ function renderWtList(){
     var latest=Number(list[0].weight),earliest=Number(list[list.length-1].weight)
     var delta=list.length>1?(latest-earliest):0
     var dLabel=list.length>1?' <span style="font-size:var(--fs-3xs);color:'+(delta<=0?'var(--green)':'var(--orange)')+'">'+(delta>0?'+':'')+(Math.round(delta*100)/100)+'</span>':''
-    h+='<div data-wtm="'+mk+'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);cursor:pointer;box-shadow:var(--shadow)">'
+    h+='<div data-wtm="'+mk+'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:var(--bg2);border:var(--bw) solid var(--bd);border-radius:var(--r);cursor:pointer;box-shadow:var(--shadow)">'
       +'<span style="font-size:var(--fs-sm);font-weight:700">'+mk.replace('-','年 ')+'月</span>'
       +'<span style="font-size:var(--fs-2xs);color:var(--text3)">'+list.length+' 条 · 最新 <b style="color:var(--text)">'+fmtW(latest)+'</b>kg'+dLabel+' <span style="display:inline-block;transition:transform .2s;transform:rotate('+(open?90:0)+'deg)">▸</span></span></div>'
     if(open){

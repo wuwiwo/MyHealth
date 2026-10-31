@@ -31,9 +31,9 @@
   function bytes(n) { return n > 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B'; }
 
   /* --- 通用样式片段（全部走设计令牌，明暗主题自适应） --- */
-  var PRE = 'margin:4px 0;padding:8px;background:var(--surface-2);border:1px dashed var(--bd);border-radius:var(--rad-sm);font-size:var(--fs-3xs);color:var(--text2);line-height:1.6;white-space:pre-wrap;word-break:break-all;font-family:inherit';
+  var PRE = 'margin:4px 0;padding:8px;background:var(--surface-2);border:var(--bw) dashed var(--bd);border-radius:var(--rad-sm);font-size:var(--fs-3xs);color:var(--text2);line-height:1.6;white-space:pre-wrap;word-break:break-all;font-family:inherit';
   var LINK = 'color:var(--text3);text-decoration:underline;cursor:pointer;padding:8px 6px;min-height:var(--touch-min);display:inline-flex;align-items:center';
-  var TAB = 'min-height:var(--touch-min);padding:6px 12px;border-radius:var(--rad-full);font-size:var(--fs-2xs);cursor:pointer;border:1px solid transparent;font-family:inherit;background:transparent';
+  var TAB = 'min-height:var(--touch-min);padding:6px 12px;border-radius:var(--rad-full);font-size:var(--fs-2xs);cursor:pointer;border:var(--bw) solid transparent;font-family:inherit;background:transparent';
   function pre(t) { return '<pre style="' + PRE + '">' + esc(t) + '</pre>'; }
 
   /* --- 各分区 --- */

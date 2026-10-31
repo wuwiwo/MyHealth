@@ -414,10 +414,53 @@ ok(/outline\s*:\s*var\(--bw\)\s+solid\s+var\(--orange\)/.test(actingChip),
 ok(!/box-shadow/.test(actingChip), '行动芯片不再使用 box-shadow（扁平规范）');
 ok(/::before\s*\{/.test(actingChip), '行动芯片保留 ::before 强调条');
 
-/* 3) 行动焦点：上限 0.5（v2.4.x 舞台化把契约值从旧卡片的 0.75 改为 0.5），且只暗化非行动者 */
-const focusRule = (cssNC.match(/\.gb-focus[^{]*\{[^}]*\}/) || [''])[0];
-ok(/opacity\s*:\s*(?:0?\.5)(?![0-9])/.test(focusRule), '行动焦点暗化上限 0.5（实际 ' + focusRule + '）');
-ok(/:not\(\.gb-acting\)/.test(focusRule) && /:not\(\.gb-dead\)/.test(focusRule), '暗化排除行动者与阵亡单位');
+/* 3) 行动焦点：**不再暗化**，改「2px 中性描边 + --text3 弱化文字」标出非行动者。
+   ⚠️ 契约变更（v2.18 作者裁决）：旧判据是「暗化上限 0.5」（v2.4.x 舞台化把卡片时代的 0.75 改成 0.5），
+      但 opacity:.5 是把整枚芯片（含名字文字）一起降透明 —— 实测名字对比度 浅色 2.05:1 / 深色 2.50:1，
+      与 §14.1 两条硬规则直接冲突：「正文 ≥4.5:1」「禁用/次要不得用 opacity 表达，要用中性描边 + --text3」。
+      新契约三条（**都比旧判据严**：旧判据只查「有没有 ≤0.5 的 opacity」就放行，新判据一个 opacity 都不许有，
+      且把描边与文字令牌也钉死，防止有人改回半透明或换成别的颜色）：
+        ① 焦点规则里不得出现任何 <1 的 opacity；
+        ② 非行动者必须 2px 中性描边（var(--bw) + var(--bd)）；
+        ③ 非行动者的芯片名字必须走 var(--text3)（刻意灰字），且该色在深浅两套主题下对底色 ≥4.5:1。
+      排除 .gb-acting / .gb-dead 的判据原样保留（未弱化）。 */
+const focusRules = (cssNC.match(/\.gb-focus[^{]*\{[^}]*\}/g) || []);
+const focusRule = focusRules.join('\n');
+ok(focusRules.length > 0, 'index.css 里能找到 .gb-focus 焦点规则（否则下面三条判据会静默空转）');
+const focusOpacityVals = (focusRule.match(/opacity\s*:\s*([^;}]+)/g) || [])
+  .map(function (s) { return s.split(':')[1].trim(); });
+ok(focusOpacityVals.every(function (v) { return parseFloat(v) >= 1; }),
+  '行动焦点不再用 opacity 暗化（半透明会把文字压到 2.05:1，§14.1 禁止）：实际 ' + (focusOpacityVals.join(' / ') || '无 opacity'));
+ok(/outline\s*:\s*var\(--bw\)\s+solid\s+var\(--bd\)/.test(focusRule)
+  || /border\s*:\s*var\(--bw\)\s+solid\s+var\(--bd\)/.test(focusRule),
+  '非行动单位用 2px 中性描边（var(--bw) + var(--bd)）与行动者区分：' + focusRule.slice(0, 140));
+const grayRules = focusRules.filter(function (r) { return r.indexOf('var(--text3)') > -1; });
+ok(grayRules.some(function (r) { return /\.gb-name/.test(r.slice(0, r.indexOf('{'))); }),
+  '非行动者的芯片名字走 --text3（刻意灰字，不是保留阵营色、也不是整体半透明）：'
+  + (grayRules.join(' | ').slice(0, 140) || '没有 --text3 规则'));
+/* ③ 的对比度：直接从令牌算（--text3 对 --bg），浅/深两套主题都必须 ≥4.5:1。
+   口径与 scripts/test-a11y-tokens.js 的 WCAG 2.1 三段式一致。 */
+function gbLum(hex) {
+  const h = String(hex).trim().replace('#', '');
+  const p = h.length === 3 ? h.split('').map(function (c) { return c + c; }).join('') : h;
+  const rgb = [parseInt(p.slice(0, 2), 16), parseInt(p.slice(2, 4), 16), parseInt(p.slice(4, 6), 16)];
+  const a = rgb.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+}
+function gbTok(block, name) {
+  const m = new RegExp('--' + name + '\\s*:\\s*([^;]+)').exec(block);
+  return m ? m[1].trim() : null;
+}
+const lightTokBlock = (cssNC.match(/\[data-theme="light"\]\s*\{[^}]*\}/) || [''])[0];
+[['深色', cssNC.slice(0, cssNC.indexOf('[data-theme="light"]'))], ['浅色', lightTokBlock]].forEach(function (pair) {
+  const t3 = gbTok(pair[1], 'text3'), bg = gbTok(pair[1], 'bg');
+  ok(!!t3 && !!bg, pair[0] + '主题能解析 --text3 / --bg（--text3=' + t3 + ' / --bg=' + bg + '）');
+  if (!t3 || !bg) return;
+  const l1 = gbLum(t3), l2 = gbLum(bg);
+  const r = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  ok(r >= 4.5, pair[0] + '主题 非行动者灰字（--text3）对广场底色（--bg）= ' + r.toFixed(2) + ':1（≥4.5，改前半透明是 2.05~2.50:1）');
+});
+ok(/:not\(\.gb-acting\)/.test(focusRule) && /:not\(\.gb-dead\)/.test(focusRule), '描边/灰字排除行动者与阵亡单位');
 /* 焦点态必须是 renderGroupOverlay 挂/去的（不能挪到别的函数里，否则换渲染路径就丢焦点）
    ⚠️ 判据写成 `\bgb-focus\b`（class 名令牌）而不是 `\.gb-focus`（选择器写法）：
    旧写法在 HEAD 上其实是靠 renderGroupOverlay 里的一句**注释**「…才挂 .gb-focus」命中的，

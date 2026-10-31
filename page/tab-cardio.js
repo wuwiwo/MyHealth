@@ -215,7 +215,7 @@ function renderCardioPlans(){
       var ct=getAllCardioTypes().find(function(x){return x.id===s.type})||{emoji:'🏃',name:s.type}
       return ct.emoji+s.duration+'min'
     }).slice(0,6)
-    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="startCardioPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delCardioPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>'
+    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="startCardioPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delCardioPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:var(--bw) solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>'
   }).join('')
   c.innerHTML+='<button class="add-btn" id="carNewPlan" style="margin-top:8px">＋ 新建有氧计划</button>'
 }

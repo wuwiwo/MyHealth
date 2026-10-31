@@ -12,7 +12,7 @@ function showRefineDialog(){
   var modal=openModal(null,'refineModal')
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🔮 炼魂系统</div>';
   // Points
-  h+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:10px">';
+  h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:10px">';
   h+='<div style="font-size:var(--fs-xs);color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:var(--fs-lg)">'+(refine.points||0)+'</b> <span style="color:var(--text3);font-size:var(--fs-3xs)">（本月已获得 '+(refine.totalEarned||0)+'）</span></div>';
   h+='</div>';
   if(!curGrade){
@@ -47,7 +47,7 @@ function showRefineDialog(){
     var bonusVal='+'+(Math.round(rawBonus*100)/100);
     var perLevel=Math.round(g[stat]*100)/100;
     var unit=stat==='hp'?'Hp':'';
-    h+='<div style="background:var(--bg);border:1px solid '+(maxed?'var(--green)':'var(--bd)')+';border-radius:var(--rs);padding:8px 10px">';
+    h+='<div style="background:var(--bg);border:var(--bw) solid '+(maxed?'var(--green)':'var(--bd)')+';border-radius:var(--rs);padding:8px 10px">';
     h+='<div style="font-size:var(--fs-2xs);color:var(--text2)">'+statIcons[stat]+' '+statName(stat)+'</div>';
     h+='<div style="font-size:var(--fs-base);font-weight:700;color:'+(maxed?'var(--green)':'var(--text)')+'">Lv.'+lv+'/'+g.maxLevel+(maxed?' ✅':'')+'</div>';
     h+='<div style="font-size:var(--fs-3xs);color:var(--text3)">'+bonusVal+unit+' (每级'+perLevel+unit+')</div>';
@@ -55,14 +55,14 @@ function showRefineDialog(){
   });
   h+='</div>';
   // Bonus summary
-  h+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:var(--fs-2xs);color:var(--text2)">';
+  h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:var(--fs-2xs);color:var(--text2)">';
   h+='总加成: ⚔️+'+Math.floor(bonus.atk)+' 🛡️+'+Math.floor(bonus.def)+' ❤️+'+Math.floor(bonus.hp)+' 👻+'+Math.floor(bonus.soulAtk)+' 🔮+'+Math.floor(bonus.soulDef);
   h+='</div>';
   // Batch buttons
   var points=refine.points||0;
   function batchBtn(count,label){
     var dis=points<count;
-    var style='flex:1;padding:12px;font-size:var(--fs-base);'+(count>1?'background:var(--bg3);color:var(--text);border:1px solid var(--bd);':'')+(dis?';opacity:.4;pointer-events:none':'');
+    var style='flex:1;padding:12px;font-size:var(--fs-base);'+(count>1?'background:var(--bg3);color:var(--text);border:var(--bw) solid var(--bd);':'')+(dis?';opacity:.4;pointer-events:none':'');
     return '<button class="sb-btn" data-a="refineBatch" data-count="'+count+'" style="'+style+'"'+(dis?' data-disabled="1"':'')+'>'+label+'</button>';
   }
   h+='<div style="display:flex;gap:8px;margin-bottom:12px">';

@@ -120,7 +120,7 @@ const CASES = [
   ['text2', 'surface', 4.5, '次要文字 / 表面'],
   ['text3', 'surface', 4.5, '弱化文字 / 表面（12px，不适用大字豁免）'],
   ['text3', 'surface-2', 4.5, '弱化文字 / 次级表面'],
-  ['on-brand', 'brand-fill', 4.5, '实心按钮前景 / 橙底（曾为 white → 2.80:1）'],
+  ['on-brand', 'brand-fill', 4.5, '实心按钮前景 / 品牌底（科技蓝 --brand-fill，曾为 white → 2.80:1）'],
   ['blue', 'surface', 4.5, '--blue 深色主题（曾为自引用循环 → 失效）'],
   ['green', 'surface', 4.5, '成功色 / 表面'],
   ['red', 'surface', 4.5, '危险色 / 表面']

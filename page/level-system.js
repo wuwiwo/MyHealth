@@ -537,7 +537,7 @@ function levelCardHtml(now) {
   var pb = playerLevelBonus(st.level);
   var nb = levelNextTier(st.level, 'player');
   var h = ''
-    + '<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:14px">'
+    + '<div style="background:var(--bg2);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:14px">'
     + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'
     + '<span id="lvCardTitle" style="font-size:var(--fs-lg);font-weight:700">我的等级 · Lv ' + st.level + '</span>'
     + '<span style="font-size:var(--fs-xs);color:var(--text3)">称号 ' + levelTitle(st.level) + '</span>'

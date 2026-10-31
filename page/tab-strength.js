@@ -222,7 +222,7 @@ function renderStrPlans(){
   }
   c.innerHTML=plans.map(p=>{
     const tags=p.exercises.map(e=>e.exercise).slice(0,6)
-    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="editPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="startPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(n=>'<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:1px solid var(--bd)">'+n+'</span>').join('')+'</div></div></div>'
+    return '<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="editPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="startPlan" data-pid="'+p.id+'">⚡</button><button class="ec-act" data-a="delPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(n=>'<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:var(--bw) solid var(--bd)">'+n+'</span>').join('')+'</div></div></div>'
   }).join('')
   c.innerHTML+='<button class="add-btn" id="strNewPlan" style="margin-top:8px">＋ 新建计划</button>'
 }
@@ -258,7 +258,7 @@ function showPeExForm(idx){
   if(!form){
     var el=document.getElementById('peExList').parentNode
     form=document.createElement('div');form.id='peExForm'
-    form.style='background:var(--bg);border:1px solid var(--bd);border-radius:var(--rs);padding:12px;margin-bottom:8px'
+    form.style='background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--rs);padding:12px;margin-bottom:8px'
     el.insertBefore(form,document.getElementById('peAddEx'))
   }
   form.innerHTML='<div class="fg"><label class="fl" for="peExName">动作</label><select class="fi" id="peExName">'
@@ -605,8 +605,8 @@ function renderStrQuickPicks(){
 function strExPickCardHtml(ex,isCommon){
   var linked=(typeof EXD!=='undefined'&&EXD.ready()&&ex.dsId)?EXD.get(ex.dsId):null;
   var m=linked?EXD.mediaUrls(linked.img):null;
-  return '<button type="button" class="ec" data-pickex="'+strAttr(ex.name)+'" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer;border:1px solid var(--bd);border-radius:12px;background:var(--bg2)">'
-    +(m?'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:1px solid var(--bd)">':'<div style="width:56px;height:56px;border-radius:10px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl)">💪</div>')
+  return '<button type="button" class="ec" data-pickex="'+strAttr(ex.name)+'" style="display:flex;width:100%;text-align:left;gap:12px;margin-top:8px;padding:10px;align-items:center;cursor:pointer;border:var(--bw) solid var(--bd);border-radius:12px;background:var(--bg2)">'
+    +(m?'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:var(--bw) solid var(--bd)">':'<div style="width:56px;height:56px;border-radius:10px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl)">💪</div>')
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-size:var(--fs-base);font-weight:700;color:var(--text1)">'+strAttr(linked?linked.zh:ex.name)+(isCommon?'<span class="ex-common-tag">⭐ 常用</span>':'')+'</div>'
     +(linked?'<div style="margin-top:2px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+tagHtml(linked.target,'cat')+'</div>':'')

@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.10';
+const APP_VERSION = '2.14.11';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];

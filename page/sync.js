@@ -285,7 +285,7 @@ function showSyncDialog(){
     var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🔄 同步数据</div>'
     
     // Local card
-    h+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px">'
+    h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px">'
       +'<div style="font-weight:700;margin-bottom:6px;color:var(--orange)">📱 本地数据'+localAge+'</div>'
       +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">'+localSummary.time+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:var(--fs-xs);color:var(--text2)">'
@@ -306,7 +306,7 @@ function showSyncDialog(){
       +'</div></div>'
 
     // Remote card
-    h+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px">'
+    h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px">'
       +'<div style="font-weight:700;margin-bottom:6px;color:var(--blue)">☁️ 云端数据'+remoteAge+'</div>'
       +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">'+remoteSummary.time+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:var(--fs-xs);color:var(--text2)">'
@@ -335,26 +335,26 @@ function showSyncDialog(){
         +'<div style="font-weight:700;color:var(--text);margin-bottom:4px">🆕 首次同步</div>'
         +'<div style="color:var(--text2)">请选择：推送本地数据到云端，或从云端拉取数据覆盖本地。</div></div>'
     }else if(localNewer&&remoteData.entries){
-      suggestion='<div style="background:rgba(249,115,22,.12);border:2px solid var(--orange);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
+      suggestion='<div style="background:rgba(var(--brand-rgb),.12);border:2px solid var(--orange);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
         +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">💡 建议：推送本地数据到云端</div>'
         +'<div style="color:var(--text2)">本地数据更新 ('+localSummary.time+')，包含 '+localSummary.strE+' 组力量.'+localSummary.prsC+'项PR。云端数据较旧。</div></div>'
     }else if(remoteNewer&&remoteData.entries){
-      suggestion='<div style="background:rgba(34,197,94,.08);border:2px solid var(--green);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
+      suggestion='<div style="background:rgba(var(--success-rgb),.08);border:2px solid var(--green);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
         +'<div style="font-weight:700;color:var(--green);margin-bottom:4px">💡 建议：从云端拉取数据</div>'
         +'<div style="color:var(--text2)">云端数据更新 ('+remoteSummary.time+')，包含 '+remoteSummary.strE+' 组力量。本地数据较旧。</div></div>'
     }else if(hasLocal&&remoteData.entries&&localSummary.strE===remoteSummary.strE){
-      suggestion='<div style="background:rgba(100,116,139,.08);border:1px solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);text-align:center">✅ 本地与云端数据一致，无需同步</div>'
+      suggestion='<div style="background:rgba(100,116,139,.08);border:var(--bw) solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);text-align:center">✅ 本地与云端数据一致，无需同步</div>'
     }else{
-      suggestion='<div style="background:rgba(100,116,139,.08);border:1px solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);text-align:center">⚠️ 无法判断新旧关系，请手动选择</div>'
+      suggestion='<div style="background:rgba(100,116,139,.08);border:var(--bw) solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);text-align:center">⚠️ 无法判断新旧关系，请手动选择</div>'
     }
     h+=suggestion
 
     // Warning
     if(localNewer&&remoteData.entries&&localSummary.strE>remoteSummary.strE){
-      h+='<div style="background:rgba(234,179,8,.1);border:1px solid var(--yellow);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px;font-size:var(--fs-2xs);color:var(--yellow)">⚠️ 拉取云端会丢失 '+Math.max(0,localSummary.strE-remoteSummary.strE)+' 组力量记录</div>'
+      h+='<div style="background:rgba(var(--warning-rgb),.1);border:var(--bw) solid var(--yellow);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px;font-size:var(--fs-2xs);color:var(--yellow)">⚠️ 拉取云端会丢失 '+Math.max(0,localSummary.strE-remoteSummary.strE)+' 组力量记录</div>'
     }
     if(remoteNewer&&remoteData.entries&&remoteSummary.strE>localSummary.strE){
-      h+='<div style="background:rgba(234,179,8,.1);border:1px solid var(--yellow);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px;font-size:var(--fs-2xs);color:var(--yellow)">⚠️ 推送本地会丢失云端 '+Math.max(0,remoteSummary.strE-localSummary.strE)+' 组力量记录</div>'
+      h+='<div style="background:rgba(var(--warning-rgb),.1);border:var(--bw) solid var(--yellow);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px;font-size:var(--fs-2xs);color:var(--yellow)">⚠️ 推送本地会丢失云端 '+Math.max(0,remoteSummary.strE-localSummary.strE)+' 组力量记录</div>'
     }
     h+='<div class="modal-actions" style="flex-wrap:wrap">'
       +'<button class="m-btn-cancel" id="syncCancel" style="flex:1;min-width:80px">取消</button>'
@@ -429,11 +429,11 @@ function exportData(){
   modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📤 导出数据</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--text2);margin-bottom:14px;line-height:1.6">选择导出范围：</div>'
     +'<button class="sb-btn" id="exportFull" style="margin-bottom:8px">📦 全量数据（完整备份）</button>'
-    +'<button class="sb-btn" id="export7" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📅 最近7天（精简，适合发给AI）</button>'
-    +'<button class="sb-btn" id="export5" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📅 最近5天</button>'
-    +'<button class="sb-btn" id="export3" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📅 最近3天</button>'
+    +'<button class="sb-btn" id="export7" style="background:var(--bg3);color:var(--text);border:var(--bw) solid var(--bd)">📅 最近7天（精简，适合发给AI）</button>'
+    +'<button class="sb-btn" id="export5" style="background:var(--bg3);color:var(--text);border:var(--bw) solid var(--bd)">📅 最近5天</button>'
+    +'<button class="sb-btn" id="export3" style="background:var(--bg3);color:var(--text);border:var(--bw) solid var(--bd)">📅 最近3天</button>'
     +'<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--bd)">'
-    +'<button class="sb-btn" id="exportCopy" style="background:var(--bg3);color:var(--text);border:1px solid var(--bd)">📋 复制最近7天到剪贴板</button>'
+    +'<button class="sb-btn" id="exportCopy" style="background:var(--bg3);color:var(--text);border:var(--bw) solid var(--bd)">📋 复制最近7天到剪贴板</button>'
     +'</div>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="exportCancel">取消</button></div></div>'
   void modal

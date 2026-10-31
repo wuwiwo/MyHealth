@@ -167,7 +167,7 @@ function drawLineChart(canvas,opts){
   if(!tip){
     tip=document.createElement('div');
     tip.setAttribute('role','status');
-    tip.style='position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--bd-l);border-radius:8px;padding:4px 10px;font-size:var(--fs-xs);color:var(--text);font-weight:600;white-space:nowrap;z-index:var(--z-content);box-shadow:var(--sh-2);display:none;transform:translate(-50%,-120%)';
+    tip.style='position:absolute;pointer-events:none;background:var(--surface);border:var(--bw) solid var(--bd-l);border-radius:8px;padding:4px 10px;font-size:var(--fs-xs);color:var(--text);font-weight:600;white-space:nowrap;z-index:var(--z-content);box-shadow:var(--sh-2);display:none;transform:translate(-50%,-120%)';
     canvas._lcTip=tip;
   }
   if(tip.parentNode!==canvas.parentElement&&canvas.parentElement)canvas.parentElement.appendChild(tip);
