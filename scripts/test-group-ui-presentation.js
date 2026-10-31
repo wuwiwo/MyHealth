@@ -405,9 +405,13 @@ ok(unitRules.every(function (r) {
   return !SCALE_RX.test(r) || (/\.gb-arena-unit/.test(r) && /\.gb-acting/.test(r));
 }), '.gb-unit 规则里的 scale() 只允许出现在 .gb-arena-unit.gb-acting 上：'
   + unitRules.filter(function (r) { return SCALE_RX.test(r); }).join(' | '));
-/* 行动芯片的既有视觉语言（光环 / 强调条）随类名迁移后必须仍在 */
+/* 行动芯片的既有视觉语言（光环 / 强调条）随类名迁移后必须仍在。
+   ⚠️ v2.16 极简扁平：全站禁用 box-shadow，"光环"改由 2px 描边（outline）表达 ——
+      判据从「必须有 box-shadow」换成「必须有 2px 描边 且 不得有 box-shadow」（更严，不是放宽）。 */
 ok(/z-index:2/.test(actingChip), '行动芯片保留 z-index:2（压在相邻芯片之上，光环不被圆角切掉）');
-ok(/box-shadow/.test(actingChip), '行动芯片保留既有 box-shadow 光环');
+ok(/outline\s*:\s*var\(--bw\)\s+solid\s+var\(--orange\)/.test(actingChip),
+  '行动芯片用 2px 描边表达光环（v2.16 扁平：box-shadow 全站禁用）：' + actingChipBrief);
+ok(!/box-shadow/.test(actingChip), '行动芯片不再使用 box-shadow（扁平规范）');
 ok(/::before\s*\{/.test(actingChip), '行动芯片保留 ::before 强调条');
 
 /* 3) 行动焦点：上限 0.5（v2.4.x 舞台化把契约值从旧卡片的 0.75 改为 0.5），且只暗化非行动者 */

@@ -113,7 +113,21 @@ function renderStr(){
          与上方 r 的 `e.targetReps>0` 判定同一口径 —— 没有目标就只显示实际值 */
       var tgtTag=e.targetReps>0?'<span class="ec-tgt">目标 '+e.targetReps+' '+unitSuffix+'</span>':''
       /* v2.4.9：条目上多一个 🔁「再来一组相同」（一键复制任意一组，字段与手输一致） */
-      return '<div class="ec '+(d?'done':'')+'">'+volTag+'<div class="ec-hdr"><div class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></div><div class="ec-actions"><button class="ec-act" data-a="strRepeat" data-id="'+e.id+'" aria-label="再来一组相同" title="再来一组相同">🔁</button><button class="ec-act" data-a="strEdit" data-id="'+e.id+'" aria-label="编辑这条记录">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'" aria-label="删除这条记录">🗑️</button></div></div><div class="ec-prog"><div class="ec-pt">'+tgtTag+'<span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span></div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'+(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')+'</div>'
+      /* v2.16 阶段 2：主信息一屏可见 —— 每条记录默认只露「动作 · 重量 · 实际次数」，
+         目标次数 / 进度条 / 等效容量 / 时间戳收进 <details>，点击（或回车/空格）展开。
+         用原生 details/summary：键盘可达、展开态由浏览器映射给 AT（aria-expanded），
+         summary 高 44px（--touch-min），操作按钮留在 details 之外，点它不会顺手折叠。 */
+      var bodyHtml=volTag
+        +'<div class="ec-prog"><div class="ec-pt">'+tgtTag+'</div><div class="ec-bar"><div class="ec-fill '+sc+'" style="width:'+p+'%"></div></div></div>'
+        +(ts?'<div class="ec-time">🕐 '+ts+'</div>':'')
+      var headHtml='<span class="ec-ex">'+e.exercise+'<span class="ec-wt">'+wtLabel+'</span></span>'
+        +'<span class="ec-actual '+ac+'">'+e.actualReps+' '+unitSuffix+' '+(d?(o?'🔥':'✅'):'')+'</span>'
+      var actsHtml='<button class="ec-act" data-a="strRepeat" data-id="'+e.id+'" aria-label="再来一组相同" title="再来一组相同">🔁</button><button class="ec-act" data-a="strEdit" data-id="'+e.id+'" aria-label="编辑这条记录">✏️</button><button class="ec-act" data-a="strDel" data-id="'+e.id+'" aria-label="删除这条记录">🗑️</button>'
+      return '<div class="ec '+(d?'done':'')+'"><div class="ec-hdr">'
+        +'<details class="ec-det"><summary class="ec-sum" aria-label="'+strAttr(e.exercise)+' 详情">'+headHtml+'</summary>'
+        +'<div class="ec-body">'+bodyHtml+'</div></details>'
+        +'<div class="ec-actions">'+actsHtml+'</div>'
+        +'</div></div>'
     }).join('')+strRepeatBarHtml(entries[entries.length-1])
   }
   renderStrStats()
