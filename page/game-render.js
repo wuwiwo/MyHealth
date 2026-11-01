@@ -476,9 +476,23 @@ var GROUP_AUTO_SPEEDS=[1,2,4]
 var GROUP_AUTO_SPEED_KEY='dh-group-auto-speed'
 var GROUP_AUTO_STEP_MS=700     /* ×1 的单位行动间隔（沿用既有 700ms，不改战斗节奏基准） */
 var GROUP_AUTO_BUBBLE_MS=900   /* ×1 的施法气泡停顿（沿用既有 900ms） */
-var _groupAuto=false           /* 「▶ 自动」开关（默认关；不持久化，见约束②） */
+/* v2.14.15：结算展示在「自动连打」下的停留时间（毫秒）。
+   规格要求「先结算完本关再开下一关」且「停留 ≤ 1.5s」——取 1400（< 1500）：
+   既有 outro 的 800ms 胜负阶段 / +1200ms 战果阶段（scheduleGroupOutro 的既有值，**未动**）
+   全部落在这一窗口内，新一关开始前不会与任何阶段回调冲突。 */
+var GROUP_AUTO_NEXT_MS=1400
+var _groupAuto=false           /* 「▶ 自动连打」开关（默认关；不持久化，见约束②）
+                                  v2.14.15 起语义升级：自动**出手 + 自动进下一关**（作者澄清原话：
+                                  「如果开启自动，则会一直自动战斗+自动下一关直到失败/手动关闭」） */
 var _groupAutoSpeed=2          /* 当前速度档 1/2/4（默认 ×2） */
 var _groupAutoStepBusy=false   /* 单拍进行中标记（约束④：上一拍未完成不进下一拍） */
+/* v2.14.15「自动连打下一关」的三个状态位（都不持久化，随会话/开战重置）：
+     `_groupChainNext`  = 已排队、尚未开始的下一关 id（**唯一队列真相**；失败/无下一关/⏸ 一律清空）
+     `_groupChainTimer` = 排队定时器（与 `_groupTimer` 同属 `cancelGroupAutoTimer()` 的唯一清理点）
+     `_groupAutoStopNote` = 上一次「为什么停」的人话原因（画在开关 title 上，停止绝不静默） */
+var _groupChainNext=null
+var _groupChainTimer=null
+var _groupAutoStopNote=''
 var _groupSpeed=2        /* 1/2/4 —— `_groupAutoSpeed` 的镜像：演出/特效档位与单拍间隔共用同一个值
                             （不引入第二个速度概念；由 applyGroupAutoSpeed() 同步） */
 var _groupAnimEl=null    // 动画中的单位
@@ -511,9 +525,14 @@ function resumeGroupBattle(){
       新增停止条件时请接到 stopGroupAuto 上，不要各自 clearTimeout。
    ================================================================== */
 
-/* 清定时器（幂等；所有停止路径的最终落点） */
+/* 清定时器（幂等；所有停止路径的最终落点）。
+   v2.14.15：这里同时是「下一拍出手」(`_groupTimer`) 与「排队中的下一关」(`_groupChainTimer`)
+   的**唯一**清理点 —— 新增任何一种自动侧的定时器都请接到这两个变量上，不要各自 clearTimeout。
+   ⚠️ 本函数只清定时器，**不清** `_groupChainNext`（队列状态归 stopGroupAuto / 开战 / 落地三处管）：
+      改档位（×1/×2/×4）要 cancelGroupAutoTimer() 再重排，队列本身不能被改档顺手丢掉。 */
 function cancelGroupAutoTimer(){
   if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
+  if(_groupChainTimer){clearTimeout(_groupChainTimer);_groupChainTimer=null}
 }
 
 /* 档位归一：只认 1/2/4；旧存档的 8 → 4（不再有 ×8 档，但设置不丢）；其它 → 默认 ×2 */
@@ -564,15 +583,20 @@ function groupAutoViewActive(){
   return true
 }
 
-/* 停止自动战斗：清定时器 + 关开关 + 界面同步；返回「此前是否开着」。
-   reason 一律落日志（禁止静默停止：为什么停必须可定位）。
+/* 停止自动战斗：清定时器 + 关开关 + 清「排队中的下一关」+ 界面同步；返回「此前是否开着」。
+   reason 一律落日志 + 落到 `_groupAutoStopNote`（禁止静默停止：为什么停必须可定位）。
+   v2.14.15：**⏸ 必须能取消「已排队但尚未开始」的下一关** —— 队列状态在这里清空，
+   定时器在 cancelGroupAutoTimer() 里清掉，此后不可能再自己跳关（规格④）。
    `skipRender`：由「打开详情」这类**即将整屏替换 overlay** 的调用方传 true ——
    此时重绘是白做（下一行就会被详情页覆盖），还会在同一个点击处理器里制造 DOM churn。 */
 function stopGroupAuto(reason,skipRender){
   cancelGroupAutoTimer()
+  var hadChain=!!_groupChainNext
+  _groupChainNext=null
   var was=_groupAuto
   _groupAuto=false
-  if(!was)return false
+  if(!was&&!hadChain)return false
+  _groupAutoStopNote=(reason||'未注明原因')
   if(typeof console!=='undefined'&&console.info)console.info('[group-auto] 自动战斗已停：'+(reason||'未注明原因'))
   /* 界面同步：只在「战斗仍在进行 + overlay 还开着 + 没有结算面板在展示」时重绘，
      避免在关闭/结算阶段抢渲染（_groupDone 自己会重绘）。 */
@@ -593,6 +617,136 @@ function _groupAutoStep(){
 
 /* 停止条件③ 的注册点见文件上方的 onBattleVisibilityChange()（与结算面板重排共用同一个
    visibilitychange 监听，避免被按事件名只存一个处理器的测试桩覆盖）。 */
+
+/* ==================================================================
+   v2.14.15：自动「连打下一关」（作者澄清：「自动战斗是指可以自动下一关，
+   如果开启自动，则会一直自动战斗+自动下一关直到失败/手动关闭」）
+
+   与 v2.14.14 的分工（**谁也不复制谁**）：
+     · `_groupStep()`     —— 唯一出手入口（本段一行都不碰）；
+     · `startGroupTrial()`—— 唯一开战入口（本段只**调用**它，绝不另建战斗对象）；
+     · `_groupDone()`     —— 唯一结算点（发奖 / 记通关 / 写历史都在那里，本段只在**其后**排队）。
+   四个停止路径（规格②③④）：胜→排队下一关；负→停；无下一关→停 + 可见提示；⏸→停并清队列。
+   安全阀（规格⑦）：下一关「关卡 id 未变 / 起战失败」→ 立即停 + 记原因，**绝不重试**。
+   ================================================================== */
+
+/* 下一关 id：线性解锁顺序就是 `allStageIds()` 的下一个（与 markGroupStageCleared 同一份顺序表）。
+   返回 null = 已是最后一关 / 当前关卡未知（两种都**不能**继续连打）。 */
+function groupNextStageId(stageId){
+  var all=(typeof allStageIds==='function')?allStageIds():[]
+  var id=(stageId===undefined)?_groupStageId:stageId
+  if(!id)return null
+  var idx=all.indexOf(id)
+  if(idx<0||idx>=all.length-1)return null
+  return all[idx+1]
+}
+/* 「当前第 N 关」：1 基序号 + 总数（0 = 关卡未知 → 不渲染这一段，绝不显示「第 0 关」） */
+function groupStageOrdinal(stageId){
+  var all=(typeof allStageIds==='function')?allStageIds():[]
+  var id=(stageId===undefined)?_groupStageId:stageId
+  if(!id)return {n:0,total:all.length}
+  var idx=all.indexOf(id)
+  return {n:idx>=0?(idx+1):0,total:all.length}
+}
+
+/* 把「排队中的下一关」排到 GROUP_AUTO_NEXT_MS 之后落地（幂等；可被 ⏸/停 取消）。 */
+function scheduleGroupChain(){
+  if(!_groupAuto||!_groupChainNext)return false
+  cancelGroupAutoTimer()
+  _groupChainTimer=setTimeout(_groupChainEnter,GROUP_AUTO_NEXT_MS)
+  return true
+}
+
+/* 结算面板收起（只在新一关要开始前调用）：面板挂在 #panelOverlay 上，不收掉会盖住新战场。
+   走既有的 `_closeDetailPanel()`（**唯一**关闭路径，负责恢复 _detailRestore / 清 innerHTML），
+   不自己 remove('open') 以免留下失效的 #detailClose。 */
+function closeGroupSettlementPanel(){
+  var ov=(typeof document!=='undefined'&&document)?document.getElementById('panelOverlay'):null
+  if(!ov||!ov.classList||typeof ov.classList.contains!=='function')return false
+  if(!ov.classList.contains('open'))return false
+  if(typeof _closeDetailPanel==='function'){_closeDetailPanel();return true}
+  ov.classList.remove('open');ov.innerHTML=''
+  return true
+}
+
+/* v2.14.15 结算后的分叉（在 `_groupDone()` 的全部副作用**之后**调用）：
+   胜 → 排下一关（自动状态跨关保持）；负 → 停（不重试同一关）；无下一关 → 停 + 可见提示。 */
+function _armGroupAutoNext(winner){
+  var stageId=_groupStageId||null
+  if(winner!=='ally'){
+    _groupChainNext=null
+    cancelGroupAutoTimer()
+    _groupAuto=false
+    _groupAutoStopNote='本场失败（不自动重试同一关）'
+    if(typeof console!=='undefined'&&console.info)console.info('[group-auto] 本场失败 → 自动连打停止（不重试同一关）')
+    return false
+  }
+  var next=groupNextStageId(stageId)
+  if(!next){
+    _groupChainNext=null
+    cancelGroupAutoTimer()
+    _groupAuto=false
+    /* 「关卡未知」不能说成「已是最后一关」—— 两种都停，但原因必须如实 */
+    _groupAutoStopNote=stageId?'已是最后一关':'当前关卡未知，无法连打'
+    if(typeof toast==='function')toast(stageId?'🏁 已是最后一关，自动连打结束':('⚠️ 自动连打结束：'+_groupAutoStopNote),'s')
+    /* 结算面板里也要看得见（战果阶段读的是 `_groupOutcomeMessage`，此时还没渲染） */
+    _groupOutcomeMessage=(_groupOutcomeMessage||'')+(stageId?' · 🏁 已是最后一关，自动连打结束':' · ⚠️ '+_groupAutoStopNote)
+    if(typeof console!=='undefined'&&console.info)console.info('[group-auto] '+_groupAutoStopNote+' → 自动连打停止')
+    if(typeof renderGroupOverlay==='function'&&_groupBattle)renderGroupOverlay(false)
+    return false
+  }
+  _groupChainNext=next
+  _groupAuto=true               /* 自动状态跨关保持：不需要玩家再点 ▶ */
+  _groupAutoStopNote=''
+  scheduleGroupChain()
+  /* 重绘一次：`_groupDone` 早先那次重绘时开关还是「关」（它先把 _groupAuto 置 false），
+     这里要让按钮立刻变成「⏳ 连打中」——否则玩家在等下一关的 1.4s 里看到的是「▶ 自动连打」。 */
+  if(typeof renderGroupOverlay==='function'&&_groupBattle)renderGroupOverlay(false)
+  return true
+}
+
+/* 排队定时器到点：复核 → 收起结算面板 → **调同一个 startGroupTrial()** → 安全阀校验 → 继续出手。 */
+function _groupChainEnter(){
+  _groupChainTimer=null
+  var next=_groupChainNext
+  if(!_groupAuto){_groupChainNext=null;return}
+  if(_groupPaused){stopGroupAuto('需要玩家决策：面板打开中');return}
+  if(!groupAutoViewActive()){stopGroupAuto('已离开敌群视图（overlay 关闭 / 切 tab / 页面隐藏）');return}
+  if(!next){stopGroupAuto('自动连打：队列里没有下一关');return}
+  _groupChainNext=null
+  var prevBattle=_groupBattle,prevStage=_groupStageId,prevRewarded=_groupRewarded
+  closeGroupSettlementPanel()
+  var err=null
+  try{
+    if(typeof startGroupTrial!=='function')throw new Error('startGroupTrial 不可用')
+    startGroupTrial(next)      /* ⚠️ 唯一开战入口；本函数内**禁止**自建战斗对象 / 自造推进循环 */
+  }catch(e){
+    err=e
+    if(typeof console!=='undefined'&&console.warn)console.warn('[group-auto] 下一关开战抛错：'+(next||'?'),e)
+  }
+  /* 安全阀：必须真的换成了一个「新的、未结束的」战斗对象，且 `_groupStageId` 已指向下一关。
+     三个条件缺一即停 —— 「关卡 id 未变 / 起战失败」绝不允许重试（否则就是死循环重开）。 */
+  var started=!!(!err&&_groupBattle&&_groupBattle!==prevBattle&&!(_groupBattle.done)&&_groupStageId===next)
+  if(!started){
+    /* 回滚到「上一关已结算完毕」的状态：否则旧战斗 + 新 stageId + 已重置的 _groupRewarded
+       会让下一次结算把奖励记到没打过的关上（本项目历史上「进度写错关/奖励静默」正是这么来的）。
+       ⚠️ 只在新战斗**没被换掉**时回滚 stageId / 幂等标记 —— 若 startGroupTrial 已经换了战斗对象
+       再抛错，那场新战斗就按「未结算」继续，不去篡改它的幂等标记。 */
+    if(_groupBattle===prevBattle){
+      _groupStageId=prevStage
+      _groupRewarded=prevRewarded
+    }
+    _groupAutoStopNote=err?('下一关（'+next+'）开战抛错：'+(err.message||err)):('下一关（'+next+'）未能开战（关卡 id 未变 / 起战失败）')
+    stopGroupAuto(_groupAutoStopNote)
+    if(typeof toast==='function')toast('⚠️ 自动连打已停：'+_groupAutoStopNote,'e')
+    if(typeof renderGroupOverlay==='function'&&_groupBattle)renderGroupOverlay(false)
+    return
+  }
+  _groupAuto=true               /* startGroupTrial 内部会关掉开关 → 这里恢复「跨关保持」 */
+  _groupAutoStopNote=''
+  if(typeof renderGroupOverlay==='function')renderGroupOverlay(false)
+  _groupStep()                  /* 与手动「⏭️」/自动定时器**同一个入口**、同样零参数 */
+}
 
 /* v2.2 WP-H1：首次使用时从存档恢复「参战宠物选择」（刷新/重开后保留）。
    ⚠️ game-render.js 在 index.html 里**比 pet-store.js 先加载**，故不能在顶层读取，
@@ -708,6 +862,10 @@ function startGroupTrial(groupId){
      速度档读独立键 `dh-group-auto-speed`（缺省回落到旧键 dh-group-speed；1/2/4/8 → 1/2/4）。 */
   _groupAuto=false
   cancelGroupAutoTimer()
+  /* v2.14.15：开战即清「排队中的下一关」与「上次停止原因」——
+     新一关从干净状态开始；连打落地时由 _groupChainEnter() 在**开战之后**重新置真。 */
+  _groupChainNext=null
+  _groupAutoStopNote=''
   applyGroupAutoSpeed(loadGroupAutoSpeed())
   _groupDetail=null
   _gbTab='battle'        // v2.1.14：每次开战回到战斗页
@@ -1539,15 +1697,23 @@ function _groupDone(){
   /* 没有本场战斗可结算：旧实现在 `_groupBattle===null` 时仍按失败路径走下去
      （结算宠物受伤 + 打开一份「💀 失败」面板），凭空造出一场失败。 */
   if(!_groupBattle)return
-  /* v2.14.14 停止条件①：战斗结束（胜/负、奖励已结算）→ 自动战斗停止并清定时器。
+  /* v2.14.15：先记下「本场是不是自动在打」——下面会立刻把开关置 false（结算期间不再出手），
+     结算全部落账之后再由 _armGroupAutoNext() 决定「排下一关」还是「彻底停」。 */
+  var autoEnded=_groupAuto||!!_groupChainNext
+  /* v2.1.19 / v2.14.14 / v2.14.15：**不重复结算**的唯一守卫（规格⑤）。
+     手动：「战斗结束后仍可继续点下一步」会再次走到这里；自动：定时器尾拍也可能再喊一次
+     `_groupStep()`（或玩家连点）。两条路径都必须只结算一次奖励 / 通关 / 受伤副作用。
+     ⚠️ 早退前把**自动侧状态收干净**：否则会留下「有排队队列、却没有开关也没定时器」的僵尸态
+        （本函数顶部已经 cancelGroupAutoTimer 了，队列必须一起清）。 */
+  if(_groupRewarded){
+    if(autoEnded){_groupChainNext=null;cancelGroupAutoTimer();_groupAuto=false}
+    return
+  }
+  /* v2.14.14 停止条件①：战斗结束（胜/负、奖励已结算）→ 自动出手停止并清定时器。
      重绘由下面那句 renderGroupOverlay(false) 统一做，这里只改状态（不抢渲染）。 */
   cancelGroupAutoTimer()
   _groupAuto=false
   var w=_groupBattle&&_groupBattle.winner
-  /* v2.1.19 / v2.14.14：**不重复结算**的唯一守卫（规格⑤）。
-     手动：「战斗结束后仍可继续点下一步」会再次走到这里；自动：定时器尾拍也可能再喊一次
-     `_groupStep()`（或玩家连点）。两条路径都必须只结算一次奖励 / 通关 / 受伤副作用。 */
-  if(_groupRewarded)return
   _groupRewarded=true
   invalidateGroupOutro()
   var battle=_groupBattle
@@ -1626,6 +1792,10 @@ function _groupDone(){
   }
   openOutcomeStage('outcome','胜负','')
   scheduleGroupOutro(outro,showOutcome,800)
+  /* v2.14.15：**奖励/通关/历史全部落账之后**才决定下一关（规格⑤：先结算再开下一关）。
+     放在最后一行还有第二个理由：outro 的阶段回调（800/1200ms）都早于 GROUP_AUTO_NEXT_MS，
+     先排新关不会打断本关结算面板的展示。 */
+  if(autoEnded)_armGroupAutoNext(w)
 }
 
 /* 敌群胜利奖励：技能点（基数 4 点/胜，与挑战数值独立）+ 材料掉落
@@ -2069,20 +2239,30 @@ function renderGroupOverlay(show){
   if(!_groupBattle){ov.classList.remove('open');return}
   var gb=_groupBattle
   var allyPct=gbSideHpPct(gb.allies), foePct=gbSideHpPct(gb.enemies)
+  /* v2.14.15：自动开关的三态文案 + 「当前第 N 关」。
+     · 关：▶ 自动连打    · 打：⏸ 自动中    · 已排队下一关：⏳ 连打中
+     只换文案与 title，**不新增字号/颜色**（样式见 index.css 的 v2.14.15 块）。
+     停止原因写进 title：停止绝不静默，玩家悬停/读屏都能知道为什么停。 */
+  var autoState=!_groupAuto?'off':(_groupChainNext?'next':'on')
+  var autoLabel=autoState==='off'?'▶ 自动连打':(autoState==='next'?'⏳ 连打中':'⏸ 自动中')
+  var autoTitle='自动连打：按当前速度连续作战，胜利后自动进入下一关；失败 / 已是最后一关 / 点⏸ 即停；打开详情或切走页面时自动暂停'
+    +(_groupAutoStopNote?'（上次停止：'+_groupAutoStopNote+'）':'')
+  var ord=groupStageOrdinal(_groupStageId)
+  var stageLabel=(ord.n>0&&ord.total>0)?('第 '+ord.n+'/'+ord.total+' 关 · '):''
   // v2.1.14：控制条常驻（sticky），其下是「战斗 / 日志」双 Tab —— 两个页签各自独立滚动
   var h='<div class="gb-ctrl">'
     +'<button class="speed-btn" id="gbClose" aria-label="退出战斗">✕</button>'
-    +'<span class="gb-ctrl-title">👥 '+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
+    +'<span class="gb-ctrl-title" data-stage="'+escHtml(_groupStageId||'')+'">👥 '+stageLabel+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
     /* v2.1.22：场地常驻胶囊（可点击看介绍）。
        此前场地只在开战时 toast 一次，几秒后就消失 —— 玩家打到一半根本记不住自己在什么场地里，
        更看不到「对敌我双方均有效」这类关键前提。现在控制条上常驻一个 🌍 胶囊，点开是完整说明。 */
     +(gb.terrain?'<button class="gb-terrain" id="gbTerrain" title="点击查看场地介绍">🌍 '+escHtml(gb.terrain.name)+'</button>':'')
     +'<span style="flex:1"></span>'
-    /* v2.14.14：「▶ 自动」开关（aria-pressed 表达状态；**默认关**，开=「⏸ 自动中」）。
-       点开 → 立刻用同一个 `_groupStep()` 起第一拍；点关 → 只清定时器（不动战斗状态）。
+    /* v2.14.14「▶ 自动」开关 → v2.14.15 升级为「自动连打」（aria-pressed 表达状态；**默认关**）。
+       点开 → 立刻用同一个 `_groupStep()` 起第一拍；点关 → 清定时器 + 清「排队中的下一关」（不再跳关）。
        title 明说边界：需要玩家决策的时点（详情/结算）会自动降级为暂停，不替玩家做选择。 */
-    +'<button class="speed-btn gb-auto-btn" id="gbAuto" aria-pressed="'+(_groupAuto?'true':'false')+'" title="自动战斗：按当前速度自动推进；打开详情 / 切走页面时自动暂停">'
-    +(_groupAuto?'⏸ 自动中':'▶ 自动')+'</button>'
+    +'<button class="speed-btn gb-auto-btn" id="gbAuto" data-auto-state="'+autoState+'" aria-pressed="'+(_groupAuto?'true':'false')+'" title="'+escHtml(autoTitle)+'">'
+    +autoLabel+'</button>'
     /* 速度档 ×1 / ×2 / ×4（默认 ×2；独立键 dh-group-auto-speed，改档即落盘） */
     +'<span class="gb-speed-row" role="group" aria-label="自动战斗速度">'
     +GROUP_AUTO_SPEEDS.map(function(sp){
@@ -2147,13 +2327,19 @@ function renderGroupOverlay(show){
              节奏由 `_groupStep()` 尾部自己按当前档位续排，这里不另写推进循环。 */
   var autoBtn=document.getElementById('gbAuto')
   if(autoBtn)autoBtn.addEventListener('click',function(){
+    /* v2.14.15：结算等待中（「⏳ 连打中」）点它同样是「⏸」——
+       stopGroupAuto 会清掉排队中的下一关，**不会再自己跳关**（规格④）。 */
     if(_groupAuto){stopGroupAuto('玩家点了⏸');renderGroupOverlay(false);return}
     if(!_groupBattle||_groupBattle.done)return   /* 已结束：不替玩家重开一局 */
     _groupAuto=true
+    _groupAutoStopNote=''                        /* 重新开启 → 旧停止原因不再相关 */
+    _groupChainNext=null
     renderGroupOverlay(false)
     _groupStep()                                  /* 与「⏭️ 下一回合」完全同一个入口、同样零参数 */
   })
-  /* v2.14.14 速度档 ×1 / ×2 / ×4：改档即落盘（独立键）+ 立即按新档位重排下一拍 */
+  /* v2.14.14 速度档 ×1 / ×2 / ×4：改档即落盘（独立键）+ 立即按新档位重排下一拍。
+     v2.14.15：改档会先 cancelGroupAutoTimer()（唯一清理点同时清掉排队定时器）——
+     若此刻正在等下一关，必须把队列**重新排上**，否则改个速度就把连打弄丢了。 */
   GROUP_AUTO_SPEEDS.forEach(function(sp){
     var b=document.getElementById('gbSpeed'+sp)
     if(!b)return
@@ -2161,6 +2347,7 @@ function renderGroupOverlay(show){
       applyGroupAutoSpeed(sp)
       saveGroupAutoSpeed(sp)
       cancelGroupAutoTimer()
+      scheduleGroupChain()        /* 队列为空时是 no-op；有队列则按新档位重排 */
       renderGroupOverlay(false)
       if(_groupAuto)_groupStep()
     })

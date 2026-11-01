@@ -5,6 +5,57 @@
 
 ---
 
+## v2.14.15
+
+Date: 2026-10-01
+
+**敌群「自动战斗」升级为「自动连打下一关」**（作者澄清：「我说的自动战斗是指可以自动下一关……直到失败/手动关闭」）。v2.14.14 只做到自动出手，本版补上自动进关。
+
+### 连打链路（全在 `page/game-render.js`，无第二份推进/建场逻辑）
+
+`_groupDone()`（结算+发奖+记通关+写历史之后）→ `_armGroupAutoNext()` → `groupNextStageId()`（用 `allStageIds()` 的线性顺序，与 `markGroupStageCleared` 同一份表）→ `scheduleGroupChain()`（`GROUP_AUTO_NEXT_MS = 1400ms`）→ `_groupChainEnter()`（复核 `_groupAuto` / `_groupPaused` / `groupAutoViewActive()`）→ `closeGroupSettlementPanel()` → **`startGroupTrial(next)`（唯一开战入口，与关卡列表点击同一个全局符号）** → 安全阀校验 → `_groupAuto = true` → `renderGroupOverlay()` + `_groupStep()`（唯一出手入口）。
+
+**自动状态跨关**：`_groupDone` 开头先置 `false`（结算期间不出手），胜利分支在**全部副作用之后**重新置 `true` 并排队；`startGroupTrial` 内部会把开关清成 false，故 `_groupChainEnter` 在开战**之后**再恢复 true —— UI 不会中途闪回「关」。
+
+### 四条停止路径
+
+| 路径 | 行为 |
+|---|---|
+| **胜** | 排队下一关（`_groupChainNext`），1.4s 后进入并继续自动 |
+| **负** | 清队列 + 清定时器 + 关自动，**不重试同一关**，记原因 |
+| **无下一关** | 停 + `toast(「🏁 已是最后一关，自动连打结束」)` + 战果面板文案 + 开关 `title` |
+| **手动 ⏸** | 立即停，**并取消「已排队但未开始」的下一关**（`_groupChainNext=null` + 清两个定时器） |
+
+切 tab / `document.hidden` / ✕ 关闭 走同一条 `stopGroupAuto` 链（`app.js` 既有接线天然覆盖），落地前再复核 `groupAutoViewActive()`。
+
+### 安全阀（防死循环）
+
+`_groupChainEnter` 必须同时满足「无异常 + 战斗对象已换新 + 未结束 + `_groupStageId === next`」，否则**立即停**：清队列、不重排定时器、`toast(「⚠️ 自动连打已停：…」)`、`console.warn` 留痕，并把 `_groupStageId/_groupRewarded` 回滚到「上一关已结算」状态（仅当战斗对象未被换掉），堵住「旧战斗 + 新 stageId → 奖励记到没打过的关」。
+
+### 幂等证据
+
+连打 3 关 → `reward` 与 `cleared` 记录均为 `g1-1, g1-2, g1-3` 各一次，再跑 40 拍仍各 1 次，`reward.length === cleared.length`；真机：技能点 10→18→28、`winCountThisWeek` 2→3→4、`battleHistoryList()` 5 条 = 5 场结算、`progress = g1-1…g1-5` 各一次。
+
+### 测试
+
+- 新增 `scripts/test-group-auto-next.js` **154 断言**：源码守卫（只出现 `startGroupTrial(next)`、无 `createGroupBattle`/`groupBattleStep`、两定时器各只有 1 处 `clearTimeout`、`GROUP_AUTO_NEXT_MS ≤ 1500`）、胜利进关与状态跨关、逐关奖励各 1 次、失败不排队不重试、最后一关三处提示、⏸ 取消已排队、四类离开路径整链停且定时器清零、两种安全阀、手动模式不受影响。
+- `test-group-auto.js` 135 → **172 断言**，只改 3 条（作者澄清使「胜利不再等于停止」）：胜利后 `_groupAuto===true`/`aria-pressed="true"`/「⏳ 连打中」，失败分支逐字保留原语义；§5 另**新增** 4 条按关计数断言。其余 132 条一字未改。
+- 全量 **79 套件 / 0 失败**（6465 断言）；`test-a11y-tokens` **40/40**。
+- 真机连打：g1-1 →（1.39s）g1-2 →（1.40s）g1-3，全程 `auto=true`；⏸ 队列窗口内点 → 4s 后仍未跳关；切 tab → 立即停且不跳关。
+
+### UI
+
+按钮三态：**「▶ 自动连打」/「⏸ 自动中」/「⏳ 连打中」**（排队态绿色虚线描边，只用既有令牌）；控制条保持「👥 第 N/240 关 · 敌数 · 回合」。
+
+### ⚠️ 待裁决
+
+1. **自动模式下战报的 stats 层被跳过**：`GROUP_AUTO_NEXT_MS=1400 < 2000ms`，自动连打时只看到「胜负 → 战果（含奖励）」约 1.4s 就进下一关。若希望每关读完整战报，需放宽停留时间（或改成"只自动出手、手动点进下一关"）。
+2. 「已是最后一关」提示在 toast / 战果文案 / 开关 title 三处，**没有常驻横幅**（避免新增字号/颜色）。要常驻需允许加一条令牌级样式。
+3. 自动连打状态**仍不持久化**（刷新回「关」），沿用 v2.14.14 的约束。
+4. 以「大关 id」开战（`_groupStageId=null`）时连打会停并提示「当前关卡未知，无法连打」（保守，不会写错关）。
+
+---
+
 ## v2.14.14
 
 Date: 2026-10-01
@@ -875,6 +926,7 @@ Date: 2026-10-12
 | v2.14.12 | 53 | （见 changelog） | **自定义重量（±0.5kg）**。重量网格（`#seWeight` 编辑弹层 与 `#strWeight` 新增一组，两处同时生效）在 13 个预设档后**追加「✏️ 自定义」格**（`span 2`，末行正好填满不留孤行）：点开**内联条** `−`/数字输入/`kg`/`+`，**±0.5kg**，也支持直接输入（`step=0.5 inputmode=decimal`，**失焦+回车双入口**）；范围 **0.5~200**，非半档就近吸附；**非法回退上次有效值+toast**、越界夹紧+toast；命中预设档时**预设高亮照旧、自定义格不高亮**，非预设值显示「✏️ 自定义 9.5kg」并写回。**计划编辑步进 1kg→0.5kg**，限幅 **1~50 → 0.5~200**。**展示统一 `fmtKg()`**（记录行/计划行/表单/训练中/汇总/快速复训）：`9.5→"9.5"`、`10→"10"`、`9.5000000001→"9.5"`，**无浮点尾巴**；老存档非半档值（9.7）**保留一位小数不谎报**（存储不变）。实现为 `tab-strength.js` 内**同名覆盖** `utils.js` 的 `buildWtGrid`（`utils.js` 本轮不可写且加载更早），**回调协议一字未改**（`onChg(数字kg)`），故两处调用点零改动；script 顺序已由测试钉住（调换会红而非静默失效）。样式只用既有令牌（2px 边、圆角 0、无阴影/渐变、未新增过渡），按钮与数值 **min-height 44px**，focus 2px 描边，`aria-label/role=group/aria-controls/aria-live` 齐全。**新增 `test-custom-weight.js` 113 断言 8 组**（含连按 400 次无浮点尾巴、`sel=0` 不高亮、端到端 9.5 落库到记录行、脚本顺序、`utils.js` 未被改）；全量 **76 套件 0 失败**、a11y **40/40**，既有测试无变红无弱化。⚠️ 待裁决：快速复训仍不带出非预设重量（`applyStrLastSet` 命中预设才带出，既有测试 6.8 守着；放宽属规格变更）；`fmtKg` 对老数据非半档值保留一位小数；真机视觉未复核 |
 | v2.14.13 | 53 | （见 changelog） | **作者远程三项**。**① 挑战主按钮回归（P0）**：`#lvChallenge`「⚔️ 挑战」几乎不可见 —— v2.14.9 扁平守卫 `[style*="gradient"]{background-image:none!important}` 把它**唯一**的底色（内联 `linear-gradient(135deg,var(--red),#dc2626)`）清空，只剩 `background-color:transparent` + `.m-btn-save` 白字 → **白字透明底 = 1.00:1**；叠加 `.modal-actions button`(0,1,1) 的 `border:none` 压过 `.m-btn-save`(0,1,0)，**所有弹层确认按钮的 2px 边框其实从未渲染**。修法：按钮走 `.m-btn-save` 实心 CTA + 新增 `.modal-actions .m-btn-save`(0,2,0) 定死 `--brand-fill` 底/`--on-brand` 字/**2px 同色边**/`--touch-min` → 四组实测（浅/深 × 390/360 数值一致）：`rgba(0,0,0,0)→rgb(37,99,235)`、`0px none→2px solid`、`auto/48→44/49`、**1.00:1→5.17:1**、宽度 166/151→**214/194**（明显宽于「关闭」）；`#exSave/#ccSave/#cpSegConfirm/#peExConfirm/#chStart` 一并修好。**同类连带**：培养页「我的角色」卡两端同色**假渐变**被抽掉丢底 → 改实色 `--bg2`；热血 buff 全屏 `radial-gradient` → 平铺 `rgba(251,191,36,.18)`（保留反馈）。**② 炼化点数来源**（作者问 700kg 为何没有）：真实规则 = **本月力量容量 `floor(kg/100)×10`**（700kg → **70 点**）+ **关卡首通战利品**（普通 +2/+4，BOSS +10/+20）；前置**通关 9-6 解锁炼魂**、**结算在打开挑战页/刷新时**（训练保存不触发、懒结算、按已兑换额补差）；隐藏挑战/敌群试炼/有氧**不给**炼化点。700kg 无炼化的三个原因：未通关 9-6（实测恒 0）、未打开挑战页、以及训练直接产出的是**宠物经验**（kg×5=3500 EXP）与容量（🪨炼化石是宠物材料，≠炼化点）。**逻辑无漏发、未改数值**；改文案（`本月已获得`→`本月容量兑换`，原会低估）+ 面板新增常显一句与 `<details>`「🔮 获取途径」。实测 700kg：首次渲染 0→**70**，再渲染仍 70（幂等）。**③ 宠物经验明细**：写入既有 `pets.levelLedger.log`（**未新建 store key**），每条含 `date/source(daily\|challenge)/total/granted/dropped/cap/pets/breakdown[]/allocations[]`（来源拆分 力量{kg,exp}/有氧{min,exp}/挑战{dmg,exp}，分配含每只 `amount/from/to/leveledUp`）；宠物面板材料区下、宝珠上 `<details>` 默认折叠，summary「📒 宠物经验明细　今日合计 +N EXP　M 笔」（44px、键盘可达、两主题可读）；幂等沿用 `dailyGranted` 水位 + 挑战 `runId` 键，只在真发时写一条。新增 `test-pet-exp-log.js` **45 断言**；全量 **77 套件 0 失败** + a11y **40/40**。⚠️ 待裁决：日志上限 20 条会裁掉当日超出部分（建议「当日全留 + 历史 20」）；炼化点结算时机是否改即时；弹层确认按钮现统一 2px 边 + ≥44px；热血闪光改平铺色 |
 | v2.14.14 | 53 | （见 changelog） | **敌群战斗自动战斗**。控制条新增「▶ 自动 / ⏸ 自动中」（`#gbAuto`，`aria-pressed`），**默认关**、开战重置、**不持久化**；速度档 **×1/×2/×4（默认 ×2）**，间隔 = 基准 700ms（气泡 900ms）÷ 档位 = **700/350/175ms**，键 **`dh-group-auto-speed`**（与 `dh-battle-speed`、旧 `dh-group-speed` 均不同，旧键读兜底+写镜像、`8→4` 归一）。**推进复用同一个入口**：`_groupAutoStep()` 只有一句 `_groupStep()`，`#gbAuto` 与手动 `#gbStep` 同签名调用 `_groupStep()`（**无第二份逻辑**），入口有 `_groupAutoStepBusy` + `try/finally` 重入守卫，**无 setInterval**。**四个停止条件**：① `_groupDone()` 结束停 ② 点 ⏸ 停 ③ `#gbClose`/`switchTab`/`onBattleVisibilityChange(document.hidden)`/每拍 `groupAutoViewActive()` 复核 → 停并清定时器 ④ 详情/技能/天赋弹层 `pauseGroupBattle()` **降级为暂停**且关弹层不自动续跑。**定时器唯一清理点 `cancelGroupAutoTimer()`**（结束/暂停/关闭/改档/开新战全经过）。**幂等**沿用 `_groupRewarded`（再推进 100 次奖励仍 1 次）。新增 `test-group-auto.js` **135 断言**（同 seed 下自动 10 拍 ≡ 手动 10 次；结束/切 tab/visibility 定时器为 null 且冻结；奖励幂等；三档与键隔离；默认关；重入守卫；样式契约）；全量 **78 套件 0 失败** + a11y **40/40**；真浏览器验证通过（刷新后速度继承 ×4、自动仍关），axe **0 violations**。**顺带修**：按下态在 `.speed-btn:hover` 反色下 **3.49:1**（axe serious）→ 加 `:not(:hover)`。⚠️ 行为变更：旧 `_groupMode`（默认 auto、持久化）被取代 → 开战不再自动走第一拍、不再写 `dh-group-mode`、旧 ×8 归一为 ×4、开详情后不再自动续跑；结算面板展示推进未停；`_groupSpeed` 收敛为单一赋值（节奏=特效档位） |
+| 2.14.15 | 53 | （见 changelog） | **敌群「自动连打下一关」**。v2.14.14 只做自动出手，本版补自动进关：`_groupDone()`（结算+发奖+记通关+写历史之后）→ `_armGroupAutoNext()` → `groupNextStageId()`（`allStageIds()` 线性顺序，与 `markGroupStageCleared` 同一份表）→ `scheduleGroupChain()`（**`GROUP_AUTO_NEXT_MS=1400ms`**）→ `_groupChainEnter()`（复核 `_groupAuto`/`_groupPaused`/`groupAutoViewActive()`）→ `closeGroupSettlementPanel()` → **`startGroupTrial(next)`（唯一开战入口，与关卡列表点击同一全局符号）** → 安全阀 → `_groupAuto=true` → `renderGroupOverlay()` + `_groupStep()`。**状态跨关**：`_groupDone` 开头置 false（结算期间不出手），胜利分支在全部副作用后重新置 true 并排队；`startGroupTrial` 内部会清开关，故 `_groupChainEnter` 在开战后再恢复 true，UI 不闪回。**四停**：胜→排队 1.4s 进下一关；负→清队列+清定时器+关自动、**不重试同关**、记原因；无下一关→停 + toast「🏁 已是最后一关」+ 战果文案 + 开关 title；手动 ⏸→立即停**并取消已排队的下一关**（`_groupChainNext=null` + 清两定时器）。切 tab/`document.hidden`/✕ 走同一 `stopGroupAuto` 链，落地前再复核视图。**安全阀**：必须「无异常 + 战斗对象换新 + 未结束 + `_groupStageId===next`」否则立即停（清队列、不重排、toast + console.warn 留痕）并回滚 `_groupStageId/_groupRewarded` 到上一关已结算状态，堵住「旧战斗 + 新 id → 奖励记到没打过的关」。**幂等**：连打 3 关 reward/cleared 各 1 次，再跑 40 拍仍 1；真机技能点 10→18→28、`winCountThisWeek` 2→3→4、history 5 条、progress g1-1…g1-5 各一次。**测试**：新增 `test-group-auto-next.js` **154 断言**（源码守卫、进关与跨关状态、逐关奖励、失败不排队、最后一关三处提示、⏸ 取消排队、四类离开路径整链停+定时器清零、两种安全阀、手动不受影响）；`test-group-auto.js` 135→**172**，仅 3 条随语义更新（胜利后 auto=true / aria-pressed=true /「⏳ 连打中」），失败分支原语义逐字保留，另新增 4 条按关计数。全量 **79 套件 0 失败**（6465 断言）+ a11y **40/40**。真机 g1-1→1.39s→g1-2→1.40s→g1-3 全程 auto；⏸ 窗口内取消后 4s 仍不跳关；切 tab 立即停。UI 三态「▶ 自动连打 / ⏸ 自动中 / ⏳ 连打中」（排队态绿虚线，仅既有令牌）。⚠️ 待裁决：自动下战报 stats 层被跳过（1400 < 2000ms）；最后一关提示无常驻横幅；连打状态不持久化；大关 id（`_groupStageId=null`）保守停止 |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
 > （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。

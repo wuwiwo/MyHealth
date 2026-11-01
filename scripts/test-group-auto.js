@@ -11,7 +11,9 @@
         （进度被写错关、奖励静默不结算），这条断言就是防它回归。
    2) 等价性 —— 同 seed 下「自动跑 N 拍」与「手动点 N 次」的**战斗状态完全一致**
       （回合 / 每单位 HP / 日志条数 / rng 状态）。
-   3) 战斗结束自动停 + 定时器已清（`_groupTimer===null`；把剩余定时器全跑完也不再推进）。
+   3) 战斗结束：**胜利 → 排队下一关**（v2.14.15 连打语义，自动状态跨关保持）；
+      **失败 → 停 + 定时器已清**（不重试同一关；把剩余定时器全跑完也不再推进）。
+      ⚠️ v2.14.15 语义变更清单见文件末尾「§10 既有断言变更清单」。
    4) 切视图 / visibilitychange / 关 overlay / 切 tab 后停且清定时器。
    5) 奖励只发一次（自动推进 100 次 / 定时器尾拍 / 手动连点都不重复加）。
    6) 速度档 ×1/×2/×4 生效 + 持久化键独立（`dh-group-auto-speed`，不碰 `dh-battle-speed`）。
@@ -107,7 +109,7 @@ function parseAttrs(s) {
 function makeHarness(seedLS) {
   const ls = makeLS(seedLS);
   const logs = { warn: [], error: [], info: [] };
-  const calls = { cleared: 0, reward: 0, stages: 0, injuries: 0 };
+  const calls = { cleared: 0, reward: 0, stages: 0, injuries: 0, clearedStages: [], rewardStages: [] };
   const timers = [];
   let timerSeq = 0;
 
@@ -182,8 +184,10 @@ function makeHarness(seedLS) {
   sb._openDetailPanel = function () {};
   sb.showGroupResultPanel = function () {};
   sb.showGroupStages = function () { calls.stages++; };
-  sb.markGroupStageCleared = function () { calls.cleared++; return { firstClear: true, nextStage: 'g1-2' }; };
-  sb.groupVictoryReward = function () { calls.reward++; return { msg: '💠 技能点 +4' }; };
+  /* v2.14.15：桩里额外记下**每一关**的调用序列（`_groupStageId`），
+     这样「自动连打 N 关」时每关奖励次数是否精确可验证（不是只验总数）。 */
+  sb.markGroupStageCleared = function (sid) { calls.cleared++; calls.clearedStages.push(sid === undefined ? sb._groupStageId : sid); return { firstClear: true, nextStage: 'g1-2' }; };
+  sb.groupVictoryReward = function () { calls.reward++; calls.rewardStages.push(sb._groupStageId); return { msg: '💠 技能点 +4' }; };
   sb.getPetStore = function () { return { pets: [] }; };
   sb.savePetStore = function () {};
   sb.applyDefeatInjuries = function () { calls.injuries++; return []; };
@@ -334,9 +338,16 @@ console.log('--- 2. 自动 N 拍与手动 N 次状态完全等价 ---');
   ok(gbA.turn >= 2, 'N 拍确实跨了多个回合（实际回合 ' + gbA.turn + '）');
 }
 
-/* ============ 3. 战斗结束自动停 + 定时器已清 ============ */
-console.log('--- 3. 战斗结束自动停且清定时器 ---');
+/* ============ 3. 战斗结束：胜 → 排队下一关（连打）；负 → 停 + 清定时器 ============
+   ⚠️ v2.14.15 语义变更（作者澄清「自动战斗是指可以自动下一关」）：**胜利不再等于「停」**，
+   而是「结算完 → 排队下一关 → 自动状态跨关保持」。故原 3 段的 3 条断言按新语义重写，
+   并把「失败即停 / 停后不再出手」原样搬到 3b（断言一条都没少，见文件末的变更清单）：
+     · 原「战斗结束 → 自动开关已关」→ 拆成 3a「胜利 → 自动保持开（跨关）」+ 3b「失败 → 关」；
+     · 原「结算重绘后 aria-pressed=false」→ 3a 断言 "true"（开关仍按着）+ 3b 断言 "false"；
+     · 原「按钮文案回到 ▶ 自动」→ 3a 断言「⏳ 连打中」+ 3b 断言回到「▶ 自动」。 */
+console.log('--- 3. 战斗结束：胜 → 排队下一关；负 → 停且清定时器 ---');
 {
+  /* ---- 3a 胜利：排队下一关（本关状态冻结） ---- */
   const h = makeHarness({});
   const gb = startBattle(h, { hp: 4000, atk: 400, ehp: 40, smallFoes: true, enemies: 2 });
   h.el('gbAuto').click();
@@ -346,15 +357,45 @@ console.log('--- 3. 战斗结束自动停且清定时器 ---');
   }
   ok(gb.done, '自动跑到了战斗结束（回合 ' + gb.turn + '，winner=' + gb.winner + '）');
   eq(gb.winner, 'ally', '本场是我方胜利（用于验奖励路径）');
-  eq(h.sb._groupAuto, false, '战斗结束 → 自动开关已关（停止条件①）');
-  eq(h.sb._groupTimer, null, '战斗结束 → _groupTimer 已清（无残留 timeout）');
-  eq(h.el('gbAuto').getAttribute('aria-pressed'), 'false', '结算重绘后 #gbAuto 回到 aria-pressed="false"');
-  ok(h.el('gbAuto').textContent.indexOf('▶ 自动') === 0, '结算重绘后按钮文案回到「▶ 自动」（实际 ' + h.el('gbAuto').textContent + '）');
+  eq(h.sb._groupAuto, true, '3a 胜利 → 自动连打保持开启（规格①：不需要玩家再点 ▶）');
+  eq(h.sb._groupChainNext, 'g1-2', '3a 胜利 → 下一关（g1-2）已排队');
+  ok(!!h.sb._groupChainTimer, '3a 胜利 → 排队定时器已排上（' + h.sb.GROUP_AUTO_NEXT_MS + 'ms）');
+  eq(h.sb._groupTimer, null, '胜利 → 「下一拍出手」定时器已清（无残留 timeout）');
+  eq(h.el('gbAuto').getAttribute('aria-pressed'), 'true', '结算重绘后 #gbAuto 仍是 aria-pressed="true"（自动按着）');
+  ok(h.el('gbAuto').textContent.indexOf('⏳ 连打中') === 0, '结算重绘后按钮文案「⏳ 连打中」（实际 ' + h.el('gbAuto').textContent + '）');
+  eq(h.el('gbAuto').getAttribute('data-auto-state'), 'next', '结算重绘后 data-auto-state="next"');
 
+  /* 本关已结算 → 不再出手（原来那条「跑完剩余定时器回合不再前进」按此语义保留：
+     先把排队中的下一关停掉，剩下的定时器就只剩本关 outro 的阶段回调） */
   const turnAfter = gb.turn, logAfter = gb.log.length;
+  h.sb.stopGroupAuto('测试：本段只验「本关结算后不再出手」');
   h.drain(400);
-  eq(gb.turn, turnAfter, '把剩余定时器全跑完，回合不再前进（定时器确实清掉了）');
-  eq(gb.log.length, logAfter, '把剩余定时器全跑完，日志不再追加');
+  eq(gb.turn, turnAfter, '本关已结算、停掉连打后把剩余定时器全跑完：本关回合不再前进');
+  eq(gb.log.length, logAfter, '本关已结算、停掉连打后把剩余定时器全跑完：本关日志不再追加');
+
+  /* ---- 3b 失败：立即停，且不重试同一关 ---- */
+  const h2 = makeHarness({});
+  const gb2 = startBattle(h2, { hp: 30, atk: 1, ehp: 3000, enemies: 2 });
+  h2.el('gbAuto').click();
+  let guard2 = 0;
+  while (!gb2.done && guard2++ < 400) {
+    if (!h2.runOldest()) break;
+  }
+  ok(gb2.done, '3b 自动跑到了战斗结束（回合 ' + gb2.turn + '，winner=' + gb2.winner + '）');
+  eq(gb2.winner, 'enemy', '3b 本场是我方失败（验「负即停」路径）');
+  eq(h2.sb._groupAuto, false, '3b 失败 → 自动开关已关（停止条件①：负即停）');
+  eq(h2.sb._groupChainNext, null, '3b 失败 → 没有排队任何下一关（不自动重试同一关）');
+  eq(h2.sb._groupChainTimer, null, '3b 失败 → 排队定时器为 null');
+  eq(h2.sb._groupTimer, null, '3b 失败 → _groupTimer 已清');
+  ok(h2.sb._groupAutoStopNote.indexOf('失败') >= 0, '3b 失败 → 停止原因已记录（' + h2.sb._groupAutoStopNote + '）');
+  eq(h2.el('gbAuto').getAttribute('aria-pressed'), 'false', '3b 结算重绘后 #gbAuto 回到 aria-pressed="false"');
+  ok(h2.el('gbAuto').textContent.indexOf('▶ 自动') === 0, '3b 结算重绘后按钮文案回到「▶ 自动」（实际 ' + h2.el('gbAuto').textContent + '）');
+
+  const turnB = gb2.turn, logB = gb2.log.length;
+  h2.drain(400);
+  eq(gb2.turn, turnB, '3b 失败后把剩余定时器全跑完：回合不再前进（不重试同关）');
+  eq(gb2.log.length, logB, '3b 失败后把剩余定时器全跑完：日志不追加');
+  eq(h2.sb._groupStageId, 'g1-1', '3b 失败后关卡 id 不变（没有偷偷换关）');
 }
 
 /* ============ 4. 切视图 / visibilitychange / 关 overlay / 切 tab → 停 + 清定时器 ============ */
@@ -421,14 +462,24 @@ console.log('--- 5. 自动推进 100 次，奖励只发一次 ---');
   eq(h.calls.reward, 1, '胜利奖励恰好发 1 次');
   eq(h.calls.cleared, 1, '通关标记恰好写 1 次');
   eq(h.sb._groupRewarded, true, '_groupRewarded 幂等标记已置位');
+  /* v2.14.15：奖励 / 通关必须记在**本关**（既不是上一关，也不是排队中的下一关） */
+  eq(h.calls.rewardStages.join(','), 'g1-1', '奖励只记在已结算的那一关（g1-1）');
+  eq(h.calls.clearedStages.join(','), 'g1-1', '通关标记只记在已结算的那一关（g1-1）');
 
   const turnSettled = gb.turn, logSettled = gb.log.length;
   for (let i = 0; i < 100; i++) h.sb._groupStep();   /* 模拟「定时器尾拍 / 玩家连点」100 次 */
-  h.drain(400);
   eq(h.calls.reward, 1, '再推进 100 次：奖励仍是 1 次（不重复加）');
   eq(h.calls.cleared, 1, '再推进 100 次：通关仍只写 1 次');
   eq(gb.turn, turnSettled, '结算后战斗状态冻结（回合不再变化）');
   eq(gb.log.length, logSettled, '结算后战斗中日志不再追加');
+
+  /* 把定时器全跑完（含 v2.14.15 排队的「下一关」）：第二关可能已开打，
+     但**第一关**的奖励/通关次数必须仍精确为 1 —— 这条守的是「绝不跨关重复发奖」。 */
+  h.drain(400);
+  eq(h.calls.rewardStages.filter(s => s === 'g1-1').length, 1, '连打进入下一关后：第一关奖励仍是 1 次（不跨关重复发奖）');
+  eq(h.calls.clearedStages.filter(s => s === 'g1-1').length, 1, '连打进入下一关后：第一关通关记录仍是 1 次');
+  eq(gb.turn, turnSettled, '连打进入下一关后：已结算的第一关战斗状态仍然冻结');
+  eq(gb.log.length, logSettled, '连打进入下一关后：已结算的第一关日志不再追加');
 }
 
 /* ============ 6. 速度档 ×1/×2/×4 + 持久化键独立 ============ */
@@ -567,6 +618,52 @@ console.log('--- 9. 样式：扁平 + 只用既有令牌 ---');
   ok(/\.speed-btn\{[^}]*min-height:var\(--touch-min\)/.test(css), '.speed-btn 热区仍是 var(--touch-min)=44px（未缩水）');
   ok(/\.speed-btn\{[^}]*border:var\(--bw\) solid/.test(css), '.speed-btn 边框仍是 2px 实线令牌 --bw');
   ok(/\.speed-btn\{[^}]*transition:[^;}]*75ms/.test(css), '.speed-btn 过渡仍 ≤75ms');
+}
+
+/* ============ 9b. v2.14.15 新增样式块：同样只用既有令牌 ============ */
+console.log('--- 9b. 样式：v2.14.15「连打态」（只改 border-style + 既有令牌） ---');
+{
+  const i = css.indexOf('v2.14.15 敌群「自动连打」');
+  ok(i > -1, 'index.css 有 v2.14.15 自动连打样式块');
+  const start = css.lastIndexOf('/*', i);
+  const end = css.indexOf('.gb-auto-btn[data-auto-state="next"]', i) + 120;
+  const blk = css.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, '');
+  ok(blk.trim().length > 0, '连打态样式块规则体非空（' + blk.trim().split('\n').length + ' 行）');
+  ok(!/border-radius/.test(blk), '连打态不含 border-radius（圆角仍为 0）');
+  ok(!/box-shadow/.test(blk), '连打态无 box-shadow');
+  ok(!/gradient/.test(blk), '连打态无渐变');
+  ok(!/font-size/.test(blk), '连打态不引入字号（不新增字阶）');
+  ok(!/#[0-9a-fA-F]{3,8}/.test(blk), '连打态不写死颜色（只用令牌）');
+  ok(/var\(--green\)/.test(blk), '连打态用既有语义令牌 var(--green)（与 v2.14.14 按下态同色）');
+  ok(/border-style:dashed/.test(blk), '连打态只靠 border-style 区分（实线 → 虚线）');
+  ok(/\[data-auto-state="next"\]/.test(blk), '连打态用 data-auto-state 属性选择器（与 aria-pressed 同源输出）');
+}
+
+/* ============ 10. v2.14.15 既有断言变更清单（逐条理由；一条都没有删除） ============
+   本轮把「自动」从「自动出手」升级为「自动出手 + 自动下一关」（作者澄清原话见文件头）。
+   语义变了 → 3 条断言必须跟着变；每条都给出了**同一断言的更强替代**，并覆盖了原语义：
+     ① 原「战斗结束 → 自动开关已关（停止条件①）」
+        → 改为 3a「胜利 → _groupAuto 仍为 true（跨关保持）」+ 3b「失败 → _groupAuto === false」。
+        理由：胜利不再等于停止，停止条件只剩「失败 / 已是最后一关 / 手动关闭」；原断言的
+        「结束即停」在 3b（失败）里逐字保留。
+     ② 原「结算重绘后 #gbAuto 回到 aria-pressed="false"」
+        → 3a 断言 "true"（开关仍按着，UI 与状态同源）+ 3b 断言 "false"（失败后确实回到未按下）。
+     ③ 原「结算重绘后按钮文案回到「▶ 自动」」
+        → 3a 断言「⏳ 连打中」+ 3b 断言回到「▶ 自动」（新增的第三态表达「已排队下一关」）。
+   其余 132 条断言**一字未改**；另外新增了「每关奖励计数精确」「停止原因可定位」等断言。 */
+console.log('--- 10. 既有断言变更清单 ---');
+{
+  /* 变更清单本身用**源码事实**兜一道（不是空断言）：上面 3 条断言换的新语义，
+     每一条都能在 game-render.js 里找到对应落点。 */
+  const armBody = fnBody(grSrc, '_armGroupAutoNext');
+  ok(armBody.length > 0, '§10 `_armGroupAutoNext` 存在（结算后「排下一关 / 停」的唯一分叉点）');
+  ok(/winner!=='ally'/.test(armBody) && /_groupAuto\s*=\s*false/.test(armBody),
+    '§10 ① 失败分支把 _groupAuto 置 false（原「战斗结束即停」语义在此逐字保留）');
+  ok(/已是最后一关/.test(armBody), '§10 ③ 无下一关分支带可见提示文案「已是最后一关」');
+  ok(/_groupAuto\s*=\s*true/.test(armBody), '§10 ① 胜利分支把 _groupAuto 置 true（跨关保持）');
+  ok(/scheduleGroupOutro\(outro,showOutcome,800\)[\s\S]{0,600}_armGroupAutoNext\(w\)/.test(fnBody(grSrc, '_groupDone')),
+    '§10 结算（outro 已排好、奖励/通关/历史已落账）之后才排下一关');
+  ok(grSrc.indexOf('GROUP_AUTO_NEXT_MS=1400') > -1 && 1400 <= 1500, '§10 结算停留 1400ms ≤ 1.5s（规格⑤）');
 }
 
 console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILED') + ' (' + pass + '/' + (pass + fail) + ')');

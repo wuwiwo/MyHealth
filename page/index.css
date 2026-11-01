@@ -1512,3 +1512,13 @@ box-shadow:none}
 .gb-speed-row{display:inline-flex;align-items:center;gap:var(--sp-1);flex-wrap:wrap}
 .gb-auto-btn[aria-pressed="true"]:not(:hover){border-color:var(--green);color:var(--green)}
 
+/* ========== v2.14.15 敌群「自动连打」：排队下一关时的开关外观 ==========
+   语义升级：自动 = 自动出手 + **自动下一关**（胜利后 1.4s 内进下一关，直到失败/最后一关/⏸）。
+   这里只给既有 .gb-auto-btn 补一个「排队中」的外观差异，让状态不靠读文案也能分辨：
+     · data-auto-state 由 JS 与 aria-pressed 同源输出（off / on / next）；
+     · 只用既有令牌 var(--green)（与 v2.14.14 按下态同色，对比度实测见上）；
+     · 只改 border-style（实线 → 虚线）。**没有**任何新字号 / 新颜色 / 圆角 / 阴影 / 渐变；
+     · 热区仍由 .speed-btn 的 min-height:var(--touch-min)（44px）提供，未缩水；
+     · 带 :not(:hover)：hover 完全沿用 .speed-btn 的反色规则（同 v2.14.14 的理由）。 */
+.gb-auto-btn[data-auto-state="next"]:not(:hover){border-color:var(--green);color:var(--green);border-style:dashed}
+
