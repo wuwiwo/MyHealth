@@ -139,6 +139,73 @@ function orbSlotsHtml(pet, d) {
    同一时刻只展开一行：8 只宠一起展开会让列表重新变长，与「缩短列表」的目标相反。 */
 var _petRowOpen = null;
 
+/* ============================================================
+   v2.14.13：**今日宠物经验明细**（作者：「宠物经验获得也要记录」）
+
+   数据只来自 pet-store.js 的 `petLevelExpLog()` —— 也就是 `pets.levelLedger.log`
+   里 `date === 今天` 的发放记录。本函数**只读不写**，绝不参与发放判断：
+   同一笔经验在发放那一刻就把「来源 / 总量 / 实发 / 丢弃 / 每只分到多少」写进账本，
+   这里只是把它排版出来（所以不会出现「面板多开一次就多记一笔」）。
+   形态：原生 <details>/<summary> —— 默认折叠、Tab 可达、Enter/Space 展开（不手写 aria-expanded）。
+   ============================================================ */
+function petExpEsc(s) {
+  var v = (s == null) ? '' : String(s);
+  if (typeof escHtml === 'function') return escHtml(v);
+  return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* 一条 breakdown 的来源文案（数字全部来自账本，不在这里另算） */
+function petExpSrcLine(b) {
+  if (!b || typeof b !== 'object') return '';
+  var exp = (typeof b.exp === 'number') ? b.exp : 0;
+  if (b.source === 'strength') return '💪 力量 ' + (b.kg || 0) + 'kg × 5 → ' + exp + ' EXP';
+  if (b.source === 'cardio') return '🏃 有氧 ' + (b.min || 0) + 'min × 20 → ' + exp + ' EXP';
+  if (b.source === 'challenge') return '⚔️ 挑战伤害 ' + (b.dmg || 0) + ' × 1% → ' + exp + ' EXP';
+  return '🔖 其它（口径差额）→ ' + exp + ' EXP';
+}
+
+function petExpLogHtml(now) {
+  var info = (typeof petLevelExpLog === 'function')
+    ? petLevelExpLog(now)
+    : { dayKey: '', entries: [], total: 0, granted: 0, dropped: 0 };
+  var h = '<details class="pet-exp-log">'
+    + '<summary class="pet-exp-log-sum">'
+    +   '<span>📒 宠物经验明细</span>'
+    +   '<b class="pet-exp-log-total">今日合计 +' + (info.granted || 0) + ' EXP</b>'
+    +   '<span class="pet-exp-log-note">' + (info.entries.length ? (info.entries.length + ' 笔') : '今日暂无') + '</span>'
+    + '</summary>'
+    + '<div class="pet-exp-log-body">'
+  if (!info.entries.length) {
+    h += '<div class="pet-exp-log-empty">今天还没有发放记录 —— 力量训练（kg×5）、有氧训练（min×20）、'
+      + '隐藏挑战（伤害×1%）任意一项产生增量后，这里会写一笔。</div>'
+  } else {
+    info.entries.forEach(function (e) {
+      var src = e.source === 'challenge' ? '⚔️ 挑战加成' : (e.source === 'daily' ? '💪 今日训练' : '🔖 ' + (e.source || '未知来源'));
+      h += '<div class="pet-exp-log-item">'
+        + '<div class="pet-exp-log-hd"><b>' + src + '</b>'
+        +   '<span class="pet-exp-log-num">总量 ' + (e.total || 0) + ' · 实发 ' + (e.granted || 0) + ' · 丢弃 ' + (e.dropped || 0) + '</span></div>'
+      var bd = Array.isArray(e.breakdown) ? e.breakdown : [];
+      if (bd.length) {
+        h += '<div class="pet-exp-log-src">' + bd.map(function (b) { return petExpSrcLine(b); }).join(' · ') + '</div>';
+      }
+      var al = Array.isArray(e.allocations) ? e.allocations : [];
+      h += '<div class="pet-exp-log-alloc">'
+        + (al.length
+            ? al.map(function (a) {
+                var lv = (a.from != null && a.to != null && a.to !== a.from) ? ('（Lv' + a.from + '→' + a.to + '）') : '';
+                return petExpEsc(a.name || a.speciesId) + ' +' + (a.amount || 0) + lv;
+              }).join(' · ')
+            : '<span class="pet-exp-log-none">没有可吃经验的成熟期宠物（满级 / 受伤 / 未成熟不计）</span>')
+        + '</div>'
+        + '</div>';
+    })
+    h += '<div class="pet-exp-log-foot">今日合计：总量 ' + (info.total || 0)
+      + ' · 实发 ' + (info.granted || 0) + ' · 丢弃 ' + (info.dropped || 0) + ' EXP</div>';
+  }
+  h += '</div></details>';
+  return h;
+}
+
 function renderPetPanel() {
   var ov = document.getElementById('panelOverlay')
   if (!ov) return
@@ -233,6 +300,8 @@ function renderPetPanel() {
           + exBlocked.map(function(r){ return r.reason }).join(' · ') + '</div>'
       : '')
     +'</div>'
+  /* v2.14.13：今日宠物经验明细（默认折叠；数据 = pets.levelLedger.log 的今日发放记录） */
+  h += petExpLogHtml()
   // v2.1.17 宝珠：合成 / 库存分解
   h += orbBagHtml(d)
   // 宠物列表

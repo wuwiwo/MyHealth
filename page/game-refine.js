@@ -13,8 +13,24 @@ function showRefineDialog(){
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🔮 炼魂系统</div>';
   // Points
   h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:10px">';
-  h+='<div style="font-size:var(--fs-xs);color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:var(--fs-lg)">'+(refine.points||0)+'</b> <span style="color:var(--text3);font-size:var(--fs-3xs)">（本月已获得 '+(refine.totalEarned||0)+'）</span></div>';
+  /* v2.14.13：`totalEarned` 只统计「容量兑换」这一条来源（关卡战利品只进 points，不进 totalEarned），
+     原来的「本月已获得」会低估实际获得量 → 文案改成与字段口径一致。 */
+  h+='<div style="font-size:var(--fs-xs);color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:var(--fs-lg)">'+(refine.points||0)+'</b> <span style="color:var(--text3);font-size:var(--fs-3xs)">（本月容量兑换 '+(refine.totalEarned||0)+'）</span></div>';
   h+='</div>';
+  /* ===== v2.14.13：把「炼化点怎么来」讲清楚（作者反馈「力量训练 700 多 kg 没有获得炼化」）=====
+     一句话常显 + 详细折算默认折叠。文案里的数字全部与实现同源：
+       · 容量兑换 = stats.js `calculateRefinePoints()` = floor(V/100)×10
+       · 关卡战利品 = game-battle.js `rollLoot()`：base 1~2，普通关 ×2 / BOSS 关 ×10
+       · 解锁门槛 = game-render.js `getGameStats()`：cleared 含 '9-6' 才 unlocked
+     用原生 <details>/<summary>（Tab 可达、Enter/Space 展开），summary 44px 热区、扁平 0 圆角。 */
+  h+='<details class="refine-src">';
+  h+='<summary class="refine-src-sum">🔮 获取途径：本月力量容量每 100kg +10 点（通关 9-6 解锁炼魂后生效）</summary>';
+  h+='<div class="refine-src-body">';
+  h+='<div>· <b>力量训练兑换</b>：floor(本月容量 ÷ 100) × 10 点 —— 例：本月 700kg → 70 点。增量补发（只补差额），打开挑战页时结算。</div>';
+  h+='<div>· <b>关卡首通</b>：普通关 +2 或 +4 点，BOSS 关 +10 或 +20 点；通关即发，不看炼魂是否解锁。</div>';
+  h+='<div>· <b>不给炼化点</b>：隐藏挑战（给本月属性奖励）、敌群试炼（给炼化石材料）、有氧训练（只给防御/生命）。</div>';
+  h+='<div>· <b>每月 1 号清零</b>：点数 / 本月容量兑换 / 已炼等级一起重置；🪨 炼化石是<b>宠物</b>材料，与炼化点不是同一种。</div>';
+  h+='</div></details>';
   if(!curGrade){
     h+='<div style="text-align:center;padding:20px;color:var(--green);font-weight:700">🎉 所有等级已满！</div>';
     h+='<div class="modal-actions"><button class="m-btn-cancel" id="refineClose">关闭</button></div></div>';

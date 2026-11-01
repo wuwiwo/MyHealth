@@ -440,9 +440,12 @@ function startHiddenChallenge(hotBuff){
     duration=Math.round(baseDur*1.4)
   }
   // 热血 buff 触发：全屏金色闪光（特殊惊艳标识）
+  /* v2.14.13：原来是 `background:radial-gradient(circle,rgba(251,191,36,.35),transparent 70%)`。
+     v2.14.9 的守卫 `[style*="gradient"]{background-image:none!important}` 把它抽掉 → 闪光**完全不出现**
+     （buff 反馈静默丢失）。扁平规范禁渐变，改为同色相的实色半透明铺底 + 原动画淡出，反馈仍然可见。 */
   if(hotBuff){
     var flash=document.createElement('div')
-    flash.style='position:fixed;inset:0;z-index:70;pointer-events:none;background:radial-gradient(circle,rgba(251,191,36,.35),transparent 70%);animation:hotFlash 1.2s ease-out forwards'
+    flash.style='position:fixed;inset:0;z-index:70;pointer-events:none;background:rgba(251,191,36,.18);animation:hotFlash 1.2s ease-out forwards'
     document.body.appendChild(flash)
     setTimeout(function(){if(flash.parentNode)flash.remove()},1300)
   }

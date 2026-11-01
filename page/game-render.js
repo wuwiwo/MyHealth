@@ -346,8 +346,13 @@ function showLevelPreview(id){
 
   h+='<div class="modal-actions">'
     +'<button class="m-btn-cancel" id="lvCancel">关闭</button>'
+  /* v2.14.13 回归修复：这里原本写死 `background:linear-gradient(135deg,var(--red),#dc2626)`。
+     v2.14.9 的扁平守卫（index.css 里命中 `[style*="gradient"]` 那条，把 background-image 强制置 none）
+     把渐变抽掉后，内联 `background` 简写留下的 `background-color:transparent` + `.m-btn-save` 的
+     `--on-brand` 白字 → 关卡挑战主按钮变成「白字 + 透明底 + 0 边框」（实测 1.00:1，看不见）。
+     现在交给 `.m-btn-save` 的实心主 CTA（--brand-fill + 白字 5.17:1），不再写任何内联颜色。 */
   if(!cleared){
-    h+='<button class="m-btn-save" style="background:linear-gradient(135deg,var(--red),#dc2626)" id="lvChallenge">⚔️ 挑战</button>'
+    h+='<button class="m-btn-save" style="flex:2" id="lvChallenge">⚔️ 挑战</button>'
   }
   h+='</div></div>'
   modal.innerHTML=h;void modal

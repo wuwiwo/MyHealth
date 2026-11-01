@@ -823,10 +823,14 @@ var PET_LEVEL_LOG_MAX = 20;            // 发放记录保留条数
 var PET_LEVEL_CH_KEYS_MAX = 50;        // 挑战幂等键保留条数
 
 function defaultPetLevelLedger() {
-  return { monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: [] };
+  return { monthKey: null, dayKey: null, dailyGranted: 0, strGranted: null, carGranted: null, challengeKeys: [], log: [] };
 }
 
-/* 账本读取（缺字段一律补齐 —— 旧档优雅退化，不迁移、不补偿） */
+/* 账本读取（缺字段一律补齐 —— 旧档优雅退化，不迁移、不补偿）
+   v2.14.13 新增 `strGranted` / `carGranted`：当日**按来源**的水位（力量 / 有氧），
+   只为「今日宠物经验明细」能把一笔增量说清来源；`dailyGranted` 仍是唯一的**总额**水位，
+   幂等判据不变（它才是「同一天重复保存不重复记账」的依据）。旧档缺这两个字段 → null，
+   由 `syncPetLevelExp()` 用「今日已发总额」反推补齐，既不重复发也不把整笔归到单一来源。 */
 function petLevelLedger(d) {
   d = d || getPetStore();
   var L = d.levelLedger;
@@ -834,6 +838,8 @@ function petLevelLedger(d) {
   if (typeof L.monthKey !== 'string') L.monthKey = null;
   if (typeof L.dayKey !== 'string') L.dayKey = null;
   if (typeof L.dailyGranted !== 'number' || !isFinite(L.dailyGranted)) L.dailyGranted = 0;
+  if (typeof L.strGranted !== 'number' || !isFinite(L.strGranted)) L.strGranted = null;
+  if (typeof L.carGranted !== 'number' || !isFinite(L.carGranted)) L.carGranted = null;
   if (!Array.isArray(L.challengeKeys)) L.challengeKeys = [];
   if (!Array.isArray(L.log)) L.log = [];
   return L;
@@ -860,7 +866,10 @@ function syncPetLevelMonth(now) {
   L.monthKey = cur;
   L.dayKey = null;                 // 新月第一笔训练照常从头算
   L.dailyGranted = 0;
-  L.log.unshift({ date: dateKey(now || new Date()), source: 'month-reset', total: 0, granted: 0, dropped: 0, pets: n });
+  L.strGranted = 0;                // v2.14.13：按来源的当日水位一并归零
+  L.carGranted = 0;
+  L.log.unshift({ date: dateKey(now || new Date()), source: 'month-reset', total: 0, granted: 0, dropped: 0,
+                  cap: 0, pets: n, breakdown: [], allocations: [] });
   if (L.log.length > PET_LEVEL_LOG_MAX) L.log.length = PET_LEVEL_LOG_MAX;
   savePetStore(d);
   return { ok: true, monthKey: cur, cleared: n };
@@ -959,7 +968,13 @@ function petLevelAllocateBatch(total, pets, rnd) {
   return out;
 }
 
-/* 把一批分配结果**写进宠物**（唯一的等级写入点）并记一笔账。返回每只的变化明细。 */
+/* 把一批分配结果**写进宠物**（唯一的等级写入点）并记一笔账。返回每只的变化明细。
+   v2.14.13：账本 `log` 每条从「只有计数」扩为**可查看的明细**（沿用同一把账本、同一个 store，
+   没有第二套 truth）：
+     · breakdown  —— 这一笔总量由哪些来源构成（力量 kg / 有氧 min / 挑战伤害 ×1%）
+     · allocations —— 每只宠物分到多少（speciesId / name / amount / from→to）
+     · cap / granted / dropped —— 单只上限、实发、如实丢弃
+   幂等判据仍是调用方的键（每日水位 / 挑战 runId），记录本身不参与任何发放判断。 */
 function petLevelGrantExp(d, totalExp, meta, rnd) {
   d = d || getPetStore();
   var batch = petLevelAllocateBatch(totalExp, d.pets, rnd);
@@ -977,7 +992,10 @@ function petLevelGrantExp(d, totalExp, meta, rnd) {
   var L = petLevelLedger(d);
   L.log.unshift({ date: dateKey((meta && meta.now) || new Date()),
                   source: (meta && meta.source) || 'unknown',
-                  total: batch.total, granted: batch.granted, dropped: batch.dropped, pets: ups.length });
+                  total: batch.total, granted: batch.granted, dropped: batch.dropped,
+                  cap: batch.cap, pets: ups.length,
+                  breakdown: (meta && meta.breakdown) || [],
+                  allocations: ups });
   if (L.log.length > PET_LEVEL_LOG_MAX) L.log.length = PET_LEVEL_LOG_MAX;
   return { ok: true, total: batch.total, cap: batch.cap, granted: batch.granted,
            dropped: batch.dropped, allocations: ups, reason: batch.reason };
@@ -1025,25 +1043,62 @@ function petLevelTodayBasis(todayKey) {
 /* ============================================================
    **每日经验**（力量 / 有氧）—— 按增量补发 + 当日水印幂等。
    任何调用点（训练保存、面板打开、每日结算）都安全：没有新增训练量时恒发 0。
+
+   v2.14.13：**按来源记明细**（作者：「宠物经验获得也要记录」）。
+   幂等仍只看 `dailyGranted`（当日总额水位）—— 它一个字都没改口径；
+   `strGranted` / `carGranted` 只是同一水位按来源的投影，用来把一笔增量说清「多少来自力量、多少来自有氧」。
+   breakdown 之和恒等于 total（不够/多出的差额兜底进 `other`），经验守恒仍由
+   `granted + dropped === total` 保证。
    ============================================================ */
+function petLevelExpBreakdown(delta, L, basis) {
+  var out = [];
+  var left = Math.max(0, delta);
+  var dStr = Math.max(0, basis.strengthExp - (typeof L.strGranted === 'number' ? L.strGranted : 0));
+  var dCar = Math.max(0, basis.cardioExp - (typeof L.carGranted === 'number' ? L.carGranted : 0));
+  if (dStr > 0 && left > 0) {
+    var a = Math.min(dStr, left);
+    out.push({ source: 'strength', kg: Math.round(basis.volume * 10) / 10, exp: a });
+    left -= a;
+  }
+  if (dCar > 0 && left > 0) {
+    var b = Math.min(dCar, left);
+    out.push({ source: 'cardio', min: Math.round(basis.minutes * 10) / 10, exp: b });
+    left -= b;
+  }
+  /* 兜底：口径差异（如动作系数被改）或旧档反推水位时的零头 —— 如实单列，不塞进力量/有氧 */
+  if (left > 0) out.push({ source: 'other', exp: left });
+  return out;
+}
+
 function syncPetLevelExp(now, rnd) {
   var m = syncPetLevelMonth(now);
   var d = getPetStore();
   var todayKey = dateKey(now || new Date());
   var L = petLevelLedger(d);
-  if (L.dayKey !== todayKey) { L.dayKey = todayKey; L.dailyGranted = 0; }
   var basis = petLevelTodayBasis(todayKey);
+  if (L.dayKey !== todayKey) { L.dayKey = todayKey; L.dailyGranted = 0; L.strGranted = 0; L.carGranted = 0; }
+  /* 旧档（本版之前只有 dailyGranted）：按「今日已发总额」反推两个来源水位 ——
+     之后新增的差额才能正确归因，也不会把今天已经发过的量再发一遍。 */
+  if (L.strGranted === null || L.carGranted === null) {
+    var done = Math.max(0, L.dailyGranted || 0);
+    var strDone = Math.min(done, Math.max(0, basis.strengthExp));
+    L.strGranted = strDone;
+    L.carGranted = Math.max(0, done - strDone);
+  }
   var delta = basis.exp - L.dailyGranted;
   if (delta <= 0) {
-    return { ok: true, duplicate: true, total: 0, granted: 0, dropped: 0, cap: 0,
+    return { ok: true, duplicate: true, total: 0, granted: 0, dropped: 0, cap: 0, breakdown: [],
              basis: basis, dailyGranted: L.dailyGranted, monthReset: m.ok, allocations: [] };
   }
+  var breakdown = petLevelExpBreakdown(delta, L, basis);
   L.dailyGranted = basis.exp;          // 水印：先记「已发放总量」，再发差额
-  var r = petLevelGrantExp(d, delta, { source: 'daily', now: now }, rnd);
+  L.strGranted = basis.strengthExp;    // 按来源的投影水位（不参与幂等判断）
+  L.carGranted = basis.cardioExp;
+  var r = petLevelGrantExp(d, delta, { source: 'daily', now: now, breakdown: breakdown }, rnd);
   savePetStore(d);
   return { ok: true, duplicate: false, total: delta, granted: r.granted, dropped: r.dropped,
            cap: r.cap, basis: basis, dailyGranted: L.dailyGranted, monthReset: m.ok,
-           allocations: r.allocations, reason: r.reason };
+           breakdown: breakdown, allocations: r.allocations, reason: r.reason };
 }
 
 /* ============================================================
@@ -1066,10 +1121,39 @@ function grantPetLevelChallengeExp(damage, runKey, now, rnd) {
   if (L.challengeKeys.length > PET_LEVEL_CH_KEYS_MAX) L.challengeKeys.length = PET_LEVEL_CH_KEYS_MAX;
   var total = Math.floor(Math.max(0, dmg) * PET_LEVEL_CH_DMG_RATE);
   var r = { granted: 0, dropped: 0, cap: 0, allocations: [], reason: (total > 0 ? null : '本次伤害 × 1% 取整为 0') };
-  if (total > 0) r = petLevelGrantExp(d, total, { source: 'challenge', now: now }, rnd);
+  if (total > 0) {
+    /* v2.14.13：挑战来源在账本里**单独标记**（source='challenge' + breakdown 带本次伤害），
+       与每日力量/有氧的两笔分开显示，不混算。 */
+    r = petLevelGrantExp(d, total, { source: 'challenge', now: now,
+      breakdown: [{ source: 'challenge', dmg: Math.floor(Math.max(0, dmg)), exp: total }] }, rnd);
+  }
+  /* total === 0 时只落幂等键（不写发放记录：没发放就没明细可记） */
   savePetStore(d);
   return { ok: true, duplicate: false, key: key, exp: total, total: total, granted: r.granted,
            dropped: r.dropped, cap: r.cap, allocations: r.allocations, reason: r.reason, monthReset: m.ok };
+}
+
+/* ============================================================
+   **今日宠物经验明细**（只读汇总，给 UI 用；不写任何存档）。
+   口径：`levelLedger.log` 里 `date === 今天` 的**发放记录**（month-reset 不是发放，排除）。
+     · entries  —— 逐笔：来源 / 总量 / 实发 / 丢弃 / 每只分到多少（新→旧，最多 PET_LEVEL_LOG_MAX 条）
+     · total / granted / dropped —— 今日合计
+   跨日：`date` 不同自然日 → 自然不在 entries 里（明细「跨日重置」靠这个口径，不需要额外清账）。
+   ⚠️ 记录不参与发放判断，重复保存不会多出一条（发放本身由水印/键幂等）。
+   ============================================================ */
+function petLevelExpLog(now) {
+  var d = getPetStore();
+  var L = petLevelLedger(d);
+  var key = dateKey(now || new Date());
+  var out = { dayKey: key, entries: [], total: 0, granted: 0, dropped: 0 };
+  (L.log || []).forEach(function (e) {
+    if (!e || e.date !== key || e.source === 'month-reset') return;
+    out.entries.push(e);
+    out.total += (typeof e.total === 'number' ? e.total : 0);
+    out.granted += (typeof e.granted === 'number' ? e.granted : 0);
+    out.dropped += (typeof e.dropped === 'number' ? e.dropped : 0);
+  });
+  return out;
 }
 
 /* ============================================================
@@ -1258,6 +1342,7 @@ if (typeof window !== 'undefined') {
   window.petLevelTodayBasis = petLevelTodayBasis;
   window.syncPetLevelExp = syncPetLevelExp;
   window.grantPetLevelChallengeExp = grantPetLevelChallengeExp;
+  window.petLevelExpLog = petLevelExpLog;
   window.applyPetExpLevelBonuses = applyPetExpLevelBonuses;
   window.petLevelBonusView = petLevelBonusView;
   window.petUnitLevelPct = petUnitLevelPct;
@@ -1322,6 +1407,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.petLevelTodayBasis = petLevelTodayBasis;
   globalThis.syncPetLevelExp = syncPetLevelExp;
   globalThis.grantPetLevelChallengeExp = grantPetLevelChallengeExp;
+  globalThis.petLevelExpLog = petLevelExpLog;
   globalThis.applyPetExpLevelBonuses = applyPetExpLevelBonuses;
   globalThis.petLevelBonusView = petLevelBonusView;
   globalThis.petUnitLevelPct = petUnitLevelPct;

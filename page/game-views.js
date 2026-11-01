@@ -65,7 +65,11 @@ function renderTrainView() {
   var d = getPetStore()
 
   // 角色属性卡
-  var h = '<div style="background:linear-gradient(135deg,var(--bg2),var(--bg2));border:var(--bw) solid var(--orange-g);border-radius:16px;padding:18px;margin-bottom:16px">'
+  /* v2.14.13：这里原来是 `background:linear-gradient(135deg,var(--bg2),var(--bg2))`（两端同色的假渐变）。
+     v2.14.9 的守卫 `[style*="gradient"]{background-image:none!important}` 抽掉渐变后，
+     内联 background 简写只剩 background-color:transparent → 卡片**丢掉了表面底色**。
+     反正两端同色，直接写实色底（扁平规范也禁渐变）。 */
+  var h = '<div style="background:var(--bg2);border:var(--bw) solid var(--orange-g);border-radius:16px;padding:18px;margin-bottom:16px">'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-2xl);width:56px;height:56px;background:var(--bg2);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--orange)">🧑</div>'
     +'<div style="flex:1"><div style="font-size:var(--fs-lg);font-weight:700">我的角色</div>'

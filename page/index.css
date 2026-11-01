@@ -524,6 +524,17 @@ box-shadow:none}
 .m-btn-save{background:var(--brand-fill);color:var(--on-brand);border:var(--bw) solid var(--brand-fill);box-shadow:none}
 .m-btn-save:hover{background:var(--text);color:var(--bg);border-color:var(--text)}
 
+/* ---- v2.14.13 回归修复：弹层主 CTA 的实心样式在 .modal-actions 里被特异性压掉 ----
+   `.modal-actions button`（0,1,1）声明了 `border:none;padding:13px`，比 `.m-btn-save`（0,1,0）**更具体**，
+   所以上面那条 `.m-btn-save` 的 2px 边框从来没真正渲染过（实测 border = "0px none"），
+   只有底色还在。改为 `.modal-actions .m-btn-save`（0,2,0）显式定死「实心 --brand-fill + 白字 + 2px 同色边 + ≥44px」。
+   ⚠️ 只作用于弹层里的主 CTA（保存 / 确定 / 开始挑战 / 关卡挑战），不动任何次级按钮；
+      回退口径与 `.sb-btn` 相反：主 CTA 保留实心，大面积动作仍走描边。 */
+.modal-actions .m-btn-save{background:var(--brand-fill);color:var(--on-brand);
+  border:var(--bw) solid var(--brand-fill);box-shadow:none;min-height:var(--touch-min);font-weight:700}
+.modal-actions .m-btn-save:hover{background:var(--text);color:var(--bg);border-color:var(--text)}
+.modal-actions .m-btn-save:active{background:var(--brand-fill-d);color:var(--on-brand);border-color:var(--brand-fill-d)}
+
 /* Toast */
 /* WP-I C-05：原 top 只有 40px，压在 81px 高的 header 标题上。
    header 实测 81px（≤380px 时 68px）+ 主导航 --tabbar-h(48px) → 取
@@ -1426,6 +1437,50 @@ box-shadow:none}
 .pet-det-sum:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
 .pet-det-body{padding:2px 0 4px}
 .pet-det-body>.pet-src-note:first-child{border-top:0;padding-top:0}
+
+/* ========== v2.14.13 炼魂面板：获取途径（一句话常显 + 详细折算默认折叠） ==========
+   与 .pet-det 同一手法：原生 <details>/<summary>、summary 44px 热区、Tab 可达、
+   Enter/Space 展开（aria-expanded 由浏览器映射，不手写）；扁平 0 圆角 / 无阴影 / 无渐变。 */
+.refine-src{border:var(--bw-thin) solid var(--bd-l);padding:0 var(--sp-2);margin-bottom:10px}
+.refine-src-sum{display:flex;align-items:center;gap:6px;min-height:var(--touch-min);
+  list-style:none;cursor:pointer;font-size:var(--fs-xs);font-weight:700;color:var(--text2);
+  -webkit-tap-highlight-color:transparent}
+.refine-src-sum::-webkit-details-marker{display:none}
+.refine-src-sum::after{content:'▾';flex:0 0 auto;margin-left:auto;color:var(--text3);font-size:var(--fs-xs)}
+.refine-src[open]>.refine-src-sum::after{content:'▴'}
+.refine-src-sum:hover{background:var(--text);color:var(--bg)}
+.refine-src-sum:hover::after{color:var(--bg)}
+.refine-src-sum:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
+.refine-src-body{padding:0 0 var(--sp-2);font-size:var(--fs-2xs);color:var(--text2);line-height:1.7}
+.refine-src-body>div+div{margin-top:4px}
+
+/* ========== v2.14.13 宠物面板：今日宠物经验明细 ==========
+   默认折叠（native <details>），summary 44px 热区、键盘可达；
+   来源拆分 / 每只分配 / 丢弃量都来自 pet-store.js 的账本，样式不参与任何计算。
+   扁平：0 圆角、无阴影、无渐变、只用 --bw-thin 分隔与 2px 左侧强调条。 */
+.pet-exp-log{border:var(--bw-thin) solid var(--bd-l);border-left:var(--bw) solid var(--orange);margin:10px 0}
+.pet-exp-log-sum{display:flex;align-items:center;gap:8px;min-height:var(--touch-min);padding:0 var(--sp-2);
+  list-style:none;cursor:pointer;font-size:var(--fs-sm);font-weight:700;color:var(--text2);
+  -webkit-tap-highlight-color:transparent}
+.pet-exp-log-sum::-webkit-details-marker{display:none}
+.pet-exp-log-sum::after{content:'▾';flex:0 0 auto;margin-left:auto;color:var(--text3);font-size:var(--fs-xs)}
+.pet-exp-log[open]>.pet-exp-log-sum::after{content:'▴'}
+.pet-exp-log-sum:hover{background:var(--text);color:var(--bg)}
+.pet-exp-log-sum:hover::after,.pet-exp-log-sum:hover .pet-exp-log-total,
+.pet-exp-log-sum:hover .pet-exp-log-note{color:var(--bg)}
+.pet-exp-log-sum:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
+.pet-exp-log-total{color:var(--brand);font-size:var(--fs-sm)}
+.pet-exp-log-note{color:var(--text3);font-weight:400;font-size:var(--fs-2xs)}
+.pet-exp-log-body{padding:0 var(--sp-2) var(--sp-2);font-size:var(--fs-2xs);color:var(--text2);line-height:1.7}
+.pet-exp-log-item{border-top:var(--bw-thin) solid var(--surface-3);padding:6px 0}
+.pet-exp-log-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.pet-exp-log-hd>b{font-size:var(--fs-xs);color:var(--text)}
+.pet-exp-log-num{color:var(--text3)}
+.pet-exp-log-src{color:var(--text2)}
+.pet-exp-log-alloc{color:var(--text)}
+.pet-exp-log-none{color:var(--text3)}
+.pet-exp-log-foot{border-top:var(--bw-thin) solid var(--surface-3);padding-top:6px;font-weight:700;color:var(--text)}
+.pet-exp-log-empty{color:var(--text3);padding:6px 0}
 
 /* ========== v2.17 科技蓝主题层：page/*.js 内联「旧橙色」收敛 ==========
    换色本身只动令牌（文件顶部 --brand* + --orange* 别名转接），CSS 里的引用一处都不用改。
