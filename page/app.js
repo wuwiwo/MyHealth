@@ -222,6 +222,10 @@ document.addEventListener('click',function(e){
 var _activeTab='training';
 function switchTab(name){
   _activeTab=name;
+  /* v2.14.14（敌群自动战斗的停止条件③）：切走「挑战」tab → 立即停自动 + 清定时器。
+     敌群 overlay 挂在 #tabGame 内部，切走后没人看得见；继续推进等于偷偷把一局打完。
+     `stopGroupAuto` 由 game-render.js 提供（typeof 守卫，页面加载顺序/桩环境都不会炸）。 */
+  if(name!=='game'&&typeof stopGroupAuto==='function')stopGroupAuto('切换 tab：'+name)
   document.querySelectorAll('.tab-bar > .tab-btn[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name))
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active',c.id==='tab'+name.charAt(0).toUpperCase()+name.slice(1)))
   if(name==='training'){renderStr();renderCar()}

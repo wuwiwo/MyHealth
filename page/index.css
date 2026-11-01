@@ -1497,3 +1497,18 @@ box-shadow:none}
       透明度取两者中间值 .10（原本 .08 / .12），不改变任何信息层级。 */
 [style*="rgba(249,115,22"]{background:rgba(var(--brand-rgb),.10)!important}
 
+/* ========== v2.14.14 敌群「自动战斗」：开关 + 速度档 ==========
+   只在既有 .speed-btn 上补「按下态」描边，**没有**任何新字号/新颜色：
+     2px 实线边框（--bw 由 .speed-btn 自带）· 圆角 0（规则里不出现 border-radius）
+     · 无 box-shadow / 无 gradient · 过渡沿用 .speed-btn 的 75ms · 热区沿用 --touch-min(44px)
+     · 对比度（实测，见 scripts/test-a11y-tokens.js §3）：--green 对 .speed-btn 底色
+       （--bg2 = --surface）深色主题 10.18:1 / 浅色主题 5.02:1，均 ≥ 4.5:1。
+   状态表达**只走** aria-pressed（JS 侧同步 aria-pressed="true|false"），
+   CSS 用属性选择器上色 → 视觉状态与无障碍状态永远同源。
+   ⚠️ 必须带 :not(:hover)：`.speed-btn:hover` 是「前景/背景反色」（background:--text /
+   color:--bg）。若按住态也强行改 color，hover 时就会变成「近黑底 + 绿字」——
+   浅色主题实测 --green #15803D 对 --text #1c1917 ≈ 3.49:1（< 4.5，axe 报 serious）。
+   加 :not(:hover) 后 hover 完全沿用既有的反色规则（--bg 字 / --text 底 ≈ 17:1）。 */
+.gb-speed-row{display:inline-flex;align-items:center;gap:var(--sp-1);flex-wrap:wrap}
+.gb-auto-btn[aria-pressed="true"]:not(:hover){border-color:var(--green);color:var(--green)}
+

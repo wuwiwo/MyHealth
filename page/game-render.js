@@ -430,8 +430,19 @@ function resumeGroupOutroTimer(){
     clearTimeout(state.timer);state.timer=null;armGroupOutroTimer(state)
   }
 }
+/* ⚠️ v2.14.14：**同一个** visibilitychange 监听里做两件事 ——
+   ① 结算面板按绝对剩余时间重排（resumeGroupOutroTimer，既有行为，逐字未动）；
+   ② 页面隐藏时停掉敌群自动战斗（stopGroupAuto，v2.14.14 新增的停止条件③）。
+   为什么合成一个监听而不是各注册一个：测试夹具的 document 桩按**事件名只保留一个处理器**
+   （见 scripts/test-group-ui-presentation.js §26），分开注册会让 ① 被覆盖 →
+   「后台恢复按绝对剩余 300ms 重排」这条既有断言红掉。真实浏览器里两者等价。 */
+function onBattleVisibilityChange(){
+  resumeGroupOutroTimer()
+  /* 页面隐藏 = 玩家看不见 → 不再推进战斗（隐藏期间自动把一局打完属于「替玩家操作」） */
+  if(typeof document!=='undefined'&&document&&document.hidden)stopGroupAuto('页面隐藏（visibilitychange）')
+}
 if(typeof document!=='undefined'&&document.addEventListener){
-  document.addEventListener('visibilitychange',resumeGroupOutroTimer)
+  document.addEventListener('visibilitychange',onBattleVisibilityChange)
   if(typeof window!=='undefined'&&window.addEventListener)window.addEventListener('pageshow',resumeGroupOutroTimer)
 }
 function advanceGroupOutro(){
@@ -447,8 +458,29 @@ var _groupStageId=null   // 当前敌群小关 id（通关记录用）
 var _groupActing=null    // 当前行动中的单位 id（高亮）
 var _petBattlePicks=[]   // 宠物参战选择（M4-6）；v2.2 WP-H1 起以存档 `dh-pets-v1.battlePicks` 为准
 var _petBattlePicksLoaded=false   // v2.2 WP-H1：是否已从存档恢复过参战选择
-var _groupMode='auto'   // 'auto' | 'manual'（manual=点一下推进一回合）
-var _groupSpeed=1        // 1/2/4
+/* ========== v2.14.14：敌群战斗「自动战斗」（作者需求原话：「敌群战斗增加自动战斗」） ==========
+   四条硬约束（每条都有落点，别只改一处）：
+     ① **同一个入口**：自动 / 手动「⏭️ 下一回合」都只调 `_groupStep()`（零参数）。
+        自动这一侧只决定「谁在什么时候再喊一次」，**不复制任何推进逻辑** ——
+        本项目曾因「复制一份入口」出过严重 bug（进度被写错关、奖励静默不结算）。
+     ② **默认关**：每次开战都从「关」开始（开关**不持久化**）。自动推进意味着
+        「替玩家把仗打完」，不该在玩家没表态时发生。
+     ③ **定时器只有一个出口**：`_groupTimer` 一律由 `cancelGroupAutoTimer()` 清理；
+        所有停止路径（战斗结束 / 玩家点⏸ / 离开敌群视图 / 切 tab / 页面隐藏 / 需要玩家决策）
+        都经过 `stopGroupAuto()`：清定时器 + 关开关 + 界面同步。
+     ④ **不得并发重入**：`_groupStep()` 入口挂 `_groupAutoStepBusy`，
+        上一拍没跑完（出手动画 / 日志追加中）绝不进下一拍。
+   速度档：[1,2,4] · 默认 ×2 · 键 `dh-group-auto-speed`（**独立键**：与关卡挑战的
+   `dh-battle-speed` 互不覆盖；旧敌群键 `dh-group-speed` 只作读兜底 + 写镜像）。 */
+var GROUP_AUTO_SPEEDS=[1,2,4]
+var GROUP_AUTO_SPEED_KEY='dh-group-auto-speed'
+var GROUP_AUTO_STEP_MS=700     /* ×1 的单位行动间隔（沿用既有 700ms，不改战斗节奏基准） */
+var GROUP_AUTO_BUBBLE_MS=900   /* ×1 的施法气泡停顿（沿用既有 900ms） */
+var _groupAuto=false           /* 「▶ 自动」开关（默认关；不持久化，见约束②） */
+var _groupAutoSpeed=2          /* 当前速度档 1/2/4（默认 ×2） */
+var _groupAutoStepBusy=false   /* 单拍进行中标记（约束④：上一拍未完成不进下一拍） */
+var _groupSpeed=2        /* 1/2/4 —— `_groupAutoSpeed` 的镜像：演出/特效档位与单拍间隔共用同一个值
+                            （不引入第二个速度概念；由 applyGroupAutoSpeed() 同步） */
 var _groupAnimEl=null    // 动画中的单位
 var _groupDetail=null    // 详情面板中的单位 id
 var _gbTab='battle'      // v2.1.14：战斗页 / 日志页双 Tab（'battle' | 'log'）
@@ -456,16 +488,111 @@ var _groupPaused=false   // v2.1.14：打开详情时暂停自动推进，避免
 var _groupRewarded=false // v2.1.19：本次战斗是否已结算过奖励（防手动模式重复领取）
 var _groupSeed=null      // v2.1.27 [7c]：本场战斗的随机种子（用于复现）
 
-/* v2.1.14：暂停 / 恢复群战推进（详情弹层打开期间挂起，关闭后按原模式续跑） */
+/* v2.1.14：暂停 / 恢复群战推进（详情弹层打开期间挂起）。
+   ⚠️ v2.14.14：打开详情/技能/天赋详情 = **需要玩家决策的时点** → 自动战斗**降级为暂停**
+   （关掉开关 + 清定时器），关闭详情后**不会**自己再跑起来（不替玩家做选择）；
+   玩家要续跑就再点「▶ 自动」或「⏭️ 下一回合」（两者是同一个 `_groupStep()` 入口）。 */
 function pauseGroupBattle(){
   _groupPaused=true
-  if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
+  /* skipRender：紧跟其后就是 renderGroupDetail()（整屏替换），这里重绘是白做 */
+  stopGroupAuto('需要玩家决策：打开了详情弹层',true)
 }
 function resumeGroupBattle(){
   if(!_groupPaused)return
   _groupPaused=false
-  if(_groupBattle&&!_groupBattle.done&&_groupMode==='auto'&&!_groupDetail)_groupStep()
+  /* 自动开关已在 pauseGroupBattle() 里关掉 → 这里不自动续跑（规格：不替用户选） */
 }
+
+/* ==================================================================
+   v2.14.14：自动战斗的「定时器 / 停止 / 视图守卫」三件套
+
+   ⚠️ 本文件里 `_groupTimer` 的**唯一**清理点是 cancelGroupAutoTimer()；
+      所有停止路径都走 stopGroupAuto()（它再调 cancelGroupAutoTimer）。
+      新增停止条件时请接到 stopGroupAuto 上，不要各自 clearTimeout。
+   ================================================================== */
+
+/* 清定时器（幂等；所有停止路径的最终落点） */
+function cancelGroupAutoTimer(){
+  if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
+}
+
+/* 档位归一：只认 1/2/4；旧存档的 8 → 4（不再有 ×8 档，但设置不丢）；其它 → 默认 ×2 */
+function normalizeGroupAutoSpeed(v){
+  var n=parseInt(v,10)
+  if(GROUP_AUTO_SPEEDS.indexOf(n)>=0)return n
+  if(n>=8)return 4
+  return 2
+}
+/* 读：新键优先 → 旧键 `dh-group-speed` 兜底 → 默认 ×2。
+   ⚠️ 旧键只作**读兜底**，从不覆盖新键（两套设置互不牵连） */
+function loadGroupAutoSpeed(){
+  var raw=null,legacy=null
+  try{ raw=localStorage.getItem(GROUP_AUTO_SPEED_KEY) }
+  catch(e){ console.warn('[group-auto] 读速度存档失败（按默认 ×2）',e) }
+  try{ legacy=localStorage.getItem('dh-group-speed') }
+  catch(e){ console.warn('[group-auto] 读旧速度键失败（按默认 ×2）',e) }
+  if(raw!=null&&raw!=='')return normalizeGroupAutoSpeed(raw)
+  if(legacy!=null&&legacy!=='')return normalizeGroupAutoSpeed(legacy)
+  return 2
+}
+/* 存：新键为主 + 旧键镜像（debug.js / 进度重置把后者当「UI 偏好键」对待，镜像后行为一致） */
+function saveGroupAutoSpeed(v){
+  var n=normalizeGroupAutoSpeed(v)
+  try{
+    localStorage.setItem(GROUP_AUTO_SPEED_KEY,String(n))
+    localStorage.setItem('dh-group-speed',String(n))
+  }catch(e){ console.warn('[group-auto] 写速度存档失败（本次会话内仍生效）',e) }
+}
+/* 落地档位：`_groupSpeed` 与 `_groupAutoSpeed` 必须同值（演出档位跟着节奏走） */
+function applyGroupAutoSpeed(v){
+  var n=normalizeGroupAutoSpeed(v)
+  _groupAutoSpeed=n
+  _groupSpeed=n
+  return n
+}
+
+/* 自动推进是否「还在敌群视图里」—— **每一拍都复核**（离开了就不许再消耗战斗）。
+   覆盖：overlay 已关 / 战斗对象已释放 / 页面隐藏 / 已切走「挑战」tab。 */
+function groupAutoViewActive(){
+  if(!_groupBattle)return false
+  if(typeof document==='undefined'||!document||!document.getElementById)return true
+  var ov=document.getElementById('battleOverlay')
+  if(ov&&ov.classList&&ov.classList.contains&&!ov.classList.contains('open'))return false
+  if(document.hidden)return false
+  var tab=document.getElementById('tabGame')
+  if(tab&&tab.classList&&tab.classList.contains&&!tab.classList.contains('active'))return false
+  return true
+}
+
+/* 停止自动战斗：清定时器 + 关开关 + 界面同步；返回「此前是否开着」。
+   reason 一律落日志（禁止静默停止：为什么停必须可定位）。
+   `skipRender`：由「打开详情」这类**即将整屏替换 overlay** 的调用方传 true ——
+   此时重绘是白做（下一行就会被详情页覆盖），还会在同一个点击处理器里制造 DOM churn。 */
+function stopGroupAuto(reason,skipRender){
+  cancelGroupAutoTimer()
+  var was=_groupAuto
+  _groupAuto=false
+  if(!was)return false
+  if(typeof console!=='undefined'&&console.info)console.info('[group-auto] 自动战斗已停：'+(reason||'未注明原因'))
+  /* 界面同步：只在「战斗仍在进行 + overlay 还开着 + 没有结算面板在展示」时重绘，
+     避免在关闭/结算阶段抢渲染（_groupDone 自己会重绘）。 */
+  var outroBusy=!!(_gbOutroActive&&_gbOutroActive.phase!=='closed')
+  if(!skipRender&&_groupBattle&&!_groupBattle.done&&!outroBusy&&typeof renderGroupOverlay==='function')renderGroupOverlay(false)
+  return true
+}
+
+/* 定时器的一拍：**仍然只调 _groupStep()**（与手动按钮同一个函数、同样零参数）。
+   拍前复核三项：开关还开着 / 不需要玩家决策 / 还在敌群视图里。 */
+function _groupAutoStep(){
+  _groupTimer=null
+  if(!_groupAuto)return
+  if(_groupPaused){stopGroupAuto('需要玩家决策：面板打开中');return}
+  if(!groupAutoViewActive()){stopGroupAuto('已离开敌群视图（overlay 关闭 / 切 tab / 页面隐藏）');return}
+  _groupStep()
+}
+
+/* 停止条件③ 的注册点见文件上方的 onBattleVisibilityChange()（与结算面板重排共用同一个
+   visibilitychange 监听，避免被按事件名只存一个处理器的测试桩覆盖）。 */
 
 /* v2.2 WP-H1：首次使用时从存档恢复「参战宠物选择」（刷新/重开后保留）。
    ⚠️ game-render.js 在 index.html 里**比 pet-store.js 先加载**，故不能在顶层读取，
@@ -577,18 +704,19 @@ function startGroupTrial(groupId){
     window.__groupSnaps = []
     window.__groupInitSnap = (typeof groupSnapshot === 'function') ? groupSnapshot(_groupBattle) : null
   } catch (e) { console.warn('[group] 初始快照失败，时间旅行将不可用', e); }
-  // 模式/速度持久化（记住上次选择）
-  _groupMode=localStorage.getItem('dh-group-mode')||'auto'
-  _groupSpeed=parseInt(localStorage.getItem('dh-group-speed')||'1',10)||1
-  if(['auto','manual'].indexOf(_groupMode)<0)_groupMode='auto'
-  if([1,2,4,8].indexOf(_groupSpeed)<0)_groupSpeed=1
+  /* v2.14.14：**自动战斗每次开战都从「关」开始**（开关不持久化，见文件上方约束②）；
+     速度档读独立键 `dh-group-auto-speed`（缺省回落到旧键 dh-group-speed；1/2/4/8 → 1/2/4）。 */
+  _groupAuto=false
+  cancelGroupAutoTimer()
+  applyGroupAutoSpeed(loadGroupAutoSpeed())
   _groupDetail=null
   _gbTab='battle'        // v2.1.14：每次开战回到战斗页
   _groupPaused=false
   _groupActing=null
   renderGroupOverlay(true)
   toast('👥 '+glv.name+' 开始！'+(petUnits.length?'（带 '+petUnits.length+' 宠物）':''),'s')
-  _groupStep()
+  /* v2.14.14：开战**不再**自动推进第一拍 —— 默认关，等玩家点「▶ 自动」或「⏭️ 下一回合」
+     （两者都走同一个 `_groupStep()`；自动这一侧只多了一个「谁再喊一次」的定时器）。 */
 }
 
 /* 自动选参战宠物（最多 n 只成熟宠物） */
@@ -598,53 +726,63 @@ function autoPickPets(n){
   return ready.slice(0,n||2).map(function(p){return p.speciesId})
 }
 
-/* 群战推进（自动模式定时循环；手动模式点按钮触发） */
+/* 群战推进 —— **自动 / 手动共用的唯一入口**
+   （`#gbStep` 手动按钮、`#gbAuto` 自动开关、`_groupAutoStep` 定时器都只调这个函数，零参数；
+     自动这一侧只负责「什么时候再喊一次」，绝不会复制一份推进逻辑） */
 function _groupStep(){
-  if(_groupBattle&&_groupBattle.done)return
-  if(_groupPaused)return   // 详情弹层打开中：挂起，关闭后 resumeGroupBattle() 续跑
-  if(!_groupBattle||_groupBattle.done){_groupDone();return}
-  // 单步执行：一次一个单位行动（速度优先级可见）
-  /* v2.1.27 [7d]：每步前存一份快照（环形，最多 30 份） */
-  try {
-    if (typeof groupSnapshot === 'function' && window.__groupSnaps) {
-      window.__groupSnaps.push({ t: _groupBattle.turn, snap: groupSnapshot(_groupBattle) })
-      if (window.__groupSnaps.length > 30) window.__groupSnaps.shift()
+  /* v2.14.14 约束④：上一拍还没跑完（出手动画 / 日志追加中）→ 绝不进下一拍 */
+  if(_groupAutoStepBusy)return
+  _groupAutoStepBusy=true
+  try{
+    if(_groupBattle&&_groupBattle.done)return
+    if(_groupPaused)return   // 详情弹层打开中：挂起（自动已在 pauseGroupBattle 里停掉）
+    if(!_groupBattle||_groupBattle.done){_groupDone();return}
+    // 单步执行：一次一个单位行动（速度优先级可见）
+    /* v2.1.27 [7d]：每步前存一份快照（环形，最多 30 份） */
+    try {
+      if (typeof groupSnapshot === 'function' && window.__groupSnaps) {
+        window.__groupSnaps.push({ t: _groupBattle.turn, snap: groupSnapshot(_groupBattle) })
+        if (window.__groupSnaps.length > 30) window.__groupSnaps.shift()
+      }
+    } catch (e) { console.warn('[group] 存快照失败', e); }
+    var _perfT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
+    /* v2.14.0（批次 C）：击杀/阵亡检测的**事前 HP 快照**（纯数据；fx-semantics.js 未加载则跳过）。
+       ⚠️ 本函数内不得出现任何 DOM 操作（§8 源码守卫）—— 检测与演出都交给独立函数。 */
+    var hpBefore = (typeof fxHpSnapshot === 'function')
+      ? fxHpSnapshot(_groupBattle && _groupBattle.units) : null
+    var step = groupBattleStep(_groupBattle)
+    /* v2.1.26 [7b]：群战单步耗时埋点，供 Debug 面板「⏱ 性能」分区读取 */
+    try { if (typeof window.__perfMarkStep === 'function') {
+      window.__perfMarkStep(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _perfT0);
+    } } catch (e) { console.warn('[perf] 埋点失败', e); }
+    // 高亮当前行动单位
+    if (step.unit) _groupActing = step.unit.id
+    renderGroupOverlay(false)
+    // 攻击反馈动画：解析本次行动的日志，高亮受击目标 + 伤害飘字
+    if (step.unit) playAttackFeedback(_groupBattle, step)
+    /* v2.14.0（批次 C）：击杀/阵亡提示（**本步前后 HP 跨零**；引擎不落阵亡日志，故在 UI 侧判）。
+       离散语义：不参与数值聚合、不影响下一步调度与结算。 */
+    if (hpBefore && typeof fxDetectKills === 'function') {
+      var _kills = fxDetectKills(hpBefore, _groupBattle && _groupBattle.units)
+      if (_kills.length) gbFxKillMarks(_groupBattle, _kills)
     }
-  } catch (e) { console.warn('[group] 存快照失败', e); }
-  var _perfT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
-  /* v2.14.0（批次 C）：击杀/阵亡检测的**事前 HP 快照**（纯数据；fx-semantics.js 未加载则跳过）。
-     ⚠️ 本函数内不得出现任何 DOM 操作（§8 源码守卫）—— 检测与演出都交给独立函数。 */
-  var hpBefore = (typeof fxHpSnapshot === 'function')
-    ? fxHpSnapshot(_groupBattle && _groupBattle.units) : null
-  var step = groupBattleStep(_groupBattle)
-  /* v2.1.26 [7b]：群战单步耗时埋点，供 Debug 面板「⏱ 性能」分区读取 */
-  try { if (typeof window.__perfMarkStep === 'function') {
-    window.__perfMarkStep(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _perfT0);
-  } } catch (e) { console.warn('[perf] 埋点失败', e); }
-  // 高亮当前行动单位
-  if (step.unit) _groupActing = step.unit.id
-  renderGroupOverlay(false)
-  // 攻击反馈动画：解析本次行动的日志，高亮受击目标 + 伤害飘字
-  if (step.unit) playAttackFeedback(_groupBattle, step)
-  /* v2.14.0（批次 C）：击杀/阵亡提示（**本步前后 HP 跨零**；引擎不落阵亡日志，故在 UI 侧判）。
-     离散语义：不参与数值聚合、不影响下一步调度与结算。 */
-  if (hpBefore && typeof fxDetectKills === 'function') {
-    var _kills = fxDetectKills(hpBefore, _groupBattle && _groupBattle.units)
-    if (_kills.length) gbFxKillMarks(_groupBattle, _kills)
+    if(_groupBattle.done){_groupDone();return}
+    // 技能气泡 → v2.4.2 起并入中央特效区的施法特效（图标 + 一句话），见 gbShowSkillCast
+    var lastLog = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1] : null
+    var bubble = lastLog ? lastLog.events.find(function(e){ return e.type==='bubble'; }) : null
+    if (bubble) {
+      gbShowSkillCast(_groupBattle, bubble)
+      if(!_groupAuto) return   // 自动关：等玩家点「⏭️ 下一回合」/「▶ 自动」
+      _groupTimer=setTimeout(_groupAutoStep,GROUP_AUTO_BUBBLE_MS/_groupSpeed)   // 气泡停顿
+      return
+    }
+    if(!_groupAuto)return   // 自动关：等玩家点「⏭️ 下一回合」/「▶ 自动」
+    // 每个单位行动间隔（看清速度顺序；间隔 = 基准 ÷ 当前档位 → ×1=700 / ×2=350 / ×4=175ms）
+    _groupTimer=setTimeout(_groupAutoStep,GROUP_AUTO_STEP_MS/_groupSpeed)
+  }finally{
+    /* 约束④的另一半：无论正常返回还是中途 return/抛错，本拍都算结束 */
+    _groupAutoStepBusy=false
   }
-  if(_groupBattle.done){_groupDone();return}
-  // 技能气泡 → v2.4.2 起并入中央特效区的施法特效（图标 + 一句话），见 gbShowSkillCast
-  var lastLog = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1] : null
-  var bubble = lastLog ? lastLog.events.find(function(e){ return e.type==='bubble'; }) : null
-  if (bubble) {
-    gbShowSkillCast(_groupBattle, bubble)
-    if (_groupMode==='manual') return
-    _groupTimer=setTimeout(_groupStep,900/_groupSpeed)   // 气泡停顿
-    return
-  }
-  if(_groupMode==='manual')return   // 手动：等用户点下一回合
-  // 每个单位行动间隔（看清速度顺序）
-  _groupTimer=setTimeout(_groupStep,700/_groupSpeed)
 }
 
 /* ============================================================
@@ -1401,11 +1539,14 @@ function _groupDone(){
   /* 没有本场战斗可结算：旧实现在 `_groupBattle===null` 时仍按失败路径走下去
      （结算宠物受伤 + 打开一份「💀 失败」面板），凭空造出一场失败。 */
   if(!_groupBattle)return
-  if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
+  /* v2.14.14 停止条件①：战斗结束（胜/负、奖励已结算）→ 自动战斗停止并清定时器。
+     重绘由下面那句 renderGroupOverlay(false) 统一做，这里只改状态（不抢渲染）。 */
+  cancelGroupAutoTimer()
+  _groupAuto=false
   var w=_groupBattle&&_groupBattle.winner
-  /* v2.1.19：手动模式下战斗结束后仍可继续点「下一步」→ _groupStep 会再次走到这里，
-     导致 markGroupStageCleared / groupVictoryReward 被重复执行、奖励重复发放。
-     这里保证每场战斗只结算一次。 */
+  /* v2.1.19 / v2.14.14：**不重复结算**的唯一守卫（规格⑤）。
+     手动：「战斗结束后仍可继续点下一步」会再次走到这里；自动：定时器尾拍也可能再喊一次
+     `_groupStep()`（或玩家连点）。两条路径都必须只结算一次奖励 / 通关 / 受伤副作用。 */
   if(_groupRewarded)return
   _groupRewarded=true
   invalidateGroupOutro()
@@ -1937,12 +2078,20 @@ function renderGroupOverlay(show){
        更看不到「对敌我双方均有效」这类关键前提。现在控制条上常驻一个 🌍 胶囊，点开是完整说明。 */
     +(gb.terrain?'<button class="gb-terrain" id="gbTerrain" title="点击查看场地介绍">🌍 '+escHtml(gb.terrain.name)+'</button>':'')
     +'<span style="flex:1"></span>'
-    // 手动/自动切换
-    +'<button class="speed-btn'+(_groupMode==='manual'?' on-warn':'')+'" id="gbMode">'+(_groupMode==='manual'?'✋ 手动':'🤖 自动')+'</button>'
-    // 调速（自动模式）
-    +(_groupMode==='auto'?'<button class="speed-btn" id="gbSpeed">'+_groupSpeed+'×</button>':'')
-    // 手动：推进一回合按钮
-    +(_groupMode==='manual'?'<button class="speed-btn on-good" id="gbStep">⏭️ 下一回合</button>':'')
+    /* v2.14.14：「▶ 自动」开关（aria-pressed 表达状态；**默认关**，开=「⏸ 自动中」）。
+       点开 → 立刻用同一个 `_groupStep()` 起第一拍；点关 → 只清定时器（不动战斗状态）。
+       title 明说边界：需要玩家决策的时点（详情/结算）会自动降级为暂停，不替玩家做选择。 */
+    +'<button class="speed-btn gb-auto-btn" id="gbAuto" aria-pressed="'+(_groupAuto?'true':'false')+'" title="自动战斗：按当前速度自动推进；打开详情 / 切走页面时自动暂停">'
+    +(_groupAuto?'⏸ 自动中':'▶ 自动')+'</button>'
+    /* 速度档 ×1 / ×2 / ×4（默认 ×2；独立键 dh-group-auto-speed，改档即落盘） */
+    +'<span class="gb-speed-row" role="group" aria-label="自动战斗速度">'
+    +GROUP_AUTO_SPEEDS.map(function(sp){
+      var on=(sp===_groupSpeed)
+      return '<button class="speed-btn gb-speed-btn'+(on?' active':'')+'" id="gbSpeed'+sp+'" data-gbspeed="'+sp+'" aria-pressed="'+(on?'true':'false')+'" title="×'+sp+'：单位行动间隔 '+Math.round(GROUP_AUTO_STEP_MS/sp)+'ms">×'+sp+'</button>'
+    }).join('')
+    +'</span>'
+    /* 手动推进：**与自动同一个入口**的手动触发（自动关时是主要操作） */
+    +'<button class="speed-btn on-good" id="gbStep">⏭️ 下一回合</button>'
     /* v2.2.27 WP-I：双方血量总览（控制条常驻 → 不滚屏也能看清敌我剩余血量）。
        回合数已在上面的标题里；这里只补「我方 / 敌方」两条总量条。
        数据来自 gbSideHpPct(gb.allies / gb.enemies)，纯展示、不参与结算。 */
@@ -1978,7 +2127,8 @@ function renderGroupOverlay(show){
   gbApplyStepTransitions(ov,gb)
   // 事件绑定
   var closeBtn=document.getElementById('gbClose')
-  if(closeBtn)closeBtn.addEventListener('click',function(){cancelGroupOutroTimer();ov.classList.remove('open');_groupBattle=null;_groupPaused=false;if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}gbFxClear()})
+  /* 停止条件③（用户主动离开敌群视图）：先释放战斗对象再停 → stopGroupAuto 不会抢着重绘 */
+  if(closeBtn)closeBtn.addEventListener('click',function(){cancelGroupOutroTimer();_groupBattle=null;stopGroupAuto('关闭敌群战斗（离开敌群视图）');ov.classList.remove('open');_groupPaused=false;cancelGroupAutoTimer();gbFxClear()})
   // v2.1.22：场地胶囊 → 场地介绍弹层
   var terrBtn=document.getElementById('gbTerrain')
   if(terrBtn)terrBtn.addEventListener('click',function(){showTerrainDetail(gb.terrain)})
@@ -1991,22 +2141,31 @@ function renderGroupOverlay(show){
       renderGroupOverlay(false)
     })
   })
-  var modeBtn=document.getElementById('gbMode')
-  if(modeBtn)modeBtn.addEventListener('click',function(){
-    if(_groupBattle&&_groupBattle.done&&_groupMode==='auto')invalidateGroupOutro()
-    _groupMode=_groupMode==='auto'?'manual':'auto'
-    localStorage.setItem('dh-group-mode',_groupMode)
-    if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
-    if(_groupMode==='auto')_groupStep()
-    else renderGroupOverlay(false)
+  /* v2.14.14「▶ 自动」开关：
+     停止条件② —— 玩家点「⏸」立即停（清定时器 + 关开关 + 重绘成「▶ 自动」）。
+     开启 —— 只做三件事（置开关 / 重绘 / 用**同一个** `_groupStep()` 起第一拍）；
+             节奏由 `_groupStep()` 尾部自己按当前档位续排，这里不另写推进循环。 */
+  var autoBtn=document.getElementById('gbAuto')
+  if(autoBtn)autoBtn.addEventListener('click',function(){
+    if(_groupAuto){stopGroupAuto('玩家点了⏸');renderGroupOverlay(false);return}
+    if(!_groupBattle||_groupBattle.done)return   /* 已结束：不替玩家重开一局 */
+    _groupAuto=true
+    renderGroupOverlay(false)
+    _groupStep()                                  /* 与「⏭️ 下一回合」完全同一个入口、同样零参数 */
   })
-  var speedBtn=document.getElementById('gbSpeed')
-  if(speedBtn)speedBtn.addEventListener('click',function(){
-    _groupSpeed=_groupSpeed===1?2:_groupSpeed===2?4:_groupSpeed===4?8:1
-    localStorage.setItem('dh-group-speed',String(_groupSpeed))
-    if(_groupTimer){clearTimeout(_groupTimer);_groupTimer=null}
-    _groupStep()
+  /* v2.14.14 速度档 ×1 / ×2 / ×4：改档即落盘（独立键）+ 立即按新档位重排下一拍 */
+  GROUP_AUTO_SPEEDS.forEach(function(sp){
+    var b=document.getElementById('gbSpeed'+sp)
+    if(!b)return
+    b.addEventListener('click',function(){
+      applyGroupAutoSpeed(sp)
+      saveGroupAutoSpeed(sp)
+      cancelGroupAutoTimer()
+      renderGroupOverlay(false)
+      if(_groupAuto)_groupStep()
+    })
   })
+  /* 手动推进：与自动**同一个入口**（`scripts/test-group-auto.js` 有断言守住这一点） */
   var stepBtn=document.getElementById('gbStep')
   if(stepBtn)stepBtn.addEventListener('click',function(){_groupStep()})
   // 复制日志按钮

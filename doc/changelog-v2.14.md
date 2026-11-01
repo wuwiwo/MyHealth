@@ -1,7 +1,55 @@
-# v2.14 变更日志
+﻿# v2.14 变更日志
 
 > 本文件只记录 **v2.14.x** 的变更。v2.13 及更早见 `doc/changelog-v2.13.md`。
 > `2.13.1` 未领用：批次 C 开启新代码大类，按策略领取 `2.14.0`（台账已登记并推进指针到 `2.14.1`），该 patch 槽保留空缺。
+
+---
+
+## v2.14.14
+
+Date: 2026-10-01
+
+**敌群战斗增加「自动战斗」**（作者远程需求：「敌群战斗增加自动战斗」）。
+
+### 开关与节奏
+
+- 敌群战斗控制条新增 **「▶ 自动 / ⏸ 自动中」**（`#gbAuto`，`aria-pressed` 表达状态），**默认关**，每次开战重置为关，**不持久化**。
+- 速度档 **×1 / ×2 / ×4**（默认 **×2**）：一拍间隔 = 基准（700ms，气泡停顿 900ms）÷ 档位 → **700 / 350 / 175ms**。
+- 持久化键 **`dh-group-auto-speed`**（与关卡挑战 `dh-battle-speed`、敌群旧键 `dh-group-speed` 都不同）；旧键只作**读兜底 + 写镜像**（旧值 `8` 归一到 `4`，设置不丢）。
+
+### 推进方式：复用同一个入口（关键）
+
+自动**没有第二份推进逻辑**：`_groupAutoStep()` 里只有一句 `_groupStep()`；`#gbAuto` 与手动 `#gbStep` 处理器调用的也是 `_groupStep()`（零参数、同一签名）。
+`_groupStep()` 入口有重入守卫（`_groupAutoStepBusy` + `try/finally`），上一拍未完不进下一拍；**无 `setInterval`**，全部 `setTimeout`。
+
+### 四个停止条件
+
+| 条件 | 实现 |
+|---|---|
+| ① 战斗结束（胜/负、奖励已结算） | `_groupDone()` → `cancelGroupAutoTimer()` + `_groupAuto=false` |
+| ② 用户点「⏸」 | `stopGroupAuto()` + 重绘 |
+| ③ 离开视图 / 切 tab / 页面隐藏 / 关闭 | `#gbClose`、`app.js switchTab()`、`onBattleVisibilityChange()`（`document.hidden`）、以及**每拍复核** `groupAutoViewActive()` |
+| ④ 需要用户决策（详情/技能/天赋弹层） | `pauseGroupBattle()` → **降级为暂停**（关开关 + 清定时器），关弹层**不会**自动续跑 |
+
+**定时器唯一清理点**：`cancelGroupAutoTimer()`，`_groupDone` / `stopGroupAuto` / `#gbClose` / 改速度 / 开新战 全部经过它。
+
+### 幂等
+
+沿用既有 `_groupRewarded`：自动、手动、连点、尾拍都走 `_groupDone`，**奖励只发一次**。实测自动跑完再额外推进 100 次，`groupVictoryReward` / `markGroupStageCleared` 仍各 1 次。
+
+### 测试与验证
+
+- 新增 `scripts/test-group-auto.js`（**135 断言**）：同一入口（源码守卫 + 运行期 spy）、**同 seed 下自动 10 拍 ≡ 手动 10 次**（回合/日志/HP/状态/rng 全等）、结束自动停且定时器为 null、`visibilitychange`/切 tab/关闭 全部冻结、**奖励幂等**（再推 100 次仍 1）、速度三档与键隔离、默认关、⏸ 后仍可手动、重入守卫、样式契约。
+- 全量 **78 个套件 / 0 失败**；`test-a11y-tokens` **40/40**。
+- 真浏览器（agent-browser + 静态服务）：默认关 → 点 ▶ 自己推进 → 打完自动停 → 奖励落 1 次 → `switchTab` 立即停 → `document.hidden` 立即停 → 点 ×4 落盘 `dh-group-auto-speed=4`（`dh-battle-speed` 保持 null）→ **刷新后速度继承 ×4、自动仍为关**；axe overlay 作用域 **0 violations**。
+- **顺带修掉一个真实对比度问题**：按下态在 `.speed-btn:hover`（前景/背景反色）下变成「近黑底 + 绿字」= **3.49:1**（axe serious）→ 规则加 `:not(:hover)`，hover 完全沿用既有反色。
+
+### ⚠️ 行为变更（有意为之，需知会）
+
+1. 旧的 `_groupMode`（默认 `auto`、持久化到 `dh-group-mode`）被 `_groupAuto`（默认关、不持久化）取代 → **开战不再自动走第一拍**、不再写 `dh-group-mode`；旧「循环 ×1→2→4→8」改为三档按钮，`8` 归一到 `4`；打开详情后**不再自动续跑**。
+2. 结算面板的 800/1200ms 展示推进（`scheduleGroupOutro`）**未停** —— 它是展示层而非战斗决策，`⏸` 不打断它。
+3. `_groupSpeed` 现在由 `applyGroupAutoSpeed()` 单一赋值：**节奏档位 = 特效档位**（×4 时特效寿命 220ms、×1 时 600ms），不再存在「节奏 ×2 / 特效 ×1」的分离组合。
+4. 若希望「记住上次是否开自动」，需要新裁决（可改为持久化）。
 
 ---
 
@@ -826,6 +874,7 @@ Date: 2026-10-12
 | v2.14.11 | 53 | （见 changelog） | **UI 收尾三项 + 逐行核验**。**①群战非行动单位**：去 `opacity:.5`（文字仅 **2.50:1**）→ `outline:2px solid var(--bd)`（`offset:-2px`，**不占布局**）+ 名字 `--text3`；实测 **深 7.34:1 / 浅 5.25:1**（8 组合：390×844/360×640 × 浅/深 × 战斗/日志抽屉）全部 ≥4.5；可区分性靠**三重形制差**（行动者=品牌 2px 环 + `scale(1.1)` 61.6×74.8 vs 56×68 + 左侧 3px 脉冲条；非行动者=中性环 + scale 1 + 无脉冲条；阵亡=无描边 + grayscale）；`geomIdentical:true`（8/8 组合 `.gb-focus` 开/关 rect 逐项一致）；`Tab` 后 `:focus-visible` 仍是品牌环。**②内联样式收编 62 处**（55 行/13 文件/60 声明 = 51×`border:1px→var(--bw)` + 11×硬编码 `rgba()`→`rgba(var(--*-rgb),α)`）。**零风险机制证明**：每行反向归一后与原文**逐字节相等**（逻辑零改动）；`index.css:124` 守卫早已把内联 `border:1px` 算成 2px（实测 1px→2px、`var(--bw)`→2px、`border-top:1px`→1px），**9 条分隔线一条未碰**（行号集合不重叠）；语义色红→danger/绿→success/黄→warning/橙→brand，**alpha 一字未动**。难度 易 36/中 24/难 0。**③**`test-a11y-tokens` 标签文案改（断言未动）；`test-group-ui-presentation` 契约改**更严**（禁任何 `opacity<1`、钉死 2px+`--bd`、钉死 `--text3`、两主题 ≥4.5、`focusRules.length>0` 防空转）。**仍未收编**：U1 `challenge.js:248` 整块硬编码深色（难）、U2 `sync.js` slate ×3（中，缺 `--neutral-rgb`）、U3 `tab-settings.js:327` 遮罩（中，需并入 `--overlay`）、U4 `challenge.js:445` 一次性渐变特效（难）、U5 `linechart.js` canvas 取色（难）。**⚠️ 待裁决**：浅色三处 AA 回归（`challenge.js:285` 绿 4.25→**4.04**；`sync.js:354/357` 黄 11px 4.26→**3.98**，**改前已 <4.5**，修法 alpha .1→.07 或换文字色）；注释「v2.18」应为 2.14.x。**附带**：阵亡名字色被同特异性覆盖（既有）、360×640 日志抽屉底部裁切 1.8px（既有）。测试 40/40 + **75/75 套件 0 失败** |
 | v2.14.12 | 53 | （见 changelog） | **自定义重量（±0.5kg）**。重量网格（`#seWeight` 编辑弹层 与 `#strWeight` 新增一组，两处同时生效）在 13 个预设档后**追加「✏️ 自定义」格**（`span 2`，末行正好填满不留孤行）：点开**内联条** `−`/数字输入/`kg`/`+`，**±0.5kg**，也支持直接输入（`step=0.5 inputmode=decimal`，**失焦+回车双入口**）；范围 **0.5~200**，非半档就近吸附；**非法回退上次有效值+toast**、越界夹紧+toast；命中预设档时**预设高亮照旧、自定义格不高亮**，非预设值显示「✏️ 自定义 9.5kg」并写回。**计划编辑步进 1kg→0.5kg**，限幅 **1~50 → 0.5~200**。**展示统一 `fmtKg()`**（记录行/计划行/表单/训练中/汇总/快速复训）：`9.5→"9.5"`、`10→"10"`、`9.5000000001→"9.5"`，**无浮点尾巴**；老存档非半档值（9.7）**保留一位小数不谎报**（存储不变）。实现为 `tab-strength.js` 内**同名覆盖** `utils.js` 的 `buildWtGrid`（`utils.js` 本轮不可写且加载更早），**回调协议一字未改**（`onChg(数字kg)`），故两处调用点零改动；script 顺序已由测试钉住（调换会红而非静默失效）。样式只用既有令牌（2px 边、圆角 0、无阴影/渐变、未新增过渡），按钮与数值 **min-height 44px**，focus 2px 描边，`aria-label/role=group/aria-controls/aria-live` 齐全。**新增 `test-custom-weight.js` 113 断言 8 组**（含连按 400 次无浮点尾巴、`sel=0` 不高亮、端到端 9.5 落库到记录行、脚本顺序、`utils.js` 未被改）；全量 **76 套件 0 失败**、a11y **40/40**，既有测试无变红无弱化。⚠️ 待裁决：快速复训仍不带出非预设重量（`applyStrLastSet` 命中预设才带出，既有测试 6.8 守着；放宽属规格变更）；`fmtKg` 对老数据非半档值保留一位小数；真机视觉未复核 |
 | v2.14.13 | 53 | （见 changelog） | **作者远程三项**。**① 挑战主按钮回归（P0）**：`#lvChallenge`「⚔️ 挑战」几乎不可见 —— v2.14.9 扁平守卫 `[style*="gradient"]{background-image:none!important}` 把它**唯一**的底色（内联 `linear-gradient(135deg,var(--red),#dc2626)`）清空，只剩 `background-color:transparent` + `.m-btn-save` 白字 → **白字透明底 = 1.00:1**；叠加 `.modal-actions button`(0,1,1) 的 `border:none` 压过 `.m-btn-save`(0,1,0)，**所有弹层确认按钮的 2px 边框其实从未渲染**。修法：按钮走 `.m-btn-save` 实心 CTA + 新增 `.modal-actions .m-btn-save`(0,2,0) 定死 `--brand-fill` 底/`--on-brand` 字/**2px 同色边**/`--touch-min` → 四组实测（浅/深 × 390/360 数值一致）：`rgba(0,0,0,0)→rgb(37,99,235)`、`0px none→2px solid`、`auto/48→44/49`、**1.00:1→5.17:1**、宽度 166/151→**214/194**（明显宽于「关闭」）；`#exSave/#ccSave/#cpSegConfirm/#peExConfirm/#chStart` 一并修好。**同类连带**：培养页「我的角色」卡两端同色**假渐变**被抽掉丢底 → 改实色 `--bg2`；热血 buff 全屏 `radial-gradient` → 平铺 `rgba(251,191,36,.18)`（保留反馈）。**② 炼化点数来源**（作者问 700kg 为何没有）：真实规则 = **本月力量容量 `floor(kg/100)×10`**（700kg → **70 点**）+ **关卡首通战利品**（普通 +2/+4，BOSS +10/+20）；前置**通关 9-6 解锁炼魂**、**结算在打开挑战页/刷新时**（训练保存不触发、懒结算、按已兑换额补差）；隐藏挑战/敌群试炼/有氧**不给**炼化点。700kg 无炼化的三个原因：未通关 9-6（实测恒 0）、未打开挑战页、以及训练直接产出的是**宠物经验**（kg×5=3500 EXP）与容量（🪨炼化石是宠物材料，≠炼化点）。**逻辑无漏发、未改数值**；改文案（`本月已获得`→`本月容量兑换`，原会低估）+ 面板新增常显一句与 `<details>`「🔮 获取途径」。实测 700kg：首次渲染 0→**70**，再渲染仍 70（幂等）。**③ 宠物经验明细**：写入既有 `pets.levelLedger.log`（**未新建 store key**），每条含 `date/source(daily\|challenge)/total/granted/dropped/cap/pets/breakdown[]/allocations[]`（来源拆分 力量{kg,exp}/有氧{min,exp}/挑战{dmg,exp}，分配含每只 `amount/from/to/leveledUp`）；宠物面板材料区下、宝珠上 `<details>` 默认折叠，summary「📒 宠物经验明细　今日合计 +N EXP　M 笔」（44px、键盘可达、两主题可读）；幂等沿用 `dailyGranted` 水位 + 挑战 `runId` 键，只在真发时写一条。新增 `test-pet-exp-log.js` **45 断言**；全量 **77 套件 0 失败** + a11y **40/40**。⚠️ 待裁决：日志上限 20 条会裁掉当日超出部分（建议「当日全留 + 历史 20」）；炼化点结算时机是否改即时；弹层确认按钮现统一 2px 边 + ≥44px；热血闪光改平铺色 |
+| v2.14.14 | 53 | （见 changelog） | **敌群战斗自动战斗**。控制条新增「▶ 自动 / ⏸ 自动中」（`#gbAuto`，`aria-pressed`），**默认关**、开战重置、**不持久化**；速度档 **×1/×2/×4（默认 ×2）**，间隔 = 基准 700ms（气泡 900ms）÷ 档位 = **700/350/175ms**，键 **`dh-group-auto-speed`**（与 `dh-battle-speed`、旧 `dh-group-speed` 均不同，旧键读兜底+写镜像、`8→4` 归一）。**推进复用同一个入口**：`_groupAutoStep()` 只有一句 `_groupStep()`，`#gbAuto` 与手动 `#gbStep` 同签名调用 `_groupStep()`（**无第二份逻辑**），入口有 `_groupAutoStepBusy` + `try/finally` 重入守卫，**无 setInterval**。**四个停止条件**：① `_groupDone()` 结束停 ② 点 ⏸ 停 ③ `#gbClose`/`switchTab`/`onBattleVisibilityChange(document.hidden)`/每拍 `groupAutoViewActive()` 复核 → 停并清定时器 ④ 详情/技能/天赋弹层 `pauseGroupBattle()` **降级为暂停**且关弹层不自动续跑。**定时器唯一清理点 `cancelGroupAutoTimer()`**（结束/暂停/关闭/改档/开新战全经过）。**幂等**沿用 `_groupRewarded`（再推进 100 次奖励仍 1 次）。新增 `test-group-auto.js` **135 断言**（同 seed 下自动 10 拍 ≡ 手动 10 次；结束/切 tab/visibility 定时器为 null 且冻结；奖励幂等；三档与键隔离；默认关；重入守卫；样式契约）；全量 **78 套件 0 失败** + a11y **40/40**；真浏览器验证通过（刷新后速度继承 ×4、自动仍关），axe **0 violations**。**顺带修**：按下态在 `.speed-btn:hover` 反色下 **3.49:1**（axe serious）→ 加 `:not(:hover)`。⚠️ 行为变更：旧 `_groupMode`（默认 auto、持久化）被取代 → 开战不再自动走第一拍、不再写 `dh-group-mode`、旧 ×8 归一为 ×4、开详情后不再自动续跑；结算面板展示推进未停；`_groupSpeed` 收敛为单一赋值（节奏=特效档位） |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
 > （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。
