@@ -4,6 +4,184 @@
 
 let _strDate=today(),_strSelW=COMMON_W[4],_strForm=false;
 
+/* ============================================================================
+   v2.14.12 — 自定义重量（作者原话：「当前没有 9.5kg 选项，所以希望增加自定义重量，可 ±0.5kg」）
+   · 预设档位（COMMON_W，utils.js）**一格不动**，只在其后追加一格「✏️ 自定义」；
+   · 点它展开**内联自定义条**：− / 数值 / + ，每次 ±0.5kg；也可直接输入
+     （`<input type="number" step="0.5" inputmode="decimal">`，失焦或回车生效）；
+   · 范围 0.5 ~ 200kg（0.5 的整数倍）；非法输入回退上次有效值并提示，越界夹紧并提示；
+   · 选中后该格高亮为「✏️ 自定义 9.5kg」，值写回调用方的 selW；
+     `buildWtGrid(c, sel, onChg, isEdit)` 的**回调协议不变**（仍是 onChg(数字 kg)）；
+   · 值落在预设档位时**不改档**：预设高亮照旧，自定义格不高亮；
+   · 同名覆盖 utils.js:201 的 buildWtGrid：本文件在 index.html 里晚于 utils.js 加载
+     （319 > 288），故 #strWeight（新增一组）与 #seWeight（编辑弹层）两处网格同时获得
+     自定义格 —— 不改 utils.js（本批不可写），也不改任何既有调用点。
+   ============================================================================ */
+var WT_MIN=0.5,WT_MAX=200,WT_STEP=0.5;
+
+/* 展示口径：整数不带小数位、半档保留一位（9.5 / 10 / 0.5）→ 永不出现 9.500000001。
+   数值本身是 0.5 的整数倍时吸附到 0.5；老存档里「一位小数但非半档」的值（如 9.7）
+   按原值保留一位，避免把已存数值显示成另一个数（存储语义一行不改）。 */
+function fmtKg(v){
+  var n=Number(v)
+  if(!isFinite(n))return '0'
+  var snapped=Math.round(n/WT_STEP)*WT_STEP
+  var out=Math.abs(snapped-n)<1e-9?snapped:Math.round(n*10)/10
+  return out%1===0?String(Math.round(out)):out.toFixed(1)
+}
+/* 就近吸附到 0.5 的整数倍（非法 → NaN） */
+function wtSnap(v){var n=Number(v);return isFinite(n)?Math.round(n/WT_STEP)*WT_STEP:NaN}
+/* 吸附 + 夹紧到 0.5 ~ 200；非法值退回 fallback（再非法则退回下限） */
+function wtClamp(v,fallback){
+  var n=wtSnap(v)
+  if(!isFinite(n))n=wtSnap(fallback)
+  if(!isFinite(n))return WT_MIN
+  return n<WT_MIN?WT_MIN:n>WT_MAX?WT_MAX:n
+}
+/* ± 一步（0.5kg）：从**原始值**起步再夹紧（0 → +0.5 = 0.5，不是 1） */
+function wtStep(v,dir){
+  var base=Number(v)
+  if(!isFinite(base))base=WT_MIN
+  return wtClamp(wtSnap(base)+(dir<0?-WT_STEP:WT_STEP))
+}
+/* 是否「非预设档位」（0 与预设值都不算自定义） */
+function wtIsCustom(v){var n=Number(v);return isFinite(n)&&n>0&&COMMON_W.indexOf(n)<0}
+/* 直接输入解析：允许 "9,5"（部分键盘的逗号就是小数点）
+   → {ok:是否在范围内, value:吸附夹紧后的值, clamped:是否被夹紧} */
+function wtParseCustom(text,last){
+  var s=String(text==null?'':text).trim().replace(',','.')
+  var fallback=wtClamp(last)
+  if(!/^-?\d*\.?\d+$/.test(s))return {ok:false,value:fallback,clamped:false}
+  var n=parseFloat(s)
+  if(!isFinite(n))return {ok:false,value:fallback,clamped:false}
+  var over=n<WT_MIN||n>WT_MAX
+  return {ok:!over,value:wtClamp(n,fallback),clamped:over}
+}
+
+/* 选中态同步：预设档位 → 预设格高亮；非预设值 → 自定义格高亮并显示具体值
+   （值为 0 = 这一条还没重量，任何格都不高亮，与改动前「无档选中」一致） */
+function wtSync(st){
+  var v=Number(st.value),custom=wtIsCustom(v)
+  COMMON_W.forEach(function(w){
+    var b=st.btnMap['p'+w];if(!b)return
+    var on=!custom&&v>0&&wtSnap(v)===w
+    if(on)b.classList.add('selected');else b.classList.remove('selected')
+    b.setAttribute('aria-pressed',on?'true':'false')
+  })
+  var cb=st.custBtn
+  if(custom){
+    cb.textContent='✏️ 自定义 '+fmtKg(v)+'kg'
+    cb.classList.add('selected')
+    cb.setAttribute('aria-label','自定义重量 '+fmtKg(v)+' 公斤（已选中，点此可微调）')
+  }else{
+    cb.textContent='✏️ 自定义'
+    cb.classList.remove('selected')
+    cb.setAttribute('aria-label','自定义重量（点此展开 ±0.5 公斤微调）')
+  }
+  cb.setAttribute('aria-expanded',st.open?'true':'false')
+  if(st.bar)st.bar.style.display=st.open?'flex':'none'
+  if(st.input)st.input.value=fmtKg(v>0?v:WT_MIN)
+}
+/* 值生效（预设点击 / ± / 直接输入同一条路）：同步选中态 + 按原协议回调（值没变就不重复通知） */
+function wtSetValue(st,v){
+  var next=wtClamp(v),prev=Number(st.value)
+  st.value=next
+  wtSync(st)
+  if(st.onChg&&next!==prev)st.onChg(next)
+  return next
+}
+/* 选了预设档位：收起自定义条 */
+function wtPickPreset(st,w){
+  st.open=false
+  return wtSetValue(st,w)
+}
+/* 展开 / 收起内联自定义条（展开时以当前选中值为起点，便于 +0.5 微调） */
+function wtToggleCustom(st){
+  st.open=!st.open
+  wtSync(st)
+  if(st.open&&st.input){
+    if(typeof st.input.focus==='function')st.input.focus()
+    if(typeof st.input.select==='function')st.input.select()
+  }
+  return st.open
+}
+/* 输入框生效（失焦 / 回车）：非法 → 回退上次有效值并提示；越界 → 夹紧并提示 */
+function wtApplyInput(st){
+  if(!st.input)return st.value
+  var r=wtParseCustom(st.input.value,st.value)
+  if(!r.ok&&!r.clamped){
+    st.input.value=fmtKg(st.value)
+    toast('重量请填 0.5 ~ 200 之间的数字（0.5 的整数倍）','e')
+    return st.value
+  }
+  if(r.clamped)toast('已调整为 '+fmtKg(r.value)+'kg（范围 0.5 ~ 200kg）','s')
+  return wtSetValue(st,r.value)
+}
+
+/* 重量网格：预设档位 + 「✏️ 自定义」格 + 内联自定义条。
+   回调协议不变（onChg(数字 kg)）；isEdit 仅供调用点沿用（编辑弹层传 true）。 */
+function buildWtGrid(c,sel,onChg,isEdit){
+  if(!c)return null
+  c.innerHTML=''
+  /* 初始值原样带入（0 = 还没重量，不被抬成 0.5 —— 与改动前「无档选中」一致） */
+  var selN=Number(sel)
+  var st={value:(sel==null||!isFinite(selN))?COMMON_W[4]:selN,open:false,onChg:onChg||null,btnMap:{},isEdit:!!isEdit}
+  c._wtState=st
+  COMMON_W.forEach(function(w){
+    var b=document.createElement('button')
+    b.type='button';b.className='wt-btn';b.textContent=String(w);b.dataset.w=String(w)
+    b.setAttribute('aria-label',fmtKg(w)+' 公斤')
+    b.addEventListener('click',function(){wtPickPreset(st,w)})
+    st.btnMap['p'+w]=b
+    c.appendChild(b)
+  })
+  var barId=(c.id||'wtGrid')+'-custom'
+  var cb=document.createElement('button')
+  cb.type='button';cb.className='wt-btn wt-custom';cb.dataset.w='custom'
+  cb.setAttribute('aria-controls',barId)
+  cb.addEventListener('click',function(){wtToggleCustom(st)})
+  st.custBtn=cb
+  c.appendChild(cb)
+
+  var bar=document.createElement('div')
+  bar.className='stepper wt-custombar';bar.id=barId
+  bar.setAttribute('role','group')
+  bar.setAttribute('aria-label','自定义重量微调（每次 0.5 公斤）')
+  var down=document.createElement('button')
+  down.type='button';down.className='sp-btn';down.textContent='−'
+  down.setAttribute('aria-label','减少 0.5 公斤')
+  down.addEventListener('click',function(){wtSetValue(st,wtStep(st.value,-1))})
+  bar.appendChild(down)
+  var inp=document.createElement('input')
+  inp.type='number';inp.className='wt-customval';inp.id=barId+'-input'
+  inp.step='0.5';inp.min=String(WT_MIN);inp.max=String(WT_MAX);inp.inputMode='decimal'
+  inp.setAttribute('step','0.5');inp.setAttribute('min',String(WT_MIN));inp.setAttribute('max',String(WT_MAX))
+  inp.setAttribute('inputmode','decimal');inp.setAttribute('autocomplete','off');inp.setAttribute('enterkeyhint','done')
+  inp.setAttribute('aria-label','自定义重量（公斤，0.5 的整数倍）')
+  inp.addEventListener('blur',function(){wtApplyInput(st)})
+  inp.addEventListener('keydown',function(e){
+    if(!e||e.key!=='Enter')return
+    if(typeof e.preventDefault==='function')e.preventDefault()
+    wtApplyInput(st)
+    if(typeof inp.blur==='function')inp.blur()
+  })
+  st.input=inp
+  bar.appendChild(inp)
+  var unit=document.createElement('span')
+  unit.className='wt-customunit';unit.textContent='kg'
+  unit.setAttribute('aria-hidden','true')
+  bar.appendChild(unit)
+  var up=document.createElement('button')
+  up.type='button';up.className='sp-btn';up.textContent='+'
+  up.setAttribute('aria-label','增加 0.5 公斤')
+  up.addEventListener('click',function(){wtSetValue(st,wtStep(st.value,1))})
+  bar.appendChild(up)
+  st.bar=bar
+  c.appendChild(bar)
+  wtSync(st)
+  return st
+}
+
 /* ========== TODAY SNAPSHOT (weekly + period progress) ========== */
 function renderTodaySnapshot(){
   var el=document.getElementById('todaySnapshot');if(!el)return
@@ -100,7 +278,7 @@ function renderStr(){
       const ts=e.createdAt?new Date(e.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''
       var wtLabel;
       if(e.eqWeight!=null){wtLabel='⚖️ '+e.eqWeight+'kg/'+(e.unit==='sec'?'秒':'次')}
-      else{wtLabel='● '+e.weight+' kg'}
+      else{wtLabel='● '+fmtKg(e.weight)+' kg'}   /* v2.14.12：9.5kg 这类半档值按原值显示，无浮点尾数 */
       var unitSuffix=e.unit==='sec'?'秒':'次'
       // 等效容量与倍率：重量(或等效重量)×实际次数×ratio/100
       var exDef=getExerciseMap()[e.exercise]
@@ -247,7 +425,7 @@ function renderPeList(){
     return
   }
   el.innerHTML=_peEditing.exercises.map(function(ex,i){
-    return '<div class="ec" style="padding:10px;margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+(i+1)+'. '+ex.exercise+'</div><div class="ec-actions"><button class="ec-act" data-a="peExEdit" data-idx="'+i+'">✏️</button><button class="ec-act" data-a="peExDel" data-idx="'+i+'">🗑️</button></div></div><div style="font-size:var(--fs-xs);color:var(--text2);margin-top:4px">'+ex.weight+' kg × '+ex.targetReps+' 次 · 休息 '+ex.restSeconds+'s</div></div>'
+    return '<div class="ec" style="padding:10px;margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+(i+1)+'. '+ex.exercise+'</div><div class="ec-actions"><button class="ec-act" data-a="peExEdit" data-idx="'+i+'">✏️</button><button class="ec-act" data-a="peExDel" data-idx="'+i+'">🗑️</button></div></div><div style="font-size:var(--fs-xs);color:var(--text2);margin-top:4px">'+fmtKg(ex.weight)+' kg × '+ex.targetReps+' 次 · 休息 '+ex.restSeconds+'s</div></div>'
   }).join('')
 }
 
@@ -264,7 +442,7 @@ function showPeExForm(idx){
   form.innerHTML='<div class="fg"><label class="fl" for="peExName">动作</label><select class="fi" id="peExName">'
     +getStrengthExercises().map(function(s){return'<option value="'+s.name+'"'+(s.name===ex.exercise?' selected':'')+'>'+s.name+'</option>'}).join('')
     +'</select></div>'
-    +'<div class="fg"><span class="fl" id="lbl-st-g2">重量 (kg)</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-st-g2"><button class="sp-btn" id="peExWDown">−</button><span class="sp-val" id="peExWeight">'+ex.weight+'</span><button class="sp-btn" id="peExWUp">+</button></div></div>'
+    +'<div class="fg"><span class="fl" id="lbl-st-g2">重量 (kg)</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-st-g2"><button class="sp-btn" id="peExWDown" aria-label="减少 0.5 公斤">−</button><span class="sp-val" id="peExWeight" aria-live="polite">'+fmtKg(ex.weight)+'</span><button class="sp-btn" id="peExWUp" aria-label="增加 0.5 公斤">+</button></div></div>'
     +'<div class="fg"><span class="fl" id="lbl-st-g3">目标次数</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-st-g3"><button class="sp-btn" id="peExRDown">−</button><span class="sp-val" id="peExReps">'+ex.targetReps+'</span><button class="sp-btn" id="peExRUp">+</button></div></div>'
     +'<div class="fg"><span class="fl" id="lbl-st-g4">休息 (秒)</span><div class="stepper" style="max-width:160px" role="group" aria-labelledby="lbl-st-g4"><button class="sp-btn" id="peExSDown">−</button><span class="sp-val" id="peExRest">'+ex.restSeconds+'</span><button class="sp-btn" id="peExSUp">+</button></div></div>'
     +'<div class="modal-actions"><button class="m-btn-cancel" id="peExCancel">取消</button><button class="m-btn-save" id="peExConfirm">✅ 确定</button></div>'
@@ -285,7 +463,7 @@ function showWoExercise(){
   overlay.innerHTML='<div class="battle-hdr"><div class="battle-level">'+_woPlan.name+'</div><div class="battle-level">'+( _woIdx+1)+'/'+_woPlan.exercises.length+'</div><button class="speed-btn" id="woClose">✕</button></div>'
     +'<div class="battle-arena" style="flex-direction:column;gap:12px"><div class="workout-exercise" style="text-align:center">'
     +'<div style="font-size:var(--fs-3xl);font-weight:800">'+ex.exercise+'</div>'
-    +'<div style="font-size:var(--fs-base);color:var(--text2);margin:4px 0 16px">'+ex.weight+' kg · 目标 '+ex.targetReps+' 次</div>'
+    +'<div style="font-size:var(--fs-base);color:var(--text2);margin:4px 0 16px">'+fmtKg(ex.weight)+' kg · 目标 '+ex.targetReps+' 次</div>'
     +'<div style="font-family:var(--font);font-size:4rem;font-weight:900;color:var(--orange)" id="woRepsDisp">'+_woReps+'</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--text3);letter-spacing:1px">实际次数</div>'
     +'<div style="display:flex;gap:24px;justify-content:center;margin:16px 0">'
@@ -328,7 +506,7 @@ function showWoSummary(){
   const el=document.getElementById('woOverlay')?.querySelector('.battle-arena')
   if(!el)return
   el.innerHTML='<div style="text-align:center"><div style="font-size:var(--fs-hero);margin-bottom:4px">🎉</div><div style="font-size:var(--fs-2xl);font-weight:800;margin-bottom:12px">训练完成！</div>'
-    +_woDone.map(d=>'<div style="font-size:var(--fs-sm);color:var(--text2)">'+d.exercise+' '+d.weight+'kg × '+d.actualReps+'/'+d.targetReps+(d.actualReps>=d.targetReps?' ✅':'')+'</div>').join('')
+    +_woDone.map(d=>'<div style="font-size:var(--fs-sm);color:var(--text2)">'+d.exercise+' '+fmtKg(d.weight)+'kg × '+d.actualReps+'/'+d.targetReps+(d.actualReps>=d.targetReps?' ✅':'')+'</div>').join('')
     +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总次数</div></div><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--blue)">'+vol+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总容量</div></div></div>'
     +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
   document.getElementById('woFinish').addEventListener('click',()=>{
@@ -432,7 +610,8 @@ function onStrengthEvent(el,id,act){
     case 'peExConfirm':{
       var exName=document.getElementById('peExName').value.trim()
       if(!exName){toast('请选择动作','e');return true}
-      var exWeight=parseFloat(document.getElementById('peExWeight').textContent)
+      /* v2.14.12：重量步进 1 → 0.5、限幅 1~50 → 0.5~200，落库仍是数字（可为小数） */
+      var exWeight=wtClamp(parseFloat(document.getElementById('peExWeight').textContent))
       var exReps=parseInt(document.getElementById('peExReps').textContent)
       var exRest=parseInt(document.getElementById('peExRest').textContent)
       if(_peTempIdx!==null){_peEditing.exercises[_peTempIdx]={exercise:exName,weight:exWeight,targetReps:exReps,restSeconds:exRest}}
@@ -440,8 +619,9 @@ function onStrengthEvent(el,id,act){
       var form=document.getElementById('peExForm');if(form)form.remove()
       renderPeList();return true}
     case 'peExCancel':var form=document.getElementById('peExForm');if(form)form.remove();return true;
-    case 'peExWDown':{var v=parseFloat(document.getElementById('peExWeight').textContent);document.getElementById('peExWeight').textContent=Math.max(1,v-1);return true}
-    case 'peExWUp':{var v=parseFloat(document.getElementById('peExWeight').textContent);document.getElementById('peExWeight').textContent=Math.min(50,v+1);return true}
+    /* v2.14.12：重量 ±0.5（原 ±1），下限 0.5、上限 200（原 1~50），显示保留一位小数 */
+    case 'peExWDown':{var wEl=document.getElementById('peExWeight');wEl.textContent=fmtKg(wtStep(parseFloat(wEl.textContent),-1));return true}
+    case 'peExWUp':{var wEl=document.getElementById('peExWeight');wEl.textContent=fmtKg(wtStep(parseFloat(wEl.textContent),1));return true}
     case 'peExRDown':{var v=parseInt(document.getElementById('peExReps').textContent);document.getElementById('peExReps').textContent=Math.max(1,v-1);return true}
     case 'peExRUp':{var v=parseInt(document.getElementById('peExReps').textContent);document.getElementById('peExReps').textContent=Math.min(999,v+1);return true}
     case 'peExSDown':{var v=parseInt(document.getElementById('peExRest').textContent);document.getElementById('peExRest').textContent=Math.max(0,v-15);return true}
@@ -645,7 +825,7 @@ function strSetLabel(e){
   if(!e)return ''
   var isSec=e.unit==='sec'
   var unit=isSec?'秒':'次'
-  var w=e.eqWeight!=null?('⚖️'+e.eqWeight+'kg/'+unit):((e.weight!=null?e.weight:0)+'kg')
+  var w=e.eqWeight!=null?('⚖️'+e.eqWeight+'kg/'+unit):(fmtKg(e.weight)+'kg')
   return e.exercise+' '+w+' × '+e.actualReps+unit
 }
 /* 复制产出的字段**与手输记录完全一致**：

@@ -247,6 +247,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
 .wt-btn.selected{background:var(--brand-fill);color:var(--on-brand);border-color:var(--orange);box-shadow:none}
 
+/* 自定义重量（v2.14.12）
+   13 个预设筹码 + 「✏️ 自定义」格 = 14 格：自定义格占 2 列（grid-column:span 2），
+   第 3 行正好是 3 个预设 + 自定义格 = 5 列填满，末行不再孤立（沿用上面 C-07 的 5 列口径）。
+   触控 ≥ --touch-min(44px)；± 复用 .sp-btn（44×44）；内联条复用 .stepper 的结构与 2px 边；
+   focus 走全局 2px 描边（不引入阴影）、圆角只用 0、过渡只用既有的 75ms。 */
+.wt-btn.wt-custom{grid-column:span 2;padding:0 var(--sp-2);font-size:var(--fs-xs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wt-custombar{grid-column:1/-1;margin-top:var(--sp-1);min-height:var(--touch-min)}
+.wt-customval{flex:1;min-width:72px;width:100%;min-height:var(--touch-min);padding:0 var(--sp-1);border:none;border-radius:0;background:transparent;box-shadow:none;color:var(--text);font-family:var(--font);font-size:var(--fs-xl);font-weight:800;text-align:center;-webkit-appearance:none;appearance:textfield;-moz-appearance:textfield}
+.wt-customval::-webkit-outer-spin-button,.wt-customval::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.wt-customunit{font-size:var(--fs-xs);color:var(--text3);padding-right:var(--sp-2)}
+.wt-custombar .sp-btn:focus-visible,.wt-customval:focus-visible,.wt-btn.wt-custom:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
+
 /* Stepper */
 .reps-row{display:flex;gap:12px}
 .rg{flex:1}
