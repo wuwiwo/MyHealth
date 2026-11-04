@@ -149,7 +149,7 @@
 | 2.14.13 | 主控线（修复/功能） | 挑战主按钮渐变被守卫清空（1.00:1→5.17:1）+ 弹层确认按钮边框特异性 bug；炼化点来源查清（容量/100×10 + 首通，需 9-6 解锁与打开挑战页）+ 面板说明；宠物经验明细记账与折叠展示 | 见本版提交 | `doc/changelog-v2.14.md` |
 | 2.14.14 | 主控线（敌群） | 敌群自动战斗（复用 `_groupStep` 单入口、四停、奖励幂等、速度键隔离）+ 135 断言测试 + hover 反色对比度修正 | 见本版提交 | `doc/changelog-v2.14.md` |
 | 2.14.15 | 主控线（敌群） | 自动连打下一关（1400ms 进关、四停、⏸ 取消排队、安全阀回滚、逐关奖励幂等）+ 154 断言测试 | 见本版提交 | `doc/changelog-v2.14.md` |
-| 2.14.16 | 主控线（宝珠系统 / UI） | 宝珠系统四项施工（作者需求）：① 分解等价碎片 `orbDecomposeShards = orbPct`（R·Lv1=10 / UR·Lv50=297，删旧品质定额表）② 恢复合成（20 碎片→随机 R·Lv1、100%、每日 5 次，`orbSynth` 随 `pets` 云同步、`todayKey` 由 UI 注入）③ 新增 5 枚宝珠图标 SVG + `orbIconHtml` 唯一入口（库存 / 5 槽位 / 挑战结算，统一 32px）④ 修复 2（升级 toast `+undefined`）；**培养页精简 + 出战阵容常驻**（原生 `<details>` 三处折叠、`.train-lineup` 就地切换 + `aria-pressed` 同源 + 开战走 `startGroupTrialWithPets` 唯一入口）。全量 **79 套件 / 0 失败**、a11y **40/40**；新增 5 个 SVG、**无新增 `page/*.js`**、无删除文件；缓存戳 `?v179`→`?v180` | 见本版提交 | `doc/changelog-v2.14.md` |
+| 2.14.16 | 主控线（宝珠系统 / UI） | 宝珠系统四项施工（作者需求）：① 分解等价碎片 `orbDecomposeShards = orbPct`（R·Lv1=10 / UR·Lv50=297，删旧品质定额表）② 恢复合成（20 碎片→随机 R·Lv1、100%、每日 5 次，`orbSynth` 随 `pets` 云同步、`todayKey` 由 UI 注入）③ 新增 5 枚宝珠图标 SVG + `orbIconHtml` 唯一入口（库存 / 5 槽位 / 挑战结算，统一 32px）④ 修复 2（升级 toast `+undefined`）；**培养页精简 + 出战阵容常驻**（原生 `<details>` 三处折叠、`.train-lineup` 就地切换 + `aria-pressed` 同源 + 开战走 `startGroupTrialWithPets` 唯一入口）。全量 **79 套件 / 0 失败**、a11y **40/40**；新增 5 个 SVG、**无新增 `page/*.js`**、无删除文件；缓存戳 `?v179`→`?v180` | `b43ca87` | `doc/changelog-v2.14.md` |
 
 > 2.2.x 及更早的版本历史见 `doc/changelog-v2.2.md` 的「架构演化」表。
 
