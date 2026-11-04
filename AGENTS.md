@@ -3,7 +3,7 @@
 本项目的文档职责分离如下：
 
 - `AGENTS.md`：规定 Agent **怎么工作**，包括工作模式、权限边界、修改纪律与协作安全。
-- `CONTEXT.md`：描述项目是什么，包括领域模型、数据模型、模块边界与依赖关系。
+- `CONTEXT.md`：项目入口摘要与文档导航；领域模型、数据模型、模块边界的**完整现行事实**见 `doc/wiki/00 系统总览.md` 及各大类页。
 - `doc/HANDOFF.md`：描述项目当前进行到哪里，以及环境差异、实时状态确认方法和已知坑。
 
 不要把 HANDOFF 中的实时状态数字、环境假设或历史事故复制成 AGENTS 的永久规则。
@@ -108,7 +108,7 @@ Git 的环境差异和远端状态确认方法以 `doc/HANDOFF.md` 为准，不�
 
 GitHub Issues，仓库 `wuwiwo/MyHealth`。详见 `docs/agents/issue-tracker.md`。
 
-> ⚠️ **本机开发环境未安装 `gh` CLI**（`command -v gh` 无输出）。需要操作 Issue 时用网页端，或先装：`winget install GitHub.cli`。
+> ⚠️ 旧记录称「本机未安装 `gh` CLI」已过时：本机实测 `gh auth status` 可用（已登录 `wuwiwo`，token 带 `repo` / `workflow`）。SSH 推送在本环境会间歇性失败，可靠通道是清空 `credential.helper` 后用 `gh auth git-credential` 经 HTTPS 推送，详见 `doc/wiki/11 部署与运维.md`。
 > Git 工具和远端状态验证遵循上方 Git environment 规则及 `doc/HANDOFF.md`，不要把单一环境的命令当作通用规则。
 
 ### Triage labels
@@ -117,9 +117,9 @@ GitHub Issues，仓库 `wuwiwo/MyHealth`。详见 `docs/agents/issue-tracker.md`
 
 ### Domain docs
 
-项目架构与领域模型见根目录 `CONTEXT.md`；当前状态、环境差异和已知坑见 `doc/HANDOFF.md`。
+项目架构与领域模型的**现行事实**见 `doc/wiki/00 系统总览.md`（根目录 `CONTEXT.md` 为入口摘要）；当前状态、环境差异和已知坑见 `doc/HANDOFF.md`。
 
-> 注：`docs/adr/` 目录**尚未创建**。历史设计决策目前散落在 `doc/design-v2.0.md`、`doc/design-tokens-v2.1.md` 与各版本 changelog 中。
+> 注：`docs/adr/` 目录**尚未创建**。现行规则集中在 `doc/wiki/`；`doc/design-v2.0.md`、`doc/2.0 敌群设计.md` 等为历史设计稿，状态清单见 `doc/wiki/12 术语表与过时文档对照.md`。
 
 ### Sub-agent 调用约定
 

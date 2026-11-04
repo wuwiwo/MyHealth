@@ -2,7 +2,7 @@
 
 > **用途**：供其他 AI / 开发者直接接手维护，无需阅读全部历史文档
 > **⚠️ 动手前先读 §0.2**：git 工具需**按环境判定**——`myhealth-git` 仅 Android SAF 端存在，**普通 Linux / Windows 直接用 `git`**（照抄 wrapper 会白找半天）
-> **生成**：2026-09-02 · **最后更新**：2026-09-29（v2.2.0 施工中）
+> **生成**：2026-09-02 · **最后更新**：2026-11-04（补文档体系入口 + §6 固定数值勘误；玩法现行事实以 `doc/wiki/` 为准）
 > **当前版本**：不要相信本文档中的固定版本号，必须通过 `page/utils.js` 中的 `APP_VERSION` 实时确认
 > **当前 HEAD**：用 `git log --oneline -5` 实时确认
 > **远端 main**：用 `git ls-remote origin refs/heads/main` 实时确认
@@ -10,13 +10,14 @@
 > **测试**：以 `scripts/test-*.js` 实际扫描并运行的结果为准；开始任务前先跑测试，得到实时套件数与断言数
 > **⚠️ 本仓库 2026-09-16 起有多个会话并行推进**（v2.1.16~19 一个、v2.1.20~22 另一个）——
 > **动手前先核对当前 HEAD、源码版本与工作树**，不要相信任何文档/记忆里的「当前版本」
+> **📚 文档体系（2026-11-04 起）**：玩法 / 数值的**现行事实**统一在 `doc/wiki/00 系统总览.md`（12 个大类各一页 + `[[wikilinks]]` 总索引 + `01 Glossary/` 术语真源）。本文 §6「玩法系统清单」保留为**历史快照**，其中的固定数字（关卡数、宝珠口径、技能槽、隐藏挑战时长、天赋/技能/状态数量）可能过时，不要作为数值依据；旧值对照见 `doc/wiki/12 术语表与过时文档对照.md`。
 > **⚠️ 2026-09-26 又连做了 v2.1.30~33**（敌群扩 24 大关 → 关卡试炼扩 24 章 → 两轮技能审计），期间改动集中在关卡数据与战斗状态层
 >
 > 🚨 **最容易搞混的一点：本项目有两套独立的「关卡」系统**，听到「关卡试炼 / 挑战关卡」时务必先确认是哪一套：
 >
 > | 系统 | 文件 | 形态 | 规模 | 相关测试 |
 > |---|---|---|---|---|
-> | **关卡试炼**（单敌） | `page/levels.js` | `LEVELS.chapN.levels[]`，手写常量 | **30 章 171 关** | `test-battle` / `test-page-load` |
+> | **关卡试炼**（单敌） | `page/levels.js` | `LEVELS.chapN.levels[]`，手写常量 | **35 章 201 关** | `test-battle` / `test-page-load` |
 > | **敌群试炼**（多对多） | `page/group-levels.js` | `GROUP_LEVELS.gN.stages[]`，程序化生成 | **24 大关 240 关** | `test-group-*` |
 >
 > 2026-09-26 曾因把用户的「关卡挑战」理解成敌群而白做一版（见 §12 PITFALL-16）。
@@ -457,6 +458,8 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ## 6. 玩法系统清单
 
+> ⚠️ **本章为历史快照（v2.2 前后）**：关卡数、宝珠口径、技能槽、隐藏挑战时长、天赋/技能/状态数量等固定数字已与现行代码不符。现行事实以 `doc/wiki/00 系统总览.md` 及各大类页为准（如 `doc/wiki/06 宝珠系统.md`、`doc/wiki/07 玩家技能与媒体资源.md`）；旧值对照见 `doc/wiki/12 术语表与过时文档对照.md`。本章保留作流程、模块与踩坑的索引，已在下方逐条标注勘误。
+
 ### 6.1 角色属性与训练
 
 - **力量训练**：动作 / 重量 / 次数 → 容量（volume）。动作库在 `data/exercises-dataset.js` + `ex-dataset.js`（含 `tagHtml`/`zhLabel` 全局），支持改名/合并（`renameOrMergeExercise` 四库联动）
@@ -479,9 +482,9 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
   - **今日池** `floor(今日容量/100)` —— 成功则写 `summonedDate=今日`（每日 1 次守卫）
   - **补召池** `floor(昨日容量/100)` —— 昨日漏召（仅顺延 1 天）且未补过时顺延至今日；补召成功写 `madeUpDate=昨日`（`madeUpUsed` 单独计数）。**补召结算不占今日名额**（`applyChallengeSettle` 分型记账）
 - **误锁自助恢复**：`v2.0.7` 修复前完成补召的存档可能被锁，done 卡有恢复按钮（`v2.0.8` 放宽条件精确命中 `madeUpDate===昨日`）
-- **热血 buff**：周内 4 天连续解锁
+- **热血 buff**：**本周去重天数 ≥ 5** 且未使用时 3 选 1（`critRate` / `critDmg` / `timeBonus`）；旧记录「周内 4 天连续」已更正（`challenge.js:417-420`）
 - **奖励**：材料 + 技能点（基础 20/次 + 周次数档位奖励 2/4/5+）——**与敌群发点是两条独立代码路径**（此处 `challenge.js` 直加 `ss.points`，敌群走 `awardSkillPoints`），改数值时注意区分
-- **历史成绩查看**（含 buff）；战斗形式为 8-12s 倒计时点击攻击小游戏（预览确认后开始）
+- **历史成绩查看**（含 buff）；战斗形式为 **6–8s** 倒计时点击攻击小游戏（预览确认后开始；`CH_DUR_MIN=6 / CH_DUR_MAX=8`，v2.4.10 前为 8–12s）
 
 ### 6.3 敌群多对多战斗
 
@@ -516,8 +519,8 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 - **`group-progress.js`**：线性解锁，通关解锁下一关，**通关后锁定不可重打**
 - **`battle-group.js`**：群战引擎（824 行），行动队列按速度排序 + 单步执行（`groupBattleStep`，一次一单位；`groupBattleTick` 兼容整回合）
-- **`talent.js`** 32 天赋 · **`skill.js`** 38 技能（敌群 25 + v2.1.16 入池的 8 + 其他）· **`status-defs.js`** **17 状态**
-  （基础 12 个 + v2.1.15 的 3 个增益 `atkup`/`guardup`/`wideguard` + v2.1.21 的 `confused`/`confused_down`；哈欠会衍生「睡眠」子状态）
+- **按实际注册调用数更正**：`talent.js` **14 条** `registerTalent` · `skill.js` **25 条** `registerSkill` · `status-defs.js` **23 条** `defineStatus` + `state-core.js` 内置 `sleep` **1 条 = 24 种状态**（`grade` 1=普通 / 2=高级 / 3=特级；`cleanseNegatives` 默认 `maxGrade=2`）
+  （旧快照写「32 天赋 / 38 技能 / 17 状态」已过时；现行清单见 `doc/wiki/04 敌群多对多战斗.md`）
 - **`ai.js`** AI 策略：斩杀残血 / 治疗队友 / Boss 大招 / 嘲讽强制 / 集火评分
 - **`terrain.js`** 6 场地（g3 起每大关一个主题场地）
 - **UI**：`game-render.js` 手动/自动模式 + 1×2×4×8× 调速 + **战斗/日志双 Tab** + 单位卡（技能冷却/行动者高亮）+ 技能与天赋详情弹层 + 伤害飘字 + 技能气泡
@@ -536,7 +539,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 - ✅ v2.2.5 已落地：**启风**（技能 #10）—— ① 每回合我方随机 2 名速度 +n×1% → 状态 **`haste` 疾风**（实例 `modsPct.spd`，不改 base、可驱散）；② 我方持**全场最快者**时该角色每回合额外一次普攻 ×n×8% → `qifengExtraAttack(gb, actor)`（群战 tick 行动之后调用，每回合一次，目标走 `aiPickTarget(gb, actor, null)`）；`normalAttack` 新增可选 `dmgMult`
 - 技能点经济：敌群通关 **+4/胜**（基数在 `skill-store.js` 的 `SKILL_POINTS_PER_STAGE`；周内递增 `weeklyBonusRate = min(2.5, 本周胜局×0.5)` → **4→6→8→10→12→14 封顶**）。
   v2.1.10 从 100 降到 10、v2.1.19 又降到 4。⚠️ **数值唯一来源是 `SKILL_POINTS_PER_STAGE`**，别在别处写死数字（`game-render.js` 的注释曾长期写「10 点/胜」与实际不符，v2.1.21 已同步）
-- 槽位：初始 1，12/20 关解锁；同类型限 1
+- 槽位：**3 槽全开**（`SKILL_SLOT_TOTAL = 3`、`slotsUnlocked = 3`、`loadout = []`）；`unlockSkillSlots()` 全项目无调用点，靠 `getSkillState()` 读路径抬到 3；同类型限 1（旧记录「初始 1，12/20 关解锁」已过时，见 `doc/wiki/07 玩家技能与媒体资源.md`）
 - **关键**：`startGroupTrial` 里必须 `attachPlayerSkills(player, getSkillState())`，玩家技能才生效
 
 ### 6.5 宠物系统
@@ -569,6 +572,12 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ### 6.6 宝珠（**v2.2 WP-A2 起：百分比进池**）
 
+> ⚠️ **本节自 v2.14.16 起整体过时**。现行口径（唯一事实源 `page/orbs.js`；完整版见 `doc/wiki/06 宝珠系统.md`）：
+> - **分解返还 = `orbPct(orb)`（等价碎片）**：`R·Lv1 = 10` … `UR·Lv50 = 297`；旧定额表 `ORB_DECOMPOSE = {R:8,SR:10,SSR:20,UR:40}` **已删除**。
+> - **恢复合成**：`ORB_SYNTH_COST = 20` 碎片 → 随机 `R·Lv1` 宝珠，**100% 成功**、**每日 5 次**（`ORB_SYNTH_DAILY_LIMIT=5`）；失败不扣碎片不计数，跨日读时归零；计数存 `data.orbSynth`，随 `dh-pets-v1` 云同步。
+> - 新增 `page/media/orbs/` 5 枚 48×48 像素 SVG 图标（`orbIconHtml(type, 32)`）；升级提示修复 `u8.stat` → `u8.pct`（旧代码显示 `+undefined`）。
+> - 下方「**没有合成**」「**分解返还 8 / 10 / 20 / 40**」「碎片只用于升级」等均为旧记录，保留仅供追溯，**不要照此改代码**。
+
 - 5 类型（血气 / 攻击 / 魂攻 / 防御 / 魂防）× 品质链 **R → SR → SSR → UR**（**N 档已删**）
 - **数值是百分比**，进 `boostPetForGroup` 的池、与稀有度倍率**相加**（不再直接加属性值）：
   - 等级上限 **R 10 / SR 25 / SSR 40 / UR 50**，**满级自动升品质**（等级回 1；加成连续：R 满 19% → SR Lv1 20%）
@@ -585,7 +594,7 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 
 ⚠️ **与 §6.3 的敌群是两套系统**：这里是**单敌**对战、手写常量 `page/levels.js`；敌群是多对多、程序化生成。
 
-- **30 章 × 每章 3~6 关 = 171 关**（chap1~3 各 3 关，**chap4 起固定 6 关**）
+- **35 章 201 关**（chap1~3 各 3 关，**chap4~35 各 6 关**）；旧快照「30 章 171 关」已过时（`page/levels.js`，详见 `doc/wiki/02 关卡试炼与单敌战斗.md`）
 - 每章末关（x-6）是 BOSS：`boss: true`，**chap16 起带 `dualAffix: true`**（双词条，见 §6.3 的 `pickBossAffix`）
 - 章数**没有硬编码**：徽标 `Object.keys(LEVELS).length`、解锁链 `allPrevCleared()`、`findLevel()`、下一关推进全部遍历 `LEVELS`
   → **扩章只需往 `LEVELS` 加一个 chap 块**
@@ -679,13 +688,13 @@ store.js → data/exercises-dataset.js → ex-dataset.js → config.js → utils
 可直接用 `.workbuddy-ai/tmp/run-all4.sh`（覆盖五种格式、输出「仅靠退出码判定」的套件清单）。
 
 ```bash
-bash .workbuddy-ai/tmp/run-all4.sh          # 推荐：严格版，61 套件全部有明确归属
+bash .workbuddy-ai/tmp/run-all4.sh          # 推荐：严格版，按退出码判定（套件数随施工递增）
 for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done   # 最简版：只看退出码
 ```
 
 > ⚠️ 下面这张**逐套件表是 2026-09-29（v2.2.10）的历史快照**（当时 38 套件 / 1109 断言），
-> 表内数字**已全面过期**（现为 61 套件 / 4320 断言）。保留它是为了看**覆盖范围**，**不要引用表里的断言数**；
-> 需要精确数字时跑上面的严格运行器。
+> 表内断言数与部分覆盖描述**已全面过期**。本轮（v2.14.16 / 2026-11-04）实时全量回归为 **79 套件 / 0 失败**，`test-a11y-tokens` 40/40；现行测试职责与流程见 `doc/wiki/10 测试与版本纪律.md`。
+> 保留表格是为了看**覆盖范围**，**不要引用表里的断言数，也不要把表内玩法数字当作现行规则**（例如「合成入口已删」已在 v2.14.16 反转为「合成已恢复」）；需要精确数字时跑上面的严格运行器。
 
 | 套件 | 断言 | 覆盖 |
 |---|---|---|
@@ -699,10 +708,10 @@ for t in scripts/test-*.js; do node "$t" >/dev/null 2>&1 || echo "FAIL $t"; done
 | `test-pet-materials` | 37 | 材料 + 炼化 + 10:1 兑换 + 技能指定升级 |
 | `test-skills` | 29 | 玩家技能（经济/升级/槽位） |
 | `test-challenge-borrow` | 27 | 隐藏挑战顺延/补召/误锁恢复 |
-| `test-orb-wiring` | 32 | 宝珠全链路（**掉落 → 装配 → 百分比进池 → 升品质 → 迁移**）+ UI 接线守卫（含「合成入口已删」「`_orbBonus` 已删」反向断言）（v2.2.2，27→32） |
+| `test-orb-wiring` | 32 | 宝珠全链路（**掉落 → 装配 → 百分比进池 → 升品质 → 迁移**）+ UI 接线守卫（含「`_orbBonus` 已删」反向断言）（v2.2.2，27→32）。⚠️ 旧描述「合成入口已删」已在 **v2.14.16 反转为「合成已恢复」**，现行断言见 `doc/wiki/06 宝珠系统.md` |
 | `test-page-load` | 27 | 页面加载链冒烟（校验 index.html 挂载了全部模块 + 骨架容器）—— **接线事故防线** |
 | `test-skill-range-channels` | 27 | 🎚️ 技能区间必须真的随成长变化（判据＝数值随 t 变） |
-| `test-enemy` | 26 | 16 天赋 + 编成阶梯 |
+| `test-enemy` | 26 | 14 天赋 + 编成阶梯 |
 | `test-player-skills` | 45 | 玩家技能挂钩 + **冰魄两段 / 巨石降魂防按等级可叠封顶**（v2.1.33）+ **格挡新口径与护盾满级 20**（v2.2.3）+ **弱化**（v2.2.4）+ **启风①②**（v2.2.5）+ **宠物共享桥（宠物档 15%/160%、格挡 50%、气力 120%）**（v2.2.6） |
 | `test-status` | 26 | 状态定义 + 生命周期（附身/末日/破甲叠加） |
 | `test-state-core` | 25 | 状态框架 |
