@@ -1,0 +1,61 @@
+<!--
+  orb type: soulAtk
+  name: 魂攻宝珠
+  palette: K=#23262E B=#8B5CF6 C=#C9B8FD D=#5B3AA8 W=#FFFFFF
+  48x48 px art, 16x16 grid, 1 cell = 3px
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<title>魂攻宝珠</title>
+<rect x="12" y="3" width="24" height="3" fill="#23262E"/>
+<rect x="6" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="6" width="30" height="3" fill="#C9B8FD"/>
+<rect x="39" y="6" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="9" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="9" width="36" height="3" fill="#8B5CF6"/>
+<rect x="42" y="9" width="3" height="3" fill="#23262E"/>
+<rect x="0" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="12" width="6" height="3" fill="#8B5CF6"/>
+<rect x="9" y="12" width="9" height="3" fill="#C9B8FD"/>
+<rect x="18" y="12" width="27" height="3" fill="#8B5CF6"/>
+<rect x="45" y="12" width="3" height="3" fill="#23262E"/>
+<rect x="0" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="15" width="18" height="3" fill="#8B5CF6"/>
+<rect x="21" y="15" width="6" height="3" fill="#FFFFFF"/>
+<rect x="27" y="15" width="18" height="3" fill="#8B5CF6"/>
+<rect x="45" y="15" width="3" height="3" fill="#23262E"/>
+<rect x="0" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="18" width="15" height="3" fill="#8B5CF6"/>
+<rect x="18" y="18" width="12" height="3" fill="#FFFFFF"/>
+<rect x="30" y="18" width="15" height="3" fill="#8B5CF6"/>
+<rect x="45" y="18" width="3" height="3" fill="#23262E"/>
+<rect x="0" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="21" width="12" height="3" fill="#8B5CF6"/>
+<rect x="15" y="21" width="18" height="3" fill="#FFFFFF"/>
+<rect x="33" y="21" width="12" height="3" fill="#8B5CF6"/>
+<rect x="45" y="21" width="3" height="3" fill="#23262E"/>
+<rect x="0" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="24" width="12" height="3" fill="#8B5CF6"/>
+<rect x="15" y="24" width="18" height="3" fill="#FFFFFF"/>
+<rect x="33" y="24" width="12" height="3" fill="#8B5CF6"/>
+<rect x="45" y="24" width="3" height="3" fill="#23262E"/>
+<rect x="0" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="27" width="15" height="3" fill="#8B5CF6"/>
+<rect x="18" y="27" width="12" height="3" fill="#FFFFFF"/>
+<rect x="30" y="27" width="15" height="3" fill="#8B5CF6"/>
+<rect x="45" y="27" width="3" height="3" fill="#23262E"/>
+<rect x="0" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="30" width="18" height="3" fill="#8B5CF6"/>
+<rect x="21" y="30" width="6" height="3" fill="#FFFFFF"/>
+<rect x="27" y="30" width="18" height="3" fill="#8B5CF6"/>
+<rect x="45" y="30" width="3" height="3" fill="#23262E"/>
+<rect x="0" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="33" width="42" height="3" fill="#5B3AA8"/>
+<rect x="45" y="33" width="3" height="3" fill="#23262E"/>
+<rect x="3" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="36" width="36" height="3" fill="#8B5CF6"/>
+<rect x="42" y="36" width="3" height="3" fill="#23262E"/>
+<rect x="6" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="9" y="39" width="30" height="3" fill="#C9B8FD"/>
+<rect x="39" y="39" width="3" height="3" fill="#23262E"/>
+<rect x="12" y="42" width="24" height="3" fill="#23262E"/>
+</svg>

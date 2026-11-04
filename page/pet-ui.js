@@ -46,36 +46,68 @@ function petIconStageHtml(speciesId, size, stage) {
 }
 
 
-/* ============ v2.1.17 宝珠 UI（design-v2.0.md §2.7） ============
-   此前 orbs.js 逻辑完整但 UI 零调用、存档也没有库存字段 —— 碎片只能用不能花。
-   这里补上：主面板合成/分解，宠物详情装配/升级/卸下。 */
+/* ============ v2.15 宝珠 UI ============
+   v2.1.17 首次接线（库存 / 分解 / 5 槽装配升级）；v2.2 取消合成、改挑战掉落；
+   **v2.15 恢复合成并改口径**：分解返还 = 加成百分点数（R·Lv1 = 10 碎片），
+   20 碎片可随机合成 1 颗 R·Lv1（100% 成功 / 每日 5 次），并给 5 种宝珠配像素图标。
+   ⚠️ 数值一律来自 orbs.js（orbPct / orbDecomposeShards / orbSynthStatus），本文件不写死。 */
 
-/* 主面板：合成按钮 + 库存列表 */
+/* 宝珠图标唯一入口：page/media/orbs/<type>.svg（48×48 像素风，与宠物/技能图标同规格）。
+   缺图标时回退 🔮 —— 不抛错、不显示裂图；调用方不必各自兜底。 */
+var ORB_ICON_DIR = 'media/orbs/';
+function orbIconUrl(type) {
+  if (!type || typeof ORB_TYPES === 'undefined' || !ORB_TYPES[type]) return null;
+  return ORB_ICON_DIR + type + '.svg';
+}
+function orbIconHtml(type, size) {
+  var url = orbIconUrl(type);
+  if (!url) return '🔮';
+  return '<img class="orb-ico" src="' + url + '" width="' + size + '" height="' + size + '" alt=""'
+    + ' loading="lazy" decoding="async">';
+}
+
+/* 主面板：合成（常显）+ 库存（默认折叠 —— 打多了挑战会有几十颗，是面板最长的区块） */
 function orbBagHtml(d) {
   if (typeof ORB_TYPES === 'undefined') return '';
+  var today = (typeof dateKey === 'function') ? dateKey(new Date()) : '';
+  var st = (typeof orbSynthStatus === 'function')
+    ? orbSynthStatus(d, today)
+    : { count: 0, limit: 5, cost: 20, shards: 0, canSynth: false, reason: '宝珠模块未加载' };
   var sh = (d.materials || {}).orbShard || 0;
-  var h = '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:14px">';
-  h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
-  h += '<div style="flex:1;font-weight:700">💎 宝珠 <span style="color:var(--text3);font-weight:400">（碎片 <b>' + sh + '</b> · 仅用于升级）</span></div>';
-  h += '</div>';
   var bag = d.orbs || [];
+  var h = '<div class="orb-bag">'
+    + '<div class="orb-bag-hd">💎 宝珠 <span class="orb-bag-meta">碎片 <b>' + sh + '</b> · 库存 '
+    + bag.length + ' 颗 · 今日合成 ' + st.count + '/' + st.limit + '</span></div>'
+    + '<button class="speed-btn orb-synth-btn" type="button" data-orb-synth="1"'
+    + (st.canSynth ? '' : ' disabled aria-disabled="true"')
+    + ' title="' + (st.reason || ('消耗 ' + st.cost + ' 碎片，随机合成 1 颗 R·Lv1 宝珠（100% 成功）')) + '">'
+    + '🔨 合成 ' + st.cost + '💎 → R·Lv1 随机宝珠（' + st.count + '/' + st.limit + '）</button>'
+    /* ⚠️ 用独立的合成原因样式类，不复用互兑原因行那个类：
+       scripts/test-pet-exchange-list.js 有一条「两个方向都能换时不出原因行」的
+       全局断言（按类名检索整个面板 HTML）—— 复用会把它误判成互兑的禁用原因。 */
+    + (st.reason ? '<div class="orb-synth-hint" role="note">' + st.reason + '</div>' : '');
   if (!bag.length) {
-    h += '<div style="color:var(--text3);margin-top:6px">库存空 —— 通关隐藏挑战掉落宝珠，装配在宠物详情里</div>';
+    h += '<div class="orb-bag-empty">库存空 —— 通关隐藏挑战掉落，或用碎片合成</div>';
   } else {
+    h += '<details class="orb-stock"><summary>📦 库存 ' + bag.length + ' 颗（点开分解）</summary><div class="orb-stock-body">';
     bag.forEach(function (o) {
       var ot = ORB_TYPES[o.type] || { name: o.type };
       var val = (typeof orbPct === 'function') ? orbPct(o) : 0;
-      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--surface-3)">';
-      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span style="color:var(--green)">+' + val + '%</span></div>';
-      h += '<button class="speed-btn" data-orb-bag="' + o.id + '" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">♻️ 分解 +' + ((typeof ORB_DECOMPOSE !== 'undefined' && ORB_DECOMPOSE[o.rarity]) || 0) + '</button>';
-      h += '</div>';
+      var back = (typeof orbDecomposeShards === 'function') ? orbDecomposeShards(o) : 0;
+      h += '<div class="orb-bag-item">'
+        + orbIconHtml(o.type, 32)
+        + '<div class="orb-bag-info">' + ot.name + ' <span class="orb-q">' + o.rarity + '</span> Lv'
+        + (o.level || 1) + ' <span class="orb-pct">+' + val + '%</span></div>'
+        + '<button class="speed-btn" data-orb-bag="' + o.id + '" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">♻️ +' + back + '</button>'
+        + '</div>';
     });
+    h += '</div></details>';
   }
   h += '</div>';
   return h;
 }
 
-/* 宠物详情：5 个槽位 */
+/* 宠物详情：5 个槽位（v2.15：每槽前置宝珠图标，空槽也显示 —— 类型一眼可辨） */
 function orbSlotsHtml(pet, d) {
   if (typeof ORB_TYPES === 'undefined') return '';
   var sh = (d.materials || {}).orbShard || 0;
@@ -92,6 +124,9 @@ function orbSlotsHtml(pet, d) {
   orbTypes.forEach(function (t) {
     var ot = ORB_TYPES[t], o = eq[t];
     h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0">';
+    /* 32px：图标是 16×16 网格 / 48px 基准，32 → 每格 2px 干净；
+       24px 不是 16 的倍数（1.5px/格），crispEdges 会把格宽硬切成 1/2px 粗细不均。 */
+    h += orbIconHtml(t, 32);
     if (o) {
       var val = (typeof orbPct === 'function') ? orbPct(o) : 0;
       /* v2.2：等级上限与「满级升品质」都看 ORB_QUALITY_SPEC（旧 ORB_TYPES.maxLv 已删） */
@@ -339,7 +374,10 @@ function renderPetPanel() {
     _rows.sort(function(a, b){
       return _GROUP_RANK[a.g] !== _GROUP_RANK[b.g] ? _GROUP_RANK[a.g] - _GROUP_RANK[b.g] : a.i - b.i
     })
-    _rows.forEach(function(r) {
+    /* v2.15：**按组折叠** —— 参战 + 可用常显；受伤 / 成长中 / 阵亡收进
+       <details> 默认折叠（v2.14.1 已把每行压到 ~56px，这里再削掉"暂时用不上"的行）。
+       一组都没有可用宠时把折叠区默认展开，避免面板只剩一行 summary。 */
+    function _petCardHtml(r) {
       var p = r.p, i = r.i
       var codex = getPetCodex(p.speciesId) || { name: p.name, rarity: p.rarity }
       /* v2.2.29：头像改用宠物专属图标（petIconStageHtml 内部兜底回原来的阶段 emoji） */
@@ -352,7 +390,7 @@ function renderPetPanel() {
       var lvInfo = (typeof petLevelInfo === 'function') ? petLevelInfo(p) : null
       var lvTxt = (lvInfo && p.stage === 'mature') ? ' · 🏅 Lv' + lvInfo.level : ''
       var open = (_petRowOpen === i)
-      h += '<div class="pet-card" data-pet-group="'+r.g+'">'
+      return '<div class="pet-card" data-pet-group="'+r.g+'">'
         +'<div class="pet-row">'
         +'<span class="pet-card-ico">'+petIconStageHtml(p.speciesId, 32, p.stage)+'</span>'
         +'<span class="pet-row-main">'
@@ -375,7 +413,17 @@ function renderPetPanel() {
         +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="detail" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">📋</button>':'')
         +'</div>'
         +'</div>'
-    })
+    }
+    var _mainRows = _rows.filter(function(r){ return r.g === 'lineup' || r.g === 'ready' })
+    var _restRows = _rows.filter(function(r){ return r.g !== 'lineup' && r.g !== 'ready' })
+    _mainRows.forEach(function(r){ h += _petCardHtml(r) })
+    if (_restRows.length) {
+      h += '<details class="pet-rest"' + (_mainRows.length ? '' : ' open') + '>'
+        + '<summary>其余 ' + _restRows.length + ' 只（受伤 / 成长中 / 阵亡）</summary>'
+        + '<div class="pet-rest-body">'
+      _restRows.forEach(function(r){ h += _petCardHtml(r) })
+      h += '</div></details>'
+    }
   }
   /* v2.3：重渲染前记下滚动位置并还原（与详情页同一处理）—— 面板是滚动容器，
      不还原的话在列表里点「🍖喂 / ✨炼化」会被弹回顶部，与「一键治疗」上移的初衷相反。 */
@@ -456,8 +504,24 @@ function renderPetPanel() {
     }
     renderPetPanel()
   })
-  /* v2.2 WP-A2：**删除「合成宝珠」入口** —— 宝珠本体改为隐藏挑战掉落，
-     碎片只用于升级（口径见 doc/changelog-v2.2.md）。 */
+  /* v2.15：**恢复「合成宝珠」入口** —— 20 碎片 / 100% / 每日 5 次，
+     规则与落盘全在 orbs.js 的 synthOrb() / orbSynthStatus()，UI 只负责提示与重渲染。 */
+  ov.querySelectorAll('[data-orb-synth]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var d9 = getPetStore()
+      var today = (typeof dateKey === 'function') ? dateKey(new Date()) : ''
+      var r9 = (typeof synthOrb === 'function')
+        ? synthOrb(d9, today)
+        : { ok: false, reason: '宝珠模块未加载' }
+      if (!r9.ok) { toast(r9.reason || '合成失败', 'e'); return }
+      savePetStore(d9)
+      toast('🔨 合成 ' + ((ORB_TYPES[r9.orb.type]||{}).name || r9.orb.type)
+        + '（R·Lv1）· 今日 ' + r9.count + '/'
+        + ((typeof ORB_SYNTH_DAILY_LIMIT === 'number') ? ORB_SYNTH_DAILY_LIMIT : 5), 's')
+      renderPetPanel()
+    })
+  })
+  /* 分解：返还 = 该宝珠的加成百分点数（v2.15 等价碎片口径），toast 报实际数值 */
   ov.querySelectorAll('[data-orb-bag]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var oid = btn.getAttribute('data-orb-bag')
@@ -467,9 +531,10 @@ function renderPetPanel() {
       arr.forEach(function(o, k){ if (o.id === oid) i7 = k })
       if (i7 < 0) return
       var orb7 = arr.splice(i7, 1)[0]
-      if (typeof decomposeOrb === 'function') decomposeOrb(orb7, d7.materials)
+      var dec7 = (typeof decomposeOrb === 'function') ? decomposeOrb(orb7, d7.materials) : { shards: 0 }
       savePetStore(d7)
-      toast('♻️ 分解 ' + ((ORB_TYPES[orb7.type]||{}).name||orb7.type) + '（' + orb7.rarity + '）', 's')
+      toast('♻️ 分解 ' + ((ORB_TYPES[orb7.type]||{}).name||orb7.type)
+        + '（' + orb7.rarity + '）→ +' + dec7.shards + ' 碎片', 's')
       renderPetPanel()
     })
   })
@@ -1063,7 +1128,10 @@ function renderPetDetail(pet, idx) {
         var u8 = upgradeOrb(o8, d8.materials)
         if (!u8.ok) { toast(u8.reason || '升级失败','e'); return }
         savePetStore(d8)
-        toast('⬆ Lv' + u8.level + '（+' + u8.stat + '）','s')
+        /* v2.15：upgradeOrb() 返回 {level,rarity,promoted,pct}，**没有 stat 字段** ——
+           旧代码读了不存在的字段会显示「（+undefined）」。改报加成百分点；升品质时补一句。 */
+        toast('⬆ Lv' + u8.level + '（+' + u8.pct + '%）'
+          + (u8.promoted ? ' · 升品质 ' + u8.rarity : ''), 's')
       }
       renderPetDetail(d8.pets[idx], idx)
     })

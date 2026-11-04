@@ -111,6 +111,8 @@ const SAMPLES = {
     orbs: [{ id: 'o1', type: 'atk', level: 3 }],
     /* v2.2 WP-H1：参战宠物选择（**在 pets 对象内部**，不单独占一个 store 键） */
     battlePicks: ['dream'],
+    /* v2.15：宝珠合成每日计数（也在 pets 对象内部，不新增 store key） */
+    orbSynth: { dayKey: '2026-09-15', count: 3 },
     lastSettleDate: '2026-09-15', monthlyKey: '2026-09'
   },
   skills: { points: 88, levels: { crit: 7, meteor: 3 }, loadout: ['crit', 'meteor', 'goldshield'] },
@@ -228,6 +230,9 @@ assert('材料袋还原（营养液/饲料/炼化石）',
   petsBack.materials && petsBack.materials.nutrition === 12 && petsBack.materials.feed === 30 && petsBack.materials.refineNormal === 44,
   JSON.stringify(petsBack.materials));
 assert('宝珠库存还原', Array.isArray(petsBack.orbs) && petsBack.orbs.length === 1, JSON.stringify(petsBack.orbs));
+assert('v2.15 每日合成计数 orbSynth 随 pets 键一起还原（换设备不重置次数）',
+  petsBack.orbSynth && petsBack.orbSynth.dayKey === '2026-09-15' && petsBack.orbSynth.count === 3,
+  JSON.stringify(petsBack.orbSynth));
 const grp = B.store.get('groupProgress') || {};
 assert('敌群进度还原', Array.isArray(grp.cleared) && grp.cleared.length === 2, JSON.stringify(grp));
 const sk = B.store.get('skills') || {};

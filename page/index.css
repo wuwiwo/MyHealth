@@ -1522,3 +1522,68 @@ box-shadow:none}
      · 带 :not(:hover)：hover 完全沿用 .speed-btn 的反色规则（同 v2.14.14 的理由）。 */
 .gb-auto-btn[data-auto-state="next"]:not(:hover){border-color:var(--green);color:var(--green);border-style:dashed}
 
+/* ========== v2.15 宝珠图标 + 库存 / 合成 + 培养页阵容 + 折叠精简 ==========
+   作者四项要求：「宝珠增加图标」「分解返还等价碎片 + 恢复合成」「培养页太冗长」
+   「出战宠物太不明显」。本块只做版式，不写任何数值（数值全在 orbs.js）。
+   规范：0 圆角 / 无阴影 / 无渐变 / 无半透明；触控目标一律 ≥ --touch-min(44px)；
+        <details> 一律用原生 summary（浏览器自带 keyboard + aria-expanded），
+        不手写 aria-expanded；只用既有令牌，无新字号、无新颜色。 */
+/* ① 宝珠图标：与 .pet-ico / .mon-ico / .sk-ico 同一套像素口径。
+   48×48 SVG、16×16 逻辑网格 → 显示尺寸必须是 16 的倍数（本块只出现 32）。 */
+.orb-ico{display:block;flex-shrink:0;image-rendering:pixelated;image-rendering:crisp-edges}
+/* ② 宝珠库存卡：合成按钮常显，库存列表默认折叠（打多了挑战会堆积几十颗，
+   是宠物面板里最长的一块 —— 与「培养页精简」同一刀）。 */
+.orb-bag{background:var(--bg2);border:var(--bw-thin) solid var(--bd-l);padding:var(--sp-3) var(--sp-4);margin:10px 0}
+.orb-bag-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:var(--fs-sm);font-weight:700}
+.orb-bag-meta{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
+.orb-bag-meta b{color:var(--text);font-variant-numeric:tabular-nums}
+.orb-synth-btn{width:100%;margin-top:8px;min-height:var(--touch-min);padding:8px 12px;font-size:var(--fs-sm);border-color:var(--brand);color:var(--brand)}
+/* 禁用态：不用 opacity（扁平规范禁半透明），改中性描边 + --text3 文字；
+   带 :hover 覆盖 .speed-btn 的「前景/背景反色」，否则禁用态 hover 会反成近黑底蓝字。 */
+.orb-synth-btn[disabled]{border-color:var(--bd);color:var(--text3);cursor:not-allowed}
+.orb-synth-btn[disabled]:hover{background:var(--bg2);color:var(--text3)}
+.orb-synth-hint{margin-top:8px;font-size:var(--fs-xs);line-height:1.6;color:var(--text3)}
+.orb-bag-empty{padding:10px 0;font-size:var(--fs-xs);color:var(--text3);line-height:1.6}
+.orb-stock{border-top:var(--bw-thin) solid var(--surface-3);margin-top:8px}
+.orb-stock>summary{display:flex;align-items:center;gap:6px;min-height:var(--touch-min);list-style:none;cursor:pointer;font-size:var(--fs-xs);font-weight:700;color:var(--text2);-webkit-tap-highlight-color:transparent}
+.orb-stock>summary::-webkit-details-marker{display:none}
+.orb-stock>summary::after{content:'▾';flex:0 0 auto;margin-left:auto;color:var(--text3);font-size:var(--fs-xs)}
+.orb-stock[open]>summary::after{content:'▴'}
+.orb-stock>summary:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
+.orb-stock-body{padding-bottom:var(--sp-2)}
+.orb-bag-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:var(--bw-thin) solid var(--surface-3)}
+.orb-bag-info{flex:1;min-width:0;font-size:var(--fs-xs);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orb-q{color:var(--purple,#a855f7)}
+.orb-pct{color:var(--green);font-variant-numeric:tabular-nums}
+/* ③ 宠物面板「其余 N 只」默认折叠：参战 / 可用常显，受伤 / 成长中 / 阵亡收起。 */
+.pet-rest{border:var(--bw-thin) solid var(--bd-l);margin:10px 0}
+.pet-rest>summary{display:flex;align-items:center;gap:6px;min-height:var(--touch-min);padding:0 var(--sp-3);list-style:none;cursor:pointer;font-size:var(--fs-xs);font-weight:700;color:var(--text2);-webkit-tap-highlight-color:transparent}
+.pet-rest>summary::-webkit-details-marker{display:none}
+.pet-rest>summary::after{content:'▾';flex:0 0 auto;margin-left:auto;color:var(--text3)}
+.pet-rest[open]>summary::after{content:'▴'}
+.pet-rest>summary:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
+.pet-rest-body{padding:0 var(--sp-2) var(--sp-2)}
+/* ④ 培养页「出战阵容」常驻醒目卡：2px 品牌描边（唯一强调），
+   与角色属性卡的橙色描边区分层级；芯片 = 头像 + 名，选中态由 aria-pressed 同源上色。 */
+.train-lineup{background:var(--bg2);border:var(--bw) solid var(--brand);padding:var(--sp-4) var(--sp-5);margin-bottom:16px}
+.train-lineup-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:var(--fs-sm);font-weight:700}
+.train-lineup-count{color:var(--brand);font-variant-numeric:tabular-nums}
+.train-lineup-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
+.train-lineup-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.train-lineup-empty{padding:8px 0;font-size:var(--fs-xs);color:var(--text3);line-height:1.6}
+.train-pick-chip{gap:6px;min-height:var(--touch-min);padding:0 10px;font-size:var(--fs-xs)}
+/* 选中态只认 aria-pressed（JS 同步），:not(:hover) 让 hover 沿用 .speed-btn 反色规则 */
+.train-pick-chip[aria-pressed="true"]:not(:hover){border-color:var(--green);color:var(--green)}
+.train-start-battle{width:100%;margin-top:10px;min-height:var(--touch-min);padding:10px 14px;font-size:var(--fs-sm)}
+.train-more-pet{width:100%;margin-top:8px;min-height:var(--touch-min);padding:10px 14px;font-size:var(--fs-sm)}
+/* ⑤ 培养页「道具材料 / 获取与记录」默认折叠 —— 首屏从 6 块压到 5 块，
+   两张长卡（获取方式 + 最近获取）收进同一个 details。 */
+.train-mat-fold{border:var(--bw-thin) solid var(--bd-l);margin-bottom:10px}
+.train-mat-fold>summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:var(--touch-min);padding:0 var(--sp-3);list-style:none;cursor:pointer;font-size:var(--fs-sm);font-weight:700;color:var(--text2);-webkit-tap-highlight-color:transparent}
+.train-mat-fold>summary::-webkit-details-marker{display:none}
+.train-fold-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
+.train-mat-fold>summary::after{content:'▾';flex:0 0 auto;margin-left:auto;color:var(--text3);font-size:var(--fs-xs)}
+.train-mat-fold[open]>summary::after{content:'▴'}
+.train-mat-fold>summary:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
+.train-mat-body{padding:var(--sp-3)}
+

@@ -85,9 +85,42 @@ function renderTrainView() {
     +statCell('💠','技能点',st.points)
     +'</div>'
     +'</div>'
-  // 宠物区块
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">🐾 宠物 <span style="font-size:var(--fs-xs);color:var(--text3)">'+d.pets.length+' 只 · 成熟 '+d.pets.filter(p=>p.stage==="mature"&&!p.isDead).length+'</span></div>'
-  h += '<button class="speed-btn" data-open-pet style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--green);color:var(--green);margin-bottom:16px">🐾 宠物面板（养成/参战/宝珠）</button>'
+  /* ===== v2.15：出战阵容常驻培养页 =====
+     改前「参战 / 开战」藏在宠物面板里，从培养页要点一次按钮才看得到（作者：太不明显）。
+     现在把阵容摘要 + 就地切换 + 开战按钮合并进这张醒目卡片；宠物面板降级为
+     卡片内的「更多养成」次级入口（喂食 / 炼化 / 宝珠 / 图鉴仍在面板里，语义不变）。
+     ⚠️ 选择逻辑与 pet-ui.js 同源：ensurePetBattlePicksLoaded → _petBattlePicks → savePetBattlePicks。 */
+  var _readyPets = d.pets.filter(function(p){ return p.stage === 'mature' && !p.isDead })
+  if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
+  var _picks = (typeof _petBattlePicks !== 'undefined' && _petBattlePicks) ? _petBattlePicks : []
+  var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
+  h += '<div class="train-lineup">'
+    + '<div class="train-lineup-hd">⚔️ 出战阵容'
+    +   '<span class="train-lineup-count">' + _picks.length + '/' + _petMax + '</span>'
+    +   '<span class="train-lineup-hint">'
+    +     (_picks.length ? '点宠物名切换' : '还没选 · 开战会自动带成熟宠物') + '</span></div>'
+    + '<div class="train-lineup-chips">'
+  if (!_readyPets.length) {
+    h += '<div class="train-lineup-empty">还没有可出战的成熟宠物 🐾</div>'
+  } else {
+    _readyPets.forEach(function(p){
+      var sel = _picks.indexOf(p.speciesId) > -1
+      var nm = (typeof getPetCodex === 'function' && (getPetCodex(p.speciesId)||{}).name) || p.name || p.speciesId
+      /* 选中态只由 aria-pressed 表达，上色交给 CSS 的
+         .train-pick-chip[aria-pressed="true"]:not(:hover)（与 .gb-auto-btn 同源）；
+         不写内联 style —— 视觉状态与无障碍状态永远同源。 */
+      h += '<button class="speed-btn train-pick-chip" type="button" data-train-pick="' + p.speciesId + '"'
+        + ' aria-pressed="' + (sel ? 'true' : 'false') + '">'
+        + ((typeof petIconHtml === 'function') ? petIconHtml(p.speciesId, 32) : '🐾')
+        + '<span>' + nm + '</span></button>'
+    })
+  }
+  h += '</div>'
+    + '<button class="speed-btn train-start-battle" id="trainStartBattle" type="button"'
+    +   ' style="border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button>'
+    + '<button class="speed-btn train-more-pet" id="trainMorePet" type="button" data-open-pet>'
+    +   '🐾 更多养成（喂食 / 炼化 / 宝珠）</button>'
+    + '</div>'
   // 技能区块
   h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚡ 技能 <span style="font-size:var(--fs-xs);color:var(--text3)">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
   h += '<button class="speed-btn" data-open-skill style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--blue);color:var(--blue)">⚡ 技能培养面板</button>'
@@ -97,8 +130,13 @@ function renderTrainView() {
   h += '<button class="speed-btn" data-open-codex style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--bd-l);color:var(--text2);margin-top:10px">📖 图鉴（宠物 / 技能 / 天赋）</button>'
   h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">🔮 炼魂 <span style="font-size:var(--fs-xs);color:var(--text3)">角色属性强化</span></div>'
   h += '<button class="speed-btn" data-open-refine style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">🔮 炼魂系统</button>'
-  // 材料区块：获取说明 + 获取记录
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">📦 道具材料 <span style="font-size:var(--fs-xs);color:var(--text3)">获取与记录</span></div>'
+  /* 材料区块：v2.15 精简 —— 「获取方式 + 最近获取」两张长卡合并进一个默认折叠的
+     原生 <details>，培养页首屏只剩角色卡 / 出战阵容 / 技能 / 炼魂 / 图鉴五个主块。
+     用原生 details 而非自定义 aria-expanded，键盘 / 读屏开箱可用。 */
+  var log = d.materialLog || []
+  h += '<details class="train-mat-fold">'
+    + '<summary>📦 道具材料 <span class="train-fold-hint">获取与记录 · 点开查看</span></summary>'
+    + '<div class="train-mat-body">'
   h += '<div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:12px">'
   h += '<div style="font-size:var(--fs-sm);font-weight:700;margin-bottom:8px">💡 获取方式</div>'
   Object.keys(MATERIAL_NAMES).forEach(function(t){
@@ -109,8 +147,6 @@ function renderTrainView() {
       +'</div>'
   })
   h += '</div>'
-  // 获取记录
-  var log = d.materialLog || []
   h += '<div style="background:var(--bg2);border-radius:14px;padding:14px">'
   h += '<div style="font-size:var(--fs-sm);font-weight:700;margin-bottom:8px">📜 最近获取</div>'
   if (!log.length) {
@@ -125,7 +161,42 @@ function renderTrainView() {
     })
   }
   h += '</div>'
+  h += '</div></details>'
   v.innerHTML = h
+  /* v2.15：出战阵容就地切换 —— 与 pet-ui.js 的 data-pet-pick 同源（读存档 → 改
+     _petBattlePicks → savePetBattlePicks），但只就地刷新芯片 / 计数，不整块重绘，
+     这样材料 <details> 的展开状态不会被一次点击重置。 */
+  v.querySelectorAll('[data-train-pick]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var sid = btn.getAttribute('data-train-pick')
+      if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
+      _petBattlePicks = _petBattlePicks || []
+      var i = _petBattlePicks.indexOf(sid)
+      var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
+      if (i > -1) _petBattlePicks.splice(i, 1)
+      else if (_petBattlePicks.length < _petMax) _petBattlePicks.push(sid)
+      else { toast('最多携带 ' + _petMax + ' 只宠物 ⚔️', 'e'); return }
+      if (typeof savePetBattlePicks === 'function') savePetBattlePicks(_petBattlePicks)
+      v.querySelectorAll('[data-train-pick]').forEach(function(c){
+        var on = _petBattlePicks.indexOf(c.getAttribute('data-train-pick')) > -1
+        c.setAttribute('aria-pressed', on ? 'true' : 'false')
+      })
+      var cnt = v.querySelector('.train-lineup-count')
+      if (cnt) cnt.textContent = _petBattlePicks.length + '/' + _petMax
+      var hint = v.querySelector('.train-lineup-hint')
+      if (hint) hint.textContent = _petBattlePicks.length ? '点宠物名切换' : '还没选 · 开战会自动带成熟宠物'
+    })
+  })
+  /* v2.15：培养页直接开战 —— 目标关取 currentGroupStageId()（唯一进度源），
+     开战仍走 startGroupTrialWithPets() → startGroupTrial()，不另建战斗对象。 */
+  var trainStartBtn = document.getElementById('trainStartBattle')
+  if (trainStartBtn) trainStartBtn.addEventListener('click', function(){
+    var stage = (typeof currentGroupStageId === 'function') ? currentGroupStageId() : null
+    if (!stage) { toast('暂无可挑战的敌群关卡', 'e'); return }
+    if (typeof startGroupTrialWithPets === 'function') startGroupTrialWithPets(stage, (_petBattlePicks || []).slice())
+    else if (typeof startGroupTrial === 'function') startGroupTrial(stage)
+    else toast('敌群模块未加载', 'e')
+  })
   var petBtn = v.querySelector('[data-open-pet]')
   if (petBtn) petBtn.addEventListener('click', function () { renderPetPanel() })
   var skillBtn = v.querySelector('[data-open-skill]')

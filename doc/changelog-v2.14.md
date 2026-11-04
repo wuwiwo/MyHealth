@@ -5,6 +5,61 @@
 
 ---
 
+## v2.14.16
+
+Date: 2026-11-04
+
+**宝珠系统四项施工 + 培养页精简 / 出战阵容常驻**（作者远程需求）。口径两处经作者裁决：分解返还按「**等同加成 %**」；「培养页太冗长」与「出战宠物太不明显」**两处都改且合并**。本版只动宝珠经济、图标与 UI 折叠/接线，**未改任何战斗数值、未改引擎、未改掉落概率**。
+
+### 新增功能
+
+1. **分解等价碎片**（`page/orbs.js`）：删除旧 `ORB_DECOMPOSE = { R:8, SR:10, SSR:20, UR:40 }` 品质定额表（它不看等级），改为 **`orbDecomposeShards(orb) = orbPct(orb)`** —— 加成多少个百分点就返还多少碎片。**R·Lv1 = 10 碎片**（基准），随品质 / 等级连续单调递增：`R·Lv10 = 19`、`SR·Lv25 = 68`、`SSR·Lv40 = 148`、**`UR·Lv50 = 297`**；仍以 `ORB_QUALITY_SPEC` 为唯一数值源，不另建表。`decomposeOrb()` 改用该函数，UI 分解 toast 同步改报**实际返还数**。
+2. **恢复宝珠合成**（`page/orbs.js`）：`ORB_SYNTH_COST = 20` 碎片 → `randomOrbType()` 随机类型 + **R·Lv1** 宝珠，**100% 成功**，每日最多 `ORB_SYNTH_DAILY_LIMIT = 5` 次（作者裁决，非旧文档的 65% 成功率）。新增 `orbSynthState(data, todayKey)`（跨日读时归零、脏数据夹紧）、`orbSynthStatus(data, todayKey)`（可合成 / 碎片不足 / 已达上限三种状态与原因）、`synthOrb(data, todayKey)`（**失败不扣碎片、不计数、不入库**）。`rollOrbDrop()` 与合成共用 `randomOrbType()`。
+   - **每日计数存 `data.orbSynth = { dayKey, count }`，放在 `pets` 存档对象内部**：不新增 store key，随 `sync.js` 从 schema 注册表自动派生的 `keys` 一起云同步；`page/pet-store.js` 的 `defaultValue()` / 无 store 回退默认对象 / 新建默认对象三处补齐，旧档缺字段时优雅退化为空计数（**不迁移、不追溯补偿**）。`MATERIAL_SOURCES.orbShard` 文案改为「隐藏挑战胜利掉落 / 分解宝珠返还（等价碎片）」。
+   - `todayKey` 由 UI 经 `dateKey(new Date())` 注入：`orbs.js` 保持**纯逻辑**，不依赖 `Date` / `date-roll.js` / DOM / store。
+3. **宝珠图标**：新增 `page/media/orbs/{hp,atk,soulAtk,def,soulDef}.svg` ×5（48×48、`viewBox="0 0 48 48"`、`shape-rendering="crispEdges"`、16×16 像素网格，与 `pets/` `skills/` 现有图标同风格）；`page/pet-ui.js` 新增唯一入口 `orbIconUrl(type)` / `orbIconHtml(type, size)`，接入库存行与 **5 个槽位（含空槽）**，显示尺寸统一 **32px**（16 的整数倍；24px 不是 16 的倍数，格宽不匀）。`page/challenge.js` 隐藏挑战结算面板同步接入，用 `typeof orbIconHtml === 'function'` 守卫 + `🔮` 兜底（该文件比 `pet-ui.js` 先加载，但结算面板是运行时渲染，届时全局函数已挂载）。
+
+### 修复
+
+1. **「修复 2」升级提示显示 `+undefined`**：`page/pet-ui.js` 升级 toast 读 `u8.stat`，而 `upgradeOrb()` 返回 `{ ok, level, rarity, promoted, pct }`，**没有 stat 字段**。改为报 `u8.pct`（加成百分点），并在 `u8.promoted` 时追加「升品质 `<rarity>`」。`scripts/test-orb-wiring.js` 新增源码守卫，禁止该字面量回归。
+2. **旧档兼容**：`getPetStore()` 读到无 `orbSynth` 的旧存档时补 `{ dayKey: null, count: 0 }`，不会因 `undefined` 导致合成状态计算异常。
+3. **分解 toast**：由固定文案改为显示 `decomposeOrb()` 返回的 `shards`，与新返还口径一致。
+
+### UI 调整
+
+- **宝珠库存**（`pet-ui.js`）：`orbBagHtml()` 常显合成按钮 `data-orb-synth="1"` + 今日 `N/5` 计数 + 禁用态与原因行；库存列表改原生 `<details class="orb-stock">` **默认折叠**；每行加 32px 图标、分解按钮显示实际返还碎片数。合成原因行用独立 `.orb-synth-hint`（**不复用 `.pet-mat-hint`** —— 后者被 `test-pet-exchange-list.js` 的全面板类名断言占用，复用会误判为互兑禁用原因）。
+- **宠物列表精简**：把原 `_rows.forEach(...)` 抽成 `_petCardHtml(r)`，`参战 / 可用` 常显，`受伤 / 成长中 / 阵亡` 收进默认折叠的 `<details class="pet-rest">`（无可用宠时默认展开其余组）。
+- **培养页出战阵容常驻**（`page/game-views.js` `renderTrainView()`）：替换原「一行标题 + `data-open-pet` 大按钮」，新增 `.train-lineup` 卡 —— `⚔️ 出战阵容` 标题 + `N/4` 计数 + 成熟宠芯片按钮 `data-train-pick` + `#trainStartBattle` 开战按钮 + 次级「🐾 更多养成」入口。选中态**只由 `aria-pressed` 表达**、CSS `[aria-pressed="true"]:not(:hover)` 上色，不写内联 style（避免视觉态与无障碍态漂移）。
+  - 切换逻辑与 `pet-ui.js` **同源**：`ensurePetBattlePicksLoaded()` → `_petBattlePicks` → `savePetBattlePicks()`；就地更新 `aria-pressed` / 计数 / 提示语，**不整块重绘**，保住 `<details>` 展开态。
+  - 开战仍走唯一入口：`currentGroupStageId()` 取当前进度关 → `startGroupTrialWithPets(stage, picks)`（缺模块时兜底 `startGroupTrial(stage)`），**不另建战斗对象**。
+- **培养页材料 / 获取记录**：两张长卡合并进默认折叠的 `<details class="train-mat-fold">`。
+- **样式**（`page/index.css` 末尾追加 v2.15 块）：`.orb-ico`（`image-rendering:pixelated/crisp-edges`）、`.orb-bag*`、`.orb-synth-btn`、`.orb-synth-hint`、`.orb-stock*`、`.orb-bag-item*`、`.pet-rest`、`.train-lineup*`、`.train-pick-chip`、`.train-start-battle`、`.train-more-pet`、`.train-mat-fold*`、`.train-fold-hint`、`.train-mat-body`。全部只用既有令牌；**0 圆角 / 无阴影 / 无渐变 / 无半透明 / 触控 ≥ `var(--touch-min)` / 原生 `<details>` 键盘可达**；禁用态用中性描边 + `--text3` 而非 `opacity`，并带 `:hover` 覆盖 `.speed-btn:hover` 反色规则。
+- **缓存戳**：`page/index.html` 全部 `?v179` → **`?v180`**（55 处），CSS link 与脚本顺序不变（`pet-ui.js` → `orbs.js` → `game-views.js`）。`page/utils.js` `APP_VERSION` → **2.14.16**。
+
+### 测试
+
+- `scripts/test-orbs.js`：**66/0**。分解断言由「SR 返还 10」改为等价碎片（`DEC_CASES` 逐格核对 R/SR/SSR/UR × 等级 / 满级 + 单调递增 + 越界仍 297）；新增 v2.15 合成段（常量、跨日归零、脏数据夹紧、三种状态、100% 成功、扣碎片 / 入库 / 计数 / 落盘、失败不扣、每日上限、跨日重置、跨日不追溯补偿、`randomOrbType()` 400 次采样覆盖 5 类型）。
+- `scripts/test-orb-wiring.js`：**69/0**。旧反向断言「合成已移除（`synthOrb` 不再是函数）」**反转**为「合成已恢复」；新增常量 / 函数暴露、`orbSynth` 默认存档与旧档补齐、合成→落盘→回读往返、分解等价碎片与 R·Lv1=10、图标资源与 `orbIconHtml(t, 32)`（且无 `orbIconHtml(t, 24)`）、培养页阵容 / 折叠接线、`challenge.js` 结算图标、修复 2 守卫、`.orb-synth-hint`（只扫 `orbBagHtml()` 函数体，避免误判文件其它处合法的互兑原因行）。
+- `scripts/test-sync-coverage.js`：**36/0**。`SAMPLES.pets` 加 `orbSynth: { dayKey:'2026-09-15', count:3 }` 并新增往返断言（换设备不重置次数）。
+- 回归确认：`test-pet-exchange-list.js` **109/0**、`test-page-load.js` **ALL PASS (27)**、`test-a11y-tokens.js` **40/40**（断言未弱化）。全量 **79 套件 / 0 失败**。
+- 5 枚 SVG 用 Python `xml.etree.ElementTree` 校验：全部可解析、规格正确、`<title>` 存在；`atk/def/hp/soulAtk` 各 52 个 `rect`，`soulDef` 56 个，输出 `ALL SVG OK`。
+
+### 文件
+
+- **新增**：`page/media/orbs/atk.svg`、`def.svg`、`hp.svg`、`soulAtk.svg`、`soulDef.svg`（5 个）。
+- **修改**：`page/orbs.js`、`page/pet-store.js`、`page/pet-ui.js`、`page/game-views.js`、`page/challenge.js`、`page/index.css`、`page/index.html`、`page/utils.js`、`scripts/test-orbs.js`、`scripts/test-orb-wiring.js`、`scripts/test-sync-coverage.js`、`README.md`、`doc/changelog-v2.14.md`、`doc/VERSION-LEDGER.md`。
+- **删除**：无。**未新增 `page/*.js`**（架构演化表 JS 文件数仍 **53**）。
+
+### ⚠️ 待裁决 / 未覆盖
+
+1. **合成是碎片汇**：20 碎片换 1 颗 R·Lv1，而分解该颗只返 10 —— 按作者明确规格实现，未做闭环补偿。
+2. **月重置覆盖不全**：`d.orbs` 里未装配宝珠的等级不回 1（初始介绍已登记，本轮未要求修，未处理）。
+3. **空槽装配固定取 `stock[0]`**（未改）。
+4. **旧文档仍滞后**：`CONTEXT.md:44` 仍写「65% 合成率」、`doc/design-v2.0.md §2.7` 仍是旧 `N/R/SR/SSR` 扁平数值表；本轮以 `page/orbs.js` 与 `doc/HANDOFF.md §6.6` 为准，**未同步旧设计文档**（属设计阶段改动，按 `AGENTS.md` 不 bump 版本）。
+5. **真机浏览器视觉未复核**：折叠态、32px 图标、`.train-lineup` 在 390/360 双宽度的实际表现未做 CDP 量测；本轮验证均为静态源码守卫 + Node 测试。
+
+---
+
 ## v2.14.15
 
 Date: 2026-10-01
@@ -927,9 +982,11 @@ Date: 2026-10-12
 | v2.14.13 | 53 | （见 changelog） | **作者远程三项**。**① 挑战主按钮回归（P0）**：`#lvChallenge`「⚔️ 挑战」几乎不可见 —— v2.14.9 扁平守卫 `[style*="gradient"]{background-image:none!important}` 把它**唯一**的底色（内联 `linear-gradient(135deg,var(--red),#dc2626)`）清空，只剩 `background-color:transparent` + `.m-btn-save` 白字 → **白字透明底 = 1.00:1**；叠加 `.modal-actions button`(0,1,1) 的 `border:none` 压过 `.m-btn-save`(0,1,0)，**所有弹层确认按钮的 2px 边框其实从未渲染**。修法：按钮走 `.m-btn-save` 实心 CTA + 新增 `.modal-actions .m-btn-save`(0,2,0) 定死 `--brand-fill` 底/`--on-brand` 字/**2px 同色边**/`--touch-min` → 四组实测（浅/深 × 390/360 数值一致）：`rgba(0,0,0,0)→rgb(37,99,235)`、`0px none→2px solid`、`auto/48→44/49`、**1.00:1→5.17:1**、宽度 166/151→**214/194**（明显宽于「关闭」）；`#exSave/#ccSave/#cpSegConfirm/#peExConfirm/#chStart` 一并修好。**同类连带**：培养页「我的角色」卡两端同色**假渐变**被抽掉丢底 → 改实色 `--bg2`；热血 buff 全屏 `radial-gradient` → 平铺 `rgba(251,191,36,.18)`（保留反馈）。**② 炼化点数来源**（作者问 700kg 为何没有）：真实规则 = **本月力量容量 `floor(kg/100)×10`**（700kg → **70 点**）+ **关卡首通战利品**（普通 +2/+4，BOSS +10/+20）；前置**通关 9-6 解锁炼魂**、**结算在打开挑战页/刷新时**（训练保存不触发、懒结算、按已兑换额补差）；隐藏挑战/敌群试炼/有氧**不给**炼化点。700kg 无炼化的三个原因：未通关 9-6（实测恒 0）、未打开挑战页、以及训练直接产出的是**宠物经验**（kg×5=3500 EXP）与容量（🪨炼化石是宠物材料，≠炼化点）。**逻辑无漏发、未改数值**；改文案（`本月已获得`→`本月容量兑换`，原会低估）+ 面板新增常显一句与 `<details>`「🔮 获取途径」。实测 700kg：首次渲染 0→**70**，再渲染仍 70（幂等）。**③ 宠物经验明细**：写入既有 `pets.levelLedger.log`（**未新建 store key**），每条含 `date/source(daily\|challenge)/total/granted/dropped/cap/pets/breakdown[]/allocations[]`（来源拆分 力量{kg,exp}/有氧{min,exp}/挑战{dmg,exp}，分配含每只 `amount/from/to/leveledUp`）；宠物面板材料区下、宝珠上 `<details>` 默认折叠，summary「📒 宠物经验明细　今日合计 +N EXP　M 笔」（44px、键盘可达、两主题可读）；幂等沿用 `dailyGranted` 水位 + 挑战 `runId` 键，只在真发时写一条。新增 `test-pet-exp-log.js` **45 断言**；全量 **77 套件 0 失败** + a11y **40/40**。⚠️ 待裁决：日志上限 20 条会裁掉当日超出部分（建议「当日全留 + 历史 20」）；炼化点结算时机是否改即时；弹层确认按钮现统一 2px 边 + ≥44px；热血闪光改平铺色 |
 | v2.14.14 | 53 | （见 changelog） | **敌群战斗自动战斗**。控制条新增「▶ 自动 / ⏸ 自动中」（`#gbAuto`，`aria-pressed`），**默认关**、开战重置、**不持久化**；速度档 **×1/×2/×4（默认 ×2）**，间隔 = 基准 700ms（气泡 900ms）÷ 档位 = **700/350/175ms**，键 **`dh-group-auto-speed`**（与 `dh-battle-speed`、旧 `dh-group-speed` 均不同，旧键读兜底+写镜像、`8→4` 归一）。**推进复用同一个入口**：`_groupAutoStep()` 只有一句 `_groupStep()`，`#gbAuto` 与手动 `#gbStep` 同签名调用 `_groupStep()`（**无第二份逻辑**），入口有 `_groupAutoStepBusy` + `try/finally` 重入守卫，**无 setInterval**。**四个停止条件**：① `_groupDone()` 结束停 ② 点 ⏸ 停 ③ `#gbClose`/`switchTab`/`onBattleVisibilityChange(document.hidden)`/每拍 `groupAutoViewActive()` 复核 → 停并清定时器 ④ 详情/技能/天赋弹层 `pauseGroupBattle()` **降级为暂停**且关弹层不自动续跑。**定时器唯一清理点 `cancelGroupAutoTimer()`**（结束/暂停/关闭/改档/开新战全经过）。**幂等**沿用 `_groupRewarded`（再推进 100 次奖励仍 1 次）。新增 `test-group-auto.js` **135 断言**（同 seed 下自动 10 拍 ≡ 手动 10 次；结束/切 tab/visibility 定时器为 null 且冻结；奖励幂等；三档与键隔离；默认关；重入守卫；样式契约）；全量 **78 套件 0 失败** + a11y **40/40**；真浏览器验证通过（刷新后速度继承 ×4、自动仍关），axe **0 violations**。**顺带修**：按下态在 `.speed-btn:hover` 反色下 **3.49:1**（axe serious）→ 加 `:not(:hover)`。⚠️ 行为变更：旧 `_groupMode`（默认 auto、持久化）被取代 → 开战不再自动走第一拍、不再写 `dh-group-mode`、旧 ×8 归一为 ×4、开详情后不再自动续跑；结算面板展示推进未停；`_groupSpeed` 收敛为单一赋值（节奏=特效档位） |
 | 2.14.15 | 53 | （见 changelog） | **敌群「自动连打下一关」**。v2.14.14 只做自动出手，本版补自动进关：`_groupDone()`（结算+发奖+记通关+写历史之后）→ `_armGroupAutoNext()` → `groupNextStageId()`（`allStageIds()` 线性顺序，与 `markGroupStageCleared` 同一份表）→ `scheduleGroupChain()`（**`GROUP_AUTO_NEXT_MS=1400ms`**）→ `_groupChainEnter()`（复核 `_groupAuto`/`_groupPaused`/`groupAutoViewActive()`）→ `closeGroupSettlementPanel()` → **`startGroupTrial(next)`（唯一开战入口，与关卡列表点击同一全局符号）** → 安全阀 → `_groupAuto=true` → `renderGroupOverlay()` + `_groupStep()`。**状态跨关**：`_groupDone` 开头置 false（结算期间不出手），胜利分支在全部副作用后重新置 true 并排队；`startGroupTrial` 内部会清开关，故 `_groupChainEnter` 在开战后再恢复 true，UI 不闪回。**四停**：胜→排队 1.4s 进下一关；负→清队列+清定时器+关自动、**不重试同关**、记原因；无下一关→停 + toast「🏁 已是最后一关」+ 战果文案 + 开关 title；手动 ⏸→立即停**并取消已排队的下一关**（`_groupChainNext=null` + 清两定时器）。切 tab/`document.hidden`/✕ 走同一 `stopGroupAuto` 链，落地前再复核视图。**安全阀**：必须「无异常 + 战斗对象换新 + 未结束 + `_groupStageId===next`」否则立即停（清队列、不重排、toast + console.warn 留痕）并回滚 `_groupStageId/_groupRewarded` 到上一关已结算状态，堵住「旧战斗 + 新 id → 奖励记到没打过的关」。**幂等**：连打 3 关 reward/cleared 各 1 次，再跑 40 拍仍 1；真机技能点 10→18→28、`winCountThisWeek` 2→3→4、history 5 条、progress g1-1…g1-5 各一次。**测试**：新增 `test-group-auto-next.js` **154 断言**（源码守卫、进关与跨关状态、逐关奖励、失败不排队、最后一关三处提示、⏸ 取消排队、四类离开路径整链停+定时器清零、两种安全阀、手动不受影响）；`test-group-auto.js` 135→**172**，仅 3 条随语义更新（胜利后 auto=true / aria-pressed=true /「⏳ 连打中」），失败分支原语义逐字保留，另新增 4 条按关计数。全量 **79 套件 0 失败**（6465 断言）+ a11y **40/40**。真机 g1-1→1.39s→g1-2→1.40s→g1-3 全程 auto；⏸ 窗口内取消后 4s 仍不跳关；切 tab 立即停。UI 三态「▶ 自动连打 / ⏸ 自动中 / ⏳ 连打中」（排队态绿虚线，仅既有令牌）。⚠️ 待裁决：自动下战报 stats 层被跳过（1400 < 2000ms）；最后一关提示无常驻横幅；连打状态不持久化；大关 id（`_groupStageId=null`）保守停止 |
+| 2.14.16 | 53 | 3314 行 game-render.js | **宝珠系统四项施工 + 培养页精简 / 出战阵容常驻**：分解等价碎片（`orbDecomposeShards = orbPct`，R·Lv1=10 / UR·Lv50=297）、恢复合成（20 碎片→R·Lv1、100%、每日 5 次、`orbSynth` 随 `pets` 同步）、5 枚宝珠图标 SVG + `orbIconHtml` 唯一入口、修复 2（`u8.stat` → `u8.pct`）、库存 / 宠物列表 / 培养材料默认折叠、`.train-lineup` 常驻阵容（就地切换 + 开战走 `startGroupTrialWithPets` 唯一入口）；全量 **79 套件 / 0 失败**、a11y **40/40**；新增 5 个 SVG、**无新增 `page/*.js`**、无删除文件；缓存戳 `?v179` → `?v180` |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
 > （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。
 > **「最大文件」** = `page/*.js` 中 `\n` 计数（即 `wc -l`）最大者 → 本版实测 `game-render.js` **2963 行**（次席 `battle-group.js` 2056 行）。
 > ⚠️ 本表 v2.11.0–v2.11.5 六行的「最大文件」已在 **v2.12.0** 按各版本发布提交勘误（2362 → 2656/2734/2716/2716/2716/2738）；
 > `doc/changelog-v2.11.md` 内同一张表的对应行未回改，以本表为准。更早的历史行沿用各自版本的原始记录，未逐版重测。
+> **v2.14.16 现场复核**：`page/*.js` **53** 个、`game-render.js` **3314 行**（次席 `battle-group.js` 2190 行），故本版行按实测填写；v2.14.1–v2.14.15 的「最大文件」列沿用「（见 changelog）」历史写法，未逐版回改。

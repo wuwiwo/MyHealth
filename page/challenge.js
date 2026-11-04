@@ -712,7 +712,12 @@ function startHiddenChallenge(hotBuff){
       +(state.petEggReward ? '<div style="margin-top:4px;display:flex;align-items:center;gap:6px">'
         + ((typeof petIconHtml === 'function') ? petIconHtml(state.petEggReward.speciesId, 32) : '')
         + '🥚 宠物蛋 <b style="color:var(--orange)">'+state.petEggReward.name+'</b></div>' : '')
-      +(state.orbReward ? '<div style="margin-top:4px">🔮 宝珠 <b style="color:var(--purple)">'+((ORB_TYPES[state.orbReward.type]||{}).name||state.orbReward.type)+'（'+state.orbReward.rarity+' · +'+(typeof orbPct==='function'?orbPct(state.orbReward):'?')+'%）</b></div>' : '')
+      /* v2.15：宝珠结算也带图标（与库存 / 槽位同一入口 orbIconHtml，缺模块时回退 🔮）。
+         ⚠️ challenge.js 比 pet-ui.js 先加载，但结算面板是运行时渲染，届时全局函数已就绪；
+            仍保留 typeof 守卫，与上方 petEggReward 的 petIconHtml 同一手法。 */
+      +(state.orbReward ? '<div style="margin-top:4px;display:flex;align-items:center;gap:6px">'
+        + ((typeof orbIconHtml === 'function') ? orbIconHtml(state.orbReward.type, 32) : '🔮')
+        + ' 宝珠 <b style="color:var(--purple)">'+((ORB_TYPES[state.orbReward.type]||{}).name||state.orbReward.type)+'（'+state.orbReward.rarity+' · +'+(typeof orbPct==='function'?orbPct(state.orbReward):'?')+'%）</b></div>' : '')
       +  '</div>'
       +'</div>'
       +'<div class="ch-sec-chart" id="chSecChart"></div>'

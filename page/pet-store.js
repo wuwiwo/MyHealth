@@ -27,7 +27,9 @@ if (typeof store !== 'undefined' && store.registerSchema) {
            log = 最近 20 条发放记录（含丢弃量，便于核对） */
         levelLedger: {
           monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: []
-        }
+        },
+        /* v2.15：宝珠合成每日计数（dayKey 变化时读时归零，随 pets 键一起云同步） */
+        orbSynth: { dayKey: null, count: 0 }
       };
     },
     validate: function (v) { return v && typeof v === 'object' && Array.isArray(v.pets); },
@@ -39,12 +41,16 @@ if (typeof store !== 'undefined' && store.registerSchema) {
 function getPetStore() {
   if (typeof store === 'undefined') {
     return { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], battlePicks: [], lastSettleDate: null, monthlyKey: null,
-             levelLedger: { monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: [] } };
+             levelLedger: { monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: [] },
+             orbSynth: { dayKey: null, count: 0 } };
   }
   var d = store.get('pets');
   if (!d) { d = { version: 1, pets: [], materials: { nutrition:0, feed:0, spirit:0, refineNormal:0, refineHigh:0, orbShard:0 }, orbs: [], battlePicks: [], lastSettleDate: null, monthlyKey: null,
-                 levelLedger: { monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: [] } }; store.set('pets', d); }
+                 levelLedger: { monthKey: null, dayKey: null, dailyGranted: 0, challengeKeys: [], log: [] },
+                 orbSynth: { dayKey: null, count: 0 } }; store.set('pets', d); }
   if (!Array.isArray(d.orbs)) d.orbs = [];   // v2.1.17 老存档补齐宝珠库存
+  /* v2.15：旧存档没有 orbSynth → 优雅退化为空计数（不迁移、不补偿，合成次数不追溯） */
+  if (!d.orbSynth || typeof d.orbSynth !== 'object') d.orbSynth = { dayKey: null, count: 0 };
   /* v2.2 WP-H1：参战宠物选择持久化 —— 旧存档没有该字段时**优雅退化**为 []（＝未选择，
      行为与改动前一致：开战时自动带成熟宠物）。不迁移、不补偿，缺失即空。 */
   if (!Array.isArray(d.battlePicks)) d.battlePicks = [];
@@ -111,7 +117,7 @@ var MATERIAL_SOURCES = {
   spirit: '隐藏挑战胜利掉落（5-10%）',
   refineNormal: '隐藏挑战胜利掉落',
   refineHigh: '隐藏挑战胜利掉落（Boss 关）',
-  orbShard: '隐藏挑战胜利掉落 / 分解宝珠'
+  orbShard: '隐藏挑战胜利掉落 / 分解宝珠返还（等价碎片）'
 };
 
 /* 每日结算入口（app 初始化/进宠物页时调用）：
