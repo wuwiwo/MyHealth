@@ -246,14 +246,17 @@ console.log('\n[8] 源码守卫（阶段 C 门禁：单一入口、仍不启用�
   ok(tr.indexOf('function terrainAttackable(') > -1, 'terrain.js 有统一取靶判据');
   ok(tr.indexOf('return u.hp > 0;') < 0, 'terrain.js 不再残留裸 hp>0 过滤');
   ok(/mode: isMulti \? 'multi' : 'single'/.test(gl), 'mode 只在 group-levels.js 的生成循环里派生');
-  /* 生产代码除 group-levels.js 外不得读 stage.mode / 起多队 */
+  /* 生产代码消费 `mode:"multi"` 的位置必须**唯一**且明确：
+     阶段 C 的旧守卫写的是「除 group-levels.js 外无人消费」；阶段 D 开闸后按设计同步改写为
+     「只有开战入口（game-render.js 的 startGroupTrial）读它，导演层本身与 mode 解耦」。 */
   const others = scripts.filter(s => s !== 'group-levels.js' && s !== 'design-doc.js');
-  let consumer = null;
+  const consumers = [];
   others.forEach(f => {
     const src = read(f);
-    if (/stage\.mode|\.mode === 'multi'|mode === 'multi'/.test(src)) consumer = f;
+    if (/stage\.mode|\.mode === 'multi'|glv\.mode === 'multi'/.test(src)) consumers.push(f);
   });
-  ok(consumer === null, '👀 阶段 C 门禁：没有任何生产代码消费 mode:"multi"', consumer || '');
+  ok(consumers.length === 1 && consumers[0] === 'game-render.js', '👀 mode 只有一个消费方：开战入口（阶段 D 已开闸）', consumers.join(','));
+  ok(read('group-dual.js').indexOf("mode === 'multi'") < 0, '导演层与 mode 解耦（它只认两个 gb，不自己判关卡类型）');
 })();
 
 console.log('\n' + (fail === 0 ? '✅ ' : '❌ ') + pass + ' passed, ' + fail + ' failed');

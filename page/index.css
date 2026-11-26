@@ -88,7 +88,7 @@
      为什么会有一组 -s（snapshot）：日志抽屉打开时广场压到快照高度，
      用令牌表达「压缩态」而不是在规则里写死 vh。
      芯片最小宽度/高度另有 52px / --touch-min 兜底（触摸目标不可缩水）。 */
-  --gb-arena-h:20vh;--gb-mid-h:15vh;--gb-arena-h-s:14vh;--gb-mid-h-s:8vh;
+  --gb-arena-h:20vh;--gb-mid-h:15vh;--gb-arena-h-s:14vh;--gb-mid-h-s:8vh;--gb-dual-arena-h:13vh;--gb-dual-mid-h:4vh;
   --gb-unit-w:72px;--gb-unit-ico:32px;
   --font:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
 }
@@ -800,6 +800,24 @@ box-shadow:none}
    （v2.4.0 实测踩过这个坑），而 .gb-arena 是 overflow:hidden —— 放大被它安静裁掉。
    行动焦点 .gb-focus 也随之从 #gbPane 迁到 #gbArena（JS 侧同步）。 */
 .gb-arena-wrap{flex:0 1 auto;display:flex;flex-direction:column;min-height:0}
+/* ========== v2.14.21（阶段 D）：多队双场景 —— 两栏并列 ==========
+   每栏各自一份 .gb-arena（同一份 renderGroupBattlePane，只是 id 带 A/B 后缀）。
+   两栏把可用宽度劈半 ⇒ 芯片更小（渲染端 dense 阈值已从 7 降到 5），行高与中央区同步收紧，
+   避免 360×640 下被 .gb-arena{overflow:hidden} 裁掉最后一行。
+   栏头状态用**文字**（推进中/待机/已胜（冻结）/已败），不靠颜色单独传达（a11y 不降级）。
+   圆角按规范一律 0（--rad-sm = 0），与既有卡片同形。 */
+.gb-dual{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2);padding:0 var(--sp-2);min-height:0}
+.gb-dual-pane{display:flex;flex-direction:column;min-width:0;min-height:0;border:var(--bw) solid var(--bd);border-radius:var(--rad-sm);background:var(--surface);overflow:hidden}
+.gb-dual-pane.active{border-color:var(--orange)}
+.gb-dual-pane.frozen{background:var(--surface-2)}
+.gb-dual-hd{display:flex;align-items:baseline;gap:var(--sp-1);padding:2px var(--sp-2);font-size:var(--fs-xs);color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gb-dual-hd b{color:var(--text1);font-weight:600}
+.gb-dual-st{overflow:hidden;text-overflow:ellipsis}
+.gb-dual-st.st-won{color:var(--green)}
+.gb-dual-st.st-lost{color:var(--red)}
+.gb-dual .gb-arena-row{max-height:var(--gb-dual-arena-h);gap:var(--sp-1);padding:4px 4px}
+.gb-dual .gb-arena-mid{height:var(--gb-dual-mid-h)}
+.gb-dual .gb-side-hdr{font-size:var(--fs-xs)}
 .gb-arena{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:2px}
 /* ⚠️ 为什么行高是 max-height 而不是 min-height（v2.4.2 实测修正）：
    原写法 min-height:20vh 会在**矮屏 + 密阵**下把 3 行硬撑到 3×128=384px（360×640 时广场只有 ~450px 可用，

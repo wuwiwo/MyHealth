@@ -5,6 +5,67 @@
 
 ---
 
+## v2.14.21
+
+Date: 2026-11-26
+
+**多队双场景 —— 阶段 D：导演层 + 双栏战场 + 玩家轮转 + 替补绑定场景**（设计 `doc/design-pet-squad-battle-v1.md` v1.2 §4 / §10）
+
+> ⚠️ 本版是**首次对线上开放多队战斗**：`g18-5` / `g24-5`（阶段 C 派生出的两个 multi 关）现在真的会开双场景。
+
+### 新增功能
+
+1. **新模块 `page/group-dual.js`（导演层，纯逻辑 / 无 DOM）**
+   - `MULTI_SCENE_ENEMY_SCALE = 0.85` + `applyMultiSceneScale(cfgList)`：只乘 `base` 五项（hp/atk/def/soulAtk/soulDef，floor、下限 1），**返回新对象不改原编成**（单场景关卡仍用原编成）。
+   - `createDualBattle({player, scenes:{A,B}, pendingSquads, buildSquad})`：两个 gb 都被置 `winnerRule:'pets'`（玩家不计判负）、各自绑 `squadUnits` 与**场景化** `reinforce`（谁全灭谁去队列取，绝不跨场景偷队）；玩家打 `_isPlayer` + `_untargetable` 并挂到 A。
+   - `dualStep(dir)`：每拍只推进**当前场景**一个单位行动（复用 `groupBattleStep`，零复制）；场景回合结束（`turnEnd`）或场景已冻结 → 换边；A 一个完整回合 → B，B 跑完 → `cycle++` 回 A；已 won/lost 的场景冻结并跳过（另一侧照常推进、cycle 仍递增）。
+   - `dualMovePlayer(dir,to)`：**只在回合边界**搬玩家（`allies` / `units` 双池同步、去重）——引擎队列在准备阶段从 `gb.units` 重建，故不会留下陈旧队列（R4）。
+   - `dualReinforce(dir,sceneKey)`：从**未上场队列**按顺序取，满血现建（走 `buildGroupBattlePets` 唯一入口），空队/全员不可战跳过继续；用尽 → null → 该场景判败 → 整场立即判负（D3，不等另一侧）。
+   - `dualEndTurn`：两侧都 won → 整场胜；否则换边。
+   - `dualMergedBattle(dir)`：把两侧拼成**只读门面**（allies 去重、敌人合流、日志带 `A·`/`B·` 前缀、turn = cycle），供战报/统计/历史/发奖统一消费。
+   - `dualSceneLabel` / `dualTakeNotes` / `dualPendingCount`：场景状态文案、一次性提示、剩余替补数（都只有一份实现）。
+2. **`page/game-render.js`（接线 + 渲染）**
+   - `startGroupTrial` 里新增**唯一** multi 分支：`glv.mode==='multi'` → `_startDualGroupTrial()`。单场景关卡根本不进这里，既有路径逐字不变。
+     - 初始派驻：编队顺序第 1 支 → A、第 2 支 → B；**两支任一建不出可战单位 → 提示不可开战**（不静默降级成单队）。
+     - 敌人：每侧各调一次 `groupStageEnemies`（每侧**完整编成**）→ `applyMultiSceneScale` → id 前缀 `enemyA-` / `enemyB-`（两栏 `data-uid` 不打架）。
+     - RNG：**一个 `makeSeededRng(_groupSeed)` 注入两个 gb**（Q12：不用「同种子两实例」，否则两侧掷同一序列）。
+     - 双场景**不做时间旅行**（两个 gb 的联合快照未定义）：`__groupSnaps` / `__groupInitSnap` 清空，`_groupStep` 跳过存快照。
+   - `_groupStep` 改为「先取当前场景 → `_dualStepOnce()` 推进 → 活指针跟随新场景」；`_groupBattle` 从「唯一战斗对象」降级为「当前推进场景的指针」，日志/特效/过渡继续按它工作（双栏渲染代码因此只有一份）。
+   - 导演 `notes` → toast：`🔄 场景 X：某队上场（满血接力）` / `🏆 场景 X 已清场（冻结）` / `💀 场景 X 全灭，已无替补`。
+   - `renderGroupBattlePane(gb, sfx)`：**容器 id 参数化**（A 栏沿用 `gbArena*`，B 栏 `gbArenaB*`）；双场景每栏 dense 阈值从 7 降到 **5**（两栏更窄）。
+   - `renderGroupOverlay`：双栏 `.gb-dual` 两 pane + 栏头「场景 A/B + 队名 + 状态（推进中/待机/已胜（冻结）/已败）」；控制条改「双场景 · 回合 cycle · 当前 A/B · 替补 N」；顶部血量条用**两侧合计**；焦点只落在当前推进那一栏。
+   - `_gbFindUnit(uid)`：两个场景都查（单位详情 / 技能 / 玩家技能 / 天赋弹层共用）。
+   - 关闭战斗 / 每次开战入口都清 `_groupDual`；导出只读探针 `window.__groupDualState()`（与 `__groupRelayNext` 同类）。
+3. **结算仍单入口**：`_groupDone` 在双场景下把 `dualMergedBattle` 门面当 `battle` 传下去 —— 奖励 / 通关解锁 / 受伤判定 / 统计 / 历史 / 结果面板**全部复用既有那一份代码**，没有第二套奖励链。
+4. **样式**（`page/index.css`）：`.gb-dual` / `.gb-dual-pane(.active/.frozen)` / `.gb-dual-hd` / `.gb-dual-st(.st-won/.st-lost)` / 两栏内 `.gb-arena-row` 与 `.gb-arena-mid` 收紧；新增 `--gb-dual-arena-h:13vh` / `--gb-dual-mid-h:4vh` 两个令牌；全部走既有令牌（圆角 `--rad-sm`=0）。
+5. `page/index.html` 插入 `<script src="group-dual.js?v185">`。
+
+### 修复
+
+1. **替补队列空转**（开发期自查发现）：`createDualBattle` 起初没有把 `buildSquad` 放进 `dir`，`dualReinforce` 读 `dir.buildSquad` 得到 undefined → 队列被一轮轮空转耗尽 → 明明还有替补却当场判败。已修为构造 `dir` 时显式带上 `buildSquad`。
+2. **陈旧导演接管下一场**（同上）：`_groupDual` 原先只在关闭战斗时清空，若「打完双场景关 → 自动连打单场景关」，`_groupStep` 会继续推进早该结束的双场景。已在 `startGroupTrial` 顶部无条件 `_groupDual = null`。
+
+### UI 调整
+
+双栏战场（每栏独立广场 + 栏头状态）；控制条文案改双场景口径；两栏焦点高亮互斥。
+
+### 已知限制 / 待阶段 E
+
+1. 双场景不做时间旅行（`↩` 回退只看得到两侧各自最近一次快照之外的状态）；未上场替补在回滚中不可恢复。
+2. 合并战报里 `A·` / `B·` 前缀已标明来源，但**回合号各场景独立**（不改写引擎日志）；统计把两侧场地伤害 / 持续伤害**求和** —— 两侧同一场地时数值会翻倍，属如实统计。
+3. `MULTI_SCENE_ENEMY_SCALE = 0.85` 仍是设计初值，真机平衡后在阶段 E 定值。
+4. 玩家不可被选为目标但仍**照常出手**（Q4）：双场景下玩家在两侧各出手一次，这是设计意图，不是 bug。
+5. 360×640 双栏的密集阵（5 我 + 3 敌）尚未真机复核 —— 阶段 E 第一件事。
+
+### 测试
+
+1. 新增 `scripts/test-dual-battle.js` **78 断言**：缩放（含不改原编成 / 下限 1）；建场（A←一队、B←二队、玩家只在 A 且 `attackable=false`、两 gb 同一 rng 引用、都 `'pets'`）；玩家搬移（双池同步、不重复、搬回干净）；推进（换边、cycle 递增、不自己结束）；替补（A 全灭 → 取队列补到 A、B 不被偷、队名更新）；替补用尽 → 整场立即判负（B 甚至没打完）；两侧清场 → 整场胜且结束后再推进为空拍；合并门面（玩家去重、敌人 = 两侧合计、日志前缀、turn=cycle）；确定性（同 seed 两跑同胜负同步数）；两栏渲染（id 后缀、dense 阈值、状态文案）；源码守卫（系数唯一、渲染函数参数化且只调同一份、`glv.mode` 条件判断唯一）；集成段（真调 `_startDualGroupTrial` 开 g18-5：两场景俱在、玩家 `_untargetable`、敌人 id 前缀、base = 0.85、第 3 队进替补队列、真 UI 推 12 拍不抛错）。
+2. `scripts/test-attackable.js` 的阶段 C 门禁按阶段 D **同步改写**：从「没有任何生产代码消费 `mode:'multi'`」改为「唯一消费方 = 开战入口，且导演层与 `mode` 解耦」。
+3. 全量 **84 套件 / 0 失败**；`test-a11y-tokens` **40/40**。
+4. 缓存戳 `?v184` → **`?v185`**（56 处，含新增脚本）。
+
+---
+
 ## v2.14.20
 
 Date: 2026-11-26
@@ -1193,10 +1254,11 @@ Date: 2026-10-12
 | 2.14.18 | 53 | 3314 行 game-render.js | **宠物编队阶段 A（战斗零改动）**：`dh-pets-v1.squads`（不新增 store 键，`battlePicks` = 首发镜像）；旧档**只读派生**迁移（读取不写盘）；不变量 = 每队 ≤4 + **同宠不得跨队** + 至少 1 队 + 队名 ≤8；唯一写入口 `savePetSquads()` 与 5 个管理动作；UI = 宠物面板「🐾 编队管理」原生 `<details>`（改名/↑↓排序/删除/新建/芯片切换/伤员 ⚠️ 保留在队）；新增 `test-pet-squads`（67 断言，含源码守卫）；`test-pet-panel-layout` 两条 `aria-pressed` 计数收紧到阵容区块；全量 **81 套件 / 0 失败**；缓存戳 `?v181` → **`?v182`** |
 | 2.14.19 | 53 | 3314 行 game-render.js | **小队接力阶段 B（普通战斗单队接力）**：新增唯一增援入口 `gbReinforce()`（allies/units 同池同步、不重建战斗对象、本回合不重排队列、幂等、只对新单位补跑 `onBattleStart`）；判负参数化 `winnerRule`（默认 `'all'` 与改前逐字一致，`'pets'` 只数非玩家单位并回落）；`checkGroupWin` **先增援后判负**（否则队灭当场结束）；`startGroupTrial` 只在 ≥2 支有宠小队时接线，提供方按 `getPetSquads()` 满血现建、跳空队/全员不可战、用尽返回 null；`groupRestore` 摘除快照后新增单位；新增 `test-squad-relay`（41 断言）；全量 **82 套件 / 0 失败**；缓存戳 `?v182` → **`?v183`** |
 | 2.14.20 | 54 | 3371 行 game-render.js | **玩家口径阶段 C（`attackable` 单源目标过滤 + 关卡 mode，仍不启用多队）**：`attackable(u)` = 存活且未打 `_untargetable` 标记，接入 `ai.js` 选靶双入口、`battle-group.js` 的 `selectTargets` 双池/嘲讽/声明合法性/强制目标/技能 `pool`+`allPool`/蓄力/迷惑/伤害分担/光环/`onFoeHeal`/额外目标池、`normalAttack` 与 `groupUnitTurn` 两道闸、反噬与魔法镜、`terrain.js` 全部取靶循环 + `applyTerrainResult` 兜底闸；`group-levels.js` 每关派生 `mode:'multi'\|'single'`（`stageIsMulti`，g18 起每 6 大关的 x-5 ⇒ 全期只有 `g18-5`/`g24-5`，Boss 与 1–3 关永不 multi，越界不派生）；**mode 只派生不消费**（源码守卫钉死），普通战斗逐字节等价；新增 `test-attackable`（48 断言）；全量 **83 套件 / 0 失败** + a11y 40/40；缓存戳 `?v183` → **`?v184`** |
+| 2.14.21 | 55 | 3542 行 game-render.js | **多队双场景阶段 D（导演 + 双栏 + 玩家轮转 + 替补绑定，首次开放多队）**：新模块 `group-dual.js`（`MULTI_SCENE_ENEMY_SCALE=0.85` 缩放 / `createDualBattle` / `dualStep` 换边与冻结跳过 / `dualMovePlayer` 回合边界双池搬移 / `dualReinforce` 未上场队列按序满血补给并绑定场景 / `dualMergedBattle` 门面 / 场景文案）；`game-render.js` 唯一 `glv.mode==='multi'` 分支 → `_startDualGroupTrial`（A←一队、B←二队、两队任一不可战即不开战、每侧各调一次 `groupStageEnemies` 完整编成 ×0.85、敌人 id `enemyA-`/`enemyB-`、**一个共享 rng 注入两个 gb**、双场景不做时间旅行），`_groupStep` 改走 `_dualStepOnce` 且 `_groupBattle` 降级为当前场景活指针，导演 notes → toast，`renderGroupBattlePane(gb,sfx)` id 参数化 + 双栏 dense 阈值 5，`renderGroupOverlay` 双栏 `.gb-dual` + 栏头状态 + 两侧合计血量 + 控制条「回合 / 当前 / 替补」，`_gbFindUnit` 跨两场景查单位，结算仍单入口（`dualMergedBattle` 门面喂既有奖励/受伤/统计/历史）；修两处开发期缺陷（替补队列 `buildSquad` 未入 `dir` 导致空转判败、`_groupDual` 未在开战入口复位导致陈旧导演接管下一场）；新增 `test-dual-battle`（78 断言，含真走 g18-5 开战入口的集成段）；全量 **84 套件 / 0 失败** + a11y 40/40；缓存戳 `?v184` → **`?v185`** |
 
-> **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
-> （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。
-> **「最大文件」** = `page/*.js` 中 `\n` 计数（即 `wc -l`）最大者 → 本版实测 `game-render.js` **2963 行**（次席 `battle-group.js` 2056 行）。
+> **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
+> （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。
+> **「最大文件」** = `page/*.js` 中 `\n` 计数（即 `wc -l`）最大者 → 本版实测 `game-render.js` **3542 行**（次席 `battle-group.js` 2370 行）。
 > ⚠️ 本表 v2.11.0–v2.11.5 六行的「最大文件」已在 **v2.12.0** 按各版本发布提交勘误（2362 → 2656/2734/2716/2716/2716/2738）；
 > `doc/changelog-v2.11.md` 内同一张表的对应行未回改，以本表为准。更早的历史行沿用各自版本的原始记录，未逐版重测。
 > **v2.14.16 现场复核**：`page/*.js` **53** 个、`game-render.js` **3314 行**（次席 `battle-group.js` 2190 行），故本版行按实测填写；v2.14.1–v2.14.15 的「最大文件」列沿用「（见 changelog）」历史写法，未逐版回改。

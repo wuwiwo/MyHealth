@@ -505,6 +505,10 @@ var _groupSeed=null      // v2.1.27 [7c]：本场战斗的随机种子（用于�
 var _groupRelaySquads=null   // 开战时的编队快照（getPetSquads()；只有 >1 支才启用接力）
 var _groupSquadIdx=0         // 已上场到的下标（0 = 首发）
 var _groupRelayPending=''    // 刚上场的队名（供 _groupStep 提示一次，提示后清空）
+/* v2.14.21（阶段 D）：**多队双场景导演**（group-dual.js 的 createDualBattle）。
+   null = 走单场景路径（所有既有关卡）；非 null 时 `_groupBattle` 只是「当前推进场景」的
+   活指针（渲染 / 日志 / 特效继续按它在既有代码里工作），真正轮转由导演负责。 */
+var _groupDual=null
 
 /* v2.1.14：暂停 / 恢复群战推进（详情弹层打开期间挂起）。
    ⚠️ v2.14.14：打开详情/技能/天赋详情 = **需要玩家决策的时点** → 自动战斗**降级为暂停**
@@ -798,6 +802,10 @@ function startGroupTrial(groupId){
   // 记录当前小关 id（通关解锁用）
   _groupStageId = stage ? groupId : null
   _groupRewarded = false   // v2.1.19：新战斗重置结算标志
+  /* v2.14.21（阶段 D）：**每次开战先清导演** —— 否则「打完一场双场景关、接着自动连打单场景关」时
+     `_groupDual` 是上一场的陈旧对象，`_groupStep` 会继续按双场景推进一场早已结束的战斗。
+     单场景路径从不写它，故这里必须无条件清。 */
+  _groupDual = null
   // 通关的关卡不可重打
   if (_groupStageId && typeof isGroupStageCleared === 'function' && isGroupStageCleared(_groupStageId)) {
     toast('该关卡已通关 ✅','e'); return
@@ -835,6 +843,14 @@ function startGroupTrial(groupId){
   /* v2.2 WP-A3/A4：上限 2 → 4，并统一走 pet-store.js 的**唯一入口**
      buildGroupBattlePets（建单位 → 稀有度放大 → 团队凝聚 / 共鸣）。 */
   ensurePetBattlePicksLoaded()
+  /* v2.14.21（阶段 D）：**多队双场景分支** —— 只有 `glv.mode==='multi'` 才进。
+     单场景关卡（含全部既有关卡、含 g18-5/g24-5 以外的一切）**根本不会**走到这里，
+     下面那条路径与 v2.14.20 逐字一致（缓存戳换了、代码没换）。 */
+  if (glv && glv.mode === 'multi') {
+    var anchorG0 = String(stage ? String(groupId).split('-')[0] : groupId)
+    _startDualGroupTrial(glv, player, anchorG0)
+    return
+  }
   var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
   var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(_petMax)
   var petUnits = (typeof buildGroupBattlePets === 'function')
@@ -895,6 +911,94 @@ function startGroupTrial(groupId){
      （两者都走同一个 `_groupStep()`；自动这一侧只多了一个「谁再喊一次」的定时器）。 */
 }
 
+/* ============================================================
+   v2.14.21（阶段 D）：**多队双场景开战**（唯一入口；单场景路径不经过这里）
+   ============================================================
+   口径（doc/design-pet-squad-battle-v1.md v1.2 §4）：
+     · 初始派驻：编队顺序第 1 支 → A、第 2 支 → B；**两支都建不出可战单位就不可开战**；
+     · 敌人：每侧各一份**完整编成**（`groupStageEnemies` 唯一来源，调用两次），
+       base 属性乘 `MULTI_SCENE_ENEMY_SCALE`（`applyMultiSceneScale` 唯一落点）；
+     · RNG：**一个共享 rng 注入两个 gb**（Q12：不用「同种子两实例」，否则两侧掷出同一序列）；
+     · 玩家：`_untargetable`（敌人视玩家不存在，Q4）+ 只挂在 A，之后随推进移动；
+     · 结算 / 奖励 / 历史仍走既有 `_groupDone` 单入口（战报用导演合并出的门面对象）。
+   ============================================================ */
+function _startDualGroupTrial(glv, player, anchorG){
+  var squads=(typeof getPetSquads==='function')?getPetSquads():[]
+  if(!squads||squads.length<2){toast('双场景需要至少两支编队（宠物面板 → 🐾 编队管理）','e');return}
+  var max=(typeof PET_BATTLE_MAX==='number')?PET_BATTLE_MAX:4
+  /* 建一支小队（满血现建）—— 仍是既有的唯一入口 buildGroupBattlePets，禁另写数值 */
+  function build(sq){
+    var ids=(sq&&sq.petIds)||[]
+    if(!ids.length)return []
+    try{
+      return (typeof buildGroupBattlePets==='function')?buildGroupBattlePets(ids,max):createPetUnitsForBattle(ids,max)
+    }catch(e){console.warn('[dual] 建队失败，跳过',e);return []}
+  }
+  var uA=build(squads[0]), uB=build(squads[1])
+  if(!uA.length||!uB.length){
+    toast('双场景需要两支都有可战宠物（成熟、未受伤、未阵亡）的编队','e')
+    return
+  }
+  var lgNum=parseInt(String(anchorG).replace(/[^0-9]/g,''),10)||1
+  var terrain=(typeof groupTerrainFor==='function')?groupTerrainFor(lgNum):null
+  /* 每侧完整编成 → 缩放 base → 建单位（id 带场景前缀，避免两栏 data-uid 打架） */
+  function enemiesFor(side,sideAllies){
+    var cfg=(typeof groupStageEnemies==='function')?groupStageEnemies(anchorG,glv,sideAllies):(glv.enemies||[])
+    var scaled=(typeof applyMultiSceneScale==='function')?applyMultiSceneScale(cfg):cfg
+    return (scaled||[]).map(function(ec,i){
+      return createEnemyUnit({id:'enemy'+side+'-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base,level:ec.level,affixes:ec.affixes})
+    })
+  }
+  _groupSeed=((Date.now()&0x7fffffff)^Math.floor(Math.random()*0x7fffffff))>>>0
+  var sharedRng=(typeof makeSeededRng==='function')?makeSeededRng(_groupSeed):Math.random
+  var gbA=createGroupBattle({allies:[player].concat(uA),enemies:enemiesFor('A',[player].concat(uA)),terrain:terrain,rng:sharedRng})
+  var gbB=createGroupBattle({allies:uB.slice(),enemies:enemiesFor('B',uB),terrain:terrain,rng:sharedRng})
+  /* 双场景的补给归导演；单场景接力的两个全局在双场景下必须是空的（防两套接力同时生效） */
+  _groupRelaySquads=null
+  _groupRelayPending=''
+  _groupSquadIdx=0
+  _groupDual=(typeof createDualBattle==='function')?createDualBattle({
+    player:player,
+    scenes:{
+      A:{gb:gbA,squadUnits:uA.slice(),squadName:(squads[0].name||'一队')},
+      B:{gb:gbB,squadUnits:uB.slice(),squadName:(squads[1].name||'二队')}
+    },
+    pendingSquads:squads.slice(2),
+    buildSquad:build
+  }):null
+  if(!_groupDual){toast('双场景导演未加载（group-dual.js 缺失）','e');return}
+  _groupBattle=_groupDual.scenes.A.gb
+  /* 时间旅行：两个 gb 的联合快照未定义 → 双场景不做（阶段 D 明确不做，不留半套） */
+  try{window.__groupSnaps=[];window.__groupInitSnap=null}catch(e){console.warn('[dual] 清快照失败',e)}
+  /* 与单场景开战同一份视图状态复位（自动关 / 清连打队列 / 读速度档 / 回战斗页） */
+  _groupAuto=false
+  cancelGroupAutoTimer()
+  _groupChainNext=null
+  _groupAutoStopNote=''
+  applyGroupAutoSpeed(loadGroupAutoSpeed())
+  _groupDetail=null
+  _gbTab='battle'
+  _groupPaused=false
+  _groupActing=null
+  if(terrain)toast('🌍 场地：'+terrain.name+'（两侧同一场地，对敌我双方均有效）','s')
+  renderGroupOverlay(true)
+  toast('👥👥 双场景开战：'+glv.name+'（A：'+(squads[0].name||'一队')+' / B：'+(squads[1].name||'二队')+'）','s')
+}
+
+/* 双场景一拍：先同步活指针 → 导演推进（可能换边）→ 指针跟随新场景。
+   返回与 `groupBattleStep` 同形的 step（unit / events / turnEnd / done），供 `_groupStep` 复用。 */
+function _dualStepOnce(){
+  var dir=_groupDual
+  if(!dir)return null
+  _groupBattle=dir.scenes[dir.active].gb
+  var step=dualStep(dir)
+  _groupBattle=dir.scenes[dir.active].gb
+  return step
+}
+
+/* v2.14.21（阶段 D）：给测试 / 调试用的只读探针（与 `__groupRelayNext` 同类，不参与线上逻辑）。 */
+window.__groupDualState = function(){ return _groupDual }
+
 /* 自动选参战宠物（最多 n 只成熟宠物） */
 function autoPickPets(n){
   var ready=getBattleReadyPets()
@@ -943,13 +1047,21 @@ function _groupStep(){
   if(_groupAutoStepBusy)return
   _groupAutoStepBusy=true
   try{
-    if(_groupBattle&&_groupBattle.done)return
+    /* v2.14.21（阶段 D）：双场景由导演推进；`_groupBattle` 只是「当前推进场景」的活指针 */
+    if(_groupDual){ if(_groupDual.done){_groupDone();return} }
+    else{
+      if(_groupBattle&&_groupBattle.done)return
+    }
     if(_groupPaused)return   // 详情弹层打开中：挂起（自动已在 pauseGroupBattle 里停掉）
-    if(!_groupBattle||_groupBattle.done){_groupDone();return}
+    if(!_groupDual&&(!_groupBattle||_groupBattle.done)){_groupDone();return}
+    if(_groupDual&&!_groupBattle){_groupDone();return}
+    /* 本拍要推进的那个 gb（双场景下**先**取当前场景，推进后指针可能已经换边） */
+    var sceneGb=_groupDual?_groupDual.scenes[_groupDual.active].gb:_groupBattle
     // 单步执行：一次一个单位行动（速度优先级可见）
-    /* v2.1.27 [7d]：每步前存一份快照（环形，最多 30 份） */
+    /* v2.1.27 [7d]：每步前存一份快照（环形，最多 30 份）
+       ⚠️ 双场景不做时间旅行（两个 gb 的联合快照未定义，阶段 D 明确不做）→ 跳过存快照。 */
     try {
-      if (typeof groupSnapshot === 'function' && window.__groupSnaps) {
+      if (!_groupDual && typeof groupSnapshot === 'function' && window.__groupSnaps) {
         window.__groupSnaps.push({ t: _groupBattle.turn, snap: groupSnapshot(_groupBattle) })
         if (window.__groupSnaps.length > 30) window.__groupSnaps.shift()
       }
@@ -958,8 +1070,10 @@ function _groupStep(){
     /* v2.14.0（批次 C）：击杀/阵亡检测的**事前 HP 快照**（纯数据；fx-semantics.js 未加载则跳过）。
        ⚠️ 本函数内不得出现任何 DOM 操作（§8 源码守卫）—— 检测与演出都交给独立函数。 */
     var hpBefore = (typeof fxHpSnapshot === 'function')
-      ? fxHpSnapshot(_groupBattle && _groupBattle.units) : null
-    var step = groupBattleStep(_groupBattle)
+      ? fxHpSnapshot(sceneGb && sceneGb.units) : null
+    var step = _groupDual ? _dualStepOnce() : groupBattleStep(_groupBattle)
+    /* 换边后让活指针跟随新场景（渲染 / 日志 / 特效继续按 `_groupBattle` 工作） */
+    if(_groupDual)_groupBattle=_groupDual.scenes[_groupDual.active].gb
     /* v2.1.26 [7b]：群战单步耗时埋点，供 Debug 面板「⏱ 性能」分区读取 */
     try { if (typeof window.__perfMarkStep === 'function') {
       window.__perfMarkStep(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _perfT0);
@@ -967,23 +1081,32 @@ function _groupStep(){
     // 高亮当前行动单位
     if (step.unit) _groupActing = step.unit.id
     /* v2.14.19（阶段 B）：本拍里发生了「小队接力」（引擎在判负前问了增援）→ 提示一次。
-       提示只是反馈，不动战斗状态（新单位已在 gb.allies / gb.units 里，下面这次渲染就会画出来）。 */
+       提示只是反馈，不动战斗状态（新单位已在 gb.allies / gb.units 里，下面这次渲染就会画出来）。
+       v2.14.21：双场景的增援 / 场景结束走导演的一次性 notes（含是哪个场景）。 */
+    if (_groupDual) {
+      var _dnotes = dualTakeNotes(_groupDual)
+      _dnotes.forEach(function (n) {
+        if (n.type === 'reinforce') toast('🔄 场景 ' + n.scene + '：' + n.name + ' 上场（满血接力）', 's')
+        else if (n.type === 'sceneWon') toast('🏆 场景 ' + n.scene + ' 已清场（冻结）', 's')
+        else if (n.type === 'sceneLost') toast('💀 场景 ' + n.scene + ' 全灭，已无替补可用', 'e')
+      })
+    }
     if (_groupRelayPending) {
       toast('🔄 ' + _groupRelayPending + ' 上场（满血接力）', 's')
       _groupRelayPending = ''
     }
     renderGroupOverlay(false)
     // 攻击反馈动画：解析本次行动的日志，高亮受击目标 + 伤害飘字
-    if (step.unit) playAttackFeedback(_groupBattle, step)
+    if (step.unit) playAttackFeedback(sceneGb, step)
     /* v2.14.0（批次 C）：击杀/阵亡提示（**本步前后 HP 跨零**；引擎不落阵亡日志，故在 UI 侧判）。
        离散语义：不参与数值聚合、不影响下一步调度与结算。 */
     if (hpBefore && typeof fxDetectKills === 'function') {
-      var _kills = fxDetectKills(hpBefore, _groupBattle && _groupBattle.units)
-      if (_kills.length) gbFxKillMarks(_groupBattle, _kills)
+      var _kills = fxDetectKills(hpBefore, sceneGb && sceneGb.units)
+      if (_kills.length) gbFxKillMarks(sceneGb, _kills)
     }
-    if(_groupBattle.done){_groupDone();return}
+    if(_groupDual ? _groupDual.done : _groupBattle.done){_groupDone();return}
     // 技能气泡 → v2.4.2 起并入中央特效区的施法特效（图标 + 一句话），见 gbShowSkillCast
-    var lastLog = _groupBattle.log.length ? _groupBattle.log[_groupBattle.log.length-1] : null
+    var lastLog = sceneGb && sceneGb.log && sceneGb.log.length ? sceneGb.log[sceneGb.log.length-1] : null
     var bubble = lastLog ? lastLog.events.find(function(e){ return e.type==='bubble'; }) : null
     if (bubble) {
       gbShowSkillCast(_groupBattle, bubble)
@@ -1753,7 +1876,7 @@ function gbShowSkillCast(gb, bubble, evs){
 function _groupDone(){
   /* 没有本场战斗可结算：旧实现在 `_groupBattle===null` 时仍按失败路径走下去
      （结算宠物受伤 + 打开一份「💀 失败」面板），凭空造出一场失败。 */
-  if(!_groupBattle)return
+  if(!_groupBattle&&!_groupDual)return
   /* v2.14.15：先记下「本场是不是自动在打」——下面会立刻把开关置 false（结算期间不再出手），
      结算全部落账之后再由 _armGroupAutoNext() 决定「排下一关」还是「彻底停」。 */
   var autoEnded=_groupAuto||!!_groupChainNext
@@ -1770,13 +1893,15 @@ function _groupDone(){
      重绘由下面那句 renderGroupOverlay(false) 统一做，这里只改状态（不抢渲染）。 */
   cancelGroupAutoTimer()
   _groupAuto=false
-  var w=_groupBattle&&_groupBattle.winner
+  var w=_groupDual?_groupDual.winner:(_groupBattle&&_groupBattle.winner)
   _groupRewarded=true
   invalidateGroupOutro()
-  var battle=_groupBattle
+  /* v2.14.21（阶段 D）：双场景结算用**导演合并出的门面对象**（战报/统计/历史/发奖都吃它），
+     奖励与受伤副作用仍是下面这一份代码 —— 禁止第二套奖励链。 */
+  var battle=_groupDual?dualMergedBattle(_groupDual):_groupBattle
   var outro={id:++_gbOutroSettlementId,battle:battle,generation:_gbOutroGeneration,token:0,timer:null,deadline:0,advance:null,phase:'outcome'}
   _gbOutroActive=outro
-  var isCurrentOutro=function(phase){return _gbOutroActive===outro&&outro.generation===_gbOutroGeneration&&_groupBattle===battle&&battle&&battle.done&&outro.phase===phase}
+  var isCurrentOutro=function(phase){return _gbOutroActive===outro&&outro.generation===_gbOutroGeneration&&outro.battle===battle&&battle&&battle.done&&outro.phase===phase}
   _groupActing=null        // v2.1.14：战斗结束不再残留「行动中」高亮
   _groupPaused=false
   gbFxClear()              // v2.4.0：清掉本场残留飘字（否则结算面板后面还飘着旧数字）
@@ -1790,7 +1915,7 @@ function _groupDone(){
     }
     // 敌群胜利奖励：技能点（基数 4 点/胜，见 skill-store.js 的 SKILL_POINTS_PER_STAGE）+ 材料（随关卡难度递增）
     // 注：v2.1.19 把基数从 10 降到 4，此处注释同步（此前一直写着 10，与实际不符）
-    var reward = groupVictoryReward(_groupBattle)
+    var reward = groupVictoryReward(battle)
     var msg = '🎉 敌群讨伐成功！' + reward.msg
     if (prog && prog.firstClear) {
       msg += (prog.nextStage ? ' · 🔓 解锁 ' + prog.nextStage : ' · 🏆 全部通关！')
@@ -1807,7 +1932,7 @@ function _groupDone(){
     var msg0 = '💀 敌群讨伐失败… 无奖励'
     try {
       var dInj = getPetStore()
-      var sps = (_groupBattle && _groupBattle.allies ? _groupBattle.allies : [])
+      var sps = (battle && battle.allies ? battle.allies : [])
         .map(function (u) { return u._petSpecies; }).filter(Boolean)
       var hurt = (typeof applyDefeatInjuries === 'function') ? applyDefeatInjuries(dInj, sps) : []
       if (hurt.length) { savePetStore(dInj); msg0 += ' ' + hurt.join('、') + ' 受伤（喂养恢复）' }
@@ -2288,6 +2413,19 @@ function renderGroupActionBanner(gb){
     +'</div>'
 }
 
+/* v2.14.21（阶段 D）：按 uid 找单位 —— 单位卡点击 / 技能 / 天赋弹层共用。
+   双场景下两栏的单位都在同一份 overlay 里，必须两边都找（先当前场景，再另一侧）。 */
+function _gbFindUnit(uid){
+  function find(g){ return (g&&g.units)?g.units.find(function(x){return x.id===uid}):null }
+  var u=find(_groupBattle)
+  if(u)return u
+  if(_groupDual){
+    var ks=['A','B']
+    for(var i=0;i<ks.length;i++){ var v=find(_groupDual.scenes[ks[i]].gb); if(v)return v }
+  }
+  return null
+}
+
 /* 渲染群战 overlay：手动/自动 + 调速 + 单位 + 动画 + 详情 + 日志 */
 function renderGroupOverlay(show){
   var ov=document.getElementById('battleOverlay')
@@ -2295,7 +2433,15 @@ function renderGroupOverlay(show){
   if(show)ov.classList.add('open')
   if(!_groupBattle){ov.classList.remove('open');return}
   var gb=_groupBattle
-  var allyPct=gbSideHpPct(gb.allies), foePct=gbSideHpPct(gb.enemies)
+  /* v2.14.21（阶段 D）：双场景 —— `_groupBattle` 是**当前推进场景**的活指针，
+     控制条与总览条要看**两侧合计**（战报同理走 dualMergedBattle 门面）。 */
+  var dual=_groupDual
+  var dualFacade=dual?dualMergedBattle(dual):null
+  var allyPct=gbSideHpPct(dualFacade?dualFacade.allies:gb.allies), foePct=gbSideHpPct(dualFacade?dualFacade.enemies:gb.enemies)
+  /* 控制条标题：单场景 = 敌方数 + 回合；双场景 = 整场轮数 + 当前场景 + 剩余替补 */
+  var titleBody=dual
+    ?('双场景 · 回合 '+dual.cycle+' · 当前 '+dual.active+' · 替补 '+dualPendingCount(dual))
+    :(gb.enemies.length+'敌 · 回合 '+gb.turn)
   /* v2.14.15：自动开关的三态文案 + 「当前第 N 关」。
      · 关：▶ 自动连打    · 打：⏸ 自动中    · 已排队下一关：⏳ 连打中
      只换文案与 title，**不新增字号/颜色**（样式见 index.css 的 v2.14.15 块）。
@@ -2309,7 +2455,7 @@ function renderGroupOverlay(show){
   // v2.1.14：控制条常驻（sticky），其下是「战斗 / 日志」双 Tab —— 两个页签各自独立滚动
   var h='<div class="gb-ctrl">'
     +'<button class="speed-btn" id="gbClose" aria-label="退出战斗">✕</button>'
-    +'<span class="gb-ctrl-title" data-stage="'+escHtml(_groupStageId||'')+'">👥 '+stageLabel+gb.enemies.length+'敌 · 回合 '+gb.turn+'</span>'
+    +'<span class="gb-ctrl-title" data-stage="'+escHtml(_groupStageId||'')+'">👥 '+stageLabel+titleBody+'</span>'
     /* v2.1.22：场地常驻胶囊（可点击看介绍）。
        此前场地只在开战时 toast 一次，几秒后就消失 —— 玩家打到一半根本记不住自己在什么场地里，
        更看不到「对敌我双方均有效」这类关键前提。现在控制条上常驻一个 🌍 胶囊，点开是完整说明。 */
@@ -2343,7 +2489,21 @@ function renderGroupOverlay(show){
      为什么必须在外：.gb-pane 是 overflow-y:auto 的滚动裁剪容器，行动者芯片的
      transform:scale(1.1) 一旦发生在里面就会横向溢出、顶出横向滚动条（v2.4.0 实测踩过）；
      广场自带 overflow:hidden，放大被它安静地裁掉。 */
-  h+='<div class="gb-arena-wrap">'+renderGroupBattlePane(gb)+'</div>'
+  /* v2.14.21（阶段 D）：双场景两栏 —— 每栏各自调一次 `renderGroupBattlePane(gb, sfx)`。
+     A 栏沿用既有 id（`gbArena`），B 栏用 `gbArenaB` 后缀；渲染代码只有一份。 */
+  if(dual){
+    h+='<div class="gb-dual" id="gbDual">'
+    ;['A','B'].forEach(function(k){
+      var sc=dual.scenes[k]
+      h+='<div class="gb-dual-pane'+(dual.active===k?' active':'')+(sc.status!=='active'?' frozen':'')+'">'
+        +'<div class="gb-dual-hd"><b>场景 '+k+'</b><span class="gb-dual-st st-'+escHtml(sc.status)+'">'+escHtml(dualSceneLabel(dual,k))+'</span></div>'
+        +'<div class="gb-arena-wrap">'+renderGroupBattlePane(sc.gb,(k==='A'?'':'B'))+'</div>'
+        +'</div>'
+    })
+    h+='</div>'
+  } else {
+    h+='<div class="gb-arena-wrap">'+renderGroupBattlePane(gb)+'</div>'
+  }
   // v2.1.14 双 Tab（战斗 / 日志）—— v2.4.2 起它同时是「日志抽屉」的把手
   h+='<div class="gb-tabs" role="tablist" aria-label="战斗视图">'
     +'<button class="gb-tab'+(_gbTab==='battle'?' active':'')+'" data-gbtab="battle" role="tab" aria-selected="'+(_gbTab==='battle')+'">⚔️ 战斗</button>'
@@ -2365,7 +2525,7 @@ function renderGroupOverlay(show){
   // 事件绑定
   var closeBtn=document.getElementById('gbClose')
   /* 停止条件③（用户主动离开敌群视图）：先释放战斗对象再停 → stopGroupAuto 不会抢着重绘 */
-  if(closeBtn)closeBtn.addEventListener('click',function(){cancelGroupOutroTimer();_groupBattle=null;stopGroupAuto('关闭敌群战斗（离开敌群视图）');ov.classList.remove('open');_groupPaused=false;cancelGroupAutoTimer();gbFxClear()})
+  if(closeBtn)closeBtn.addEventListener('click',function(){cancelGroupOutroTimer();_groupBattle=null;_groupDual=null;stopGroupAuto('关闭敌群战斗（离开敌群视图）');ov.classList.remove('open');_groupPaused=false;cancelGroupAutoTimer();gbFxClear()})
   // v2.1.22：场地胶囊 → 场地介绍弹层
   var terrBtn=document.getElementById('gbTerrain')
   if(terrBtn)terrBtn.addEventListener('click',function(){showTerrainDetail(gb.terrain)})
@@ -2387,7 +2547,7 @@ function renderGroupOverlay(show){
     /* v2.14.15：结算等待中（「⏳ 连打中」）点它同样是「⏸」——
        stopGroupAuto 会清掉排队中的下一关，**不会再自己跳关**（规格④）。 */
     if(_groupAuto){stopGroupAuto('玩家点了⏸');renderGroupOverlay(false);return}
-    if(!_groupBattle||_groupBattle.done)return   /* 已结束：不替玩家重开一局 */
+    if((_groupDual?_groupDual.done:(!_groupBattle||_groupBattle.done)))return   /* 已结束：不替玩家重开一局 */
     _groupAuto=true
     _groupAutoStopNote=''                        /* 重新开启 → 旧停止原因不再相关 */
     _groupChainNext=null
@@ -2420,8 +2580,14 @@ function renderGroupOverlay(show){
      与下方的日志抽屉互不干扰（抽屉打开时广场被压缩，焦点仍只作用于广场）。
      放大（transform:scale）由 CSS 挂在 .gb-arena-unit.gb-acting 上，
      只在 .gb-arena 的 overflow:hidden 里生效 —— 见 index.css 的说明。 */
-  var arena = document.getElementById('gbArena')
-  if (arena && arena.classList) arena.classList.toggle('gb-focus', !!(_groupActing && !gb.done))
+  /* v2.14.21：双场景两栏 —— 焦点只落在**当前推进场景**那一栏（两栏都挂会让人分不清在打哪边） */
+  var focusKeys=dual?['A','B']:['']
+  focusKeys.forEach(function(k){
+    var el=document.getElementById('gbArena'+k)
+    if(!el||!el.classList)return
+    var on=!!(_groupActing&&!(dual?dual.done:gb.done)&&(!dual||k===dual.active))
+    el.classList.toggle('gb-focus',on)
+  })
   if (pane && _gbTab==='log') pane.scrollTop = pane.scrollHeight
   if(copyBtn)copyBtn.addEventListener('click',function(){
     var gb2=_groupBattle
@@ -2450,7 +2616,7 @@ function renderGroupOverlay(show){
   ov.querySelectorAll('.gb-unit').forEach(function(el){
     el.addEventListener('click',function(){
       var uid=el.getAttribute('data-uid')
-      var u=gb.units.find(function(x){return x.id===uid})
+      var u=_gbFindUnit(uid)
       if(!u)return
       _groupDetail=uid
       pauseGroupBattle()
@@ -2461,7 +2627,7 @@ function renderGroupOverlay(show){
   ov.querySelectorAll('.gb-chip[data-skill]').forEach(function(el){
     el.addEventListener('click',function(ev){
       ev.stopPropagation()
-      var u=gb.units.find(function(x){return x.id===el.getAttribute('data-uid')})
+      var u=_gbFindUnit(el.getAttribute('data-uid'))
       pauseGroupBattle()
       showSkillDetail(el.getAttribute('data-skill'),u)
     })
@@ -2469,7 +2635,7 @@ function renderGroupOverlay(show){
   ov.querySelectorAll('.gb-chip[data-pskill]').forEach(function(el){
     el.addEventListener('click',function(ev){
       ev.stopPropagation()
-      var u=gb.units.find(function(x){return x.id===el.getAttribute('data-uid')})
+      var u=_gbFindUnit(el.getAttribute('data-uid'))
       pauseGroupBattle()
       showPlayerSkillDetail(el.getAttribute('data-pskill'),u)
     })
@@ -2478,7 +2644,7 @@ function renderGroupOverlay(show){
     el.addEventListener('click',function(ev){
       ev.stopPropagation()
       pauseGroupBattle()
-      showTalentDetail(el.getAttribute('data-talent'),gb.units.find(function(x){return x.id===el.getAttribute('data-uid')}))
+      showTalentDetail(el.getAttribute('data-talent'),_gbFindUnit(el.getAttribute('data-uid')))
     })
   })
   // 攻击动画（高亮受伤单位）
@@ -2560,25 +2726,30 @@ function logEventClass(e){
 /* 战斗页（广场）：行动顺序 + 三区（敌方 → 中央 → 我方），顺序固定不可调换。
    ⚠️ 本函数体内**不得**出现行动横幅（横幅归 renderGroupOverlay 的吸顶区），
       也**不得**再渲染 gb-hint 长提示（提示归下方 #gbPane）—— 有测试按源码断言。 */
-function renderGroupBattlePane(gb){
+function renderGroupBattlePane(gb,sfx){
+  /* v2.14.21（阶段 D）：**容器 id 参数化** —— 双场景两栏各调一次本函数（A 用空后缀保持既有 id，
+     B 用 'B' 后缀）。禁止另写一份渲染代码（设计 §4.3 / R1）。 */
+  sfx=sfx||''
   var petCount=0
   gb.allies.forEach(function(u){ if(u._petSpecies) petCount++ })
   /* v2.4.2 实测收口：芯片总数 ≥7（最坏 = 5 我 + 3 敌；实测 240 关敌人最多 3 个）时挂 gb-arena-dense，
      把芯片 72→56px、头像 32→24px —— 否则 360×640 上我方第二行会被 .gb-arena 的 overflow:hidden 裁掉
-     （实测 inj3 芯片越界 37px）。判据是**数据总数**，纯展示、不影响任何战斗逻辑。 */
+     （实测 inj3 芯片越界 37px）。判据是**数据总数**，纯展示、不影响任何战斗逻辑。
+     双场景每栏更窄，阈值下调到 5（单侧最坏 5 我 + 3 敌）。 */
   var totalChips=((gb&&gb.allies)||[]).length+((gb&&gb.enemies)||[]).length
-  var h='<div class="gb-arena'+(totalChips>=7?' gb-arena-dense':'')+'" id="gbArena">'
+  var denseAt=sfx?5:7
+  var h='<div class="gb-arena'+(totalChips>=denseAt?' gb-arena-dense':'')+'" id="gbArena'+sfx+'">'
   /* 行动顺序条复用既有 renderGroupOrder(gb)（自带 overflow-x:auto，不参与放大） */
   h+=renderGroupOrder(gb)
   /* 敌方在上（对阵舞台的空间隐喻） */
-  h+='<div class="gb-arena-row gb-arena-enemy" id="gbArenaEnemy">'
+  h+='<div class="gb-arena-row gb-arena-enemy" id="gbArenaEnemy'+sfx+'">'
     +'<div class="gb-side-hdr enemy"><span>🔴 敌方</span></div>'
   gb.enemies.forEach(function(u){h+=renderGroupUnit(u,'enemy')})
   h+='</div>'
   /* 中央留空区：特效（飘字 / 技能名）的落点，纯占位、不放内容 */
-  h+='<div class="gb-arena-mid" id="gbArenaMid"></div>'
+  h+='<div class="gb-arena-mid" id="gbArenaMid'+sfx+'"></div>'
   /* 我方在下；「🐾 宠物 ×N」沿用 v2.2.27 的合并口径（4 只宠不再印 4 个标签） */
-  h+='<div class="gb-arena-row gb-arena-ally" id="gbArenaAlly">'
+  h+='<div class="gb-arena-row gb-arena-ally" id="gbArenaAlly'+sfx+'">'
     +'<div class="gb-side-hdr ally"><span>🟢 我方</span>'
     +(petCount?'<span class="gb-tag pet">🐾 宠物 ×'+petCount+'</span>':'')
     +'</div>'
