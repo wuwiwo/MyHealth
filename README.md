@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.18
+> Personal Health Manager — 个人健身健康管理应用 v2.14.19
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -113,7 +113,7 @@ doc/
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.18）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.18）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.19）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -444,4 +444,6 @@ Vercel 项目设置：
 
 | **2.14.18** | **2026-11-26** | **宠物编队（阶段 A：数据模型 + 管理 UI，战斗逻辑零改动）** —— 设计见 `doc/design-pet-squad-battle-v1.md`（v1.2 定稿）。**① 存档**：`dh-pets-v1.squads = [{id,name,petIds}]`，**不新增 store 键**（云同步零改动）；`battlePicks` 保留为**首发镜像**（恒等于 `squads[0].petIds`），旧调用点（培养页 / 宠物面板芯片）行为不变。**② 不变量（Q1）**：每队 ≤ `PET_BATTLE_MAX`(4)、**同一宠物不得出现在两个小队**（先到先得）、至少保留 1 队；写入只做截断/去重/形状规整，**不按存活状态过滤** —— 受伤 / 阵亡宠物**留在队里**但开战时由既有 `canPetBattle()` 过滤（不静默改成员）。**③ 旧档迁移 = 只读派生**：无 `squads` 时按现有 `battlePicks` 派生「一队」，**不在读取路径写盘**（防云同步整键覆盖凭空写出空编队），首次写编队才落盘。**④ 唯一写入口** `savePetSquads()`（`savePetBattlePicks()` 内部同步首发），面板只调 `addPetSquad / removePetSquad / renamePetSquad / movePetSquad / togglePetSquadPet`。**⑤ UI**：宠物面板新增「🐾 编队管理」原生 `<details>` 折叠区（默认收起、44px 热区、队名校验 8 字/空名回落/超长截断、↑↓ 排序即替补顺序、🗑 删除、＋新建、每队芯片切换、伤员 ⚠️ 与原因行、队名经 `petSquadEsc` 转义）；**第 1 队 = 首发**，改完立即刷新 `_petBattlePicks` 缓存。新增 `scripts/test-pet-squads.js` **67 断言**（含只读派生不写盘、跨队互斥脏档去重、双向同步幂等、重开恢复、单一写入口源码守卫）；`test-pet-panel-layout` 两条 `aria-pressed` 计数收紧到**阵容区块内**（语义未弱化）＋ 6 条编队区 UI 契约（88 通过）。全量 **81 套件 / 0 失败** + a11y **40/40**。缓存戳 `?v181` → **`?v182`**（55 处） | `doc/changelog-v2.14.md` |
 
-> 当前版本：**v2.14.18**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+| **2.14.19** | **2026-11-26** | **小队接力（阶段 B：普通战斗单队接力，单队路径逐字不变）** — 设计 `doc/design-pet-squad-battle-v1.md` §3。**① 引擎**（`battle-group.js`）：新增**唯一增援入口** `gbReinforce(gb, units)` —— `gb.allies` 与 `gb.units` **同池同步**（引擎所有遍历都走 `units`）、不重建战斗对象（敌人/词条/场地/RNG/进度原样）、本回合队列**不重排**（新单位从下一回合准备阶段进入）、已加入单位**幂等不重复 push**、只对新单位补跑一次 `onBattleStart`（圣光麒麟·威压领域的 `_pfMates` 靠这个缓存，否则静默失效；老单位与敌方不重放）。**② 判负参数化** `winnerRule`：默认 `'all'`（含玩家，**与改前逐字一致**）；`'pets'`（多队用，阶段 D 启用）只数非玩家单位（`_isPlayer`），无宠物单位时回落 `'all'`。**③ 顺序**：`checkGroupWin` **先问增援再判负** —— 反过来的话本队全灭会当场结束、下一队永远上不了场；仅在「敌方还有活口 + 本队全灭 + 提供方还给队」三件同时成立时增援，`guard<16` 防死循环。**④ 接线**（`game-render.js`）：`startGroupTrial` 只在 **≥2 支有宠小队**时挂 `squadUnits` + `reinforce=_groupRelayNext`；提供方按 `getPetSquads()` 顺序接力、**满血现建**、仍走 `buildGroupBattlePets()` 唯一入口、跳过空队/全员不可战（受伤阵亡），用尽返回 `null`（D3 落点）；接力**不掷骰**（同种子可复现性不受影响）；上场有一次性 toast。**⑤ 回滚**：`groupRestore` 摘除快照之后才加入的单位（就地 splice 保留引用），避免时间旅行把替补带回过去。**单队/旧档路径**：不传 `squadUnits`/`reinforce` ⇒ 引擎那段代码不执行，`test-group-determinism` 等既有确定性套件红转绿、全量 **82 套件 / 0 失败**。新增 `test-squad-relay.js` **41 断言**（默认口径不变 / 幂等双池 / 先增援后判负 / D3 / `'all'` vs `'pets'` / 只对新单位补开场 / 提供方跳空队 / 回滚摘除 / 源码守卫）。缓存戳 `?v182` → **`?v183`** | `doc/changelog-v2.14.md` |
+
+> 当前版本：**v2.14.19**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

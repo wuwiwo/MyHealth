@@ -501,6 +501,10 @@ var _gbTab='battle'      // v2.1.14：战斗页 / 日志页双 Tab（'battle' | 
 var _groupPaused=false   // v2.1.14：打开详情时暂停自动推进，避免详情被下一步渲染刷掉
 var _groupRewarded=false // v2.1.19：本次战斗是否已结算过奖励（防手动模式重复领取）
 var _groupSeed=null      // v2.1.27 [7c]：本场战斗的随机种子（用于复现）
+/* v2.14.19（阶段 B）：**小队接力**的本场状态（全部 runtime，不落盘） */
+var _groupRelaySquads=null   // 开战时的编队快照（getPetSquads()；只有 >1 支才启用接力）
+var _groupSquadIdx=0         // 已上场到的下标（0 = 首发）
+var _groupRelayPending=''    // 刚上场的队名（供 _groupStep 提示一次，提示后清空）
 
 /* v2.1.14：暂停 / 恢复群战推进（详情弹层打开期间挂起）。
    ⚠️ v2.14.14：打开详情/技能/天赋详情 = **需要玩家决策的时点** → 自动战斗**降级为暂停**
@@ -820,6 +824,9 @@ function startGroupTrial(groupId){
      挂成单位级字段，由 battle-group 的 levelDamageAdjust() 在伤害结算处消费。 */
   player._levelDmgDealtPct=_lb.dmgDealtPct||0
   player._levelDmgTakenPct=_lb.dmgTakenPct||0
+  /* v2.14.19（阶段 B）：标记「这是玩家单位」—— `winnerRule:'pets'`（多队战斗，阶段 D 启用）
+     据此把玩家排除在判负之外；普通战斗（'all'）不看这个标记，行为不变。 */
+  player._isPlayer=true
   // 挂载玩家技能（装备的技能生效）
   if (typeof attachPlayerSkills === 'function' && typeof getSkillState === 'function') {
     attachPlayerSkills(player, getSkillState())
@@ -853,6 +860,17 @@ function startGroupTrial(groupId){
   /* v2.1.27 [7c]：给本场一个种子，使战斗可复现 / 可回退 */
   _groupSeed = ((Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0
   _groupBattle=createGroupBattle({allies:allies,enemies:enemies,terrain:terrain,seed:_groupSeed})
+  /* v2.14.19（阶段 B）：**小队接力接线** —— 只有真的有 ≥2 支「有可战宠物」的小队时才挂。
+     单队（包括所有旧存档派生出来的「一队」）走的就是改前那条路径：不传 squadUnits / reinforce，
+     引擎里那段增援代码根本不执行 ⇒ 日志、RNG、判负时机与 v2.14.18 逐字节一致。
+     首发的 petUnits 仍是上面那一次 buildGroupBattlePets（同一份调用、同一顺序，未改）。 */
+  _groupSquadIdx=0
+  _groupRelaySquads=(typeof getPetSquads==='function')?getPetSquads():null
+  _groupRelayPending=''
+  if(_groupRelaySquads&&_groupRelaySquads.length>1&&petUnits.length){
+    _groupBattle.squadUnits=petUnits.slice()
+    _groupBattle.reinforce=_groupRelayNext
+  }
   /* v2.1.27 [7d]：初始快照（重放 / 时间旅行的起点） */
   try {
     window.__groupSnaps = []
@@ -883,6 +901,39 @@ function autoPickPets(n){
   if(!ready.length)return []
   return ready.slice(0,n||2).map(function(p){return p.speciesId})
 }
+
+/* v2.14.19（阶段 B）：**下一支小队** —— 引擎的增援提供方 `gb.reinforce(gb) → Unit[]|null`
+   · 队伍来源 = 开战时 `getPetSquads()` 的快照（阶段 A 的单一来源），按数组顺序接力，第 1 支首发；
+   · **现建单位 → 满血**、不继承上一队伤势；仍走 `buildGroupBattlePets()` 唯一入口
+     （凝聚 / 共鸣 / 等级 / 共享技能与首发同一口径，禁止另写一份数值）；
+   · 空队 / 全员不可战（受伤、阵亡——`canPetBattle` 在建单位时已过滤）→ 跳过该队继续找；
+     全部用尽 → `null`，引擎据此判负（这就是 D3「没有替补就算失败」的落点）；
+   · **不掷骰**：本函数不碰 `gb.rng`，同种子战斗的可复现性不受影响。 */
+function _groupRelayNext(gb){
+  var squads=_groupRelaySquads||[]
+  var max=(typeof PET_BATTLE_MAX==='number')?PET_BATTLE_MAX:4
+  while(++_groupSquadIdx<squads.length){
+    var sq=squads[_groupSquadIdx]
+    var ids=sq&&sq.petIds
+    if(!ids||!ids.length)continue
+    try{
+      var units=(typeof buildGroupBattlePets==='function')
+        ?buildGroupBattlePets(ids,max)
+        :createPetUnitsForBattle(ids,max)
+      if(!units||!units.length)continue
+      _groupRelayPending=sq.name||('第'+(_groupSquadIdx+1)+'队')
+      return units
+    }catch(e){
+      /* 单队建单位失败不应打断整场战斗：记录下来并跳过（不空 swallow） */
+      console.warn('[group] 增援建单位失败，跳过该小队', e)
+    }
+  }
+  return null
+}
+
+/* 测试观察点（与 `window.__groupSnaps` 同类）：只供 scripts/test-squad-relay.js 直接验证接力提供方，
+   不参与任何线上逻辑。 */
+if(typeof window!=='undefined')window.__groupRelayNext=_groupRelayNext
 
 /* 群战推进 —— **自动 / 手动共用的唯一入口**
    （`#gbStep` 手动按钮、`#gbAuto` 自动开关、`_groupAutoStep` 定时器都只调这个函数，零参数；
@@ -915,6 +966,12 @@ function _groupStep(){
     } } catch (e) { console.warn('[perf] 埋点失败', e); }
     // 高亮当前行动单位
     if (step.unit) _groupActing = step.unit.id
+    /* v2.14.19（阶段 B）：本拍里发生了「小队接力」（引擎在判负前问了增援）→ 提示一次。
+       提示只是反馈，不动战斗状态（新单位已在 gb.allies / gb.units 里，下面这次渲染就会画出来）。 */
+    if (_groupRelayPending) {
+      toast('🔄 ' + _groupRelayPending + ' 上场（满血接力）', 's')
+      _groupRelayPending = ''
+    }
     renderGroupOverlay(false)
     // 攻击反馈动画：解析本次行动的日志，高亮受击目标 + 伤害飘字
     if (step.unit) playAttackFeedback(_groupBattle, step)

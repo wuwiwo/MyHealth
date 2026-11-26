@@ -5,6 +5,60 @@
 
 ---
 
+## v2.14.19
+
+Date: 2026-11-26
+
+**小队接力 —— 阶段 B：普通战斗单队接力（单队路径与改前逐字节一致）**（设计定稿 `doc/design-pet-squad-battle-v1.md` v1.2 §3）
+
+### 新增功能
+
+1. **唯一增援入口 `gbReinforce(gb, units)`**（`page/battle-group.js`）：
+   - `gb.allies` 与 `gb.units` **同池同步**（引擎内队列 / 属性刷新 / 天赋与场地钩子 / 日志归因全部遍历 `units`，只改一边必然漏一半）；
+   - **不重建战斗对象**：敌人、固化词条、场地、RNG 种子、关卡进度全部原样，只往我方池里加人；
+   - **本回合行动队列不重排**，新单位从**下一回合准备阶段**起进入队列（设计 §3「换队发生在回合之间」）；
+   - 已加入过的单位**幂等不重复 push**；战斗已结束（`gb.done`）时拒绝增援；
+   - 只对**新单位**补跑一次 `onBattleStart`（`talentAura(added, …)`，`ctx.allyUnits` 是 `gb.allies` **活引用**）—— 圣光麒麟·威压领域的 `_pfMates` 缓存靠这个，不补就是静默失效；老单位与敌方**不重放**。
+2. **判负口径参数化 `winnerRule`**：`createGroupBattle` 新增 `opts.winnerRule`，**默认 `'all'`（含玩家，与改前逐字一致）**；`'pets'`（多队战斗用，阶段 D 才启用）只数非玩家单位（`_isPlayer`），场上没有宠物单位时**回落 `'all'`**，不会凭空判我方胜。
+3. **接力接线**（`page/game-render.js`）：
+   - `startGroupTrial` 只在 **≥2 支有可战宠物的小队**时挂 `gb.squadUnits`（首发宠物单位）与 `gb.reinforce=_groupRelayNext`；单队 / 旧存档派生的一队**走改前路径**（引擎里那段增援代码根本不执行）；
+   - 提供方 `_groupRelayNext`：按 `getPetSquads()` 顺序接力，**现建单位 → 满血**、不继承上一队伤势，仍走 `buildGroupBattlePets()` 唯一入口（凝聚 / 共鸣 / 等级 / 共享技能与首发同一口径）；空队、全员不可战（受伤 / 阵亡已被 `canPetBattle` 过滤）→ 跳过继续找；用尽 → `null`（引擎据此判「没有替补就算失败」，即 D3 的落点）；
+   - **不掷骰**：提供方不碰 `gb.rng`，同种子可复现性不受影响；
+   - 上场时一次性 toast「🔄 X 上场（满血接力）」，提示即清。
+4. **玩家标记**：玩家单位打 `_isPlayer=true`（普通战斗的 `'all'` 口径不看它，多队的 `'pets'` 口径据此排除玩家）。
+
+### 修复
+
+1. **增援/判负的时序**（实现过程中发现并固化的硬约束）：`runPhaseAction` 与 `groupBattleStep` **每行动一个单位就调一次** `checkGroupWin`，若先判负，本队全灭会当场 `done`，下一队永远上不了场。故 `checkGroupWin` 现在**先问增援、后判负**，且只在「敌方还有活口 + 本队全灭 + 提供方还给了队」三件同时成立时增援；`guard<16` 防「提供方恒给空队」。
+2. **回滚不把替补带回过去**（`groupRestore`）：时间旅行回滚到增援之前的快照时，快照之后才加入的单位会残留在 `units/allies/enemies/squadUnits` 里。现在按快照 id 集合**就地 splice 摘除**（保留数组引用，避免别处持有引用失联）。
+
+### UI 调整
+
+1. 群战控制台之外的**画面未改**：新单位直接出现在既有 `gb.allies` 芯片列表里（渲染走同一份数据），只多了上场的一次性 toast。
+2. 编队管理（阶段 A 的「🐾 编队管理」）**未改**；该区块的排序即本阶段的接力顺序。
+
+### 测试
+
+- 新增 `scripts/test-squad-relay.js`：**41 断言 / 0 失败**。覆盖：默认字段与 `'all'` 判负口径不变 / `gbReinforce` 双池同步与幂等 / 空数组与已结束战斗的拒绝 / **先增援后判负**（队灭不判负、用尽后普通战斗仍由玩家续战）/ 敌方先灭则不浪费小队 / `'all'` vs `'pets'` 的阈值差异 / `'pets'` 无宠物单位回落 / 增援只对新单位补 `onBattleStart`（探针天赋计数 = 1、老单位无二次派发、事件落日志 `unit=增援`）/ 提供方跳过空队与全员受伤队、拿到的是满血单位 / 回滚摘除替补 / game-render 与 battle-group 源码守卫。
+- 全量 **82 套件 / 0 失败**（`test-group-determinism`、`test-group-battle`、`test-ai`、`test-group-auto*` 等既有确定性/推进套件全绿 ⇒ 未接线路径逐字节未变）；`test-a11y-tokens` 40/40。
+- 版本：`APP_VERSION` → **2.14.19**；缓存戳 `page/index.html` 全部 `?v182` → **`?v183`**（55 处）。
+
+### 文件
+
+- **新增**：`scripts/test-squad-relay.js`。
+- **修改**：`page/battle-group.js`、`page/game-render.js`、`page/utils.js`、`page/index.html`、`README.md`、`doc/changelog-v2.14.md`、`doc/VERSION-LEDGER.md`。
+- **删除**：无。**未新增 `page/*.js`**（架构演化表 JS 文件数仍 **53**）。
+
+### ⚠️ 待裁决 / 未覆盖
+
+1. **多队双场景未上线**：`winnerRule:'pets'` 已实现但**没有生产调用点**（阶段 D 才接线）；玩家不受攻击（`_untargetable` / `attackable`）仍属阶段 C。
+2. **接力发生在行动中途时的观感**：本队全灭的那一拍，若队列里还有未行动的敌人，它们本回合仍会对玩家出手；替补从下一回合开始行动。设计如此，但真机手感待复核。
+3. **时间旅行的「下一队指针」不回退**：`groupRestore` 会摘掉替补单位，但 `game-render` 的 `_groupSquadIdx` 不回退 → 回滚后再灭队可能跳过一支小队（调试向功能的已知限制，非正常玩法路径）。
+4. **真机未复核**：接力 toast / 新单位芯片出现时机未做 CDP 目视（阶段 E 统一复核）。
+5. **队伍全灭但玩家单挑胜利仍可能**：普通战斗 `'all'` 口径下宠物全灭后玩家可继续打完并取胜（这与改前一致，是 `Q5` 的定稿结果，不是新漏洞）。
+
+---
+
 ## v2.14.18
 
 Date: 2026-11-26
@@ -1088,6 +1142,7 @@ Date: 2026-10-12
 | 2.14.16 | 53 | 3314 行 game-render.js | **宝珠系统四项施工 + 培养页精简 / 出战阵容常驻**：分解等价碎片（`orbDecomposeShards = orbPct`，R·Lv1=10 / UR·Lv50=297）、恢复合成（20 碎片→R·Lv1、100%、每日 5 次、`orbSynth` 随 `pets` 同步）、5 枚宝珠图标 SVG + `orbIconHtml` 唯一入口、修复 2（`u8.stat` → `u8.pct`）、库存 / 宠物列表 / 培养材料默认折叠、`.train-lineup` 常驻阵容（就地切换 + 开战走 `startGroupTrialWithPets` 唯一入口）；全量 **79 套件 / 0 失败**、a11y **40/40**；新增 5 个 SVG、**无新增 `page/*.js`**、无删除文件；缓存戳 `?v179` → `?v180` |
 | 2.14.17 | 53 | 3314 行 game-render.js | **宠物天赋补齐 6 条（R/SR）+ 战意/梦幻/不动如山数值调整**：不动如山每回合回血 3%、战意吸血 10~100%、梦幻光球自愈 -40%、战意先制度改技能自身 priority:1（引擎 predeclareActions 扩展我方）、雨中疾行（雨天 spd×2）、星芒庇护（受击 40% 减伤 25%）、斗志昂扬（攻/受击 25% spd+1）、磐石反噬（(def+soulDef)×10% 定值反弹过减伤不过防御，新 mutation reflectMitigated）、共鸣之歌（我方施技自回 2%）、雷鸣加速（我方施技 20% 自身 CD-1，新 hook onAllyCastSkill）；新增 test-pet-v21417（48 断言），全量 80 套件 / 3405 断言 0 失败；缓存戳 ?v181 |
 | 2.14.18 | 53 | 3314 行 game-render.js | **宠物编队阶段 A（战斗零改动）**：`dh-pets-v1.squads`（不新增 store 键，`battlePicks` = 首发镜像）；旧档**只读派生**迁移（读取不写盘）；不变量 = 每队 ≤4 + **同宠不得跨队** + 至少 1 队 + 队名 ≤8；唯一写入口 `savePetSquads()` 与 5 个管理动作；UI = 宠物面板「🐾 编队管理」原生 `<details>`（改名/↑↓排序/删除/新建/芯片切换/伤员 ⚠️ 保留在队）；新增 `test-pet-squads`（67 断言，含源码守卫）；`test-pet-panel-layout` 两条 `aria-pressed` 计数收紧到阵容区块；全量 **81 套件 / 0 失败**；缓存戳 `?v181` → **`?v182`** |
+| 2.14.19 | 53 | 3314 行 game-render.js | **小队接力阶段 B（普通战斗单队接力）**：新增唯一增援入口 `gbReinforce()`（allies/units 同池同步、不重建战斗对象、本回合不重排队列、幂等、只对新单位补跑 `onBattleStart`）；判负参数化 `winnerRule`（默认 `'all'` 与改前逐字一致，`'pets'` 只数非玩家单位并回落）；`checkGroupWin` **先增援后判负**（否则队灭当场结束）；`startGroupTrial` 只在 ≥2 支有宠小队时接线，提供方按 `getPetSquads()` 满血现建、跳空队/全员不可战、用尽返回 null；`groupRestore` 摘除快照后新增单位；新增 `test-squad-relay`（41 断言）；全量 **82 套件 / 0 失败**；缓存戳 `?v182` → **`?v183`** |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
 > （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。

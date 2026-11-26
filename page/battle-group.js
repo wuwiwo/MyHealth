@@ -359,6 +359,17 @@ function groupRestore(gb, snap) {
       Object.keys(su).forEach(function (k) { u[k] = su[k]; });
     });
     gb._stepQueue = null; gb._stepIdx = 0;
+    /* v2.14.19（阶段 B）：回滚到「增援之前」的快照时，**快照之后才加入的单位必须被摘除** ——
+       否则时间旅行会把替补小队"带"回过去（快照契约要求完全回到快照形状）。
+       就地 splice（保留数组引用），不新建数组，避免别处持有的引用失联。 */
+    var snapIds = {};
+    snap.units.forEach(function (su) { snapIds[su.id] = true; });
+    [gb.units, gb.allies, gb.enemies, gb.squadUnits].forEach(function (arr) {
+      if (!arr) return;
+      for (var i = arr.length - 1; i >= 0; i--) {
+        if (arr[i] && !snapIds[arr[i].id]) arr.splice(i, 1);
+      }
+    });
     /* v2.4.5：_roundOpen 必须一起重置 —— 它与 _stepQueue 是同一件事的两个面
        （队列为空 = 准备阶段待跑），否则回滚后下一次 step 会跳过准备阶段、直接按旧队列跑。 */
     gb._roundOpen = false;
@@ -395,6 +406,16 @@ function createGroupBattle(opts) {
     turn: 0,
     done: false,
     winner: null,        // 'ally' | 'enemy'
+    /* v2.14.19（阶段 B）：**判负口径** — 只影响「我方是否全灭」这一个判据。
+       · 'all'（默认/普通战斗）：我方全体（含玩家）都倒 → 败，与改前完全一致；
+       · 'pets'（多队战斗，阶段 D 启用）：只看非玩家单位（`_isPlayer`），玩家不计入判负。
+       没有 `_isPlayer` 标记时 'pets' 自动回落到 'all'（旧调用点/旧快照不会变严或变松）。 */
+    winnerRule: opts.winnerRule || 'all',
+    /* v2.14.19（阶段 B）：**小队接力**的两块接线。两者缺一即完全退化到改前行为：
+       · squadUnits  当前上场小队的单位引用（判「本队全灭」用；普通战斗不传 = 无接力）；
+       · reinforce   取下一队的提供方 `fn(gb) → Unit[] | null`（由调用方实现，引擎只负责问）。 */
+    squadUnits: opts.squadUnits || null,
+    reinforce: (typeof opts.reinforce === 'function') ? opts.reinforce : null,
     /* v2.4.5：当前阶段（GB_PHASES 之一）。建场时先落在「准备」——
        runPhasePrepare 每次进入阶段都会重写它，两条推进路径共用。 */
     phase: GB_PHASES[0],
@@ -1641,9 +1662,81 @@ function ageStatusesInJudge(unit) {
    不补这一句就会停在「行动」，UI/日志拿到一个与 gb.done 自相矛盾的阶段。
    ⚠️ 调用点必须仍在**落日志之后**（runPhaseAction / groupBattleStep 都是先 logPhase 再判胜负），
    否则本回合最后一条日志会被误标成「结束」。 */
+/* 我方是否还有活口 —— **判负唯一判据**（v2.14.19 参数化 winnerRule，默认 'all' 与改前逐字一致） */
+function gbAlliesAlive(gb) {
+  if (gb && gb.winnerRule === 'pets') {
+    var pets = (gb.allies || []).filter(function (u) { return u && !u._isPlayer; });
+    if (pets.length) return pets.some(function (u) { return u.hp > 0; });
+    /* 没有宠物单位（纯玩家场）：'pets' 无从判定 → 按 'all' 兜底，绝不凭空判我方胜 */
+  }
+  return (gb.allies || []).some(function (a) { return a && a.hp > 0; });
+}
+
+/* v2.14.19（阶段 B）：**唯一增援入口** —— 战斗中把新单位并入我方（单队接力的落地动作）。
+   · gb.allies / gb.units **同时** push：引擎内所有遍历（行动队列、属性刷新、天赋/场地钩子、
+     日志归因）都走 gb.units，只改 allies 会漏掉一半；
+   · 不重建战斗对象（敌人 / 固化词条 / 场地 / RNG / 关卡进度全部原样）；
+   · 本回合的行动队列**不重排**：新单位从**下一回合准备阶段**起进入队列（设计 §3 的"换队发生在回合之间"）；
+   · 新单位**满血**（由调用方用 buildGroupBattlePets 现建），不吃旧队伤势；
+   · 只对新单位补跑一次 `onBattleStart`（圣光麒麟·威压领域的 `_pfMates` 靠这个缓存，不补就等于静默失效）；
+     敌方与老单位**不重放**该钩子，避免重复开场效果；
+   · 已加入过的单位**不会**重复 push（幂等）。 */
+function gbReinforce(gb, units) {
+  var empty = { ok: false, added: 0, units: [], events: [] };
+  if (!gb || !units || !units.length || gb.done) return empty;
+  var added = [];
+  units.forEach(function (u) {
+    if (!u || added.indexOf(u) > -1) return;
+    if ((gb.units || []).indexOf(u) < 0) { (gb.units || []).push(u); added.push(u); }
+  });
+  if (!added.length) return empty;
+  added.forEach(function (u) {
+    var pool = (u.side === 'enemy') ? gb.enemies : gb.allies;
+    if (pool && pool.indexOf(u) < 0) pool.push(u);
+  });
+  /* 新单位 = 新的「上场小队」（判「本队全灭」的唯一依据；只有我方宠物，不含玩家） */
+  gb.squadUnits = added.filter(function (u) { return u.side !== 'enemy'; });
+  var evts = ({ ok: true, added: added.length, units: added.slice(), events: [] });
+  /* 开战类天赋只对新单位补一次（talentAura 以 added 为来源池 → 不会回头重放老单位） */
+  if (typeof talentAura === 'function') {
+    var ctx = { allyUnits: gb.allies, enemyUnits: gb.enemies };
+    var r = talentAura(added, 'onBattleStart', ctx);
+    var e2 = (r && r.events || []).filter(function (e) { return e && e.msg; });
+    if (e2.length) {
+      gb.events = gb.events.concat(e2);
+      if (typeof logPhase === 'function') logPhase(gb, { turn: gb.turn, unit: '增援', events: e2 });
+      evts.events = e2;
+    }
+  }
+  return evts;
+}
+
+/* 胜负判定（群战口径：每个单位行动后即时判）。与旧 step 路径一致：两边同时团灭时后者生效。
+   v2.4.5：胜负一分出就顺手把阶段推进到「结束」——
+   契约要求收尾时 gb.phase 停在最后一个合法阶段，而 step 路径在 gb.done 之后会**直接退出驱动循环**
+   （调用方看到 done 就不再调 groupBattleStep），不会再有 finishRound 帮它补「结束」；
+   不补这一句就会停在「行动」，UI/日志拿到一个与 gb.done 自相矛盾的阶段。
+   ⚠️ 调用点必须仍在**落日志之后**（runPhaseAction / groupBattleStep 都是先 logPhase 再判胜负），
+   否则本回合最后一条日志会被误标成「结束」。
+
+   v2.14.19（阶段 B）：在判负**之前**先问一次增援 —— 顺序不能反过来。
+   若先判 done，本队全灭会当场结束战斗，下一队永远上不了场（`runPhaseAction` 每行动一个单位
+   就调本函数，所以"队灭"这件事必须在判负之前被消费掉）。
+   · 只有「敌方还有活口 + 本队全灭 + 提供方还给了下一队」三件同时成立才增援；
+   · guard 上限 16 轮防「提供方恒给空队」造成死循环；没有 relay 接线时此段**不执行**。 */
 function checkGroupWin(gb) {
-  var alliesAlive = gb.allies.some(function (a) { return a.hp > 0; });
-  var enemiesAlive = gb.enemies.some(function (e) { return e.hp > 0; });
+  var enemiesAlive = (gb.enemies || []).some(function (e) { return e && e.hp > 0; });
+  if (enemiesAlive && gb.reinforce && gb.squadUnits && gb.squadUnits.length) {
+    var guard = 0;
+    while (guard++ < 16) {
+      var squadDown = gb.squadUnits.every(function (u) { return !u || u.hp <= 0; });
+      if (!squadDown) break;
+      var more = gb.reinforce(gb);
+      var res = gbReinforce(gb, more);
+      if (!res.ok) break;
+    }
+  }
+  var alliesAlive = gbAlliesAlive(gb);
   if (!alliesAlive) { gb.done = true; gb.winner = 'enemy'; }
   if (!enemiesAlive) { gb.done = true; gb.winner = 'ally'; }
   if (gb.done) enterPhase(gb, GB_PHASES[3]);
