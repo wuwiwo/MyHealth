@@ -5,6 +5,57 @@
 
 ---
 
+## v2.14.18
+
+Date: 2026-11-26
+
+**宠物编队 —— 阶段 A：编队数据模型 + 管理 UI（战斗逻辑零改动）**（设计定稿 `doc/design-pet-squad-battle-v1.md` v1.2）
+
+### 新增功能
+
+1. **多小队编队存档**（`page/pet-store.js`）：`dh-pets-v1.squads = [{id,name,petIds}]`，**不新增 store 键**（`sync.js` 与云同步零改动）。`battlePicks` 保留为**首发镜像**（恒等于 `squads[0].petIds`），旧调用点（培养页芯片 / 宠物面板芯片 / `ensurePetBattlePicksLoaded`）行为不变。
+2. **唯一写入口与只读入口**：`getPetSquads()` 只读（无 `squads` 时按 `battlePicks` **派生**，不写盘）；`savePetSquads()` 唯一写（同步 `battlePicks`）；管理动作只经 `addPetSquad / removePetSquad / renamePetSquad / movePetSquad / togglePetSquadPet`，每个都返回 `{ok, reason?}`。
+3. **不变量（设计 Q1）**：每队 ≤ `PET_BATTLE_MAX`(4，唯一常量来源)；**同一宠物不得同时出现在两个小队**（先到先得，靠前的队保留）；至少保留 1 支小队；队名 ≤ `PET_SQUAD_NAME_MAX`(8)、空名回落「一队 / 第N队」。
+   - 写入只做「截断 / 去重 / 形状规整」，**不按物种存在性或存活状态过滤**（与既有 `battlePicks` 口径一致：写入不管，读取时由 `ensurePetBattlePicksLoaded()` / `canPetBattle()` 过滤）。
+4. **旧档迁移 = 只读派生**：老存档没有 `squads` 时派生一支「一队」（成员 = 现有 `battlePicks`），**读取路径不写盘** —— 避免云同步整键覆盖后凭空写出一份空编队；首次写编队时才落盘。
+5. **编队管理 UI**（`page/pet-ui.js` + `page/index.css`）：宠物面板「🐾 编队管理」原生 `<details>` 折叠区（默认收起、展开态在重渲染后保留）。
+   - 每支队一张卡：首发/作战徽标、**队名内联输入**（`change` 才落盘，8 字上限）、`N/4` 计数、`↑`/`↓` 排序（**顺序即替补顺序**，第 1 队 = 首发）、`🗑` 删除（仅剩 1 队时禁用）、`＋ 新建小队`。
+   - 每队宠物**芯片切换**（`aria-pressed`），受伤宠物带 ⚠️ 与 `title` 原因、队内另有「有 N 只受伤中……开战不会上场」`role=note` 提示 —— **成员身份保留，不静默剔除**。
+   - 队名进 HTML 前统一 `petSquadEsc()` 转义（防注入）；样式全用既有令牌（`.speed-btn` 底座 = 44px 热区 / 2px 边 / 圆角 0 / 75ms 过渡），未新增颜色、无渐变无阴影。
+6. **首发缓存同步**：编队任何改动后 `petSquadRefreshPicks()` 把 `getPetSquads()[0].petIds` 写回 `_petBattlePicks`，否则开战会读旧阵容。
+
+### 修复
+
+1. **`aria-pressed` 计数断言收紧（测试侧，未弱化）**：`scripts/test-pet-panel-layout.js` 原先把**整面板**的 `aria-pressed` 计数钉成 4/1，加入编队芯片后必然失真 → 改为**只在阵容区块**（`.pet-lineup` 到 `.pet-squads` 之间）计数，语义仍是「阵容芯片带切换语义」，要求不变。
+2. **沙盒兼容**：`ov.querySelector` 在部分测试 mock 里不存在 → 用 `typeof ov.querySelector === 'function'` 守卫（行为与原来一致，未放宽任何断言）。
+
+### UI 调整
+
+1. 宠物面板在「⚔️ 参战阵容」卡之后、材料区之前插入「🐾 编队管理」折叠区；参战阵容区块本身**一个字符都未改**（仍是首发小队的选择，仍是开战入口）。
+2. 新增 CSS 段 `.pet-squads / .pet-squad-card / .pet-squad-hd / .pet-squad-name / .pet-squads-body / .pet-squad-chips / .pet-squad-chip / .pet-squad-op / .pet-squad-del / .pet-squad-add / .pet-squad-warn / .pet-squad-note`（全部走既有令牌）。
+
+### 测试
+
+- 新增 `scripts/test-pet-squads.js`：**67 断言 / 0 失败**。覆盖：接口导出 / 旧档只读派生不写盘（比对存档字节）/ 返回值是副本 / 每队上限与拒绝原因 / **Q1 跨队互斥 + 脏档去重** / `battlePicks ↔ squads[0]` 双向幂等 / 排序与首发镜像 / 空名回落与超长截断 / 至少一队 / **伤员留在队但开战被 `canPetBattle` 过滤** / 不新增 store 键 / 重开恢复 / 单一写入口源码守卫（`d.squads =` 恰好 2 处、UI 不调 `savePetSquads`、不直接读 `.squads`、有 `petSquadEsc`）。
+- 全量 **81 套件 / 0 失败**；`test-a11y-tokens` 未变（40/40）。
+- 版本：`APP_VERSION` → **2.14.18**；缓存戳 `page/index.html` 全部 `?v181` → **`?v182`**（55 处）。
+
+### 文件
+
+- **新增**：`scripts/test-pet-squads.js`。
+- **修改**：`page/pet-store.js`、`page/pet-ui.js`、`page/index.css`、`page/utils.js`、`page/index.html`、`scripts/test-pet-panel-layout.js`、`README.md`、`doc/changelog-v2.14.md`、`doc/VERSION-LEDGER.md`。
+- **删除**：无。**未新增 `page/*.js`**（架构演化表 JS 文件数仍 **53**）。
+
+### ⚠️ 待裁决 / 未覆盖
+
+1. **战斗侧未接**：本阶段**不改变任何战斗行为** —— 多队接力 / 双场景 / 玩家不受攻击 / 关卡 `mode:'multi'` 全部未施工（阶段 B–E）。
+2. **真机未复核**：编队 UI 的 390/360 目视、折叠区滚动位置未做 CDP 校验（阶段 E 统一复核）。
+3. **培养页（`game-views.js`）未接入编队入口**：那里仍只编辑首发（`battlePicks`），管理多队需进宠物面板 —— 是否在培养页加二级入口待作者定。
+4. **改名交互**：用 `change`（失焦/回车）落盘，改名后会重渲染面板（焦点丢失）；若要"边打边看"的即时输入需改防抖方案。
+5. **删除小队无二次确认以外的保护**：删除后其成员回到"未编队"状态（宠物本身不受影响），但**不自动补进首发**。
+
+---
+
 ## v2.14.17
 
 Date: 2026-11-26
@@ -1035,6 +1086,7 @@ Date: 2026-10-12
 | 2.14.15 | 53 | （见 changelog） | **敌群「自动连打下一关」**。v2.14.14 只做自动出手，本版补自动进关：`_groupDone()`（结算+发奖+记通关+写历史之后）→ `_armGroupAutoNext()` → `groupNextStageId()`（`allStageIds()` 线性顺序，与 `markGroupStageCleared` 同一份表）→ `scheduleGroupChain()`（**`GROUP_AUTO_NEXT_MS=1400ms`**）→ `_groupChainEnter()`（复核 `_groupAuto`/`_groupPaused`/`groupAutoViewActive()`）→ `closeGroupSettlementPanel()` → **`startGroupTrial(next)`（唯一开战入口，与关卡列表点击同一全局符号）** → 安全阀 → `_groupAuto=true` → `renderGroupOverlay()` + `_groupStep()`。**状态跨关**：`_groupDone` 开头置 false（结算期间不出手），胜利分支在全部副作用后重新置 true 并排队；`startGroupTrial` 内部会清开关，故 `_groupChainEnter` 在开战后再恢复 true，UI 不闪回。**四停**：胜→排队 1.4s 进下一关；负→清队列+清定时器+关自动、**不重试同关**、记原因；无下一关→停 + toast「🏁 已是最后一关」+ 战果文案 + 开关 title；手动 ⏸→立即停**并取消已排队的下一关**（`_groupChainNext=null` + 清两定时器）。切 tab/`document.hidden`/✕ 走同一 `stopGroupAuto` 链，落地前再复核视图。**安全阀**：必须「无异常 + 战斗对象换新 + 未结束 + `_groupStageId===next`」否则立即停（清队列、不重排、toast + console.warn 留痕）并回滚 `_groupStageId/_groupRewarded` 到上一关已结算状态，堵住「旧战斗 + 新 id → 奖励记到没打过的关」。**幂等**：连打 3 关 reward/cleared 各 1 次，再跑 40 拍仍 1；真机技能点 10→18→28、`winCountThisWeek` 2→3→4、history 5 条、progress g1-1…g1-5 各一次。**测试**：新增 `test-group-auto-next.js` **154 断言**（源码守卫、进关与跨关状态、逐关奖励、失败不排队、最后一关三处提示、⏸ 取消排队、四类离开路径整链停+定时器清零、两种安全阀、手动不受影响）；`test-group-auto.js` 135→**172**，仅 3 条随语义更新（胜利后 auto=true / aria-pressed=true /「⏳ 连打中」），失败分支原语义逐字保留，另新增 4 条按关计数。全量 **79 套件 0 失败**（6465 断言）+ a11y **40/40**。真机 g1-1→1.39s→g1-2→1.40s→g1-3 全程 auto；⏸ 窗口内取消后 4s 仍不跳关；切 tab 立即停。UI 三态「▶ 自动连打 / ⏸ 自动中 / ⏳ 连打中」（排队态绿虚线，仅既有令牌）。⚠️ 待裁决：自动下战报 stats 层被跳过（1400 < 2000ms）；最后一关提示无常驻横幅；连打状态不持久化；大关 id（`_groupStageId=null`）保守停止 |
 | 2.14.16 | 53 | 3314 行 game-render.js | **宝珠系统四项施工 + 培养页精简 / 出战阵容常驻**：分解等价碎片（`orbDecomposeShards = orbPct`，R·Lv1=10 / UR·Lv50=297）、恢复合成（20 碎片→R·Lv1、100%、每日 5 次、`orbSynth` 随 `pets` 同步）、5 枚宝珠图标 SVG + `orbIconHtml` 唯一入口、修复 2（`u8.stat` → `u8.pct`）、库存 / 宠物列表 / 培养材料默认折叠、`.train-lineup` 常驻阵容（就地切换 + 开战走 `startGroupTrialWithPets` 唯一入口）；全量 **79 套件 / 0 失败**、a11y **40/40**；新增 5 个 SVG、**无新增 `page/*.js`**、无删除文件；缓存戳 `?v179` → `?v180` |
 | 2.14.17 | 53 | 3314 行 game-render.js | **宠物天赋补齐 6 条（R/SR）+ 战意/梦幻/不动如山数值调整**：不动如山每回合回血 3%、战意吸血 10~100%、梦幻光球自愈 -40%、战意先制度改技能自身 priority:1（引擎 predeclareActions 扩展我方）、雨中疾行（雨天 spd×2）、星芒庇护（受击 40% 减伤 25%）、斗志昂扬（攻/受击 25% spd+1）、磐石反噬（(def+soulDef)×10% 定值反弹过减伤不过防御，新 mutation reflectMitigated）、共鸣之歌（我方施技自回 2%）、雷鸣加速（我方施技 20% 自身 CD-1，新 hook onAllyCastSkill）；新增 test-pet-v21417（48 断言），全量 80 套件 / 3405 断言 0 失败；缓存戳 ?v181 |
+| 2.14.18 | 53 | 3314 行 game-render.js | **宠物编队阶段 A（战斗零改动）**：`dh-pets-v1.squads`（不新增 store 键，`battlePicks` = 首发镜像）；旧档**只读派生**迁移（读取不写盘）；不变量 = 每队 ≤4 + **同宠不得跨队** + 至少 1 队 + 队名 ≤8；唯一写入口 `savePetSquads()` 与 5 个管理动作；UI = 宠物面板「🐾 编队管理」原生 `<details>`（改名/↑↓排序/删除/新建/芯片切换/伤员 ⚠️ 保留在队）；新增 `test-pet-squads`（67 断言，含源码守卫）；`test-pet-panel-layout` 两条 `aria-pressed` 计数收紧到阵容区块；全量 **81 套件 / 0 失败**；缓存戳 `?v181` → **`?v182`** |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
 > （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。

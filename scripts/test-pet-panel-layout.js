@@ -213,8 +213,12 @@ ok(nPicks === 5, '参战芯片 = 成熟且未阵亡的 5 只（排除蛋期 1 �
 ok(H.indexOf('data-pet-pick="chirpbird"') < 0, '蛋期宠物不进参战芯片');
 ok(H.indexOf('data-pet-pick="darkcrow"') < 0, '已阵亡宠物不进参战芯片');
 ok(H.indexOf('class="pet-lineup-count">4/4<') >= 0, '阵容摘要显示已选数量 4/4');
-ok((H.match(/aria-pressed="true"/g) || []).length === 4, '4 个已选芯片带 aria-pressed="true"（切换语义）');
-ok((H.match(/aria-pressed="false"/g) || []).length === 1, '1 个未选芯片带 aria-pressed="false"');
+/* v2.18：编队区块（.pet-squads）里也有 aria-pressed 的编队芯片，
+   所以这两条断言必须**只在阵容区块内计数**（语义仍是「阵容芯片带切换语义」，不放松要求）。 */
+const lineupBlock = H.slice(iLineup, H.indexOf('class="pet-squads"') > iLineup
+  ? H.indexOf('class="pet-squads"') : iMat);
+ok((lineupBlock.match(/aria-pressed="true"/g) || []).length === 4, '4 个已选芯片带 aria-pressed="true"（切换语义）');
+ok((lineupBlock.match(/aria-pressed="false"/g) || []).length === 1, '1 个未选芯片带 aria-pressed="false"');
 ok(H.indexOf('src="media/pets/sparkle.svg"') > 0, '芯片内仍是头像 + 名称（头像渲染入口未变）');
 
 /* 材料区：数字行无按钮，按钮组独立、一键治疗全宽独占一行 */

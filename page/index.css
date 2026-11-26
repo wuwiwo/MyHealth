@@ -1128,6 +1128,30 @@ box-shadow:none}
 .pet-lineup-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
 .pet-pick-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .pet-start-battle{width:100%;margin-top:10px;min-height:var(--touch-min);padding:10px 14px;font-size:var(--fs-sm)}
+/* ===== v2.18（阶段 A）：编队管理（多小队）=====
+   复用既有令牌与 .speed-btn 底座（44px 热区 / 2px 边 / 圆角 0 / 75ms 过渡都在底座里），
+   此处只补布局与层级；不新增颜色、不用渐变、不用阴影。 */
+.pet-squads{background:var(--bg2);border:var(--bw) solid var(--bd);padding:0 var(--sp-5);margin-bottom:14px}
+.pet-squads summary{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;min-height:var(--touch-min);font-size:var(--fs-sm);font-weight:700;cursor:pointer}
+.pet-squads-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
+.pet-squads-body{padding:0 0 var(--sp-4)}
+.pet-squad-card{border:var(--bw) solid var(--bd);padding:var(--sp-4);margin-top:var(--sp-2)}
+.pet-squad-hd{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.pet-squad-badge{font-size:var(--fs-xs);font-weight:700;color:var(--text2);border:var(--bw) solid var(--bd);padding:2px var(--sp-2);min-width:44px;text-align:center}
+.pet-squad-badge.is-first{color:var(--brand);border-color:var(--brand)}
+.pet-squad-name{flex:1 1 96px;min-width:0;min-height:var(--touch-min);padding:var(--sp-2) 10px;font-size:var(--fs-sm);font-weight:600;background:var(--bg2);color:var(--text);border:var(--bw) solid var(--bd);border-radius:0;font-family:inherit}
+.pet-squad-name:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.pet-squad-count{font-size:var(--fs-xs);color:var(--text2);font-variant-numeric:tabular-nums}
+.pet-squad-op{min-width:var(--touch-min);padding:0 10px;font-size:var(--fs-md)}
+.pet-squad-op[disabled]{color:var(--text3);border-color:var(--bd);cursor:not-allowed}
+.pet-squad-del{color:var(--red);border-color:var(--red)}
+.pet-squad-del[disabled]{color:var(--text3);border-color:var(--bd)}
+.pet-squad-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--sp-2)}
+.pet-squad-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:var(--fs-sm)}
+.pet-squad-chip[aria-pressed="true"]{border-color:var(--green);color:var(--green)}
+.pet-squad-warn{font-size:var(--fs-xs);color:var(--yellow);margin-top:var(--sp-2)}
+.pet-squad-add{width:100%;margin-top:var(--sp-3);font-size:var(--fs-sm);border-color:var(--brand);color:var(--brand)}
+.pet-squad-note{font-size:var(--fs-xs);color:var(--text3);margin-top:var(--sp-2)}
 .pet-mat{font-size:var(--fs-sm);background:var(--bg2);border-radius:0;padding:var(--sp-4) var(--sp-5);margin-bottom:14px}
 .pet-mat-row{display:flex;gap:12px;flex-wrap:wrap;line-height:1.6}
 .pet-mat-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}

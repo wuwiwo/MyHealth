@@ -18,6 +18,7 @@ if (typeof store !== 'undefined' && store.registerSchema) {
         },
         orbs: [],            // v2.1.17 未装配的宝珠库存 [{id,type,rarity,level,exp}]
         battlePicks: [],     // v2.2 WP-H1：参战宠物选择（speciesId 数组，刷新/重开后保留）
+        squads: [],          // v2.18：宠物编队 [{id,name,petIds}]；battlePicks = squads[0].petIds（镜像）
         lastSettleDate: null,  // 宠物系统上次结算日
         monthlyKey: null,      // 月度重置键
         /* v2.17：**宠物等级记账**（经验发放的幂等账本）。
@@ -270,8 +271,148 @@ function getPetBattlePicks() {
 function savePetBattlePicks(ids) {
   var d = getPetStore();
   d.battlePicks = (Array.isArray(ids) ? ids : []).slice(0, PET_BATTLE_MAX);
+  /* v2.18：**不变量维护** —— battlePicks 恒等于首发小队（squads[0].petIds）。
+     老调用点（培养页 / 宠物面板的芯片）继续只认 battlePicks，这里把它们同步进编队首发。 */
+  var list = (Array.isArray(d.squads) && d.squads.length) ? d.squads.slice() : petSquadDerive(d);
+  list[0] = { id: list[0] && list[0].id, name: list[0] && list[0].name, petIds: d.battlePicks.slice() };
+  d.squads = petSquadSanitize(d, list);
   savePetStore(d);
   return d.battlePicks.slice();
+}
+
+/* ============================================================
+   v2.18（阶段 A）：**宠物编队**（squads）
+   设计定稿：`doc/design-pet-squad-battle-v1.md` §2（v1.2）
+   · 存档：`dh-pets-v1.squads = [{id,name,petIds}]` —— **不新开 store 键**（云同步零改动）；
+   · 单写入口：`savePetSquads()`；`savePetBattlePicks()` 内部同步把首发带进编队；
+   · 不变量（Q1 定稿）：① 每队 ≤ `PET_BATTLE_MAX`；② 同一宠物**不得**同时出现在两个小队；
+     ③ 至少保留 1 支小队；④ `battlePicks` 恒等于 `squads[0].petIds`（首发镜像）。
+   · 旧档迁移 = **只读派生**：没有 `squads` 时按现有 `battlePicks` 派生一支「一队」，
+     不在读取路径写盘（首次写编队时才落盘）—— 避免云同步整键覆盖时凭空写出一份空编队。
+   · 写入只做「截断 / 去重 / 形状规整」，**不按物种存在性或存活状态过滤**（与既有
+     battlePicks 口径一致：写入不管，读取时由 `ensurePetBattlePicksLoaded()` / `canPetBattle()`
+     过滤）。受伤 / 阵亡的宠物**保留在队里**，开战时自然上不了场。
+   ============================================================ */
+var PET_SQUAD_NAME_MAX = 8;
+
+/* 编队名规整：空名 → 「一队」/「第N队」，超长截断（改名的唯一落点） */
+function petSquadName(name, idx) {
+  var s = (typeof name === 'string') ? name.trim() : '';
+  if (!s) s = (idx === 0) ? '一队' : ('第' + (idx + 1) + '队');
+  return s.slice(0, PET_SQUAD_NAME_MAX);
+}
+
+/* 老档派生：没有 squads 时把现有 battlePicks 当成「一队」 */
+function petSquadDerive(d) {
+  var picks = (d && Array.isArray(d.battlePicks)) ? d.battlePicks.slice(0, PET_BATTLE_MAX) : [];
+  return [{ id: 'sq-1', name: '一队', petIds: picks }];
+}
+
+/* 形状规整 + 不变量；幂等（同一份输入重复调用结果相同） */
+function petSquadSanitize(d, list) {
+  var out = [], usedIds = {}, usedPets = {};
+  (Array.isArray(list) ? list : []).forEach(function (sq, i) {
+    if (!sq || typeof sq !== 'object') return;
+    var id = String(sq.id || ('sq-' + (i + 1)));
+    var base = id, k = 2;
+    while (usedIds[id]) { id = base + '-' + k; k++; }
+    usedIds[id] = true;
+    var petIds = [];
+    (Array.isArray(sq.petIds) ? sq.petIds : []).forEach(function (pid) {
+      if (typeof pid !== 'string' || !pid) return;
+      if (usedPets[pid]) return;                     // Q1：跨队去重（先到先得 = 靠前的小队保留）
+      if (petIds.length >= PET_BATTLE_MAX) return;   // 每队上限（唯一常量来源）
+      usedPets[pid] = true;
+      petIds.push(pid);
+    });
+    out.push({ id: id, name: petSquadName(sq.name, i), petIds: petIds });
+  });
+  if (!out.length) {
+    var seed = (d && Array.isArray(d.battlePicks)) ? d.battlePicks.slice(0, PET_BATTLE_MAX) : [];
+    out.push({ id: 'sq-1', name: '一队', petIds: seed });
+  }
+  return out;
+}
+
+/* 只读：当前编队（无 squads 时派生，不写盘） */
+function getPetSquads() {
+  var d = getPetStore();
+  var list = (Array.isArray(d.squads) && d.squads.length) ? d.squads : petSquadDerive(d);
+  return petSquadSanitize(d, list);
+}
+
+/* 唯一写入口：编队 → 存档，并同步 battlePicks 镜像（squads[0]） */
+function savePetSquads(list) {
+  var d = getPetStore();
+  var clean = petSquadSanitize(d, list);
+  d.squads = clean;
+  d.battlePicks = clean[0].petIds.slice();
+  savePetStore(d);
+  return petSquadSanitize(d, clean);
+}
+
+/* 新队 id：sq-N（避开已占用的） */
+function petSquadNewId(list) {
+  var n = list.length + 1;
+  while (list.some(function (s) { return s.id === 'sq-' + n; })) n++;
+  return 'sq-' + n;
+}
+
+/* 新建一支空队（不自动带上宠物；数量不限） */
+function addPetSquad(name) {
+  var list = getPetSquads();
+  list.push({ id: petSquadNewId(list), name: petSquadName(name, list.length), petIds: [] });
+  return { ok: true, squads: savePetSquads(list) };
+}
+
+/* 删除一支队（至少保留 1）；删掉首发 → 新首发自动继承 battlePicks 镜像 */
+function removePetSquad(id) {
+  var list = getPetSquads();
+  if (list.length <= 1) return { ok: false, reason: '至少保留一支小队' };
+  var i = list.map(function (s) { return s.id; }).indexOf(id);
+  if (i < 0) return { ok: false, reason: '小队不存在' };
+  list.splice(i, 1);
+  return { ok: true, squads: savePetSquads(list) };
+}
+
+/* 改名（空名回落为「一队 / 第N队」，超长截断） */
+function renamePetSquad(id, name) {
+  var list = getPetSquads();
+  var i = list.map(function (s) { return s.id; }).indexOf(id);
+  if (i < 0) return { ok: false, reason: '小队不存在' };
+  list[i].name = petSquadName(name, i);
+  return { ok: true, squads: savePetSquads(list) };
+}
+
+/* 排序：dir = -1 上移 / +1 下移。**顺序即替补顺序**，第 1 支是首发。 */
+function movePetSquad(id, dir) {
+  var list = getPetSquads();
+  var i = list.map(function (s) { return s.id; }).indexOf(id);
+  var j = i + (dir === -1 ? -1 : 1);
+  if (i < 0) return { ok: false, reason: '小队不存在' };
+  if (j < 0 || j >= list.length) return { ok: false, reason: '已到边界' };
+  var t = list[i]; list[i] = list[j]; list[j] = t;
+  return { ok: true, squads: savePetSquads(list) };
+}
+
+/* 切换某只宠物在某支队的成员身份（Q1：跨队互斥；每队 ≤ PET_BATTLE_MAX） */
+function togglePetSquadPet(id, speciesId) {
+  var list = getPetSquads();
+  var i = list.map(function (s) { return s.id; }).indexOf(id);
+  if (i < 0) return { ok: false, reason: '小队不存在' };
+  var sq = list[i];
+  var k = sq.petIds.indexOf(speciesId);
+  if (k > -1) {
+    sq.petIds.splice(k, 1);
+    return { ok: true, selected: false, squads: savePetSquads(list) };
+  }
+  if (sq.petIds.length >= PET_BATTLE_MAX) {
+    return { ok: false, reason: '每队最多 ' + PET_BATTLE_MAX + ' 只宠物' };
+  }
+  var host = list.filter(function (s) { return s.id !== id && s.petIds.indexOf(speciesId) > -1; })[0];
+  if (host) return { ok: false, reason: '它已在「' + host.name + '」：同一宠物不能出现在两个小队' };
+  sq.petIds.push(speciesId);
+  return { ok: true, selected: true, squads: savePetSquads(list) };
 }
 
 /* ============================================================
@@ -1318,6 +1459,15 @@ if (typeof window !== 'undefined') {
   window.petCompareFinal = petCompareFinal;
   window.getPetBattlePicks = getPetBattlePicks;
   window.savePetBattlePicks = savePetBattlePicks;
+  /* v2.18：编队 —— 面板只调这几个入口，不自己 get/save */
+  window.getPetSquads = getPetSquads;
+  window.savePetSquads = savePetSquads;
+  window.addPetSquad = addPetSquad;
+  window.removePetSquad = removePetSquad;
+  window.renamePetSquad = renamePetSquad;
+  window.movePetSquad = movePetSquad;
+  window.togglePetSquadPet = togglePetSquadPet;
+  window.PET_SQUAD_NAME_MAX = PET_SQUAD_NAME_MAX;
   window.exchangePetMaterials = exchangePetMaterials;
   window.petMatExchangeInfo = petMatExchangeInfo;
   window.createPetUnitsForBattle = createPetUnitsForBattle;
@@ -1383,6 +1533,15 @@ if (typeof globalThis !== 'undefined') {
   globalThis.petCompareFinal = petCompareFinal;
   globalThis.getPetBattlePicks = getPetBattlePicks;
   globalThis.savePetBattlePicks = savePetBattlePicks;
+  /* v2.18：编队 */
+  globalThis.getPetSquads = getPetSquads;
+  globalThis.savePetSquads = savePetSquads;
+  globalThis.addPetSquad = addPetSquad;
+  globalThis.removePetSquad = removePetSquad;
+  globalThis.renamePetSquad = renamePetSquad;
+  globalThis.movePetSquad = movePetSquad;
+  globalThis.togglePetSquadPet = togglePetSquadPet;
+  globalThis.PET_SQUAD_NAME_MAX = PET_SQUAD_NAME_MAX;
   globalThis.exchangePetMaterials = exchangePetMaterials;
   globalThis.petMatExchangeInfo = petMatExchangeInfo;
   globalThis.createPetUnitsForBattle = createPetUnitsForBattle;

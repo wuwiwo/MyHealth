@@ -241,6 +241,93 @@ function petExpLogHtml(now) {
   return h;
 }
 
+/* ============================================================
+   v2.18（阶段 A）：**编队管理**区块（多小队）
+   设计定稿：`doc/design-pet-squad-battle-v1.md` §2 / Q1–Q2（v1.2）
+   · 本函数**只拼 HTML**：所有读写都走 pet-store.js 的
+     `getPetSquads / addPetSquad / removePetSquad / renamePetSquad / movePetSquad /
+      togglePetSquadPet`（唯一入口），这里不碰存档、不写任何常量数字。
+   · 第 1 队 = **首发**（= 上方「参战阵容」芯片 = 开战阵容）；顺序即替补顺序。
+   · Q1：同一宠物不能出现在两个小队（跨队互斥在 pet-store 的 toggle 里判，这里只显示原因）。
+   · 伤员 / 阵亡者**留在队里**但不可出战（canPetBattle 在建单位时过滤），所以在队芯片上加 ⚠️ 与原因。
+   · 展开状态是纯 UI 态（`_petSquadsOpen`），重渲染后保留；不进存档。
+   ============================================================ */
+var _petSquadsOpen = false;
+
+function petSquadEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* 面板里编队区块的 HTML（ready = 成熟 + 未阵亡的宠物列表，与上方芯片同源） */
+function petSquadPanelHtml(ready) {
+  if (typeof getPetSquads !== 'function') return '';
+  var squads = getPetSquads();
+  if (!squads.length) return '';
+  var max = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4;
+  var nameMax = (typeof PET_SQUAD_NAME_MAX === 'number') ? PET_SQUAD_NAME_MAX : 8;
+  var injuredOf = function (sid) {
+    var p = ready.filter(function (x) { return x.speciesId === sid; })[0];
+    return !!(p && p.injured);
+  };
+  var h = '<details class="pet-squads"' + (_petSquadsOpen ? ' open' : '') + '>'
+    + '<summary>🐾 编队管理 <span class="pet-squads-hint">'
+    + squads.length + ' 队 · 一队为首发 · 点开编辑</span></summary>'
+    + '<div class="pet-squads-body">';
+  squads.forEach(function (sq, i) {
+    var injuredN = sq.petIds.filter(injuredOf).length;
+    h += '<div class="pet-squad-card">'
+      + '<div class="pet-squad-hd">'
+      + '<span class="pet-squad-badge' + (i === 0 ? ' is-first' : '') + '">'
+      + (i === 0 ? '首发' : '作战') + '</span>'
+      + '<input class="pet-squad-name" type="text" data-squad-name="' + sq.id + '"'
+      + ' value="' + petSquadEsc(sq.name) + '" maxlength="' + nameMax + '"'
+      + ' aria-label="「' + petSquadEsc(sq.name) + '」名称（最多 ' + nameMax + ' 个字）">'
+      + '<span class="pet-squad-count">' + sq.petIds.length + '/' + max + '</span>'
+      + '<button class="speed-btn pet-squad-op" type="button" data-squad-move="' + sq.id + '|-1"'
+      + ' aria-label="把「' + petSquadEsc(sq.name) + '」上移"' + (i === 0 ? ' disabled aria-disabled="true"' : '')
+      + '>↑</button>'
+      + '<button class="speed-btn pet-squad-op" type="button" data-squad-move="' + sq.id + '|1"'
+      + ' aria-label="把「' + petSquadEsc(sq.name) + '」下移"' + (i === squads.length - 1 ? ' disabled aria-disabled="true"' : '')
+      + '>↓</button>'
+      + '<button class="speed-btn pet-squad-op pet-squad-del" type="button" data-squad-del="' + sq.id + '"'
+      + ' aria-label="删除「' + petSquadEsc(sq.name) + '」"' + (squads.length <= 1 ? ' disabled aria-disabled="true"' : '')
+      + '>🗑</button>'
+      + '</div>'
+      + '<div class="pet-squad-chips">';
+    ready.forEach(function (p) {
+      var sel = sq.petIds.indexOf(p.speciesId) > -1;
+      var inj = !!p.injured;
+      var nm = ((typeof getPetCodex === 'function' && (getPetCodex(p.speciesId) || {}).name) || p.name || p.speciesId);
+      h += '<button class="speed-btn pet-squad-chip" type="button" data-squad-pick="' + sq.id + '|' + p.speciesId + '"'
+        + ' aria-pressed="' + (sel ? 'true' : 'false') + '"'
+        + (inj ? ' title="受伤中：留在队里，但本场不会上场（先用营养液治疗）"' : '')
+        + '>' + ((typeof petIconHtml === 'function') ? petIconHtml(p.speciesId, 32) : '🐾')
+        + '<span>' + petSquadEsc(nm) + (inj ? ' ⚠️' : '') + '</span></button>';
+    });
+    h += '</div>';
+    if (injuredN) {
+      h += '<div class="pet-squad-warn" role="note">⚠️ 有 ' + injuredN
+        + ' 只受伤中：仍保留在队里，但开战不会上场（先喂营养液）</div>';
+    }
+    h += '</div>';
+  });
+  h += '<button class="speed-btn pet-squad-add" id="petSquadAdd" type="button">＋ 新建小队</button>'
+    + '<div class="pet-squad-note" role="note">同一宠物不能同时出现在两个小队；'
+    + '一队就是首发（上方「参战阵容」的芯片与它同步）。后续战斗按此顺序接力上场。</div>'
+    + '</div></details>';
+  return h;
+}
+
+/* 编队改动后：把「首发」同步回运行时缓存（开战读的是 `_petBattlePicks`，不刷新就会用旧阵容） */
+function petSquadRefreshPicks() {
+  if (typeof getPetSquads !== 'function') return;
+  var sq = getPetSquads()[0];
+  if (!sq) return;
+  _petBattlePicks = sq.petIds.slice();
+  if (typeof _petBattlePicksLoaded !== 'undefined') _petBattlePicksLoaded = true;
+}
+
 function renderPetPanel() {
   var ov = document.getElementById('panelOverlay')
   if (!ov) return
@@ -286,6 +373,8 @@ function renderPetPanel() {
     /* 开战按钮随「参战选择」一起上移：它作用的正是上面这份选择 */
     h += '<button class="speed-btn pet-start-battle" id="petStartBattle" style="border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button>'
     h += '</div>'
+    /* v2.18（阶段 A）：编队管理（多小队）。放在阵容卡之后、材料区之前 —— 与"阵容"语义相邻。 */
+    h += petSquadPanelHtml(ready)
   }
   // 材料（v2.3：数字独占一行，按钮组另起一行；一键治疗全宽独占一行）
   var m = d.materials || {}
@@ -580,6 +669,64 @@ function renderPetPanel() {
       if (typeof savePetBattlePicks === 'function') savePetBattlePicks(_petBattlePicks)
       renderPetPanel()
     })
+  })
+  /* ===== v2.18（阶段 A）：编队管理的事件 =====
+     ⚠️ 一律「调 pet-store 入口 → 刷新首发缓存 → 重渲染」，不在本文件写存档、不自己判上限/互斥。 */
+  var sqDetails = (typeof ov.querySelector === 'function') ? ov.querySelector('.pet-squads') : null
+  if (sqDetails) sqDetails.addEventListener('toggle', function () { _petSquadsOpen = !!sqDetails.open })
+  ov.querySelectorAll('[data-squad-pick]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var raw = btn.getAttribute('data-squad-pick') || ''
+      var bar = raw.indexOf('|')
+      if (bar < 0) return
+      var r = (typeof togglePetSquadPet === 'function')
+        ? togglePetSquadPet(raw.slice(0, bar), raw.slice(bar + 1))
+        : { ok: false, reason: '编队模块未加载' }
+      if (!r.ok) { toast(r.reason || '编队失败', 'e'); return }
+      petSquadRefreshPicks()
+      renderPetPanel()
+    })
+  })
+  ov.querySelectorAll('[data-squad-move]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var raw = btn.getAttribute('data-squad-move') || ''
+      var bar = raw.indexOf('|')
+      if (bar < 0) return
+      var r = (typeof movePetSquad === 'function')
+        ? movePetSquad(raw.slice(0, bar), parseInt(raw.slice(bar + 1), 10) === -1 ? -1 : 1)
+        : { ok: false, reason: '编队模块未加载' }
+      if (!r.ok) { toast(r.reason || '排序失败', 'e'); return }
+      petSquadRefreshPicks()
+      renderPetPanel()
+    })
+  })
+  ov.querySelectorAll('[data-squad-del]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-squad-del')
+      if (!confirm('删除这支小队？（队伍里的宠物不会消失，只是不再编在这里）')) return
+      var r = (typeof removePetSquad === 'function') ? removePetSquad(id) : { ok: false, reason: '编队模块未加载' }
+      if (!r.ok) { toast(r.reason || '删除失败', 'e'); return }
+      petSquadRefreshPicks()
+      toast('已删除该小队', 's')
+      renderPetPanel()
+    })
+  })
+  ov.querySelectorAll('[data-squad-name]').forEach(function (inp) {
+    /* 用 change（失焦 / 回车）而不是 input：改名只落一次盘，也避免每次按键重渲染 */
+    inp.addEventListener('change', function () {
+      var id = inp.getAttribute('data-squad-name')
+      var r = (typeof renamePetSquad === 'function') ? renamePetSquad(id, inp.value) : { ok: false, reason: '编队模块未加载' }
+      if (!r.ok) { toast(r.reason || '改名失败', 'e'); return }
+      renderPetPanel()
+    })
+  })
+  var squadAdd = document.getElementById('petSquadAdd')
+  if (squadAdd) squadAdd.addEventListener('click', function () {
+    var r = (typeof addPetSquad === 'function') ? addPetSquad() : { ok: false, reason: '编队模块未加载' }
+    if (!r.ok) { toast(r.reason || '新建失败', 'e'); return }
+    _petSquadsOpen = true
+    toast('🐾 已新建一支小队（点芯片给它配宠物）', 's')
+    renderPetPanel()
   })
   var startBtn = document.getElementById('petStartBattle')
   if (startBtn) startBtn.addEventListener('click', function(){
