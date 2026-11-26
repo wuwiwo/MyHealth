@@ -6,11 +6,13 @@
    ============================================ */
 
 /* 决策上下文辅助 */
+/* v2.14.20（阶段 C）：两个入口都改用 `attackable()` 单源判据 —— 敌方 AI 的选靶池里
+   永远不会出现 `_untargetable` 的单位（多队战斗＝玩家）；普通战斗无标记，行为不变。 */
 function aliveOpponents(gb, actor) {
-  return (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function(u){ return u.hp > 0; });
+  return (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function(u){ return attackable(u); });
 }
 function aliveAllies(gb, actor) {
-  return (actor.side === 'ally' ? gb.allies : gb.enemies).filter(function(u){ return u.hp > 0; });
+  return (actor.side === 'ally' ? gb.allies : gb.enemies).filter(function(u){ return attackable(u); });
 }
 
 /* 目标评分：残血优先、低防优先、治疗者优先 */

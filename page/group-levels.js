@@ -414,6 +414,24 @@ function genStageEnemies(lg, st) {
   return enemies;
 }
 
+/* ============================================
+   v2.14.20（多队双场景 阶段 C）：关卡 `mode` 字段的**唯一派生点**
+   ============================================
+   设计依据 doc/design-pet-squad-battle-v1.md v1.2 §6 / Q6（复核裁决 3）：
+   「双场景敌人遇到次数比较少」→ **g18 起、每 6 大关的 x-5（精英关）**，
+   Boss（x-10）与 1–3 关永不进 multi；按 GROUP_MAX=24 派生，全期只有 g18-5 / g24-5。
+   ⚠️ 本阶段（C）只**派生字段、不消费**：门禁是「仍不启用多队」，
+      真正读 `mode:'multi'` 起双场景的接线在阶段 D（导演对象）。
+      任何生产代码若在此处之外读 mode 决定战斗形态，都属于越过阶段门禁。 */
+var MULTI_SCENE_FIRST_LEVEL = 18;
+var MULTI_SCENE_STEP = 6;
+function stageIsMulti(lg, st) {
+  if (st !== 5) return false;                                     // 只认 x-5 精英关（Boss x-10 永不）
+  if (lg < MULTI_SCENE_FIRST_LEVEL) return false;
+  if (lg > GROUP_MAX) return false;
+  return (lg - MULTI_SCENE_FIRST_LEVEL) % MULTI_SCENE_STEP === 0;
+}
+
 /* 生成全部 GROUP_MAX 大关 × 10 小关
    （v2.1.19 由 15 扩到 18；v2.1.29 由 18 扩到 21；v2.1.30 由 21 扩到 24；g13+ 为超限试炼。循环边界由 GROUP_MAX 派生） */
 var GROUP_LEVELS = {};
@@ -422,10 +440,12 @@ var GROUP_LEVELS = {};
     var stages = [];
     for (var st = 1; st <= 10; st++) {
       var isElite = st === 5, isBoss = st === 10;
+      var isMulti = stageIsMulti(lg, st);
       stages.push({
         id: 'g' + lg + '-' + st,
         name: (isBoss ? '👑 ' : isElite ? '⭐ ' : '') + '第' + st + '关',
         type: isBoss ? 'boss' : isElite ? 'elite' : 'normal',
+        mode: isMulti ? 'multi' : 'single',
         enemies: genStageEnemies(lg, st)
       });
     }
@@ -600,6 +620,9 @@ if (typeof window !== 'undefined') {
   window.GROUP_TAIL_FROM = GROUP_TAIL_FROM;
   window.groupTailMul = groupTailMul;
   window.getGroupStage = getGroupStage;
+  window.stageIsMulti = stageIsMulti;
+  window.MULTI_SCENE_FIRST_LEVEL = MULTI_SCENE_FIRST_LEVEL;
+  window.MULTI_SCENE_STEP = MULTI_SCENE_STEP;
   window.GROUP_ANCHOR = GROUP_ANCHOR;
   window.groupAnchorT = groupAnchorT;
   window.anchorStageEnemies = anchorStageEnemies;
@@ -631,6 +654,9 @@ if (typeof globalThis !== 'undefined') {
   globalThis.GROUP_TAIL_FROM = GROUP_TAIL_FROM;
   globalThis.groupTailMul = groupTailMul;
   globalThis.getGroupStage = getGroupStage;
+  globalThis.stageIsMulti = stageIsMulti;
+  globalThis.MULTI_SCENE_FIRST_LEVEL = MULTI_SCENE_FIRST_LEVEL;
+  globalThis.MULTI_SCENE_STEP = MULTI_SCENE_STEP;
   globalThis.GROUP_ANCHOR = GROUP_ANCHOR;
   globalThis.groupAnchorT = groupAnchorT;
   globalThis.anchorStageEnemies = anchorStageEnemies;

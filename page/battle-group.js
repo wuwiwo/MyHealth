@@ -69,9 +69,20 @@ function syncStatusDerived(unit) {
    自动结算 400% 重击并**占用该次行动**。 */
 var CHARGE_STRIKE_POWER = 4;   // 400%
 
+/* v2.14.20（多队双场景 阶段 C）：**唯一目标过滤助手** ——「敌人视玩家不存在」的单源判据。
+   设计依据 doc/design-pet-squad-battle-v1.md v1.2 §5（Q4 复核裁决 1）：玩家作唯一单位
+   轮流在场，敌方一切「敌方→我方」目标集合（单体选靶 / AOE / 随机 / 反噬 / 场地遍历）
+   都必须排除玩家，且玩家不吃任何来源伤害与状态。
+   · `_untargetable` 由多队战斗的接线方（阶段 D）打上；普通战斗里没有任何单位带该标记，
+     因此本函数严格等价于旧的 `hp > 0`，既有行为逐字节不变。
+   · 以后新增取目标的地方一律走这里，禁止再各写一份 `hp > 0`。 */
+function attackable(u) {
+  return !!u && u.hp > 0 && !u._untargetable;
+}
+
 function resolveChargeStrike(gb, actor) {
   var events = [];
-  var foes = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; });
+  var foes = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return attackable(u); });
   if (!foes.length) return events;
   var t = foes[Math.floor(gb.rng() * foes.length)];
   var dmg = Math.max(1, Math.floor(effectiveStat(actor, 'atk') * CHARGE_STRIKE_POWER - Math.floor(effectiveStat(t, 'def') / 2)));
@@ -119,7 +130,7 @@ function resolveConfusion(gb, actor) {
   var events = [];
   var cf = _confuseParams(actor);
   var others = (actor.side === 'ally' ? gb.enemies : gb.allies)
-    .filter(function (u) { return u.hp > 0 && u.id !== actor.id; });
+    .filter(function (u) { return attackable(u) && u.id !== actor.id; });
   var branch = Math.floor(gb.rng() * 3);
   if (branch === 1 && !others.length) branch = 2;   // 文档：无其他敌人则不触发 ② → 退到 ③
 
@@ -200,7 +211,8 @@ function talentAura(units, hook, ctx) {
    ⚠️ 与 reflectFlat 的区别：不按攻击者防御/魂防做减法（val 已是最终基数），
       但攻击者的减伤天赋/状态（dmgTakenReduce / dmgReduce / soulDmgReduce）、护盾、格挡仍然生效。 */
 function applyReflectMitigated(gb, attacker, val, events, label) {
-  if (!attacker || attacker.hp <= 0 || !(val > 0)) return;
+  /* v2.14.20（阶段 C）：反噬也是「伤害来源」，对 `_untargetable` 的单位（多队战斗＝玩家）零生效 */
+  if (!attacker || !attackable(attacker) || !(val > 0)) return;
   var dmg = Math.max(1, Math.floor(val));
   var ctx = { isPlayerAttack:false, isPhysical:false, isSkill:false, amount:dmg, attacker:null, target:attacker };
   var td = talentDispatch(attacker, 'onDamage', ctx);
@@ -274,7 +286,7 @@ function applyAllyDamageShare(gb, target, dmg, events, opts) {
   opts = opts || {};
   var ctxBase = { target: target, amount: dmg, isSkill: !!opts.isSkill };
   var mates = (target.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) {
-    return u.hp > 0 && u.id !== target.id;
+    return attackable(u) && u.id !== target.id;
   });
   var res = talentAura(mates, 'onAllyDamage', ctxBase);
   var share = 0;
@@ -600,7 +612,7 @@ function declaredActionValid(gb, actor, d) {
   if (d.skillId && usable.indexOf(d.skillId) < 0) return false;
   var ids = d.targetIds || [];
   if (ids.length) {
-    var alive = declaredTargets(gb, ids).filter(function (u) { return u.hp > 0; });
+    var alive = declaredTargets(gb, ids).filter(function (u) { return attackable(u); });
     if (!alive.length) return false;
   }
   return true;
@@ -611,7 +623,7 @@ function takeDeclaredAction(gb, actor) {
   if (d && actor._declaredUsed !== gb.turn && declaredActionValid(gb, actor, d)) {
     actor._declaredUsed = gb.turn;   // 一次行动消费一次（额外行动会重选）
     actor._declUnused = false;
-    var alive = declaredTargets(gb, d.targetIds).filter(function (u) { return u.hp > 0; });
+    var alive = declaredTargets(gb, d.targetIds).filter(function (u) { return attackable(u); });
     return {
       skillId: d.skillId,
       target: alive.length > 1 ? alive : (alive.length === 1 ? alive[0] : null),
@@ -660,8 +672,10 @@ function selectTargets(gb, actor, skillDef, forcedTarget) {
         （见 70 / 117 / 238 / 372 / 578 / 791 / 834 / 850 / 951 / 1062 / 1083 / 1130 / 1131 / 1152 /
          1177 / 1183 / 1184 / 1227 / 1258 / 1259 / 1276 / 1294 / 1295 行）—— 修的是**单点缺失**，
         不要顺手改写别处。 */
-  var mates = (actor.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return u.hp > 0; });
-  var foes = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; });
+  /* v2.14.20（阶段 C）：候选池统一走 `attackable` —— 敌方一侧的「mates」是敌人自己人、
+     「foes」是我方（含 `_untargetable` 的玩家）⇒ 多队战斗里玩家不会进入选靶池。 */
+  var mates = (actor.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return attackable(u); });
+  var foes = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return attackable(u); });
 
   /* v2.7.0：**已声明的目标优先** —— AI 在准备阶段（或行动前当场重选）挑好的目标，此前对
      **技能路径完全无效**：`groupUnitTurn` 拿到 `actTarget` 后只把它用在普攻，技能则调
@@ -681,7 +695,7 @@ function selectTargets(gb, actor, skillDef, forcedTarget) {
     if (!forcedTarget) return null;
     if (Object.prototype.toString.call(forcedTarget) === '[object Array]') return null;
     if (!forcedTarget.id) return null;
-    if (forcedTarget.hp <= 0) return null;
+    if (!attackable(forcedTarget)) return null;
     var pool = wantMate ? mates : foes;
     return pool.indexOf(forcedTarget) >= 0 ? forcedTarget : null;
   }
@@ -689,7 +703,7 @@ function selectTargets(gb, actor, skillDef, forcedTarget) {
   if (target === 'self') return [actor];
   if (target === 'all') {
     // 嘲讽者被单独挑出，其余全体
-    var taunter = foes.find(function (u) { return u._taunting && u.hp > 0; });
+    var taunter = foes.find(function (u) { return u._taunting && attackable(u); });
     if (taunter && target === 'all') {
       // 全体技能仍打全体，但嘲讽者额外承伤由 battle 处理
     }
@@ -743,7 +757,7 @@ function selectTargets(gb, actor, skillDef, forcedTarget) {
   var forcedFoe = forcedOne(false);
   if (forcedFoe) return [forcedFoe];
   var pool = foes;
-  var t = pool.find(function (u) { return u._taunting && u.hp > 0; });
+  var t = pool.find(function (u) { return u._taunting && attackable(u); });
   if (t) return [t];
   if (!pool.length) return [];
   return [pool[Math.floor(gb.rng() * pool.length)]];
@@ -767,7 +781,9 @@ function heatAfterAttack(gb, actor, events) {
 
 function normalAttack(gb, actor, target, dmgMult) {
   var events = [];
-  if (!target || target.hp <= 0) return events;
+  /* v2.14.20（阶段 C）：普攻是伤害来源，`_untargetable` 的受击方（多队战斗＝玩家）直接不吃。
+     放在最前面 —— 连「落空/酷暑」这类副作用都不该为一次打不到人的攻击触发。 */
+  if (!target || !attackable(target)) return events;
   // 命中判定（v2.1.5）
   if (!groupRollHit(gb, actor, target)) {
     events.push({ msg: '💨 ' + (actor.name || '单位') + ' 的攻击落空（' + target.name + ' 闪避）', targetId: target.id });
@@ -824,7 +840,7 @@ function normalAttack(gb, actor, target, dmgMult) {
   td2.mutations.forEach(function (m) {
     /* 反伤只打攻击者。原实现在这里顺手把 target.hp 也扣了一次，
        而下方结算又会扣一遍 —— 等于「粗糙皮肤」让受击方吃双倍伤害（v2.1.15 修）。 */
-    if (m.key === 'reflectFlat') { actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 ' + target.name + ' 粗糙皮肤 → ' + (actor.name || '攻击者') + ' 反伤 ' + m.value, targetId: actor.id, type: 'damage' }); }
+    if (m.key === 'reflectFlat') { if (attackable(actor)) { actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 ' + target.name + ' 粗糙皮肤 → ' + (actor.name || '攻击者') + ' 反伤 ' + m.value, targetId: actor.id, type: 'damage' }); } }
     /* v2.14.17 磐石反噬：定值反弹，过攻击者减伤/护盾/格挡，但不过防御（见 applyReflectMitigated） */
     if (m.key === 'reflectMitigated') applyReflectMitigated(gb, actor, m.value, events, target.name + ' 磐石反噬');
     if (m.key === 'dmgTakenBoost') dmg = Math.floor(dmg * (1 + m.value));
@@ -1089,9 +1105,9 @@ function castSkill(gb, actor, skillId, opts) {
        无影拳的 5 连击要求「目标随机可重复」，而 selectTargets('random1') 只给 1 个目标。 */
     var dmgResult = calcSkillDamage(def, actor, targets, {
       rng: gb.rng,
-      pool: (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; }),
+      pool: (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return attackable(u); }),
       /* WP-C（§2.12 梦幻光球「全场随机弹射」）：需要**全场**候选（含同阵营），故另给一份 allPool。 */
-      allPool: gb.units.filter(function (u) { return u.hp > 0; })
+      allPool: gb.units.filter(function (u) { return attackable(u); })
     });
     if (dmgResult) {
       /* v2.2.18（§2.7 雷霆冲撞「自身承受 35% 反冲」）：本次施放**实际打在目标身上**的伤害合计。
@@ -1294,7 +1310,7 @@ function castSkill(gb, actor, skillId, opts) {
       /* v2.3.0 魔法镜：被免疫；**负面/减益类**反射给施加者，治疗/增益类仅免疫（§5.6-3） */
       if (Object.prototype.hasOwnProperty.call(mirrorBlocked, t.id)) {
         var isPos = (typeof isPositiveStatus === 'function') && isPositiveStatus(sa.id);
-        if (mirrorBlocked[t.id] && !isPos && actor && actor.hp > 0 && actor.id !== t.id) {
+        if (mirrorBlocked[t.id] && !isPos && actor && attackable(actor) && actor.id !== t.id) {
           applyStatus(actor, { id: sa.id, duration: sa.duration, source: t, modsPct: sa.modsPct, data: sa.data });
           syncStatusDerived(actor);
           events.push({ msg: '🪞 魔法镜反弹：【' + getStatusName(sa.id) + '】→ ' + actor.name, targetId: actor.id, type: 'status' });
@@ -1327,7 +1343,7 @@ function castSkill(gb, actor, skillId, opts) {
       var stripMods = false;
       selfGuard.mutations.forEach(function (m) { if (m.key === 'stripStatMods') stripMods = true; });
       // 阵营光环守卫（凛冬之核：我方全体免疫冰冻）
-      var mates = (t.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return u.hp > 0; });
+      var mates = (t.side === 'ally' ? gb.allies : gb.enemies).filter(function (u) { return attackable(u); });
       var auraGuard = talentAura(mates, 'onAllyStatus', { statusId: sa.id, grade: grade, target: t });
       if (!selfGuard.skipAction && !auraGuard.skipAction) {
         // v2.1.14：区分「施加 / 刷新 / 叠层」，并去掉日志里外泄的英文状态 id（如 (poison)）
@@ -1370,7 +1386,7 @@ function castSkill(gb, actor, skillId, opts) {
           if (m.key === 'healReduce') amount = Math.floor(amount * (1 - m.value));
         });
         // 威压领域：敌方治疗 -10%；持有者血量>70% 时翻倍为 -20%（§3.10）
-        var foes = (t.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return u.hp > 0; });
+        var foes = (t.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) { return attackable(u); });
         var pf = talentAura(foes, 'onFoeHeal', { target: t, amount: amount });
         pf.mutations.forEach(function (m) { if (m.key === 'healReduce') amount = Math.floor(amount * (1 - m.value)); });
         pf.events.forEach(function (e) { events.push({ msg: e.msg }); });
@@ -1858,7 +1874,7 @@ function runUnitActionStep(gb, actor) {
   exRes.mutations.forEach(function (m) { if (m.key === 'extraAction') wantExtra = true; });
   exRes.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
   if (wantExtra && !gb.done && actor.hp > 0
-      && (actor.side === 'ally' ? gb.enemies : gb.allies).some(function (u) { return u.hp > 0; })) {
+      && (actor.side === 'ally' ? gb.enemies : gb.allies).some(function (u) { return attackable(u); })) {
     evts = evts.concat(groupUnitTurn(gb, actor));
   }
   /* v2.2.9 金身护盾破盾反伤：此刻的 actor 就是**刚刚出手的人** → 破盾者即他。放在启风之前。 */
@@ -2151,6 +2167,9 @@ function groupUnitTurn(gb, actor) {
     var targets;
     if (actTarget) targets = [actTarget];
     else targets = selectTargets(gb, actor, null);
+    /* v2.14.20（阶段 C）：普攻落点的最后一道闸 —— 声明/随机路径都可能带出陈旧目标，
+       统一按 `attackable` 再过滤一次（多队战斗里玩家不会被普攻打到）。 */
+    targets = (targets || []).filter(function (tt) { return attackable(tt); });
     if (targets.length) {
       var ta = talentDispatch(actor, 'onBeforeAction', { turn: turn, actualTurn: gb.turn });
       var multi = ta.mutations.find(function (m) { return m.key === 'multiTarget'; });
@@ -2161,7 +2180,7 @@ function groupUnitTurn(gb, actor) {
          现在按需要的总数从对侧补充（无放回、走本场种子），再把前 nTargets 个依次普攻。 */
       if (nTargets > targets.length) {
         var extraPool = (actor.side === 'ally' ? gb.enemies : gb.allies).filter(function (u) {
-          return u.hp > 0 && targets.indexOf(u) < 0;
+          return attackable(u) && targets.indexOf(u) < 0;
         });
         while (targets.length < nTargets && extraPool.length) {
           targets.push(extraPool.splice(Math.floor(gb.rng() * extraPool.length), 1)[0]);

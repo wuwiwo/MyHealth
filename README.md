@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.19
+> Personal Health Manager — 个人健身健康管理应用 v2.14.20
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -111,9 +111,9 @@ doc/
 ├── wiki/  ← 📚 **系统现行事实（唯一权威）**：`00 系统总览.md` 总索引 + 12 个大类各一页 + `01 Glossary/` 术语真源，`[[wikilinks]]` 互联
 ├── HANDOFF.md  ← 🤝 AI/开发者交接文档（环境/纪律/模块/测试/待办/踩坑；§6 为历史快照）
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
-├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.18）
+├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.21）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.19）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.20）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -446,4 +446,6 @@ Vercel 项目设置：
 
 | **2.14.19** | **2026-11-26** | **小队接力（阶段 B：普通战斗单队接力，单队路径逐字不变）** — 设计 `doc/design-pet-squad-battle-v1.md` §3。**① 引擎**（`battle-group.js`）：新增**唯一增援入口** `gbReinforce(gb, units)` —— `gb.allies` 与 `gb.units` **同池同步**（引擎所有遍历都走 `units`）、不重建战斗对象（敌人/词条/场地/RNG/进度原样）、本回合队列**不重排**（新单位从下一回合准备阶段进入）、已加入单位**幂等不重复 push**、只对新单位补跑一次 `onBattleStart`（圣光麒麟·威压领域的 `_pfMates` 靠这个缓存，否则静默失效；老单位与敌方不重放）。**② 判负参数化** `winnerRule`：默认 `'all'`（含玩家，**与改前逐字一致**）；`'pets'`（多队用，阶段 D 启用）只数非玩家单位（`_isPlayer`），无宠物单位时回落 `'all'`。**③ 顺序**：`checkGroupWin` **先问增援再判负** —— 反过来的话本队全灭会当场结束、下一队永远上不了场；仅在「敌方还有活口 + 本队全灭 + 提供方还给队」三件同时成立时增援，`guard<16` 防死循环。**④ 接线**（`game-render.js`）：`startGroupTrial` 只在 **≥2 支有宠小队**时挂 `squadUnits` + `reinforce=_groupRelayNext`；提供方按 `getPetSquads()` 顺序接力、**满血现建**、仍走 `buildGroupBattlePets()` 唯一入口、跳过空队/全员不可战（受伤阵亡），用尽返回 `null`（D3 落点）；接力**不掷骰**（同种子可复现性不受影响）；上场有一次性 toast。**⑤ 回滚**：`groupRestore` 摘除快照之后才加入的单位（就地 splice 保留引用），避免时间旅行把替补带回过去。**单队/旧档路径**：不传 `squadUnits`/`reinforce` ⇒ 引擎那段代码不执行，`test-group-determinism` 等既有确定性套件红转绿、全量 **82 套件 / 0 失败**。新增 `test-squad-relay.js` **41 断言**（默认口径不变 / 幂等双池 / 先增援后判负 / D3 / `'all'` vs `'pets'` / 只对新单位补开场 / 提供方跳空队 / 回滚摘除 / 源码守卫）。缓存戳 `?v182` → **`?v183`** | `doc/changelog-v2.14.md` |
 
-> 当前版本：**v2.14.19**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+| **2.14.20** | **2026-11-26** | **玩家口径（阶段 C：`attackable` 单源目标过滤 + 关卡 `mode`，仍不启用多队）** — 设计 `doc/design-pet-squad-battle-v1.md` v1.2 §5/§6。**① 单一助手**：`attackable(u) = 存活 && !u._untargetable`（`battle-group.js`），承载 Q4 复核裁决「玩家作唯一单位轮流在场，**敌人视玩家不存在**」；**普通战斗无标记 ⇒ 逐字节等价 `hp > 0`**。**② 接入面**：`ai.js` 的 `aliveOpponents`/`aliveAllies`；`battle-group.js` 的 `selectTargets` 双池（`random1`/`all`/`ally1`/`ally2`/`enemy1`/`enemy2`/`enemy12`）+ 嘲讽（两处）+ **声明目标合法性**（玩家被声明 ⇒ 声明作废重选）+ 强制目标 + 技能 `pool`/`allPool` + 蓄力随机靶 + 迷惑误击池 + 伤害分担 + 状态光环 + `onFoeHeal` + 额外行动补池；`normalAttack` 入口闸（打不到的人连「落空/酷暑」都不触发）与 `groupUnitTurn` 普攻落点闸；反噬（`reflectMitigated`/`reflectFlat`）与魔法镜反射对玩家零生效；`terrain.js` 新增 `terrainAttackable` 覆盖沙暴抽靶/分档排名/雪天冰冻/酷暑全体/雨天潮湿与闪电/毒气中毒，`applyTerrainResult` 再加兜底闸（伤害与状态都不落地）。**③ 关卡 mode**：`group-levels.js` 唯一派生点 `stageIsMulti()` + `MULTI_SCENE_FIRST_LEVEL=18`/`MULTI_SCENE_STEP=6`，每关写 `mode:'multi'\|'single'` ⇒ 全期只有 **`g18-5`/`g24-5`**，**Boss 与 1–3 关永不 multi**，越界不派生。**④ 阶段门禁**：`mode` **只派生不消费**（源码守卫钉死「除 `group-levels.js` 外无 `stage.mode`/`mode === 'multi'`」），真正的双场景接线留到阶段 D；`_untargetable` 本阶段**无生产注入**，否则 g18-5 会变成「玩家无敌但无双场景」的半成品。**⑤ 不可选 ≠ 不参战**：`buildActionQueue` 仍收玩家。新增 `test-attackable.js` **48 断言**（含无标记回归面与对照组）；全量 **83 套件 / 0 失败** + a11y **40/40**。缓存戳 `?v183` → **`?v184`** | `doc/changelog-v2.14.md` |
+
+> 当前版本：**v2.14.20**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

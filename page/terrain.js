@@ -34,16 +34,26 @@ function terrainTurnEnd(gb) {
   return r.events || [];
 }
 
+/* v2.14.20（阶段 C）：场地取靶的统一判据。`attackable` 定义在 battle-group.js（本文件在其后加载，
+   互为全局同域）；测试单独加载本文件时回落到等价的「存活」判断，避免 ReferenceError。 */
+function terrainAttackable(u) {
+  if (typeof attackable === 'function') return attackable(u);
+  return !!u && u.hp > 0 && !u._untargetable;
+}
+
 /* 应用场地造成的伤害/状态 */
 function applyTerrainResult(gb, r) {
+  /* v2.14.20（阶段 C）：场地是「伤害/状态来源」之一，`_untargetable` 的单位（多队战斗＝玩家）
+     既不受伤也不吃状态 —— 这里统一拦一次，前面各场地的取靶循环另按 `terrainAttackable` 收敛。 */
+  var atk = terrainAttackable;
   (r.damage || []).forEach(function (d) {
     var u = gb.units.find(function (x) { return x.id === d.unitId; });
-    if (!u || u.hp <= 0) return;
+    if (!atk(u)) return;
     u.hp = Math.max(0, u.hp - d.amount);
   });
   (r.statusApps || []).forEach(function (sa) {
     var u = gb.units.find(function (x) { return x.id === sa.unitId; });
-    if (u && u.hp > 0) applyStatus(u, { id: sa.id, duration: sa.duration, source: null });
+    if (atk(u)) applyStatus(u, { id: sa.id, duration: sa.duration, source: null });
   });
 }
 
@@ -57,7 +67,7 @@ function applyTerrainResult(gb, r) {
    返回 {unitId: 减免比例}；调用方用它缩放到最终伤害。 */
 function terrainDefenceTiers(gb, key, high, low, mid) {
   var out = {};
-  var alive = (gb && gb.units) ? gb.units.filter(function (u) { return u.hp > 0; }) : [];
+  var alive = (gb && gb.units) ? gb.units.filter(function (u) { return terrainAttackable(u); }) : [];
   if (!alive.length) return out;
   var vals = alive.map(function (u) {
     if (typeof effectiveStat === 'function') return effectiveStat(u, key);
@@ -86,7 +96,7 @@ registerTerrain({
   desc: '全场命中率-20%（只影响普攻：技能不判命中）；每回合结束随机2名角色受碎石伤害（最大生命值×5%，按防御分档减免：防御最高者-50%、最低者-25%、其余-35%）',
   onTurnEnd: function (gb) {
     var events = [{ msg: '🌪️ 沙暴' }];
-    var alive = gb.units.filter(function (u) { return u.hp > 0; });
+    var alive = gb.units.filter(function (u) { return terrainAttackable(u); });
     var targets = [];
     while (targets.length < 2 && alive.length) {
       var pick = alive[Math.floor(battleRnd() * alive.length)];
@@ -119,7 +129,7 @@ registerTerrain({
     if (!gb._snowInterval) gb._snowInterval = 5 + Math.floor(battleRnd() * 3);
     var interval = gb._snowInterval;
     if (turn >= interval && turn % interval === 0) {
-      var alive = gb.units.filter(function (u) { return u.hp > 0; });
+      var alive = gb.units.filter(function (u) { return terrainAttackable(u); });
       if (alive.length) {
         var t = alive[Math.floor(battleRnd() * alive.length)];
         var plain = talentDispatch(t, 'onBeforeStatus', {});
@@ -144,7 +154,7 @@ registerTerrain({
   desc: '每回合结束全体失最大生命值×4%；每次普攻后**攻击者**失最大生命值×2%（无视防御与魂防；多段普攻计多次，普通技能不触发）',
   onTurnEnd: function (gb) {
     var events = [{ msg: '☀️ 酷暑' }];
-    var dmgArr = gb.units.filter(function (u) { return u.hp > 0; }).map(function (u) {
+    var dmgArr = gb.units.filter(function (u) { return terrainAttackable(u); }).map(function (u) {
       var dmg = Math.floor(u.base.hp * 0.04);
       return { unitId: u.id, amount: dmg };
     });
@@ -160,7 +170,7 @@ registerTerrain({
   onTurnStart: function (gb) {
     var events = [];
     gb.units.forEach(function (u) {
-      if (u.hp > 0 && battleRnd() < 0.15) {
+      if (terrainAttackable(u) && battleRnd() < 0.15) {
         applyStatus(u, { id: 'wet', duration: 1 });
         events.push({ msg: '🌧️ ' + u.name + ' 变潮湿' });
       }
@@ -172,7 +182,7 @@ registerTerrain({
     var rainTiers = terrainDefenceTiers(gb, 'soulDef', 0.60, 0.35, 0.45);
     var dmgArr = [];
     gb.units.forEach(function (u) {
-      if (u.hp > 0 && hasStatus(u, 'wet')) {
+      if (terrainAttackable(u) && hasStatus(u, 'wet')) {
         /* v3.0.0（作者裁决 2）：雨天闪电按**魂防御**分档减免 —— 最高 60% / 最低 35% / 其余 45%；
            排名范围同样是场上**全部存活单位**（含未被劈中的），每回合判定 1 次。 */
         var rawR = Math.floor(u.base.hp * 0.07);
@@ -206,7 +216,7 @@ registerTerrain({
     var events = [];
     if ((gb.turn || 0) < 5) return { events: events };
     gb.units.forEach(function (u) {
-      if (u.hp <= 0 || u._gasImmune) return;
+      if (!terrainAttackable(u) || u._gasImmune) return;
       if (battleRnd() < 0.35) {
         if (hasStatus(u, 'poison')) {
           u._gasPoisonCount = (u._gasPoisonCount || 0) + 1;

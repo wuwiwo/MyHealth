@@ -5,6 +5,55 @@
 
 ---
 
+## v2.14.20
+
+Date: 2026-11-26
+
+**玩家口径 —— 阶段 C：`attackable(u)` 单源目标过滤 + 关卡 `mode` 字段（仍不启用多队）**（设计定稿 `doc/design-pet-squad-battle-v1.md` v1.2 §5 / §6 / §10）
+
+### 新增功能
+
+1. **唯一目标过滤助手 `attackable(u)`**（`page/battle-group.js`）：`!!u && u.hp > 0 && !u._untargetable`。
+   - 语义来自 Q4 复核裁决 1：**玩家作唯一单位轮流在场，敌人视玩家不存在** —— 敌方一切「敌方→我方」目标集合（单体选靶 / AOE / 随机 / 反噬 / 场地遍历）都排除玩家，且玩家**不吃任何来源伤害与状态**。
+   - 单一判据：以后新增取目标的地方一律走它，禁止再各写一份 `hp > 0`。
+   - **普通战斗零变化**：没有任何单位带 `_untargetable` ⇒ 函数严格等价于旧的 `hp > 0`。
+2. **接入点（逐个目标池，不含「存活检查」类判断）**：
+   - `page/ai.js`：`aliveOpponents` / `aliveAllies`（敌人 AI 选靶唯一入口，单点覆盖 `aiPickTarget` 的残血评分、嘲讽强制、全体技能、治疗目标）。
+   - `page/battle-group.js`：`selectTargets` 的 `mates` / `foes` 双池（含 `random1` / `all` / `ally1` / `ally2` / `enemy1` / `enemy2` / `enemy12`）、嘲讽查找（两处）、**声明目标合法性**（`declaredActionValid` 与 `takeDeclaredAction`，玩家被声明为目标 ⇒ 声明作废当场重选）、强制目标 `forcedOne`、`calcSkillDamage` 的 `pool` / `allPool`（梦幻光球弹射）、蓄力重击随机目标、迷惑「误击其他敌人」池、伤害分担 `mates`、状态光环 `mates`、`onFoeHeal` 池、额外行动目标补充池；`normalAttack` 入口加**第一道闸**（打不到的单位连「落空 / 酷暑惩罚」都不触发），`groupUnitTurn` 普攻落点再加**最后一道闸**（声明/随机路径带出的陈旧目标一并过滤）。
+   - 反噬：`applyReflectMitigated` 与 `reflectFlat` 按 `attackable(attacker)` 判定（玩家作为攻击者不吃反弹）；魔法镜把负面状态反射给施加者时同样跳过。
+   - `page/terrain.js`：新增 `terrainAttackable`（`attackable` 的场地侧别名，单独加载时回落等价判断），统一用于沙暴抽靶 / 沙暴·雨天分档排名 / 雪天冰冻 / 酷暑全体 / 雨天潮湿 / 雨天闪电 / 毒气中毒；`applyTerrainResult` 再加一道兜底闸（伤害与 `statusApps` 都不落地）。
+3. **关卡 `mode` 字段**（`page/group-levels.js`）：新增唯一派生点 `stageIsMulti(lg, st)` + 常量 `MULTI_SCENE_FIRST_LEVEL=18` / `MULTI_SCENE_STEP=6`，每关生成时写 `mode: 'multi' | 'single'`。
+   - 规则（Q6 复核裁决 3「双场景敌人遇到次数比较少」）：**g18 起、每 6 大关的 x-5（精英关）** ⇒ 全期只有 **`g18-5` / `g24-5`**；**Boss（x-10）与 1–3 关永不 multi**，超出 `GROUP_MAX` 不派生。
+   - `stageIsMulti` / 两个常量一并挂上 `window` 与 `globalThis`（测试与工具可读）。
+4. **玩家照常出手**：`_untargetable` 只影响「能否被选为目标」，`buildActionQueue` 仍按 `hp > 0` 收人 —— 不可选 ≠ 不参战。
+
+### 修复
+
+无行为修复。本阶段刻意保持**既有战斗逐字节不变**：`_untargetable` 在本阶段**没有任何生产代码注入**（门禁见下），所有接入点对普通战斗等价于原判断。
+
+### UI 调整
+
+无。
+
+### 阶段门禁（重要）
+
+1. **仍不启用多队**：`mode` 本阶段**只派生、不消费**。若此刻让 `startGroupTrial` 读 `mode` 直接给玩家打 `_untargetable`，`g18-5` / `g24-5` 会变成「玩家无敌但没有第二个场景」的畸形半成品。真正的接线（导演对象 + 双场景渲染 + 轮流结算）在阶段 D。
+2. 源码守卫已钉住这一条：`scripts/test-attackable.js` §8 断言「除 `group-levels.js` 外没有任何生产代码出现 `stage.mode` / `mode === 'multi'`」—— 阶段 D 开闸时这条守卫要同步改写（改成「只有导演模块可以消费」）。
+
+### 测试
+
+1. 新增 `scripts/test-attackable.js` **48 断言**：助手三条判据；敌方 AI 单体/嘲讽/AOE/随机/强制声明均选不到玩家；声明合法性失效；**无标记时全部照旧**（回归面：玩家仍可被选、普攻仍打到玩家与宠物）；普攻与反噬对标记单位零生效（含对照组）；四类场地（沙暴/酷暑/雨天/毒气）不伤玩家且 `applyTerrainResult` 兜底闸生效；行动队列仍含玩家；关卡 `mode` 全期恰 2 个 multi 且就是 `g18-5`/`g24-5`（Boss、g1-5、越界档均 single）；源码守卫（`attackable` 单一来源、`ai.js`/`terrain.js` 无残留裸 `hp > 0` 池、`mode` 无消费方）。
+2. 全量 **83 套件 / 0 失败**（新增 1 套件）；`test-a11y-tokens` **40/40**。
+3. 缓存戳 `?v183` → **`?v184`**（55 处）。
+
+### 待裁决 / 已知限制
+
+1. `MULTI_SCENE_ENEMY_SCALE = 0.85` 仍只是设计定值，实测定值留到阶段 E。
+2. 时间旅行回滚与接力的「下一队指针不回退」（阶段 B 遗留）未在本版处理。
+3. 场地分档排名（`terrainDefenceTiers`）现在也把玩家排除在外 —— 多队战斗里这是正确的（玩家不在场），但如果将来需要「玩家属性影响场地排名」，要显式给参数，别悄悄放宽这条判据。
+
+---
+
 ## v2.14.19
 
 Date: 2026-11-26
@@ -1143,6 +1192,7 @@ Date: 2026-10-12
 | 2.14.17 | 53 | 3314 行 game-render.js | **宠物天赋补齐 6 条（R/SR）+ 战意/梦幻/不动如山数值调整**：不动如山每回合回血 3%、战意吸血 10~100%、梦幻光球自愈 -40%、战意先制度改技能自身 priority:1（引擎 predeclareActions 扩展我方）、雨中疾行（雨天 spd×2）、星芒庇护（受击 40% 减伤 25%）、斗志昂扬（攻/受击 25% spd+1）、磐石反噬（(def+soulDef)×10% 定值反弹过减伤不过防御，新 mutation reflectMitigated）、共鸣之歌（我方施技自回 2%）、雷鸣加速（我方施技 20% 自身 CD-1，新 hook onAllyCastSkill）；新增 test-pet-v21417（48 断言），全量 80 套件 / 3405 断言 0 失败；缓存戳 ?v181 |
 | 2.14.18 | 53 | 3314 行 game-render.js | **宠物编队阶段 A（战斗零改动）**：`dh-pets-v1.squads`（不新增 store 键，`battlePicks` = 首发镜像）；旧档**只读派生**迁移（读取不写盘）；不变量 = 每队 ≤4 + **同宠不得跨队** + 至少 1 队 + 队名 ≤8；唯一写入口 `savePetSquads()` 与 5 个管理动作；UI = 宠物面板「🐾 编队管理」原生 `<details>`（改名/↑↓排序/删除/新建/芯片切换/伤员 ⚠️ 保留在队）；新增 `test-pet-squads`（67 断言，含源码守卫）；`test-pet-panel-layout` 两条 `aria-pressed` 计数收紧到阵容区块；全量 **81 套件 / 0 失败**；缓存戳 `?v181` → **`?v182`** |
 | 2.14.19 | 53 | 3314 行 game-render.js | **小队接力阶段 B（普通战斗单队接力）**：新增唯一增援入口 `gbReinforce()`（allies/units 同池同步、不重建战斗对象、本回合不重排队列、幂等、只对新单位补跑 `onBattleStart`）；判负参数化 `winnerRule`（默认 `'all'` 与改前逐字一致，`'pets'` 只数非玩家单位并回落）；`checkGroupWin` **先增援后判负**（否则队灭当场结束）；`startGroupTrial` 只在 ≥2 支有宠小队时接线，提供方按 `getPetSquads()` 满血现建、跳空队/全员不可战、用尽返回 null；`groupRestore` 摘除快照后新增单位；新增 `test-squad-relay`（41 断言）；全量 **82 套件 / 0 失败**；缓存戳 `?v182` → **`?v183`** |
+| 2.14.20 | 54 | 3371 行 game-render.js | **玩家口径阶段 C（`attackable` 单源目标过滤 + 关卡 mode，仍不启用多队）**：`attackable(u)` = 存活且未打 `_untargetable` 标记，接入 `ai.js` 选靶双入口、`battle-group.js` 的 `selectTargets` 双池/嘲讽/声明合法性/强制目标/技能 `pool`+`allPool`/蓄力/迷惑/伤害分担/光环/`onFoeHeal`/额外目标池、`normalAttack` 与 `groupUnitTurn` 两道闸、反噬与魔法镜、`terrain.js` 全部取靶循环 + `applyTerrainResult` 兜底闸；`group-levels.js` 每关派生 `mode:'multi'\|'single'`（`stageIsMulti`，g18 起每 6 大关的 x-5 ⇒ 全期只有 `g18-5`/`g24-5`，Boss 与 1–3 关永不 multi，越界不派生）；**mode 只派生不消费**（源码守卫钉死），普通战斗逐字节等价；新增 `test-attackable`（48 断言）；全量 **83 套件 / 0 失败** + a11y 40/40；缓存戳 `?v183` → **`?v184`** |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
 > （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。
