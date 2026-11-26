@@ -9,14 +9,14 @@
 /* 图鉴：speciesId → 宠物定义 */
 var PET_CODEX = {
   /* ---- R 级 ---- */
-  sparkle: { id:'sparkle', name:'闪闪星', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:[], skills:['p_shine'] },
-  waterdrop:{ id:'waterdrop', name:'水水滴', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:[], skills:['p_drench'] },
+  sparkle: { id:'sparkle', name:'闪闪星', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:['sparkle_guard'], skills:['p_shine'] },
+  waterdrop:{ id:'waterdrop', name:'水水滴', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:['rain_sprint'], skills:['p_drench'] },
   pongpong:{ id:'pongpong', name:'彭彭猪', rarity:'R', role:'辅助', base:{hp:100,atk:10,def:5,soulAtk:6,soulDef:3,spd:5}, talents:['pig_snore'], skills:['p_sleep'] },
   /* ---- SR 级 ---- */
-  flamechick:{ id:'flamechick', name:'火焰鸡', rarity:'SR', role:'攻击', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:[], skills:['p_flamepeck'] },
-  rocksteady:{ id:'rocksteady', name:'坚强岩', rarity:'SR', role:'辅助', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:[], skills:['fortify'] },
-  chirpbird:{ id:'chirpbird', name:'清脆鸟', rarity:'SR', role:'攻击', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:[], skills:['p_sing'] },
-  thunderdog:{ id:'thunderdog', name:'雷霆犬', rarity:'SR', role:'攻击', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:[], skills:['p_thundercharge'] },
+  flamechick:{ id:'flamechick', name:'火焰鸡', rarity:'SR', role:'攻击', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:['flame_spirit'], skills:['p_flamepeck'] },
+  rocksteady:{ id:'rocksteady', name:'坚强岩', rarity:'SR', role:'辅助', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:['stone_thorns'], skills:['fortify'] },
+  chirpbird:{ id:'chirpbird', name:'清脆鸟', rarity:'SR', role:'攻击', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:['chirp_sustain'], skills:['p_sing'] },
+  thunderdog:{ id:'thunderdog', name:'雷霆犬', rarity:'SR', role:'攻击', base:{hp:150,atk:15,def:10,soulAtk:10,soulDef:6,spd:6}, talents:['thunder_haste'], skills:['p_thundercharge'] },
   /* ---- SSR 级 ---- */
   possum:{ id:'possum', name:'小负鼠', rarity:'SSR', role:'攻击', base:{hp:200,atk:20,def:15,soulAtk:15,soulDef:10,spd:8}, talents:['lucky_pocket'], skills:['p_doublehit'] },
   darkcrow:{ id:'darkcrow', name:'黑暗鸦', rarity:'SSR', role:'攻击', base:{hp:200,atk:20,def:15,soulAtk:15,soulDef:10,spd:8}, talents:['dark_eye'], skills:['p_phantom'] },
@@ -296,7 +296,8 @@ registerSkill({ id:'p_holylight', name:'圣光治愈', type:'support', target:'a
      · **每次弹射使下次弹射伤害 +10%** —— 既有实现（`dmgUp:0.10` 累加），本轮只钉不改；
      · **冷却 5 → 4**。 */
 registerSkill({ id:'p_dreamball', name:'梦幻光球', type:'attack', target:'random1', power:250, range:{power:[220,310]}, dmgType:'soul', cooldown:4,
-  charge:true, bounce:{ times:3, dmgUp:0.10, foeChance:[1,1] } });
+  /* v2.14.17：自愈量 ×0.6（治疗 -40%），引擎 skill.js bounce.healScale 消费。 */
+  charge:true, bounce:{ times:3, dmgUp:0.10, foeChance:[1,1], healScale:0.6 } });
 
 /* UR：无影拳
    WP-C（§2.13 评审「总计 4 次攻击，每次 55%-100%，视为普通攻击，会触发普通攻击相关效果与判定」）：
@@ -327,21 +328,20 @@ registerSkill({ id:'p_shadowfist', name:'无影拳', type:'attack', target:'rand
        （落在 `modsPct`，effectiveStat = base ×(1+1.5) ~ ×(1+3.0)），**不是**乘 1.5~3.0 倍
        —— 依据是既有实现的口径：`atkup` 状态一直按 `modsPct` 的「百分比加成」语义结算，
        乘 1.5~3.0 倍会让 t=0 的 150% 写成 modsPct=0.5、与文本「提升 150%」自相矛盾。
-     · **先制度 +1** —— 落在 buff 载荷 `priorityBonus:1`，由 battle-group 写进 `warmight` 状态实例的
-       `data.priority`，再由 `unitPriorityRank` → `warmightPriorityBonus` 真正参与出手分档
-       （v2.14.8 已接通；此前引擎只有「技能级先制度」，没有任何单位级通道）。
-       **不**给本技能自身加 `priority` —— 那是「施法者先手」，与「被灌注的 2 名友方先手」不是一回事。
-     · CD 维持 4（规格「CD 4」）。 */
-registerSkill({ id:'p_warmight', name:'战意灌注', type:'support', target:'ally2', cooldown:4,
-  range:{ atkBoost:[150, 300], lifesteal:[5, 50], skillLifesteal:[7.5, 32.5] },
+     · CD 维持 4（规格「CD 4」）。
+     v2.14.17 作者裁决：先制度 +1 改为**技能本身**（圣光麒麟施放本技能时先手），不再给被灌注的 2 名友方加先制。
+       实现 = `priority:1` + 删 `priorityBonus`；引擎 predeclareActions 已扩展为我方也预声明
+       （否则技能级 priority 对我方恒 0）。 */
+registerSkill({ id:'p_warmight', name:'战意灌注', type:'support', target:'ally2', cooldown:4, priority:1,
+  /* v2.14.17：吸血区间 5%~50% → 10%~100%（技能吸血 7.5%~32.5% 不变）。 */
+  range:{ atkBoost:[150, 300], lifesteal:[10, 100], skillLifesteal:[7.5, 32.5] },
   effects:[function(c,ts,r,ctx){
     var v = ctx.sv('atkBoost')/100, ls = ctx.sv('lifesteal')/100, sls = ctx.sv('skillLifesteal')/100;
     ts.forEach(function(t){
       var atk = (t.base && t.base.atk) || 0, soul = (t.base && t.base.soulAtk) || 0;
       var key = soul > atk ? 'soulAtk' : 'atk';       // 较高一项
       var mods = {}; mods[key] = v;
-      r.buffs.push({ unitId:t.id, key:'warmight', value:v, modsPct:mods, lifesteal:ls, skillLifesteal:sls, duration:2,
-        priorityBonus:1 });
+      r.buffs.push({ unitId:t.id, key:'warmight', value:v, modsPct:mods, lifesteal:ls, skillLifesteal:sls, duration:2 });
     });
     r.events.push({ msg:'🔥 ' + (c.name||'宠物') + ' 战意灌注 → ' + ts.map(function(t){return t.name;}).join('、')
       + '：攻击/魂攻较高项 +' + Math.round(v*100) + '%、吸血 ' + Math.round(ls*100) + '% / 技能吸血 ' + Math.round(sls*100) + '%、先制度 +1（2 回合）' });
@@ -574,8 +574,18 @@ registerTalent({ id:'fighter_instinct', name:'斗者本能', desc:'普攻/技能
    边界口径：严格大于（正好 90% / 50% / 10% 落到下一档）—— 与 v2.3.0 的「>95% 严格大于」同口径。
    ⚠️ 命中口径：免疫判定看的是**受击方当前血量**（`unit.hp / unit.base.hp`），
       不看「承伤后血量」；减伤与免疫在同一个 `onDamage` / `onBeforeStatus` 时点各自读一次。 */
-registerTalent({ id:'immovable', name:'不动如山', desc:'血量>90%免疫普通~高级负面且受伤-50%；>50%免疫普通负面且受伤-30%；>10%受伤-20%', petOnly:true,
+/* v2.14.17 作者补充：每回合结束恢复最大生命 ×3%（与三档减伤独立，满血不空放）。
+   落点 = 判定阶段 onTurnEnd（与圣光守护的每回合自愈同一派发点），只对自己生效。 */
+registerTalent({ id:'immovable', name:'不动如山', desc:'血量>90%免疫普通~高级负面且受伤-50%；>50%免疫普通负面且受伤-30%；>10%受伤-20%；每回合恢复最大生命3%', petOnly:true,
   hooks: {
+    onTurnEnd: function (unit) {
+      if (!unit || unit.hp <= 0) return;
+      var heal = Math.max(1, Math.floor((unit.base && unit.base.hp || 0) * 0.03));
+      var real = Math.min(heal, Math.max(0, (unit.base && unit.base.hp || 0) - unit.hp));
+      if (real <= 0) return;
+      unit.hp = Math.min(unit.base.hp, unit.hp + real);
+      return { events: [{ type:'heal', unitId:unit.id, msg:'🛡️ 不动如山: ' + (unit.name||'单位') + ' 回复 ' + real }] };
+    },
     onBeforeStatus: function (unit, ctx) {
       var ratio = (unit.base && unit.base.hp) ? (unit.hp / unit.base.hp) : 0;
       var grade = ctx.grade || 1;
@@ -645,6 +655,123 @@ registerTalent({ id:'pressure_field', name:'威压领域', desc:'敌方全体治
       pick.hp = Math.min(pick.base.hp, pick.hp + real);
       unit._pfHealCount++;
       return { events: [{ type:'heal', unitId: pick.id, msg:'🕊️ 威压领域: ' + pick.name + ' 回复 ' + real }] };
+    }
+  } });
+
+/* ============================================================
+   v2.14.17 新增 6 条宠物天赋（R/SR 补齐，作者规格逐字实现）
+   ⚠️ 全部 petOnly:true（固有专属，不给敌人抽到）；数值一律走 talentConfig，
+      hook 里不写死字面量（守卫 test-talent-fixation.js）。
+   ============================================================ */
+
+/* 水水滴：雨天疾行 —— 雨天（gb.terrain.id==='rain'）时速度 ×2。
+   `phase:'prepare'` → onTurnStart 在准备阶段派发（ctx 由 runPhasePrepare 补 terrain 字段），
+   onTurnEnd 还原 base.spd（灵感涌动同一口径），避免永久翻倍。 */
+registerTalent({ id:'rain_sprint', name:'雨中疾行', desc:'雨天时速度×2', petOnly:true, phase:'prepare',
+  config: { mult: 2 },
+  hooks: {
+    onTurnStart: function (unit, ctx) {
+      if (!unit || !ctx || !ctx.terrain || ctx.terrain.id !== 'rain') return;
+      if (unit._rainSprintOn) return;                          // 幂等：同回合重复派发不重复乘
+      var mult = talentConfig('rain_sprint', 'mult', 2);
+      unit._rainSprintOrig = unit.base.spd || 0;
+      unit.base.spd = Math.floor(unit._rainSprintOrig * mult);
+      unit._rainSprintOn = true;
+      return { events: [{ msg:'🌧️ 雨中疾行: ' + (unit.name||'单位') + ' 速度 ×' + mult }] };
+    },
+    onTurnEnd: function (unit) {
+      if (!unit || !unit._rainSprintOn) return;
+      unit.base.spd = unit._rainSprintOrig || 0;
+      unit._rainSprintOn = false;
+    }
+  } });
+
+/* 闪闪星：星芒庇护 —— 受到伤害 40% 几率 -25%。
+   落 onDamage（受击方通道）：mutation `dmgTakenReduce` 由 battle-group 消费（×(1-v)）。 */
+registerTalent({ id:'sparkle_guard', name:'星芒庇护', desc:'受到伤害40%几率-25%', petOnly:true,
+  config: { chance: 0.4, reduce: 0.25 },
+  hooks: {
+    onDamage: function (unit, ctx) {
+      if (!ctx || ctx.isPlayerAttack) return;                  // 只在受击方派发时触发
+      if (!(ctx.amount > 0)) return;
+      var chance = talentConfig('sparkle_guard', 'chance', 0.4);
+      if (battleRnd() >= chance) return;
+      var reduce = talentConfig('sparkle_guard', 'reduce', 0.25);
+      return { mutations: [{ key:'dmgTakenReduce', value:reduce }],
+        events: [{ msg:'✨ 星芒庇护: ' + (unit.name||'单位') + ' 减伤 ' + Math.round(reduce*100) + '%' }] };
+    }
+  } });
+
+/* 火焰鸡：斗志昂扬 —— 每次攻击 / 受到攻击 25% 几率 +1 速度，直到战斗结束（永久、不还原）。
+   攻击侧走 onAfterDamage，受击侧走 onDamage（ctx.isPlayerAttack 真 = 攻击方派发，这里只取受击通道）。 */
+registerTalent({ id:'flame_spirit', name:'斗志昂扬', desc:'攻击/受击25%几率速度+1（本场永久）', petOnly:true,
+  config: { chance: 0.25, amount: 1 },
+  hooks: {
+    onAfterDamage: function (unit) {
+      if (!unit || unit.hp <= 0) return;
+      if (battleRnd() >= talentConfig('flame_spirit', 'chance', 0.25)) return;
+      var n = talentConfig('flame_spirit', 'amount', 1);
+      unit.base.spd = (unit.base.spd || 0) + n;
+      return { events: [{ msg:'🔥 斗志昂扬: ' + (unit.name||'单位') + ' 速度 +' + n }] };
+    },
+    onDamage: function (unit, ctx) {
+      if (!unit || unit.hp <= 0) return;
+      if (!ctx || ctx.isPlayerAttack) return;
+      if (!(ctx.amount > 0)) return;
+      if (battleRnd() >= talentConfig('flame_spirit', 'chance', 0.25)) return;
+      var n = talentConfig('flame_spirit', 'amount', 1);
+      unit.base.spd = (unit.base.spd || 0) + n;
+      return { events: [{ msg:'🔥 斗志昂扬: ' + (unit.name||'单位') + ' 速度 +' + n }] };
+    }
+  } });
+
+/* 坚强岩：磐石反噬 —— 受到攻击给予攻击者 (自身def+自身soulDef)×10% 反弹伤害。
+   ⚠️ 作者裁决：不按敌人防御/魂防做减法（定值），但敌人的减伤天赋/护盾/格挡仍生效。
+   落新 mutation `reflectMitigated`，消费端见 battle-group.js 的普攻/技能两条受击通道。 */
+registerTalent({ id:'stone_thorns', name:'磐石反噬', desc:'受击反弹(def+魂防合计)×10%，无视敌人防御但可被减免', petOnly:true,
+  config: { pct: 0.10 },
+  hooks: {
+    onDamage: function (unit, ctx) {
+      if (!unit || unit.hp <= 0) return;
+      if (!ctx || ctx.isPlayerAttack) return;
+      if (!(ctx.amount > 0)) return;
+      if (!ctx.attacker || ctx.attacker.hp <= 0) return;
+      var pct = talentConfig('stone_thorns', 'pct', 0.10);
+      var val = Math.max(1, Math.floor(((unit.base && unit.base.def || 0) + (unit.base && unit.base.soulDef || 0)) * pct));
+      return { mutations: [{ key:'reflectMitigated', value:val, attacker:ctx.attacker }],
+        events: [{ msg:'🪨 磐石反噬: 反弹 ' + val + '  damage' }] };
+    }
+  } });
+
+/* 清脆鸟：共鸣之歌 —— 我方任一单位施放技能时，自身恢复 2% 最大生命。
+   落新 hook `onAllyCastSkill`（castSkill 成功施放后对我方全员派发）。 */
+registerTalent({ id:'chirp_sustain', name:'共鸣之歌', desc:'我方任一单位发动技能时，自身恢复2%最大生命', petOnly:true,
+  config: { pct: 0.02 },
+  hooks: {
+    onAllyCastSkill: function (unit) {
+      if (!unit || unit.hp <= 0 || !unit.base) return;
+      var heal = Math.max(1, Math.floor((unit.base.hp || 0) * talentConfig('chirp_sustain', 'pct', 0.02)));
+      var real = Math.min(heal, Math.max(0, unit.base.hp - unit.hp));
+      if (real <= 0) return;
+      unit.hp = Math.min(unit.base.hp, unit.hp + real);
+      return { events: [{ type:'heal', unitId:unit.id, msg:'🎵 共鸣之歌: ' + (unit.name||'单位') + ' 回复 ' + real }] };
+    }
+  } });
+
+/* 雷霆犬：雷鸣加速 —— 我方任一单位施放技能时 20% 几率使**自身**技能冷却 -1 回合。
+   ⚠️ 作者裁决：只对持有者自己的技能生效；直接改 unit.counters.cd（不通过 mutation 跨单位误伤）。 */
+registerTalent({ id:'thunder_haste', name:'雷鸣加速', desc:'我方任一单位发动技能时20%几率自身技能冷却-1', petOnly:true,
+  config: { chance: 0.20 },
+  hooks: {
+    onAllyCastSkill: function (unit) {
+      if (!unit || unit.hp <= 0) return;
+      if (battleRnd() >= talentConfig('thunder_haste', 'chance', 0.20)) return;
+      var cd = unit.counters && unit.counters.cd;
+      if (!cd) return;
+      var hit = false;
+      for (var k in cd) { if (cd[k] > 0) { cd[k]--; hit = true; } }
+      if (!hit) return;
+      return { events: [{ msg:'⚡ 雷鸣加速: ' + (unit.name||'单位') + ' 技能冷却 -1' }] };
     }
   } });
 

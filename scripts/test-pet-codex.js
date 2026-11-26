@@ -58,7 +58,8 @@ assert('宠物 tags', unit.tags.includes('pet') && unit.tags.includes('UR'));
 const petR = sandbox.createPet({ speciesId: 'sparkle', rarity: 'R', name: '闪闪星' });
 petR.stage = 'mature';
 const unitR = sandbox.createPetUnit(petR);
-assert('R 宠物无天赋', unitR._talents.length === 0);
+/* v2.14.17：R 闪闪星新增 sparkle_guard，R 宠物不再「无天赋」 */
+assert('R 宠物天赋为图鉴固有值', unitR._talents.length === 1 && unitR._talents[0] === 'sparkle_guard', unitR._talents.join(','));
 assert('R 基础属性', unitR.base.hp === 100 && unitR.base.atk === 10);
 
 // ---- 4. 宠物技能注册 ----
@@ -66,7 +67,7 @@ const petSkillIds = ['p_shine','p_drench','p_sleep','p_flamepeck','p_sing','p_th
 petSkillIds.forEach(id => assert('宠物技能注册: ' + id, sandbox.getSkill(id) !== null));
 
 // ---- 5. 宠物天赋注册 ----
-const petTalentIds = ['lucky_pocket','dark_eye','winter_core','holy_guard','mirror_field','inspiration','mind_eye','fighter_instinct','immovable','pressure_field'];
+const petTalentIds = ['lucky_pocket','dark_eye','winter_core','holy_guard','mirror_field','inspiration','mind_eye','fighter_instinct','immovable','pressure_field','pig_snore','rain_sprint','sparkle_guard','flame_spirit','stone_thorns','chirp_sustain','thunder_haste'];
 petTalentIds.forEach(id => assert('宠物天赋注册: ' + id, sandbox.getTalent(id) !== null));
 
 // ---- 6. 宠物参战（接群战）----
@@ -81,8 +82,12 @@ assert('宠物参与行动', gb.log.some(l => l.unit === '梦幻' || l.unit === 
 // ---- 7. 天赋固有专属（v2.1.4 按 design-v2.0.md §2.6 回退「槽位解锁」）----
 // 每只宠物的天赋固定为图鉴定义值：不可解锁、不可跨宠物装配。
 const T = id => sandbox.getPetTalents(sandbox.createPet({ speciesId: id, rarity: sandbox.getPetCodex(id).rarity }));
-assert('R 闪闪星无天赋', T('sparkle').length === 0);
-assert('SR 火焰鸡无天赋', T('flamechick').length === 0);
+assert('R 闪闪星=星芒庇护', JSON.stringify(T('sparkle')) === '["sparkle_guard"]', JSON.stringify(T('sparkle')));
+assert('R 水水滴=雨中疾行', JSON.stringify(T('waterdrop')) === '["rain_sprint"]', JSON.stringify(T('waterdrop')));
+assert('SR 火焰鸡=斗志昂扬', JSON.stringify(T('flamechick')) === '["flame_spirit"]', JSON.stringify(T('flamechick')));
+assert('SR 坚强岩=磐石反噬', JSON.stringify(T('rocksteady')) === '["stone_thorns"]', JSON.stringify(T('rocksteady')));
+assert('SR 清脆鸟=共鸣之歌', JSON.stringify(T('chirpbird')) === '["chirp_sustain"]', JSON.stringify(T('chirpbird')));
+assert('SR 雷霆犬=雷鸣加速', JSON.stringify(T('thunderdog')) === '["thunder_haste"]', JSON.stringify(T('thunderdog')));
 assert('SSR 小负鼠=幸运口袋', JSON.stringify(T('possum')) === '["lucky_pocket"]', JSON.stringify(T('possum')));
 assert('SSR 黑暗鸦=漆黑之眼', JSON.stringify(T('darkcrow')) === '["dark_eye"]', JSON.stringify(T('darkcrow')));
 assert('SSR 小冰晶=凛冬之核', JSON.stringify(T('icecrystal')) === '["winter_core"]', JSON.stringify(T('icecrystal')));

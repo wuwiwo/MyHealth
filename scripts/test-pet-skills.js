@@ -405,8 +405,10 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
   assert('§2.12 单次伤害 200~290% → [220,310]', JSON.stringify(sk.range.power) === '[220,310]');
   assert('§2.12 声明蓄力 1 回合', sk.charge === true);
   /* v2.14.8 作者平衡调整：敌群/宠物技能只用「恒敌方」口径（不再攻击友方）→ foeChance 恒 [1,1] */
-  assert('§2.12 弹射参数（3 次 / 每次 +10% / 敌方恒 100% = 不攻击友方）',
-    JSON.stringify(sk.bounce) === '{"times":3,"dmgUp":0.1,"foeChance":[1,1]}', JSON.stringify(sk.bounce));
+  /* v2.14.17：自愈 ×0.6（治疗 -40%）→ healScale:0.6 */
+  assert('§2.12 弹射参数（3 次 / 每次 +10% / 敌方恒 100% / 自愈×0.6）',
+    sk.bounce.times === 3 && sk.bounce.dmgUp === 0.1
+    && JSON.stringify(sk.bounce.foeChance) === '[1,1]' && sk.bounce.healScale === 0.6, JSON.stringify(sk.bounce));
   const caster = petUnit('p-db', '梦幻', { hp: 300, atk: 30, def: 20, soulAtk: 300, soulDef: 15, spd: 9 },
     ['pet', 'UR'], ['p_dreamball'], 0);
   const enemies = [1, 2, 3].map(function (i) { return foe('e-db' + i); });
@@ -499,8 +501,9 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
 {
   const sk = skill('p_warmight');
   assert('§2.14 目标 → 随机 2 名友方（ally2）', sk.target === 'ally2');
-  assert('§2.14 区间：升幅[150,300] / 吸血[5,50] / 技能吸血[7.5,32.5]',
-    JSON.stringify(sk.range) === '{"atkBoost":[150,300],"lifesteal":[5,50],"skillLifesteal":[7.5,32.5]}', JSON.stringify(sk.range));
+  /* v2.14.17：吸血 5~50% → 10~100% */
+  assert('§2.14 区间：升幅[150,300] / 吸血[10,100] / 技能吸血[7.5,32.5]',
+    JSON.stringify(sk.range) === '{"atkBoost":[150,300],"lifesteal":[10,100],"skillLifesteal":[7.5,32.5]}', JSON.stringify(sk.range));
 
   const UR_BASE = { hp: 300, atk: 30, def: 20, soulAtk: 20, soulDef: 15, spd: 9 };
   const caster = petUnit('p-wm', '圣光麒麟', UR_BASE, ['pet', 'UR'], ['p_warmight'], 0);
@@ -517,17 +520,18 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     fx.buffs[0].modsPct.atk != null && fx.buffs[0].modsPct.soulAtk == null, JSON.stringify(fx.buffs[0].modsPct));
   assert('§2.14 「较高一项」：魂攻高 → 只加魂攻（不加攻击）',
     fx.buffs[1].modsPct.soulAtk != null && fx.buffs[1].modsPct.atk == null, JSON.stringify(fx.buffs[1].modsPct));
-  assert('§2.14 t=0：升幅 150% / 吸血 5% / 技能吸血 7.5%',
-    Math.abs(fx.buffs[0].value - 1.5) < 1e-9 && Math.abs(fx.buffs[0].lifesteal - 0.05) < 1e-9 &&
+  assert('§2.14 t=0：升幅 150% / 吸血 10% / 技能吸血 7.5%',
+    Math.abs(fx.buffs[0].value - 1.5) < 1e-9 && Math.abs(fx.buffs[0].lifesteal - 0.10) < 1e-9 &&
     Math.abs(fx.buffs[0].skillLifesteal - 0.075) < 1e-9, JSON.stringify(fx.buffs[0]));
   const fxFull = sandbox.applySkillEffects(sk, casterFull, [atkHi], {});
-  assert('§2.14 t=1：升幅 300% / 吸血 50% / 技能吸血 32.5%',
-    Math.abs(fxFull.buffs[0].value - 3.0) < 1e-9 && Math.abs(fxFull.buffs[0].lifesteal - 0.50) < 1e-9 &&
+  assert('§2.14 t=1：升幅 300% / 吸血 100% / 技能吸血 32.5%',
+    Math.abs(fxFull.buffs[0].value - 3.0) < 1e-9 && Math.abs(fxFull.buffs[0].lifesteal - 1.0) < 1e-9 &&
     Math.abs(fxFull.buffs[0].skillLifesteal - 0.325) < 1e-9, JSON.stringify(fxFull.buffs[0]));
-  /* v2.14.8：先制度 +1 走 buff 载荷（引擎侧写进 warmight.data.priority，见下方落地断言） */
-  assert('§2.14 buff 载荷携带 priorityBonus = 1（先制度 +1）',
-    fx.buffs[0].priorityBonus === 1 && fxFull.buffs[0].priorityBonus === 1,
+  /* v2.14.17：先制度改为技能自身 priority:1，不再走 buff 载荷 */
+  assert('§2.14 buff 载荷不再携带 priorityBonus（先制度改技能自身）',
+    fx.buffs[0].priorityBonus == null && fxFull.buffs[0].priorityBonus == null,
     JSON.stringify({ t0: fx.buffs[0].priorityBonus, t1: fxFull.buffs[0].priorityBonus }));
+  assert('§2.14 技能自身 priority = 1', sk.priority === 1, String(sk.priority));
 
   /* ---- 落地：castSkill 把 buff 变成状态（atkup 键由「较高一项」决定 + warmight 吸血） ---- */
   const gb = sandbox.createGroupBattle({ allies: [caster, atkHi, soulHi], enemies: [foe('e-wm')], seed: 31 });
@@ -549,25 +553,32 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
     sandbox.effectiveStat(wmSoul, 'soulAtk') === Math.floor(wmSoul.base.soulAtk * 2.5) &&
     sandbox.effectiveStat(wmSoul, 'atk') === wmSoul.base.atk,
     JSON.stringify({ aAtk: sandbox.effectiveStat(atkHi, 'atk'), sSoul: sandbox.effectiveStat(wmSoul, 'soulAtk') }));
-  /* v2.14.8「先制度 +1」真的进出手分档：warmight 实例带 data.priority=1，
-     unitPriorityRank 把它加在技能先制档之上（先制度是独立分档，不是速度加成） */
+  /* v2.14.17：先制度改为**技能自身** priority:1 —— warmight 实例不再带 data.priority，
+     施法者（圣光麒麟）在预声明 p_warmight 时进先制档；被灌注友方不再获得先制。 */
   const wmHolder = gb.allies.filter(function (u) { return u.id === 'wm-atk'; })[0];
   const wmInst = wmHolder.statuses.filter(function (s) { return s.id === 'warmight'; })[0];
-  assert('§2.14 先制度 +1 落到 warmight 实例（data.priority = 1）',
-    wmInst && wmInst.data && wmInst.data.priority === 1, JSON.stringify(wmInst && wmInst.data));
-  assert('§2.14 先制度 +1 真的抬高出手分档（unitPriorityRank 1 vs 未持有者 0）',
-    sandbox.unitPriorityRank(wmHolder, gb) === 1 && sandbox.unitPriorityRank(caster, gb) === 0,
-    JSON.stringify({ holder: sandbox.unitPriorityRank(wmHolder, gb), caster: sandbox.unitPriorityRank(caster, gb) }));
-  /* 分档真的改变队列顺序：把持者速度调到最低，仍应先于速度更高的未持有者出手 */
+  assert('§2.14 warmight 实例不再携带 data.priority',
+    !(wmInst && wmInst.data && wmInst.data.priority), JSON.stringify(wmInst && wmInst.data));
   {
-    const slow = sandbox.createUnit({ id: 'wm-slow', side: 'ally', name: '慢', base: { hp: 500, atk: 10, def: 10, soulAtk: 10, spd: 1 } });
-    const fast = sandbox.createUnit({ id: 'wm-fast', side: 'ally', name: '快', base: { hp: 500, atk: 10, def: 10, soulAtk: 10, spd: 30 } });
-    const gbq = sandbox.createGroupBattle({ allies: [slow, fast], enemies: [foe('e-wmq')], seed: 77 });
-    sandbox.applyStatus(slow, { id: 'warmight', duration: 2, data: { ls: 0.05, sls: 0.1, priority: 1 } });
-    gbq._declaredTurn = null;                       // held 口径（未做预声明）
-    const q = sandbox.buildActionQueue(gbq);
-    assert('§2.14 先制度 +1 真的改变出手顺序（慢速持者仍在高速未持有者之前）',
-      q[0].id === 'wm-slow', q.map(function (u) { return u.id + '(' + u.base.spd + ')'; }).join(','));
+    // 我方先制单位在准备阶段声明后，unitPriorityRank 读到技能自身 priority=1
+    const gbp = sandbox.createGroupBattle({ allies: [caster, atkHi], enemies: [foe('e-wmq')], seed: 78 });
+    gbp.turn = 0;
+    caster._declaredTurn = null;
+    atkHi._declaredTurn = null;
+    caster.counters = { cd:{} };
+    // 固定 pickSkill 只返回 p_warmight 以稳定断言
+    const origPick = sandbox.pickSkill;
+    sandbox.pickSkill = function () { return 'p_warmight'; };
+    sandbox.predeclareActions(gbp);
+    sandbox.pickSkill = origPick;
+    assert('§2.14 我方先制技能预声明后 unitPriorityRank = 1',
+      sandbox.unitPriorityRank(caster, gbp) === 1 && sandbox.unitPriorityRank(atkHi, gbp) === 0,
+      JSON.stringify({ caster: sandbox.unitPriorityRank(caster, gbp), holder: sandbox.unitPriorityRank(atkHi, gbp) }));
+    /* 分档真的改变队列顺序：施法者速度调到最低，仍应先于高速单位出手 */
+    caster.base.spd = 1; atkHi.base.spd = 30;
+    const q = sandbox.buildActionQueue(gbp);
+    assert('§2.14 先制度真的改变出手顺序（慢速施法者仍在高速单位之前）',
+      q[0].id === caster.id, q.map(function (u) { return u.id + '(' + u.base.spd + ')'; }).join(','));
   }
 
   /* ---- 吸血（普攻通道）：与天赋「嗜血」叠加 ---- */
@@ -614,8 +625,9 @@ assert('§2.5 未新增 p_fortify 专属技能', skill('p_fortify') === null);
   gb4.turn = 1;
   sandbox.castSkill(gb4, caster, 'p_warmight');
   const mData = mirrorHolder.statuses.filter(function (s) { return s.id === 'warmight'; })[0].data;
-  assert('§2.14 镜像结界放大吸血（我方来源 ×1.25：5% → 6.25%）',
-    Math.abs(mData.ls - 0.0625) < 1e-9, JSON.stringify(mData));
+  /* v2.14.17：t=0 吸血 10% → ×1.25 = 12.5% */
+  assert('§2.14 镜像结界放大吸血（我方来源 ×1.25：10% → 12.5%）',
+    Math.abs(mData.ls - 0.125) < 1e-9, JSON.stringify(mData));
 }
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');

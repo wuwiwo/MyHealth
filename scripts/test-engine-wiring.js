@@ -199,8 +199,9 @@ console.log('\n[2] 先制度 = 本回合真用了先制技能才先手');
       if (sb.SKILLS[id] && sb.SKILLS[id].priority) allyPrio.push('pet:' + sp + '.' + id);
     });
   });
-  assert('口径边界：全表里带 priority 的技能只有那 3 个敌群技能（我方不参与预声明无影响）',
-    allyPrio.length === 0, allyPrio.join(','));
+  /* v2.14.17：战意灌注（圣光麒麟）改为技能自身 priority:1，我方先制技能唯一合法来源是它。 */
+  assert('口径边界：我方带 priority 的技能只有 p_warmight',
+    allyPrio.length === 2 && allyPrio.every(function (s) { return /p_warmight/.test(s); }), allyPrio.join(','));
   assert('玩家技能表（skills.js）确实没有 priority 字段',
     !/priority/.test(load('skills.js')), 'skills.js 里出现了 priority');
 

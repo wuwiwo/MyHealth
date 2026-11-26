@@ -196,6 +196,31 @@ function talentAura(units, hook, ctx) {
   return out;
 }
 
+/* v2.14.17 磐石反噬：对攻击者结算一次「定值反弹」。
+   ⚠️ 与 reflectFlat 的区别：不按攻击者防御/魂防做减法（val 已是最终基数），
+      但攻击者的减伤天赋/状态（dmgTakenReduce / dmgReduce / soulDmgReduce）、护盾、格挡仍然生效。 */
+function applyReflectMitigated(gb, attacker, val, events, label) {
+  if (!attacker || attacker.hp <= 0 || !(val > 0)) return;
+  var dmg = Math.max(1, Math.floor(val));
+  var ctx = { isPlayerAttack:false, isPhysical:false, isSkill:false, amount:dmg, attacker:null, target:attacker };
+  var td = talentDispatch(attacker, 'onDamage', ctx);
+  var sd = dispatch(attacker, 'onDamage', ctx);
+  td.mutations = td.mutations.concat(sd.mutations);
+  td.mutations.forEach(function (m) {
+    if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));
+    if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
+    if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * (1 - m.value));
+  });
+  if (attacker.side === 'ally' && typeof playerBlockHook === 'function') {
+    var blocked = playerBlockHook(attacker, dmg);
+    if (blocked < dmg) { dmg = blocked; events.push({ msg:'🛡️ ' + attacker.name + ' 格挡！', targetId:attacker.id, type:'status' }); }
+  }
+  var sh = absorbShield(attacker, dmg);
+  if (sh.absorbed > 0) { dmg = sh.dmg; events.push({ msg:'🛡️ ' + attacker.name + ' 护盾吸收 ' + sh.absorbed + ' 反伤', targetId:attacker.id, type:'status' }); }
+  attacker.hp = Math.max(0, attacker.hp - dmg);
+  events.push({ msg:'🪨 ' + (label||'反噬') + ' → ' + (attacker.name||'攻击者') + ' 反弹 ' + dmg + ' 伤害', targetId:attacker.id, type:'damage' });
+}
+
 /* 天赋暴击判定（斗者本能）：返回 {chance, mult} */
 function talentCrit(actor) {
   var td = talentDispatch(actor, 'onBeforeCrit', {});
@@ -490,7 +515,21 @@ function predeclareActions(gb) {
     /* 清掉**上一回合**的残留声明：单位阵亡 / 被跳过行动时，旧声明不该一直挂着。 */
     u._declared = null; u._declaredTurn = null; u._declaredUsed = null; u._declUnused = false;
     if (u.hp <= 0) return;
-    if (u.side !== 'enemy') return;               // 我方不声明（见上文）
+    /* v2.14.17 作者裁决（战意灌注先制度改为技能本身）：我方**先制技能持有者**也要预声明，
+       否则 unitPriorityRank 的 declared 分支读不到技能自身 priority（我方恒为 0）。
+       ⚠️ 只对「拥有先制技能」的我方单位声明，且走**行动阶段同一个 pickSkill**（同一 RNG 序列），
+          行动阶段由 takeDeclaredAction 消费；非先制单位维持原样（不声明、行动阶段随机选）。
+       这样先制技能的先手权在准备阶段确定，与 v2.4.8「本回合真用了先制技能才先手」同口径。 */
+    if (u.side !== 'enemy') {
+      var usable = (typeof usableSkills === 'function') ? usableSkills(u) : (u.skills || []);
+      var hasPrio = usable.some(function (sid) { return priorityRankOfSkill(sid) > 0; });
+      if (!hasPrio) return;
+      u._declared = { skillId: (typeof pickSkill === 'function') ? pickSkill(u) : usable[0], targetIds: [] };
+      u._declaredTurn = turn;
+      u._declaredUsed = null;
+      u._declUnused = true;
+      return;
+    }
     if (unitPriorityRank(u, gb) <= 0) return;     // 没有可用先制技能 → 分档无关，不掷骰
     var d = aiDecide(gb, u);
     if (!d) return;
@@ -557,6 +596,11 @@ function takeDeclaredAction(gb, actor) {
       target: alive.length > 1 ? alive : (alive.length === 1 ? alive[0] : null),
       skillDef: d.skillId ? ((typeof SKILLS !== 'undefined' && SKILLS[d.skillId]) || null) : null
     };
+  }
+  /* v2.14.17：我方先制单位声明失效（技能进 CD 等）→ 当场用 pickSkill 重选；
+     敌方仍走 aiDecide。两边都保持「一次行动消费一次声明」。 */
+  if (actor && actor.side !== 'enemy') {
+    return { skillId: (typeof pickSkill === 'function') ? pickSkill(actor) : null, target: null };
   }
   return aiDecide(gb, actor);        // 失效 / 二次行动 → 当场重选（复用同一个 AI 函数）
 }
@@ -760,6 +804,8 @@ function normalAttack(gb, actor, target, dmgMult) {
     /* 反伤只打攻击者。原实现在这里顺手把 target.hp 也扣了一次，
        而下方结算又会扣一遍 —— 等于「粗糙皮肤」让受击方吃双倍伤害（v2.1.15 修）。 */
     if (m.key === 'reflectFlat') { actor.hp = Math.max(0, actor.hp - m.value); events.push({ msg: '🩸 ' + target.name + ' 粗糙皮肤 → ' + (actor.name || '攻击者') + ' 反伤 ' + m.value, targetId: actor.id, type: 'damage' }); }
+    /* v2.14.17 磐石反噬：定值反弹，过攻击者减伤/护盾/格挡，但不过防御（见 applyReflectMitigated） */
+    if (m.key === 'reflectMitigated') applyReflectMitigated(gb, actor, m.value, events, target.name + ' 磐石反噬');
     if (m.key === 'dmgTakenBoost') dmg = Math.floor(dmg * (1 + m.value));
     /* WP-C（单源化）：魔法盾 magicshield 的 soulDmgReduce 此前**只读生产端以外的硬编码 ×0.7**
        （生产端 talent.js 给 0.3，恰好等价，但改生产端不生效、且镜像/裁决调整会静默漂移）。
@@ -881,6 +927,7 @@ function applyPlayerSkillDamage(gb, actor, target, rawAmount, label) {
     if (m.key === 'dmgTakenReduce') dmg = Math.floor(dmg * (1 - m.value));
     if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
     if (m.key === 'soulDmgReduce') dmg = Math.floor(dmg * (1 - m.value));
+    if (m.key === 'reflectMitigated') applyReflectMitigated(gb, actor, m.value, events, target.name + ' 磐石反噬');
   });
   /* 护盾先行吸收（与普攻/技能同一实现） */
   var absorbed = 0;
@@ -1084,6 +1131,8 @@ function castSkill(gb, actor, skillId, opts) {
             /* v2.4.7（§8.5-2）：懒惰「放弃行动回合自身受到伤害降低」对**技能伤害**同样生效 ——
                生产端 lazy.onDamage 只看「本单位是否受击 / 本回合是否放弃行动」，不区分伤害通道。 */
             if (m.key === 'dmgReduce') dmg = Math.floor(dmg * (1 - m.value));
+            /* v2.14.17 磐石反噬（技能通道同样生效） */
+            if (m.key === 'reflectMitigated') applyReflectMitigated(gb, actor, m.value, events, t.name + ' 磐石反噬');
           });
           /* v2.9.0（作者裁决 5）：**技能不触发暴击** —— 原先这里走 groupCritMult()
              （天赋「斗者本能」30%/150% × 玩家/宠物暴击档 30%/300%、15%/160%），
@@ -1398,6 +1447,18 @@ function castSkill(gb, actor, skillId, opts) {
     events.push({ msg: '💀 ' + actor.name + ' 遗言：自我牺牲阵亡', targetId: actor.id, type: 'status' });
   }
 
+  /* v2.14.17：我方任一单位**真正施放技能**后，派发 onAllyCastSkill 给我方全体（清脆鸟自愈 / 雷霆犬减 CD）。
+     放在此处（设置冷却前、所有效果已落地后），保证：
+       · 蓄力首次施放已在 :1007 早退 → 不会触发（只有真正放出来才算）；
+       ·  successes only —— def 不存在 / 技能被禁等早退路径都到不了这里。
+     ctx.caster/skillId 让 hook 可区分「是不是自己放的」。 */
+  if (actor.side === 'ally') {
+    var allyCast = talentAura(gb.allies, 'onAllyCastSkill', { caster: actor, skillId: skillId });
+    allyCast.events.forEach(function (e) { if (e && e.msg) events.push({ msg: e.msg, targetId: e.targetId || actor.id, type: e.type || 'buff' }); });
+    /* 减 CD mutation 的持有者由 hook 自己改 unit.counters.cd（见 thunder_haste），
+       mutation 仅作事件/统计标记，消费端在这里只合并事件，不改其他单位的冷却。 */
+  }
+
   // 设置冷却（WP-C：蓄力载荷的释放当回合**不再重设** —— 冷却已在蓄力当回合起算）
   if (!opts.releasing) setSkillCooldown(actor, skillId, def.cooldown || 1);
   return events;
@@ -1635,7 +1696,9 @@ function runPhasePrepare(gb) {
     var auraCtx = {
       turn: turn,
       allyUnits: u.side === 'ally' ? gb.allies : gb.enemies,
-      enemyUnits: u.side === 'ally' ? gb.enemies : gb.allies
+      enemyUnits: u.side === 'ally' ? gb.enemies : gb.allies,
+      /* v2.14.17 雨中疾行：准备阶段 onTurnStart 需要知道当前场地是不是雨天 */
+      terrain: gb.terrain || null
     };
     var ts = talentDispatchPhase(u, 'onTurnStart', auraCtx, 'prepare');
     ts.events.forEach(function (e) { evts.push({ msg: e.msg, targetId: e.targetId, type: e.type }); });
@@ -1958,6 +2021,11 @@ function groupUnitTurn(gb, actor) {
       var ai = takeDeclaredAction(gb, actor);
       skillId = ai.skillId;
       actTarget = ai.target;
+    } else if (actor._declaredTurn === gb.turn && actor._declared) {
+      /* v2.14.17：我方先制技能持有者在准备阶段已声明（见 predeclareActions），
+         行动阶段消费同一声明；无有效声明时 takeDeclaredAction 内部已回落到 pickSkill。 */
+      var allyD = takeDeclaredAction(gb, actor);
+      skillId = allyD.skillId;
     } else {
       // 玩家：优先施放装备的攻击类玩家技能（陨石/冰魄/巨石）
       var ps = playerAttackSkillPick(gb, actor)

@@ -292,7 +292,9 @@ function calcSkillDamage(skill, caster, targets, ctx) {
       hitOne(pick, 1 + (b.dmgUp || 0) * landed);
       landed++;
     }
-    selfHealAmount = missed * base;
+    /* v2.14.17 作者调整：梦幻光球「治疗 -40%」—— 未发动次数的自愈量 ×0.6。
+       healScale 可配置（默认 1 = 旧行为），目前只有 p_dreamball 传 0.6。 */
+    selfHealAmount = missed * base * (b.healScale > 0 ? b.healScale : 1);
   } else if (skill.multiHit) {
     var pool = (ctx.pool && ctx.pool.length) ? ctx.pool : targets;
     for (var hi = 0; hi < skill.multiHit && pool.length; hi++) {

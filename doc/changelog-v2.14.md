@@ -5,6 +5,57 @@
 
 ---
 
+## v2.14.17
+
+Date: 2026-11-26
+
+**宠物天赋补齐（R/SR 6 只新增）+ 战意/梦幻/不动如山数值调整**（作者规格 10 项，施工记录见 `doc/plans/v2.14.17-施工记录.md`）。三项口径经作者裁决：① 先制度改引擎让我方生效；② 磐石反噬**过减伤但不过防御**；③ 雷鸣加速 CD-1 **只对持有者自己的技能**。
+
+### 新增功能
+
+1. **6 条 R/SR 宠物专属天赋**（`page/pet-codex.js`，全部 `petOnly:true`、固有、忽略存档）：
+   - **水水滴 · 雨中疾行**：雨天（`gb.terrain.id === 'rain'`）时 `base.spd ×2`，回合末还原（`phase:'prepare'` + `onTurnStart`/`onTurnEnd`，灵感涌动同口径）。
+   - **闪闪星 · 星芒庇护**：受击 **40%** 几率 `dmgTakenReduce 0.25`。
+   - **火焰鸡 · 斗志昂扬**：攻击（`onAfterDamage`）/ 受击（`onDamage`）各 **25%** 几率 `base.spd +1`，**本场永久累积**。
+   - **坚强岩 · 磐石反噬**：受击反弹 `(自身def + 自身soulDef) ×10%`，**不按敌人防御做减法**，但敌人的减伤天赋 / 护盾 / 格挡仍生效。
+   - **清脆鸟 · 共鸣之歌**：我方任一单位真正施放技能后，自身回 **2%** 最大生命。
+   - **雷霆犬 · 雷鸣加速**：我方任一单位真正施放技能后 **20%** 几率使**自身**技能冷却全部 **-1**（只改持有者自己的 `counters.cd`）。
+2. **新引擎钩子**（`page/battle-group.js`）：
+   - `onAllyCastSkill`：`castSkill` 成功施放后对我方全体派发（蓄力首次施放的早退路径不触发），清脆鸟 / 雷霆犬共用。
+   - `reflectMitigated` mutation：定值反弹，新增通用消费函数 `applyReflectMitigated()`，覆盖普攻 / 技能 / 玩家主动技能三条受击通道。
+   - 准备阶段 `onTurnStart` 的 ctx 补 `terrain: gb.terrain`（雨中疾行判定用）。
+   - `predeclareActions` 扩展为**我方先制技能持有者也预声明**（走同一个 `pickSkill`，不额外掷骰），行动阶段由 `takeDeclaredAction` 消费；否则技能级 `priority` 对我方恒 1/0 —— 这是让战意灌注先制度真正生效的前提。
+
+### 修复 / 数值调整
+
+1. **不动如山每回合恢复 3% 最大生命**（`immovable.onTurnEnd`，满血不空放、带事件）。
+2. **战意灌注吸血 5%~50% → 10%~100%**（`range.lifesteal`；技能吸血 7.5%~32.5% 不变）。
+3. **梦幻光球治疗 -40%**：`skill.js` bounce 分支 `selfHealAmount = missed × base × healScale`，`p_dreamball` 传 `healScale:0.6`（默认 1，不影响其他 bounce 技能）。
+4. **战意灌注先制度语义反转**：技能自身 `priority:1`，删除给被灌注友方的 `priorityBonus:1` 与 `warmight.data.priority` 写入。
+
+### 测试
+
+- 新增 `scripts/test-pet-v21417.js` **48 断言 / 0 失败**：逐项验证 10 项改动（含 200 次采样触发率、雨天/非雨天、CD 只改自己、反弹过减伤不过防御）。
+- 更新 4 个既有套件的旧口径断言（**未弱化**）：`test-engine-wiring`（我方唯一先制技能 = `p_warmight`）、`test-pet-codex`（R/SR 天赋挂载）、`test-pet-skills`（吸血区间 / 先制度改技能自身 / 镜像缩放）、以及随之修正的 t=0/t=1 数值。
+- 全量 **80 套件 / 3405 断言 / 0 失败**（`test-ai.js` 本次未 flaky）。
+- 缓存戳 `page/index.html` 全部 `?v180` → **`?v181`**（55 处）；`APP_VERSION` → **2.14.17**。
+
+### 文件
+
+- **新增**：`scripts/test-pet-v21417.js`、`doc/plans/v2.14.17-施工记录.md`。
+- **修改**：`page/pet-codex.js`、`page/battle-group.js`、`page/skill.js`、`page/utils.js`、`page/index.html`、`scripts/test-engine-wiring.js`、`scripts/test-pet-codex.js`、`scripts/test-pet-skills.js`、`README.md`、`doc/changelog-v2.14.md`、`doc/VERSION-LEDGER.md`。
+- **删除**：无。**未新增 `page/*.js`**（架构演化表 JS 文件数仍 **53**）。
+
+### ⚠️ 待裁决 / 未覆盖
+
+1. **真机浏览器未复核**：新天赋的执行链路均为源码 + Node 测试验证，未做 CDP 390/360 目视。
+2. **雨中疾行的只在准备阶段判定天气**：若回合中天气变化（当前引擎无此机制），本回合速度不跟随。
+3. **斗志昂扬的永久加速**每回合可叠，长期战斗速度无上限（按作者字面「直到战斗结束」实现）。
+4. **磐石反噬**对玩家攻击者的格挡走 `playerBlockHook`，对敌方无格挡（引擎现状）；反弹下限 1。
+5. **我方预声明**目前只对「拥有先制技能的我方单位」启用，非先制单位维持行动阶段随机选（保持 RNG 序列与旧行为一致）；若未来我方新增多个先制技能，声明窗口需复核。
+
+---
+
 ## v2.14.16
 
 Date: 2026-11-04
@@ -983,6 +1034,7 @@ Date: 2026-10-12
 | v2.14.14 | 53 | （见 changelog） | **敌群战斗自动战斗**。控制条新增「▶ 自动 / ⏸ 自动中」（`#gbAuto`，`aria-pressed`），**默认关**、开战重置、**不持久化**；速度档 **×1/×2/×4（默认 ×2）**，间隔 = 基准 700ms（气泡 900ms）÷ 档位 = **700/350/175ms**，键 **`dh-group-auto-speed`**（与 `dh-battle-speed`、旧 `dh-group-speed` 均不同，旧键读兜底+写镜像、`8→4` 归一）。**推进复用同一个入口**：`_groupAutoStep()` 只有一句 `_groupStep()`，`#gbAuto` 与手动 `#gbStep` 同签名调用 `_groupStep()`（**无第二份逻辑**），入口有 `_groupAutoStepBusy` + `try/finally` 重入守卫，**无 setInterval**。**四个停止条件**：① `_groupDone()` 结束停 ② 点 ⏸ 停 ③ `#gbClose`/`switchTab`/`onBattleVisibilityChange(document.hidden)`/每拍 `groupAutoViewActive()` 复核 → 停并清定时器 ④ 详情/技能/天赋弹层 `pauseGroupBattle()` **降级为暂停**且关弹层不自动续跑。**定时器唯一清理点 `cancelGroupAutoTimer()`**（结束/暂停/关闭/改档/开新战全经过）。**幂等**沿用 `_groupRewarded`（再推进 100 次奖励仍 1 次）。新增 `test-group-auto.js` **135 断言**（同 seed 下自动 10 拍 ≡ 手动 10 次；结束/切 tab/visibility 定时器为 null 且冻结；奖励幂等；三档与键隔离；默认关；重入守卫；样式契约）；全量 **78 套件 0 失败** + a11y **40/40**；真浏览器验证通过（刷新后速度继承 ×4、自动仍关），axe **0 violations**。**顺带修**：按下态在 `.speed-btn:hover` 反色下 **3.49:1**（axe serious）→ 加 `:not(:hover)`。⚠️ 行为变更：旧 `_groupMode`（默认 auto、持久化）被取代 → 开战不再自动走第一拍、不再写 `dh-group-mode`、旧 ×8 归一为 ×4、开详情后不再自动续跑；结算面板展示推进未停；`_groupSpeed` 收敛为单一赋值（节奏=特效档位） |
 | 2.14.15 | 53 | （见 changelog） | **敌群「自动连打下一关」**。v2.14.14 只做自动出手，本版补自动进关：`_groupDone()`（结算+发奖+记通关+写历史之后）→ `_armGroupAutoNext()` → `groupNextStageId()`（`allStageIds()` 线性顺序，与 `markGroupStageCleared` 同一份表）→ `scheduleGroupChain()`（**`GROUP_AUTO_NEXT_MS=1400ms`**）→ `_groupChainEnter()`（复核 `_groupAuto`/`_groupPaused`/`groupAutoViewActive()`）→ `closeGroupSettlementPanel()` → **`startGroupTrial(next)`（唯一开战入口，与关卡列表点击同一全局符号）** → 安全阀 → `_groupAuto=true` → `renderGroupOverlay()` + `_groupStep()`。**状态跨关**：`_groupDone` 开头置 false（结算期间不出手），胜利分支在全部副作用后重新置 true 并排队；`startGroupTrial` 内部会清开关，故 `_groupChainEnter` 在开战后再恢复 true，UI 不闪回。**四停**：胜→排队 1.4s 进下一关；负→清队列+清定时器+关自动、**不重试同关**、记原因；无下一关→停 + toast「🏁 已是最后一关」+ 战果文案 + 开关 title；手动 ⏸→立即停**并取消已排队的下一关**（`_groupChainNext=null` + 清两定时器）。切 tab/`document.hidden`/✕ 走同一 `stopGroupAuto` 链，落地前再复核视图。**安全阀**：必须「无异常 + 战斗对象换新 + 未结束 + `_groupStageId===next`」否则立即停（清队列、不重排、toast + console.warn 留痕）并回滚 `_groupStageId/_groupRewarded` 到上一关已结算状态，堵住「旧战斗 + 新 id → 奖励记到没打过的关」。**幂等**：连打 3 关 reward/cleared 各 1 次，再跑 40 拍仍 1；真机技能点 10→18→28、`winCountThisWeek` 2→3→4、history 5 条、progress g1-1…g1-5 各一次。**测试**：新增 `test-group-auto-next.js` **154 断言**（源码守卫、进关与跨关状态、逐关奖励、失败不排队、最后一关三处提示、⏸ 取消排队、四类离开路径整链停+定时器清零、两种安全阀、手动不受影响）；`test-group-auto.js` 135→**172**，仅 3 条随语义更新（胜利后 auto=true / aria-pressed=true /「⏳ 连打中」），失败分支原语义逐字保留，另新增 4 条按关计数。全量 **79 套件 0 失败**（6465 断言）+ a11y **40/40**。真机 g1-1→1.39s→g1-2→1.40s→g1-3 全程 auto；⏸ 窗口内取消后 4s 仍不跳关；切 tab 立即停。UI 三态「▶ 自动连打 / ⏸ 自动中 / ⏳ 连打中」（排队态绿虚线，仅既有令牌）。⚠️ 待裁决：自动下战报 stats 层被跳过（1400 < 2000ms）；最后一关提示无常驻横幅；连打状态不持久化；大关 id（`_groupStageId=null`）保守停止 |
 | 2.14.16 | 53 | 3314 行 game-render.js | **宝珠系统四项施工 + 培养页精简 / 出战阵容常驻**：分解等价碎片（`orbDecomposeShards = orbPct`，R·Lv1=10 / UR·Lv50=297）、恢复合成（20 碎片→R·Lv1、100%、每日 5 次、`orbSynth` 随 `pets` 同步）、5 枚宝珠图标 SVG + `orbIconHtml` 唯一入口、修复 2（`u8.stat` → `u8.pct`）、库存 / 宠物列表 / 培养材料默认折叠、`.train-lineup` 常驻阵容（就地切换 + 开战走 `startGroupTrialWithPets` 唯一入口）；全量 **79 套件 / 0 失败**、a11y **40/40**；新增 5 个 SVG、**无新增 `page/*.js`**、无删除文件；缓存戳 `?v179` → `?v180` |
+| 2.14.17 | 53 | 3314 行 game-render.js | **宠物天赋补齐 6 条（R/SR）+ 战意/梦幻/不动如山数值调整**：不动如山每回合回血 3%、战意吸血 10~100%、梦幻光球自愈 -40%、战意先制度改技能自身 priority:1（引擎 predeclareActions 扩展我方）、雨中疾行（雨天 spd×2）、星芒庇护（受击 40% 减伤 25%）、斗志昂扬（攻/受击 25% spd+1）、磐石反噬（(def+soulDef)×10% 定值反弹过减伤不过防御，新 mutation reflectMitigated）、共鸣之歌（我方施技自回 2%）、雷鸣加速（我方施技 20% 自身 CD-1，新 hook onAllyCastSkill）；新增 test-pet-v21417（48 断言），全量 80 套件 / 3405 断言 0 失败；缓存戳 ?v181 |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版实测 **53**
 > （v2.13.0 的 52 + 本版新增 `page/fx-semantics.js`）。
