@@ -815,9 +815,19 @@ box-shadow:none}
 .gb-dual-st{overflow:hidden;text-overflow:ellipsis}
 .gb-dual-st.st-won{color:var(--green)}
 .gb-dual-st.st-lost{color:var(--red)}
-.gb-dual .gb-arena-row{max-height:var(--gb-dual-arena-h);gap:var(--sp-1);padding:4px 4px}
-.gb-dual .gb-arena-mid{height:var(--gb-dual-mid-h)}
+.gb-dual .gb-arena-row{max-height:none;gap:2px;padding:2px 2px}
+.gb-dual .gb-arena-mid{height:2px}
 .gb-dual .gb-side-hdr{font-size:var(--fs-xs)}
+/* v2.14.22（阶段 E 实机复核）：两栏各只有 156–183px 宽，标准芯片（56px）一行只放 2 个 →
+   5 宠要 3 行、加上 2 个阵营标题就超过广场高度，被 .gb-arena{overflow:hidden} 裁掉最后一行
+   （360×640 实测越界 153px）。双栏改用**紧凑芯片**：44×44（仍是 a11y 触摸下限，不缩水）、
+   头像 18px、名字 2xs —— 156px 一行可放 3 个，5 宠 2 行 + 3 敌 1 行刚好落在广场内。
+   中央区在双栏里只留 2px（特效落点仍由 gbFx 绝对定位层负责，不依赖它）。 */
+.gb-dual .gb-arena{--gb-unit-w:44px;--gb-unit-ico:18px;gap:2px}
+.gb-dual .gb-arena-unit{min-width:44px;min-height:44px;padding:2px 1px;gap:0}
+.gb-dual .gb-arena-unit .gb-name{font-size:var(--fs-2xs);max-width:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gb-dual .gb-arena-st{min-height:12px}
+.gb-dual .gb-arena-unit .gb-hp-wrap{height:4px}
 .gb-arena{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:2px}
 /* ⚠️ 为什么行高是 max-height 而不是 min-height（v2.4.2 实测修正）：
    原写法 min-height:20vh 会在**矮屏 + 密阵**下把 3 行硬撑到 3×128=384px（360×640 时广场只有 ~450px 可用，

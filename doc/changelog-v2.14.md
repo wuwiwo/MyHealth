@@ -5,6 +5,65 @@
 
 ---
 
+## v2.14.22
+
+Date: 2026-11-26
+
+**阶段 E：真机双栏复核 + 平衡实测定值**（设计 `doc/design-pet-squad-battle-v1.md` v1.2 §10.1 阶段 E）
+
+> 两件事：① 用**自建真机量测工具**（无头 Chrome + CDP）在 360×640 / 390×844 复核双栏，**抓到一个真实缺陷并修掉**；② 用**引擎直跑模拟**做 `MULTI_SCENE_ENEMY_SCALE` 的平衡实测，**定值 0.85 → 0.95**。
+
+### 新增功能
+
+1. **`scripts/verify-dual-layout.js`（真机双栏校验工具，非测试套件）**
+   - 无头 Chrome（`--headless=new --remote-debugging-port=9333`）+ Node 22 自带全局 `WebSocket` **自建 CDP 客户端**（本机无 Python、无 Playwright MCP，`bu` 平面无 JS eval）。
+   - 两个视口（360×640、390×844，`dsf=2`、`isMobile`）各跑一遍：`switchTab('game')` → 覆写 `getPetSquads` / `buildGroupBattlePets` 造 3 队（一队 4 宠、二队 4 宠、三队 1 宠）→ `startGroupTrial('g18-5')` → 量测 → 推 12 拍 → 截图落 `_tmp-dual-verify/`。
+   - **28 项断言**：两栏并排且同高、页面无横向溢出、栏头文案、每枚芯片相对其广场的四向越界、广场 `scrollHeight/clientHeight`、页签仍可见、推进后场景键合法。
+   - 工具自身的**假阳性修复**：战场 overlay 挂在「挑战」页签里，不先 `switchTab('game')` 会量到全 0 宽（首轮 4 项假红）。
+2. **`scripts/balance-dual.js`（平衡实测工具，非测试套件）**
+   - 同关同阵容、固定种子、直接驱动 `createDualBattle` + `dualStep`：**双场景＝8 宠分两队 + 每侧完整编成 × scale**；**基线＝同关单场景（4 宠 + 玩家、`winnerRule='all'`、scale 1.00）**。
+   - 两档阵容（普通：SSR×2 + SR×4 + R×2，按强度降序 ⇒ A 队强、B 队弱；强：UR×3 + SSR×4 + SR×1），按单场景胜率自动校准到 `g7-10`，再扫 `1.00 / 0.95 / 0.90 / 0.85 / 0.80 / 0.70`。
+
+### 修复
+
+1. **双栏芯片溢出广场下沿（360×640 实测 A 栏越界 153px、B 栏 81px；390×844 为 126px / 54px）**
+   根因：双栏只有 156px（390 视口 183px）宽，标准芯片 `--gb-unit-w:56px` / `min-width:52px` 一行只放 2 枚 ⇒ 5 宠折成 3 行，被 `.gb-arena{overflow:hidden}` 裁掉末行。
+   修法见下节「UI 调整」，复测 **28/28 全绿**。
+
+### UI 调整
+
+1. **双栏专用紧凑芯片**（全部落在 `.gb-dual` 作用域，单场景完全不受影响）
+   - `.gb-dual .gb-arena`：`--gb-unit-w:44px` / `--gb-unit-ico:18px`、`gap:2px`。
+   - `.gb-dual .gb-arena-unit`：`min-width:44px` / `min-height:44px` —— **仍等于 `--touch-min`，触摸目标未缩水**；`padding:2px 1px`、`gap:0`。
+   - 名字 `--fs-2xs` + 单行省略号、血条 4px、状态区 `min-height:12px` ⇒ 156px 一行放 3 枚：**5 宠 2 行 + 3 敌 1 行**，两视口均无裁切。
+2. **双栏广场纵向不再裁切**：`.gb-dual .gb-arena-row` 取消 `max-height`（原 `13vh` 裁掉换行后的末行）；中央区在双栏压到 `2px`（特效落点仍走 `gbFx` 绝对定位层，不依赖它）。
+3. **控制条标题压缩**：`双场景 · 回合 1 · 当前 A · 替补 1` → `双场景·回合1·A·替补1`（360 上原标题会折成两行、挤掉战场高度）。
+
+### 平衡定值（`MULTI_SCENE_ENEMY_SCALE` 0.85 → 0.95）
+
+实测（40 种子，校准关 `g7-10`，单场景基线胜率 53% / 100% 两档阵容）：
+
+| scale | 双场景胜率 | 平均整场轮数 | 胜场剩余我方血量 |
+|-------|-----------|-------------|-----------------|
+| 1.00 | 17% ~ 60% | 14.1 | 44~49% |
+| 0.95 | 57% ~ 83% | 12~14 | 50~51% |
+| 0.90 | 80% ~ 93% | 10.6 | 55~57% |
+| 0.85 | 97% ~ 98% | 9.4~11.7 | 58~64% |
+| 0.80 | 100% | 8.4~9.8 | 66~70% |
+| 0.70 | 100% | 7.1~8.0 | 76~78% |
+
+- 结论：**0.85 会让「双场景」比同关单场景更容易 4~40pp**（双倍宠物池把失败风险摊薄），与「多队精英关」的定位相反；**0.95 与单场景持平或略难**，1.00 偏硬（B 队通常弱于 A 队、实测还会更低）。
+- 因此把常量定为 **0.95**，注释里写明实测依据；`applyMultiSceneScale` 的语义一字未改（只乘 base 五项、floor、下限 1、不改原编成）。
+- ⚠️ 若作者要求「精英关明显更硬」，只需把这一个常量上调到 `1.00`。
+
+### 测试 / 版本
+
+1. `scripts/test-dual-battle.js` 5 条系数相关断言同步改为 0.95（缩放样本 100→95、20→19；常量守卫；集成段敌人 base 期望）——**78 断言全绿**。
+2. 全量 **84 套件 / 0 失败**；`test-a11y-tokens` **40/40**。
+3. 缓存戳 `?v185` → **`?v186`**（56 处）；`page/` JS 数 **55**（本版未新增 page 模块）。
+
+---
+
 ## v2.14.21
 
 Date: 2026-11-26
@@ -1255,6 +1314,7 @@ Date: 2026-10-12
 | 2.14.19 | 53 | 3314 行 game-render.js | **小队接力阶段 B（普通战斗单队接力）**：新增唯一增援入口 `gbReinforce()`（allies/units 同池同步、不重建战斗对象、本回合不重排队列、幂等、只对新单位补跑 `onBattleStart`）；判负参数化 `winnerRule`（默认 `'all'` 与改前逐字一致，`'pets'` 只数非玩家单位并回落）；`checkGroupWin` **先增援后判负**（否则队灭当场结束）；`startGroupTrial` 只在 ≥2 支有宠小队时接线，提供方按 `getPetSquads()` 满血现建、跳空队/全员不可战、用尽返回 null；`groupRestore` 摘除快照后新增单位；新增 `test-squad-relay`（41 断言）；全量 **82 套件 / 0 失败**；缓存戳 `?v182` → **`?v183`** |
 | 2.14.20 | 54 | 3371 行 game-render.js | **玩家口径阶段 C（`attackable` 单源目标过滤 + 关卡 mode，仍不启用多队）**：`attackable(u)` = 存活且未打 `_untargetable` 标记，接入 `ai.js` 选靶双入口、`battle-group.js` 的 `selectTargets` 双池/嘲讽/声明合法性/强制目标/技能 `pool`+`allPool`/蓄力/迷惑/伤害分担/光环/`onFoeHeal`/额外目标池、`normalAttack` 与 `groupUnitTurn` 两道闸、反噬与魔法镜、`terrain.js` 全部取靶循环 + `applyTerrainResult` 兜底闸；`group-levels.js` 每关派生 `mode:'multi'\|'single'`（`stageIsMulti`，g18 起每 6 大关的 x-5 ⇒ 全期只有 `g18-5`/`g24-5`，Boss 与 1–3 关永不 multi，越界不派生）；**mode 只派生不消费**（源码守卫钉死），普通战斗逐字节等价；新增 `test-attackable`（48 断言）；全量 **83 套件 / 0 失败** + a11y 40/40；缓存戳 `?v183` → **`?v184`** |
 | 2.14.21 | 55 | 3542 行 game-render.js | **多队双场景阶段 D（导演 + 双栏 + 玩家轮转 + 替补绑定，首次开放多队）**：新模块 `group-dual.js`（`MULTI_SCENE_ENEMY_SCALE=0.85` 缩放 / `createDualBattle` / `dualStep` 换边与冻结跳过 / `dualMovePlayer` 回合边界双池搬移 / `dualReinforce` 未上场队列按序满血补给并绑定场景 / `dualMergedBattle` 门面 / 场景文案）；`game-render.js` 唯一 `glv.mode==='multi'` 分支 → `_startDualGroupTrial`（A←一队、B←二队、两队任一不可战即不开战、每侧各调一次 `groupStageEnemies` 完整编成 ×0.85、敌人 id `enemyA-`/`enemyB-`、**一个共享 rng 注入两个 gb**、双场景不做时间旅行），`_groupStep` 改走 `_dualStepOnce` 且 `_groupBattle` 降级为当前场景活指针，导演 notes → toast，`renderGroupBattlePane(gb,sfx)` id 参数化 + 双栏 dense 阈值 5，`renderGroupOverlay` 双栏 `.gb-dual` + 栏头状态 + 两侧合计血量 + 控制条「回合 / 当前 / 替补」，`_gbFindUnit` 跨两场景查单位，结算仍单入口（`dualMergedBattle` 门面喂既有奖励/受伤/统计/历史）；修两处开发期缺陷（替补队列 `buildSquad` 未入 `dir` 导致空转判败、`_groupDual` 未在开战入口复位导致陈旧导演接管下一场）；新增 `test-dual-battle`（78 断言，含真走 g18-5 开战入口的集成段）；全量 **84 套件 / 0 失败** + a11y 40/40；缓存戳 `?v184` → **`?v185`** |
+| 2.14.22 | 55 | 3543 行 game-render.js | **阶段 E（真机双栏复核 + 平衡实测定值）**：新增 `scripts/verify-dual-layout.js`（无头 Chrome + 自建 CDP 客户端，Node 22 自带 WebSocket）在 360×640 / 390×844 真开 g18-5 量测 **28 项**，抓到**双栏芯片溢出广场下沿**（A 越界 153px / B 81px）并修复 —— 双栏改紧凑芯片 `--gb-unit-w:44px` / `--gb-unit-ico:18px`（`min-width`/`min-height` 仍 **44px = 触摸下限**）、中央区压到 2px、`.gb-dual .gb-arena-row` 取消 `max-height` 裁切、控制条标题压成无空格；新增 `scripts/balance-dual.js`（同关同阵容、40 种子、单场景用户基线）实测把 `MULTI_SCENE_ENEMY_SCALE` **0.85 → 0.95**（0.85 时双场景比同关单场景**容易 4~40pp**，与精英关定位相反；0.95 持平或略难）。全量 **84 套件 / 0 失败** + a11y **40/40**，缓存戳 `?v186` |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。

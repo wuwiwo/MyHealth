@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.21
+> Personal Health Manager — 个人健身健康管理应用 v2.14.22
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -113,7 +113,7 @@ doc/
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.22）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.21）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.22）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -450,4 +450,6 @@ Vercel 项目设置：
 
 | **2.14.21** | **2026-11-26** | **多队双场景（阶段 D：导演 + 双栏 + 玩家轮转 + 替补绑定，首次开放多队）** — 设计 `doc/design-pet-squad-battle-v1.md` v1.2 §4。**① 新模块 `page/group-dual.js`（纯逻辑）**：`MULTI_SCENE_ENEMY_SCALE=0.85` + `applyMultiSceneScale`（只乘 base 五项、floor、下限 1、**不改原编成**）；`createDualBattle` 给两个 gb 置 `winnerRule:'pets'`、各绑 `squadUnits` 与**场景化** `reinforce`（谁全灭谁取队、不跨场景偷队）；`dualStep` 每拍只推进当前场景一个单位（复用 `groupBattleStep`），A 完整回合 → B → `cycle++` 回 A，已 won/lost 场景冻结跳过；`dualMovePlayer` **只在回合边界**搬玩家（双池同步）；`dualReinforce` 从未上场队列按序满血补给并绑定该场景、用尽 → 整场立即判负；`dualMergedBattle` 只读门面（allies 去重 / 敌人合流 / 日志带 `A·`/`B·`）。**② `game-render.js`**：`startGroupTrial` 唯一 `glv.mode==='multi'` 分支 → `_startDualGroupTrial`（A←一队/B←二队、两队任一不可战即**不开战**、每侧各调一次 `groupStageEnemies` 完整编成 ×0.85、敌人 id `enemyA-`/`enemyB-`、**一个共享 rng 注入两个 gb**、双场景不做时间旅行）；`_groupStep` 走 `_dualStepOnce`，`_groupBattle` 降级为「当前推进场景」活指针；导演 notes → toast；`renderGroupBattlePane(gb,sfx)` id 参数化 + 双栏 dense 阈值 5；`renderGroupOverlay` 双栏 `.gb-dual` + 栏头状态（推进中/待机/已胜（冻结）/已败）+ 两侧合计血量 + 控制条「回合 · 当前 · 替补 N」；`_gbFindUnit` 跨两场景查单位；`_groupDone` 仍单入口（门面喂既有奖励/受伤/统计/历史）。**③ 修两处自查缺陷**：`buildSquad` 未入 `dir` 导致替补队列空转判败；`_groupDual` 未在开战入口复位导致陈旧导演接管下一场。**④ 样式**：`.gb-dual*` + `--gb-dual-arena-h:13vh`/`--gb-dual-mid-h:4vh`，全部既有令牌、圆角 0。新增 `test-dual-battle.js` **78 断言**（含真走 g18-5 开战入口的集成段）；阶段 C 的 mode 门禁同步改写为「唯一消费方 = 开战入口」；全量 **84 套件 / 0 失败** + a11y **40/40**。缓存戳 `?v184` → **`?v185`**（56 处）。**⚠️ g18-5 / g24-5 现在真的会开多队战斗** | `doc/changelog-v2.14.md` |
 
-> 当前版本：**v2.14.21**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+| **2.14.22** | **2026-11-26** | **阶段 E：真机双栏复核 + 平衡实测定值** — 设计 `doc/design-pet-squad-battle-v1.md` v1.2 §10.1 阶段 E。**① 真机双栏复核（自建工具，非目测）**：新增 `scripts/verify-dual-layout.js`（无头 Chrome + 自建 CDP 客户端，Node 22 自带 `WebSocket`；不依赖 Playwright / Python），在 **360×640** 与 **390×844**（`dsf=2`、mobile）两个视口真开 `g18-5`，量测 **28 项**：两栏并排（栏宽 156 / 183px）、同一行、页面无横向溢出、栏头文案（推进中/待机）、每个芯片相对其广场的四向越界、广场 `scrollHeight/clientHeight`、页签仍可见、推 12 拍后场景键合法。**首轮抓到一个真实缺陷**：芯片溢出广场下沿（360 视口 A 越界 **153px**、内容高 349 vs 可视 196；B 81px；390 视口 A 126px；B 54px）—— 根因：双栏只有 156px 宽，标准芯片（`--gb-unit-w:56px`、`min-width:52px`）一行只放 2 枚 → 5 宠折成 3 行，被 `.gb-arena{overflow:hidden}` 裁掉末行。**② 修复（双栏专用紧凑芯片，不牺牲 a11y）**：`.gb-dual .gb-arena` 改 `--gb-unit-w:44px` / `--gb-unit-ico:18px`，芯片 `min-width/min-height:44px`（**仍等于 `--touch-min` 触摸下限，未缩水**）、名字 `2xs` + 省略号、血条 4px、`gap:2px`；**中央区在双栏里压到 2px**、`.gb-dual .gb-arena-row` 取消 `max-height` 裁切 —— 156px 一行 3 枚 ⇒ 5 宠 2 行 + 3 敌 1 行全部落在广场内。控制条标题压成无空格「双场景·回合1·A·替补1」（原标题在 360 上折成两行）。复测 **28/28 全绿**（两视口）；同时修掉校验工具自身的假阳性（overlay 挂在隐藏页签里 → 补 `switchTab('game')` 后量测归真）。截图落 `_tmp-dual-verify/`（未跟踪）。**③ 平衡实测与定值**：新增 `scripts/balance-dual.js`（同关同阵容、40 种子、单场景基线＝4 宠 + 玩家、`winnerRule='all'`；双场景＝8 宠分两队 + 每侧完整编成 × scale），校准关 `g7-10`（单场景胜率落 53~100% 的两档阵容）实测：**scale 1.00 → 双场景 17~60%**、**0.95 → 57~83%**、**0.90 → 80~93%**、**0.85 → 97~98%**、**0.80/0.70 → 100%**（胜场剩余血量 44%→78%）。结论：**0.85 让「双场景」比同关单场景更容易 4~40pp**（与「多队精英关」定位相反，因为双倍宠物池把失败风险摊薄），**0.95 才与单场景持平或略难**、1.00 偏硬（B 队常弱于 A 队还会更低）⇒ `MULTI_SCENE_ENEMY_SCALE` **0.85 → 0.95**（常量仍只在 `group-dual.js` 一处，`applyMultiSceneScale` 只乘 base 五项、floor、下限 1、不改原编成）。`test-dual-battle.js` 5 条系数相关断言同步改为 0.95（**78 断言全绿**）；全量 **84 套件 / 0 失败** + `test-a11y-tokens` **40/40**。**缓存戳 `?v185` → `?v186`（56 处）**；`page/` JS 数不变（**55**）；最大文件 `game-render.js` 3543 行。⚠️ **开放项**：0.95 为实测推荐值，作者若要求「精英关更硬」可上调至 1.00（只动这一个常量）；多队全灭但玩家仍存活的判负口径仍为 `'pets'`（设计 Q4/Q5 已裁），时间旅行不回退接力指针（阶段 B 遗留）| `doc/changelog-v2.14.md` |
+
+> 当前版本：**v2.14.22**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

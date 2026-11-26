@@ -95,18 +95,18 @@ function build(opts) {
 }
 
 /* ---------- 1. 属性缩放 ---------- */
-console.log('\n[1] applyMultiSceneScale：每侧完整编成 × 0.85（不改原编成）');
+console.log('\n[1] applyMultiSceneScale：每侧完整编成 × 0.95（不改原编成）');
 (function () {
   const src = [{ name: '甲', tier: 'normal', level: 3, base: { hp: 100, atk: 20, def: 10, soulAtk: 6, soulDef: 4 }, skills: ['s1'], affixes: ['a1'] }];
   const out = sb.applyMultiSceneScale(src);
   ok(out.length === 1, '数量不变');
-  ok(out[0].base.hp === 85 && out[0].base.atk === 17, 'hp / atk 按 0.85 收缩（floor）', JSON.stringify(out[0].base));
+  ok(out[0].base.hp === 95 && out[0].base.atk === 19, 'hp / atk 按 0.95 收缩（floor）', JSON.stringify(out[0].base));
   ok(out[0].base.soulAtk === 5 && out[0].base.soulDef === 3, 'soulAtk / soulDef 同样收缩');
   ok(src[0].base.hp === 100 && src[0].base.atk === 20, '原编成未被改（单场景关卡仍能用它）');
   ok(out[0].level === 3 && out[0].tier === 'normal' && out[0].skills[0] === 's1' && out[0].affixes[0] === 'a1', '等级 / 词条 / 技能原样透传（只缩放 base）');
   const small = sb.applyMultiSceneScale([{ base: { hp: 1, atk: 2 } }]);
   ok(small[0].base.hp === 1 && small[0].base.atk === 1, '下限 1（不出 0 血怪）', JSON.stringify(small[0].base));
-  ok(sb.MULTI_SCENE_ENEMY_SCALE === 0.85, '系数唯一来源 = 0.85');
+  ok(sb.MULTI_SCENE_ENEMY_SCALE === 0.95, '系数唯一来源 = 0.95（阶段 E 实测值）');
   ok(typeof sb.applyMultiSceneScale === 'function', '导出到全局（测试 / 工具可读）');
 })();
 
@@ -245,7 +245,7 @@ console.log('\n[10] 源码守卫（单入口 / 单渲染 / 单常量 / 不对单
   function read(f) { return fs.readFileSync(path.join(PAGE, f), 'utf8'); }
   const gr = read('game-render.js');
   const gd = read('group-dual.js');
-  ok(gd.indexOf('var MULTI_SCENE_ENEMY_SCALE = 0.85;') > -1, '系数常量只在 group-dual.js 定义');
+  ok(gd.indexOf('var MULTI_SCENE_ENEMY_SCALE = 0.95;') > -1, '系数常量只在 group-dual.js 定义');
   ok(/renderGroupBattlePane\(gb,sfx\)/.test(gr), '渲染函数已参数化（gb,sfx）');
   ok(gr.indexOf('renderGroupBattlePane(gb)') > -1 && gr.indexOf("renderGroupBattlePane(sc.gb,(k==='A'?'':'B'))") > -1, '两栏各调一次同一函数（没有第二份渲染）');
   ok(gr.indexOf("glv.mode === 'multi'") > -1, '多队分支只在开战入口按 mode 判定');
@@ -283,7 +283,7 @@ console.log('\n[12] 开战入口每次清 `_groupDual`');
 })();
 
 /* ---------- 13. 集成：真走开战入口（g18-5 的 mode:'multi' → 双场景） ---------- */
-console.log('\n[13] 集成：_startDualGroupTrial 真的建出两栏，玩家不可选、敌人按 0.85 缩放');
+console.log('\n[13] 集成：_startDualGroupTrial 真的建出两栏，玩家不可选、敌人按 0.95 缩放');
 (function () {
   const glv = sb.getGroupStage('g18-5');
   ok(glv && glv.mode === 'multi', 'g18-5 本身是 multi 关');
@@ -305,7 +305,7 @@ console.log('\n[13] 集成：_startDualGroupTrial 真的建出两栏，玩家不
   const enemyA = dir.scenes.A.gb.enemies[0];
   ok(/^enemyA-/.test(enemyA.id) && /^enemyB-/.test(dir.scenes.B.gb.enemies[0].id), '两侧敌人 id 带 A/B 前缀（data-uid 不打架）');
   const cfg = glv.enemies[0];
-  ok(enemyA.base.hp === Math.max(1, Math.floor(cfg.base.hp * 0.85)), '敌人 base 按 0.85 缩放（每侧完整编成）', enemyA.base.hp + ' vs ' + cfg.base.hp);
+  ok(enemyA.base.hp === Math.max(1, Math.floor(cfg.base.hp * 0.95)), '敌人 base 按 0.95 缩放（每侧完整编成）', enemyA.base.hp + ' vs ' + cfg.base.hp);
   ok(dir.pending.length === 1, '第 3 支编队进入替补队列', dir.pending.length);
   /* 推几拍：不抛错、场景指针在 A/B 之间合法 */
    let steps = 0, err = null;

@@ -2438,9 +2438,10 @@ function renderGroupOverlay(show){
   var dual=_groupDual
   var dualFacade=dual?dualMergedBattle(dual):null
   var allyPct=gbSideHpPct(dualFacade?dualFacade.allies:gb.allies), foePct=gbSideHpPct(dualFacade?dualFacade.enemies:gb.enemies)
-  /* 控制条标题：单场景 = 敌方数 + 回合；双场景 = 整场轮数 + 当前场景 + 剩余替补 */
+  /* 控制条标题：单场景 = 敌方数 + 回合；双场景 = 整场轮数 + 当前场景 + 剩余替补。
+     双场景文案压缩到无空格（360 上「第 175/240 关 · 双场景 · 回合 1 · 当前 A · 替补 1」会折成两行）。 */
   var titleBody=dual
-    ?('双场景 · 回合 '+dual.cycle+' · 当前 '+dual.active+' · 替补 '+dualPendingCount(dual))
+    ?('双场景·回合'+dual.cycle+'·'+dual.active+'·替补'+dualPendingCount(dual))
     :(gb.enemies.length+'敌 · 回合 '+gb.turn)
   /* v2.14.15：自动开关的三态文案 + 「当前第 N 关」。
      · 关：▶ 自动连打    · 打：⏸ 自动中    · 已排队下一关：⏳ 连打中
