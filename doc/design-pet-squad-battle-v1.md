@@ -297,6 +297,20 @@ MULTI_SCENE_ENEMY_SCALE = 0.85     // 初值；阶段 E 真机平衡后定为唯
 
 > 每阶段以 `feat:` 提交并完成版本三项同步（`APP_VERSION` / README 版本表 / changelog / 架构演化表 / `?vNN`）；**本设计文档本身不触发版本**（`docs:` 提交）。
 
+### 10.1 施工状态回填（2026-11-26）
+
+| 阶段 | 版本 | 状态 | 落地要点 |
+|---|---|---|---|
+| A | 2.14.18 | ✅ | `squads` 纯增量迁移、5 个管理动作、`battlePicks` 首发镜像、编队 UI |
+| B | 2.14.19 | ✅ | `gbReinforce` 唯一增援入口、`winnerRule` 默认 `'all'`、`checkGroupWin` 先增援后判负 |
+| C | 2.14.20 | ✅ | `attackable(u)` 单源判据接入 `ai.js`/`battle-group.js`/`terrain.js`、`mode` 派生（g18-5 / g24-5）；**本阶段无生产注入** |
+| D | 2.14.21 | ✅ | `group-dual.js` 导演（`dualStep` 换边 / 冻结跳过 / 回合边界搬玩家 / `dualReinforce` 绑定场景 / `dualMergedBattle` 门面）、`_startDualGroupTrial` 唯一 multi 分支、`renderGroupBattlePane(gb,sfx)` 参数化双栏、结算仍走 `_groupDone` 单入口；**首次对线上开放多队** |
+| E | — | ⬜ 未开始 | 360×640 双栏密集阵复核、`MULTI_SCENE_ENEMY_SCALE` 实测定值与手感复测 |
+
+> D 阶段实施后与本文的两处**偏差记录**：
+> 1. 双场景**不做时间旅行**（两 gb 联合快照未定义）→ `__groupSnaps` 清空、跳过存快照；如需支持，须先把「导演级快照」设计出来。
+> 2. 合并战报的回合号**沿用各场景自己的**（只给行动者加 `A·` / `B·` 前缀）；若要统一回合号，应在 `dualMergedBattle` 里重编而不改引擎日志。
+
 ---
 
 ## 11. 风险与未决登记

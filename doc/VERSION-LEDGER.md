@@ -18,7 +18,9 @@
 
 ## 当前领号指针
 
-**2.14.21**（下一个可用）
+**2.14.22**（下一个可用）
+
+> 2026-11-26：`2.14.21` 已领用 —— 多队双场景**阶段 D**（导演层 `group-dual.js` + 双栏战场 + 玩家轮转 + 替补绑定场景，首次对线上开放多队：g18-5 / g24-5），属同一代码修改大类内的 patch；领号前确认全仓无既有使用，指针推进到 `2.14.22`。阶段 E（真机平衡定值 `MULTI_SCENE_ENEMY_SCALE`）将另领一个号。
 
 > 2026-11-26：`2.14.20` 已领用 —— 多队双场景阶段 C（`attackable` 单源目标过滤 + 关卡 `mode` 派生，`_untargetable` 本阶段无生产注入、仍不启用多队），属同一代码修改大类内的 patch；领号前确认全仓无既有使用，指针推进到 `2.14.21`。阶段 D（双场景导演与渲染）将另领一个号。
 
@@ -85,6 +87,7 @@
 
 | 版本 | 线 / 负责人 | 工作内容 | commit | changelog |
 |---|---|---|---|---|
+| 2.14.21 | 主控线（宠物编队） | **多队双场景阶段 D（导演 + 双栏 + 玩家轮转 + 替补绑定；首次开放多队）**：新模块 `page/group-dual.js`（`MULTI_SCENE_ENEMY_SCALE=0.85` 缩放、`createDualBattle` 两 gb 置 `'pets'` 判负并场景化 `reinforce`、`dualStep` A→B→cycle++ 且冻结跳过、`dualMovePlayer` 回合边界双池搬移、`dualReinforce` 未上场队列按序满血补给、`dualMergedBattle` 只读门面）；`game-render.js` 唯一 `glv.mode==='multi'` 分支 → `_startDualGroupTrial`（A←一队/B←二队、任一不可战即不开战、每侧完整编成 ×0.85、敌人 id `enemyA-`/`enemyB-`、共享单 rng、不做时间旅行），`_groupStep` 走 `_dualStepOnce`、`_groupBattle` 降级为当前场景活指针，notes→toast，`renderGroupBattlePane(gb,sfx)` 参数化 + dense 阈值 5，`renderGroupOverlay` 双栏 `.gb-dual`、`_gbFindUnit` 跨场景查单位，结算仍单入口；修两处自查缺陷（`buildSquad` 未入 `dir` → 替补空转判败；`_groupDual` 未在开战复位 → 陈旧导演接管下一场）；新增 `test-dual-battle` **78 断言**（含真走 g18-5 开战入口的集成段），阶段 C mode 门禁改写为「唯一消费方 = 开战入口」；全量 **84 套件 / 0 失败** + a11y 40/40；缓存戳 `?v184` → **`?v185`** | `d303f80` | `doc/changelog-v2.14.md` |
 | 2.14.20 | 主控线（宠物编队） | **玩家口径阶段 C（`attackable` 单源目标过滤 + 关卡 mode，仍不启用多队）**：`attackable(u)` = 存活且未打 `_untargetable`（普通战斗无标记 ⇒ 逐字节等价 `hp > 0`）；接入 `ai.js` 选靶双入口、`battle-group.js` 的 `selectTargets` 双池 / 嘲讽（2 处）/ 声明合法性 / 强制目标 / 技能 `pool`+`allPool` / 蓄力 / 迷惑 / 伤害分担 / 状态光环 / `onFoeHeal` / 额外行动补池，`normalAttack` 入口闸 + `groupUnitTurn` 普攻落点闸，反噬与魔法镜反射零生效；`terrain.js` 新增 `terrainAttackable` 覆盖沙暴抽靶/分档排名/雪天/酷暑/雨天/毒气，`applyTerrainResult` 兜底闸；`group-levels.js` 每关派生 `mode:'multi'\|'single'`（`stageIsMulti`、g18 起每 6 大关的 x-5 ⇒ 全期只有 `g18-5`/`g24-5`，Boss 与 1–3 关永不 multi）；**mode 只派生不消费**（源码守卫钉死），`_untargetable` 本阶段无生产注入；新增 `test-attackable` **48 断言**；全量 **83 套件 / 0 失败** + a11y 40/40；缓存戳 `?v183` → **`?v184`** | `a442137` | `doc/changelog-v2.14.md` |
 | 2.14.19 | 主控线（宠物编队） | **小队接力阶段 B（普通战斗单队接力，单队路径逐字不变）**：`gbReinforce()` 唯一增援入口（allies/units 同池同步、不重建战斗对象、本回合不重排队列、幂等、只对新单位补跑 `onBattleStart`）；`winnerRule` 参数化（默认 `'all'`，`'pets'` 只数非玩家单位并回落）；`checkGroupWin` **先增援后判负**；`startGroupTrial` 只在 ≥2 支有宠小队时接线，提供方满血现建、跳空队/全员不可战、用尽返回 null（D3）；`groupRestore` 摘除快照后新增单位；新增 `test-squad-relay` **41 断言**；全量 **82 套件 / 0 失败**；缓存戳 `?v182` → **`?v183`** | `39e5f24` | `doc/changelog-v2.14.md` |
 | 2.14.18 | 主控线（宠物编队） | **宠物编队阶段 A（战斗零改动）**：`dh-pets-v1.squads`（不新增 store 键，`battlePicks` = 首发镜像）；旧档**只读派生**迁移（读取不写盘）；不变量 = 每队 ≤4 + **同宠不得跨队** + 至少 1 队 + 队名 ≤8；唯一写入口 `savePetSquads()` + 5 个管理动作；UI = 宠物面板「🐾 编队管理」原生 `<details>`（改名 / ↑↓ 排序 / 删除 / 新建 / 芯片切换 / 伤员 ⚠️ 保留在队）；新增 `scripts/test-pet-squads.js` **67 断言**（含单一写入口源码守卫）；`test-pet-panel-layout` 两条 `aria-pressed` 计数收紧到阵容区块（未弱化）；全量 **81 套件 / 0 失败**；缓存戳 `?v181` → **`?v182`** | `e452d24` | `doc/changelog-v2.14.md` |
