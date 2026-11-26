@@ -219,6 +219,15 @@ const lineupBlock = H.slice(iLineup, H.indexOf('class="pet-squads"') > iLineup
   ? H.indexOf('class="pet-squads"') : iMat);
 ok((lineupBlock.match(/aria-pressed="true"/g) || []).length === 4, '4 个已选芯片带 aria-pressed="true"（切换语义）');
 ok((lineupBlock.match(/aria-pressed="false"/g) || []).length === 1, '1 个未选芯片带 aria-pressed="false"');
+
+/* v2.18（阶段 A）：编队管理区块的 UI 契约（位置 / 结构 / 默认折叠 / 首发徽标） */
+const iSquads = H.indexOf('class="pet-squads"');
+ok(iSquads > iLineup && iSquads < iMat, '编队管理区在阵容之后、材料之前', iLineup + ' / ' + iSquads + ' / ' + iMat);
+ok(H.indexOf('<details class="pet-squads">') >= 0, '编队区默认折叠（<details> 无 open 属性）');
+ok(H.indexOf('id="petSquadAdd"') > iSquads, '有「＋ 新建小队」按钮');
+ok((H.match(/data-squad-pick="/g) || []).length === 5, '默认 1 支队 × 5 只可战宠物 = 5 个编队芯片');
+ok(H.indexOf('data-squad-name="sq-1"') > iSquads, '首发队有可改名的输入框');
+ok(H.indexOf('pet-squad-badge is-first') > iSquads && H.indexOf('>首发<') > 0, '首发队带「首发」徽标');
 ok(H.indexOf('src="media/pets/sparkle.svg"') > 0, '芯片内仍是头像 + 名称（头像渲染入口未变）');
 
 /* 材料区：数字行无按钮，按钮组独立、一键治疗全宽独占一行 */

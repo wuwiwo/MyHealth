@@ -38,6 +38,7 @@ Date: 2026-11-26
 
 - 新增 `scripts/test-pet-squads.js`：**67 断言 / 0 失败**。覆盖：接口导出 / 旧档只读派生不写盘（比对存档字节）/ 返回值是副本 / 每队上限与拒绝原因 / **Q1 跨队互斥 + 脏档去重** / `battlePicks ↔ squads[0]` 双向幂等 / 排序与首发镜像 / 空名回落与超长截断 / 至少一队 / **伤员留在队但开战被 `canPetBattle` 过滤** / 不新增 store 键 / 重开恢复 / 单一写入口源码守卫（`d.squads =` 恰好 2 处、UI 不调 `savePetSquads`、不直接读 `.squads`、有 `petSquadEsc`）。
 - 全量 **81 套件 / 0 失败**；`test-a11y-tokens` 未变（40/40）。
+- `scripts/test-pet-panel-layout.js`：两条 `aria-pressed` 计数**收紧到阵容区块内**（语义未弱化）＋ 新增 **6 条编队区块 UI 契约**（位置在阵容后/材料前、默认折叠、`＋新建` 按钮、默认 1 队 × 5 只 = 5 个编队芯片、队名输入、首发徽标），**88 通过 / 0 失败**。
 - 版本：`APP_VERSION` → **2.14.18**；缓存戳 `page/index.html` 全部 `?v181` → **`?v182`**（55 处）。
 
 ### 文件
