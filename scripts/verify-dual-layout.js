@@ -78,7 +78,8 @@ function connect(wsUrl) {
   };
 }
 
-/* ---- 页面内注入：三支编队（A/B 首发 + 1 替补）、真走 g18-5 的 multi 分支 ---- */
+/* ---- 页面内注入：三支编队（A/B 首发 + 1 替补）、真走多队分支（关卡 id 可传参，默认 g18-5） ---- */
+const STAGE_ID = process.argv[2] || 'g18-5';
 const INJECT = `
 (function(){
   /* 战场 overlay 挂在「挑战」页签里：先切到挑战页，否则祖先 display:none → 量出来全是 0 宽 */
@@ -98,7 +99,7 @@ const INJECT = `
       return u;
     });
   };
-  startGroupTrial('g18-5');
+  startGroupTrial(${JSON.stringify(STAGE_ID)});
   return !!(window.__groupDualState && window.__groupDualState());
 })()
 `;

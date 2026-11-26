@@ -15,20 +15,33 @@
      · 整场胜负（D3）：两场景都 won → 胜；某场景全灭且无替补 → 败（不等另一侧）。
    ============================================ */
 
-/* Q10（v1.2 复核裁决 2）：每个场景各拿一份**完整编成**，base 属性乘该系数。
-   v2.14.22（阶段 E 实测定值）：**0.85 → 0.95**。
-   实测依据（scripts/balance-dual.js，同关同阵容、40 种子、单场景基线＝4 宠 + 玩家）：
-     · 0.85 → 双场景胜率 97~98%（单场景基线 53~100%）→ 「双场景」反而比同关单场景**更容易**，
-       与「多队精英关」的定位相反；
-     · 0.95 → 83%（基线 100%）/ 57%（基线 53%）→ 与单场景持平或略难，符合定位；
-     · 1.00 → 60%（基线 100%）→ 明显偏硬（B 队通常弱于 A 队，实测值还会更低）。
-   只乘 base 属性（hp/atk/def/soulAtk/soulDef），不乘等级、不乘词条、不乘场地。 */
-var MULTI_SCENE_ENEMY_SCALE = 0.95;
+/* Q10（v1.2 复核裁决 2）→ **v2.14.23 作者裁决（按关卡类型分档）**：
+   每个场景各拿一份**完整编成**，base 属性乘按 `type` 取的系数：
+     · 普通关（normal，x1–x4 / x6–x9）→ **0.85**
+     · 精英关（elite，x5）             → **0.90**
+     · Boss 关（boss，x10 的双 Boss）   → **0.90**
+   ⚠️ 等级 / 词条 / 场地 / 技能**一律不乘**，只乘 base 五项（与 Q10 原始口径一致）。
+   ⚠️ 这里是**唯一来源**：`group-levels.js` 只派生 `mode`（哪些关允许双场景），不派生系数。
+   历史：v2.14.22 阶段 E 曾把单一常量实测为 0.95；本版按作者**分类型**规格替换为上面这张表
+   （普通关回到 0.85，精英 / Boss 用 0.90）。 */
+var MULTI_SCENE_ENEMY_SCALE = 0.85;                                    // 兜底（未知类型）
+var MULTI_SCENE_SCALE_BY_TYPE = { normal: 0.85, elite: 0.9, boss: 0.9 };
+
+/* 关卡 `type` → 缩放系数。未知 / 缺省回落到普通关那一档（绝不抛错、绝不给 0）。 */
+function multiSceneScale(type) {
+  if (typeof type === 'string' && MULTI_SCENE_SCALE_BY_TYPE[type] != null) {
+    return MULTI_SCENE_SCALE_BY_TYPE[type];
+  }
+  return MULTI_SCENE_ENEMY_SCALE;
+}
 
 /* 只乘 base 属性（hp/atk/def/soulAtk/soulDef），不乘等级、不乘词条、不乘场地；
-   返回**新对象**，不改原 cfgList（原编成仍要留给单场景关卡用）。 */
+   返回**新对象**，不改原 cfgList（原编成仍要留给单场景关卡用）。
+   `scale` 可以是**数字**（显式取值）或**关卡 type 字符串**（走分档表）；都不给 → 普通档。 */
 function applyMultiSceneScale(cfgList, scale) {
-  var s = (typeof scale === 'number') ? scale : MULTI_SCENE_ENEMY_SCALE;
+  var s = (typeof scale === 'number') ? scale
+    : (typeof scale === 'string') ? multiSceneScale(scale)
+    : MULTI_SCENE_ENEMY_SCALE;
   var keys = ['hp', 'atk', 'def', 'soulAtk', 'soulDef'];
   return (cfgList || []).map(function (ec) {
     var out = {};
@@ -271,6 +284,8 @@ function dualPendingCount(dir) { return dir && dir.pending ? dir.pending.length 
 /* 测试 / 工具暴露（与 `window.__groupRelayNext` 同类，不参与线上逻辑）。 */
 if (typeof window !== 'undefined') {
   window.MULTI_SCENE_ENEMY_SCALE = MULTI_SCENE_ENEMY_SCALE;
+  window.MULTI_SCENE_SCALE_BY_TYPE = MULTI_SCENE_SCALE_BY_TYPE;
+  window.multiSceneScale = multiSceneScale;
   window.applyMultiSceneScale = applyMultiSceneScale;
   window.createDualBattle = createDualBattle;
   window.dualStep = dualStep;
@@ -280,6 +295,8 @@ if (typeof window !== 'undefined') {
 }
 if (typeof globalThis !== 'undefined') {
   globalThis.MULTI_SCENE_ENEMY_SCALE = MULTI_SCENE_ENEMY_SCALE;
+  globalThis.MULTI_SCENE_SCALE_BY_TYPE = MULTI_SCENE_SCALE_BY_TYPE;
+  globalThis.multiSceneScale = multiSceneScale;
   globalThis.applyMultiSceneScale = applyMultiSceneScale;
   globalThis.createDualBattle = createDualBattle;
   globalThis.dualStep = dualStep;

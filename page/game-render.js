@@ -843,13 +843,18 @@ function startGroupTrial(groupId){
   /* v2.2 WP-A3/A4：上限 2 → 4，并统一走 pet-store.js 的**唯一入口**
      buildGroupBattlePets（建单位 → 稀有度放大 → 团队凝聚 / 共鸣）。 */
   ensurePetBattlePicksLoaded()
-  /* v2.14.21（阶段 D）：**多队双场景分支** —— 只有 `glv.mode==='multi'` 才进。
-     单场景关卡（含全部既有关卡、含 g18-5/g24-5 以外的一切）**根本不会**走到这里，
-     下面那条路径与 v2.14.20 逐字一致（缓存戳换了、代码没换）。 */
+  /* v2.14.23（作者裁决，推翻阶段 C/D 的「只有 g18-5 / g24-5」）：
+     **多队双场景是常态** —— 普通关（x1–x4 / x6–x9）与精英关（x5）全部 multi，
+     Boss 关只在「双 Boss」关（每 3 大关一次：g3/g6/…/g24）为 multi。
+     进入双场景分支的条件有两条，缺一即走下面的单场景路径（与旧版逐字一致）：
+       ① 关卡 `mode === 'multi'`（`group-levels.stageIsMulti` 派生，唯一来源）；
+       ② `_startDualGroupTrial` 能真正建出**两支可战编队** —— 新玩家 / 只有 1 支满员队时
+          **回退单场景并开战**（不再像阶段 D 那样把开战挡掉，否则新档会被卡在 1-1）。 */
   if (glv && glv.mode === 'multi') {
     var anchorG0 = String(stage ? String(groupId).split('-')[0] : groupId)
-    _startDualGroupTrial(glv, player, anchorG0)
-    return
+    if (_startDualGroupTrial(glv, player, anchorG0)) return
+    /* 回退时给一次明确原因（不重复刷屏），然后继续走单场景建场 */
+    toast('ℹ️ 本场按**单场景**开战：需要两支都有可战宠物的编队（宠物面板 → 🐾 编队管理）','s')
   }
   var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
   var petIds = (_petBattlePicks && _petBattlePicks.length) ? _petBattlePicks : autoPickPets(_petMax)
@@ -917,14 +922,16 @@ function startGroupTrial(groupId){
    口径（doc/design-pet-squad-battle-v1.md v1.2 §4）：
      · 初始派驻：编队顺序第 1 支 → A、第 2 支 → B；**两支都建不出可战单位就不可开战**；
      · 敌人：每侧各一份**完整编成**（`groupStageEnemies` 唯一来源，调用两次），
-       base 属性乘 `MULTI_SCENE_ENEMY_SCALE`（`applyMultiSceneScale` 唯一落点）；
+       base 属性乘**按关卡类型取**的系数（`multiSceneScale(glv.type)`：普通 0.85 / 精英 0.9 / Boss 0.9），
+       `applyMultiSceneScale` 是唯一落点；
      · RNG：**一个共享 rng 注入两个 gb**（Q12：不用「同种子两实例」，否则两侧掷出同一序列）；
      · 玩家：`_untargetable`（敌人视玩家不存在，Q4）+ 只挂在 A，之后随推进移动；
      · 结算 / 奖励 / 历史仍走既有 `_groupDone` 单入口（战报用导演合并出的门面对象）。
+   ⚠️ v2.14.23：本函数**返回布尔**（true = 已开双场景；false = 建不出两队，调用方回退单场景）。
    ============================================================ */
 function _startDualGroupTrial(glv, player, anchorG){
   var squads=(typeof getPetSquads==='function')?getPetSquads():[]
-  if(!squads||squads.length<2){toast('双场景需要至少两支编队（宠物面板 → 🐾 编队管理）','e');return}
+  if(!squads||squads.length<2)return false
   var max=(typeof PET_BATTLE_MAX==='number')?PET_BATTLE_MAX:4
   /* 建一支小队（满血现建）—— 仍是既有的唯一入口 buildGroupBattlePets，禁另写数值 */
   function build(sq){
@@ -935,16 +942,15 @@ function _startDualGroupTrial(glv, player, anchorG){
     }catch(e){console.warn('[dual] 建队失败，跳过',e);return []}
   }
   var uA=build(squads[0]), uB=build(squads[1])
-  if(!uA.length||!uB.length){
-    toast('双场景需要两支都有可战宠物（成熟、未受伤、未阵亡）的编队','e')
-    return
-  }
+  if(!uA.length||!uB.length)return false
+  /* v2.14.23：系数按关卡类型（唯一来源 group-dual.js 的分档表），旧单一常量已作废 */
+  var scl=(typeof multiSceneScale==='function')?multiSceneScale(glv.type):0.85
   var lgNum=parseInt(String(anchorG).replace(/[^0-9]/g,''),10)||1
   var terrain=(typeof groupTerrainFor==='function')?groupTerrainFor(lgNum):null
   /* 每侧完整编成 → 缩放 base → 建单位（id 带场景前缀，避免两栏 data-uid 打架） */
   function enemiesFor(side,sideAllies){
     var cfg=(typeof groupStageEnemies==='function')?groupStageEnemies(anchorG,glv,sideAllies):(glv.enemies||[])
-    var scaled=(typeof applyMultiSceneScale==='function')?applyMultiSceneScale(cfg):cfg
+    var scaled=(typeof applyMultiSceneScale==='function')?applyMultiSceneScale(cfg,scl):cfg
     return (scaled||[]).map(function(ec,i){
       return createEnemyUnit({id:'enemy'+side+'-'+i,tier:ec.tier,name:ec.name,talents:ec.talents,skills:ec.skills,base:ec.base,level:ec.level,affixes:ec.affixes})
     })
@@ -966,7 +972,7 @@ function _startDualGroupTrial(glv, player, anchorG){
     pendingSquads:squads.slice(2),
     buildSquad:build
   }):null
-  if(!_groupDual){toast('双场景导演未加载（group-dual.js 缺失）','e');return}
+  if(!_groupDual){toast('双场景导演未加载（group-dual.js 缺失）','e');return false}
   _groupBattle=_groupDual.scenes.A.gb
   /* 时间旅行：两个 gb 的联合快照未定义 → 双场景不做（阶段 D 明确不做，不留半套） */
   try{window.__groupSnaps=[];window.__groupInitSnap=null}catch(e){console.warn('[dual] 清快照失败',e)}
@@ -983,6 +989,7 @@ function _startDualGroupTrial(glv, player, anchorG){
   if(terrain)toast('🌍 场地：'+terrain.name+'（两侧同一场地，对敌我双方均有效）','s')
   renderGroupOverlay(true)
   toast('👥👥 双场景开战：'+glv.name+'（A：'+(squads[0].name||'一队')+' / B：'+(squads[1].name||'二队')+'）','s')
+  return true
 }
 
 /* 双场景一拍：先同步活指针 → 导演推进（可能换边）→ 指针跟随新场景。

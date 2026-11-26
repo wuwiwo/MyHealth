@@ -205,34 +205,43 @@ console.log('\n[6] 行动队列仍含玩家（玩家是出手单位，只是不�
   ok(sb.attackable(p) === false, '但玩家仍不可被敌方选为目标');
 })();
 
-/* ---------- 7. 关卡 mode 派生 ---------- */
-console.log('\n[7] 关卡 mode：全期只有 g18-5 / g24-5');
+/* ---------- 7. 关卡 mode 派生（v2.14.23 作者裁决：多队是常态，双 Boss 每 3 大关 1 次） ---------- */
+console.log('\n[7] 关卡 mode：x1–x9 全 multi；Boss 关仅「双 Boss」关（每 3 大关）为 multi');
 (function () {
-  const multi = [], singles = [];
+  const multi = [], singles = [], bad = [];
   Object.keys(sb.GROUP_LEVELS).forEach(g => {
     const group = sb.GROUP_LEVELS[g];
     (group.stages || []).forEach(s => {
       if (s.mode === 'multi') multi.push(s.id);
-      else singles.push(s.id);
-      ok2mode(s);
+      else if (s.mode === 'single') singles.push(s.id);
+      else bad.push(s.id + '=' + s.mode);
     });
   });
-  function ok2mode(s) { if (s.mode !== 'single' && s.mode !== 'multi') singles.push('BAD:' + s.id); }
-  ok(multi.length === 2, '全期 multi 关卡恰有 2 个', multi.join(','));
-  ok(multi.indexOf('g18-5') > -1 && multi.indexOf('g24-5') > -1, '就是 g18-5 与 g24-5', multi.join(','));
-  ok(sb.getGroupStage('g18-5').mode === 'multi', 'getGroupStage("g18-5").mode = multi');
-  ok(sb.getGroupStage('g12-5').mode === 'single', 'g12-5（前一档精英关）仍是 single');
-  ok(sb.getGroupStage('g18-10').mode === 'single', 'Boss g18-10 永不 multi');
-  ok(sb.getGroupStage('g1-5').mode === 'single', 'g1-5 永不 multi');
-  const all = singles.filter(id => id.indexOf('BAD:') === 0);
-  ok(all.length === 0, '每一关的 mode 都只有 single/multi 两种合法值', all.join(','));
-  ok(sb.stageIsMulti(18, 5) && sb.stageIsMulti(24, 5), 'stageIsMulti(18,5)/(24,5) = true');
+  const groups = Object.keys(sb.GROUP_LEVELS).length;          // 24
+  const perGroup = (sb.GROUP_LEVELS.g1.stages || []).length;   // 10
+  ok(bad.length === 0, '每一关的 mode 都只有 single/multi 两种合法值', bad.join(','));
+  /* x1–x9 共 9 关 × 24 大关；x10 里 lg%3==0 的 8 关 */
+  const bossMulti = groups => Math.floor(groups / 3);
+  ok(multi.length === groups * 9 + bossMulti(groups), 'multi 数 = 每大关 1–9 关 + 能整除 3 的 Boss 关', multi.length);
+  ok(singles.length === groups - bossMulti(groups), 'single 只剩「非双 Boss」的 Boss 关', singles.join(','));
+  ok(multi.indexOf('g18-5') > -1 && multi.indexOf('g24-5') > -1, '精英关仍全 multi（g18-5 / g24-5）');
+  ok(multi.indexOf('g12-5') > -1 && multi.indexOf('g1-5') > -1, '早期精英关同样 multi（不再有 18 关门槛）');
+  ok(multi.indexOf('g3-10') > -1 && multi.indexOf('g6-10') > -1 && multi.indexOf('g24-10') > -1, '双 Boss：g3-10 / g6-10 / … / g24-10');
+  ok(singles.indexOf('g1-10') > -1 && singles.indexOf('g2-10') > -1 && singles.indexOf('g4-10') > -1, '其余 Boss 关仍 single（单场景单 Boss）');
+  ok(sb.getGroupStage('g18-10').mode === 'multi', 'g18-10（18 % 3 = 0）是双 Boss 关');
+  ok(sb.getGroupStage('g17-10').mode === 'single', 'g17-10（17 % 3 ≠ 0）是普通单场景 Boss');
+  ok(sb.stageIsMulti(18, 5) && sb.stageIsMulti(1, 1) && sb.stageIsMulti(24, 9), 'stageIsMulti：x1–x9 任意大关为 true');
   ok(!sb.stageIsMulti(30, 5), '超过 GROUP_MAX 的 g30-5 不派生（防越界）');
-  ok(!sb.stageIsMulti(18, 10), 'x-10 Boss 不派生');
+  ok(!sb.stageIsMulti(1, 10) && sb.stageIsMulti(3, 10), 'x-10 只在 lg%3==0 时派生（g1-10 false / g3-10 true）');
+  ok(sb.MULTI_BOSS_EVERY === 3, '双 Boss 节律常量 = 3（唯一来源 group-levels.js）');
+  /* 双 Boss 编成：每侧一份完整编成（1 Boss + 2 护卫）⇒ 两场景合计 2 个 Boss，不需要新逻辑 */
+  const bossStage = sb.getGroupStage('g3-10');
+  const bossCfgs = sb.groupStageEnemies('g3-10', bossStage);
+  ok(bossCfgs.length >= 2 && bossCfgs[0].tier !== bossCfgs[1].tier, 'Boss 编成 = 1 Boss + 护卫（每侧一份 ⇒ 全场双 Boss）', JSON.stringify(bossCfgs.map(c => c.tier)));
 })();
 
-/* ---------- 8. 源码守卫：唯一助手 + mode 不被消费 ---------- */
-console.log('\n[8] 源码守卫（阶段 C 门禁：单一入口、仍不启用多队）');
+/* ---------- 8. 源码守卫：唯一助手 + mode 单一消费方 ---------- */
+console.log('\n[8] 源码守卫（单一入口、mode 只在开战入口消费）');
 (function () {
   function read(f) { return fs.readFileSync(path.join(PAGE, f), 'utf8'); }
   const bg = read('battle-group.js');
@@ -246,16 +255,15 @@ console.log('\n[8] 源码守卫（阶段 C 门禁：单一入口、仍不启用�
   ok(tr.indexOf('function terrainAttackable(') > -1, 'terrain.js 有统一取靶判据');
   ok(tr.indexOf('return u.hp > 0;') < 0, 'terrain.js 不再残留裸 hp>0 过滤');
   ok(/mode: isMulti \? 'multi' : 'single'/.test(gl), 'mode 只在 group-levels.js 的生成循环里派生');
-  /* 生产代码消费 `mode:"multi"` 的位置必须**唯一**且明确：
-     阶段 C 的旧守卫写的是「除 group-levels.js 外无人消费」；阶段 D 开闸后按设计同步改写为
-     「只有开战入口（game-render.js 的 startGroupTrial）读它，导演层本身与 mode 解耦」。 */
+  /* 生产代码消费 `mode:"multi"` 的位置必须**唯一**且明确：开战入口（game-render.js）。
+     导演层本身与 mode 解耦（它只认两个 gb）。 */
   const others = scripts.filter(s => s !== 'group-levels.js' && s !== 'design-doc.js');
   const consumers = [];
   others.forEach(f => {
     const src = read(f);
     if (/stage\.mode|\.mode === 'multi'|glv\.mode === 'multi'/.test(src)) consumers.push(f);
   });
-  ok(consumers.length === 1 && consumers[0] === 'game-render.js', '👀 mode 只有一个消费方：开战入口（阶段 D 已开闸）', consumers.join(','));
+  ok(consumers.length === 1 && consumers[0] === 'game-render.js', '👀 mode 只有一个消费方：开战入口', consumers.join(','));
   ok(read('group-dual.js').indexOf("mode === 'multi'") < 0, '导演层与 mode 解耦（它只认两个 gb，不自己判关卡类型）');
 })();
 

@@ -95,19 +95,25 @@ function build(opts) {
 }
 
 /* ---------- 1. 属性缩放 ---------- */
-console.log('\n[1] applyMultiSceneScale：每侧完整编成 × 0.95（不改原编成）');
+console.log('\n[1] applyMultiSceneScale：按关卡类型分档（normal 0.85 / elite 0.9 / boss 0.9，不改原编成）');
 (function () {
   const src = [{ name: '甲', tier: 'normal', level: 3, base: { hp: 100, atk: 20, def: 10, soulAtk: 6, soulDef: 4 }, skills: ['s1'], affixes: ['a1'] }];
-  const out = sb.applyMultiSceneScale(src);
+  const out = sb.applyMultiSceneScale(src, 'normal');
   ok(out.length === 1, '数量不变');
-  ok(out[0].base.hp === 95 && out[0].base.atk === 19, 'hp / atk 按 0.95 收缩（floor）', JSON.stringify(out[0].base));
+  ok(out[0].base.hp === 85 && out[0].base.atk === 17, '普通关 0.85（floor）', JSON.stringify(out[0].base));
   ok(out[0].base.soulAtk === 5 && out[0].base.soulDef === 3, 'soulAtk / soulDef 同样收缩');
   ok(src[0].base.hp === 100 && src[0].base.atk === 20, '原编成未被改（单场景关卡仍能用它）');
   ok(out[0].level === 3 && out[0].tier === 'normal' && out[0].skills[0] === 's1' && out[0].affixes[0] === 'a1', '等级 / 词条 / 技能原样透传（只缩放 base）');
-  const small = sb.applyMultiSceneScale([{ base: { hp: 1, atk: 2 } }]);
+  const small = sb.applyMultiSceneScale([{ base: { hp: 1, atk: 2 } }], 'normal');
   ok(small[0].base.hp === 1 && small[0].base.atk === 1, '下限 1（不出 0 血怪）', JSON.stringify(small[0].base));
-  ok(sb.MULTI_SCENE_ENEMY_SCALE === 0.95, '系数唯一来源 = 0.95（阶段 E 实测值）');
-  ok(typeof sb.applyMultiSceneScale === 'function', '导出到全局（测试 / 工具可读）');
+  const elite = sb.applyMultiSceneScale(src, 'elite');
+  const boss = sb.applyMultiSceneScale(src, 'boss');
+  ok(elite[0].base.hp === 90 && elite[0].base.atk === 18, '精英关 0.9', JSON.stringify(elite[0].base));
+  ok(boss[0].base.hp === 90 && boss[0].base.atk === 18, 'Boss 关 0.9', JSON.stringify(boss[0].base));
+  ok(sb.multiSceneScale('normal') === 0.85 && sb.multiSceneScale('elite') === 0.9 && sb.multiSceneScale('boss') === 0.9, '分档表：0.85 / 0.9 / 0.9');
+  ok(sb.multiSceneScale('unknown') === 0.85 && sb.multiSceneScale() === 0.85, '未知类型 / 缺省回落普通档 0.85（绝不返回 0）');
+  const noArg = sb.applyMultiSceneScale(src);
+  ok(noArg[0].base.hp === 85, '不传 scale 时按普通档 (0.85) 缩放', noArg[0].base.hp);
 })();
 
 /* ---------- 2. 建场口径 ---------- */
@@ -245,7 +251,8 @@ console.log('\n[10] 源码守卫（单入口 / 单渲染 / 单常量 / 不对单
   function read(f) { return fs.readFileSync(path.join(PAGE, f), 'utf8'); }
   const gr = read('game-render.js');
   const gd = read('group-dual.js');
-  ok(gd.indexOf('var MULTI_SCENE_ENEMY_SCALE = 0.95;') > -1, '系数常量只在 group-dual.js 定义');
+  ok(gd.indexOf('var MULTI_SCENE_ENEMY_SCALE = 0.85;') > -1, '兜底常量（普通档 0.85）只在 group-dual.js 定义');
+  ok(gd.indexOf('MULTI_SCENE_SCALE_BY_TYPE = { normal: 0.85, elite: 0.9, boss: 0.9 }') > -1, '分档表只有一份（normal/elite/boss）');
   ok(/renderGroupBattlePane\(gb,sfx\)/.test(gr), '渲染函数已参数化（gb,sfx）');
   ok(gr.indexOf('renderGroupBattlePane(gb)') > -1 && gr.indexOf("renderGroupBattlePane(sc.gb,(k==='A'?'':'B'))") > -1, '两栏各调一次同一函数（没有第二份渲染）');
   ok(gr.indexOf("glv.mode === 'multi'") > -1, '多队分支只在开战入口按 mode 判定');
@@ -283,7 +290,7 @@ console.log('\n[12] 开战入口每次清 `_groupDual`');
 })();
 
 /* ---------- 13. 集成：真走开战入口（g18-5 的 mode:'multi' → 双场景） ---------- */
-console.log('\n[13] 集成：_startDualGroupTrial 真的建出两栏，玩家不可选、敌人按 0.95 缩放');
+console.log('\n[13] 集成：_startDualGroupTrial 真的建出两栏，玩家不可选、敌人按关卡类型缩放（g18-5 = 精英 0.9）');
 (function () {
   const glv = sb.getGroupStage('g18-5');
   ok(glv && glv.mode === 'multi', 'g18-5 本身是 multi 关');
@@ -305,13 +312,50 @@ console.log('\n[13] 集成：_startDualGroupTrial 真的建出两栏，玩家不
   const enemyA = dir.scenes.A.gb.enemies[0];
   ok(/^enemyA-/.test(enemyA.id) && /^enemyB-/.test(dir.scenes.B.gb.enemies[0].id), '两侧敌人 id 带 A/B 前缀（data-uid 不打架）');
   const cfg = glv.enemies[0];
-  ok(enemyA.base.hp === Math.max(1, Math.floor(cfg.base.hp * 0.95)), '敌人 base 按 0.95 缩放（每侧完整编成）', enemyA.base.hp + ' vs ' + cfg.base.hp);
+  ok(enemyA.base.hp === Math.max(1, Math.floor(cfg.base.hp * 0.9)), '敌人 base 按精英关 0.9 缩放（每侧完整编成）', enemyA.base.hp + ' vs ' + cfg.base.hp);
   ok(dir.pending.length === 1, '第 3 支编队进入替补队列', dir.pending.length);
   /* 推几拍：不抛错、场景指针在 A/B 之间合法 */
    let steps = 0, err = null;
   try { while (steps < 12 && !dir.done) { sb._groupStep(); steps++; } } catch (e) { err = e; }
   ok(!err, '真 UI 推进入口不抛错', err && err.message);
   ok(steps > 0 && (dir.active === 'A' || dir.active === 'B'), '推进若干拍后场景键仍合法', 'steps=' + steps + ' active=' + dir.active);
+})();
+
+/* ---------- 14. v2.14.23：双 Boss 关（每 3 大关）每侧 1 Boss；非双 Boss 关仍单场景 ---------- */
+console.log('\n[14] 双 Boss 关：g3-10 两侧各 1 Boss；g4-10 仍 single；单队回退单场景');
+(function () {
+  const bossStage = sb.getGroupStage('g3-10');
+  ok(bossStage && bossStage.mode === 'multi', 'g3-10（3 % 3 = 0）是双 Boss 多队关');
+  const p = mkUnit('你', 'ally', 100);
+  sb.getPetSquads = function () {
+    return [{ name: '一队', petIds: ['s1'] }, { name: '二队', petIds: ['s2'] }];
+  };
+  sb.buildGroupBattlePets = function (ids) {
+    return (ids || []).map(function (id) { return mkUnit('宠-' + id, 'ally', 40); });
+  };
+  let threw = null;
+  try { sb._startDualGroupTrial(bossStage, p, 'g3'); } catch (e) { threw = e; }
+  ok(!threw && !!sb.__groupDualState(), 'Boss 关也能开出双场景（不抛错）', threw && threw.message);
+  const dir = sb.__groupDualState();
+  const tierOf = g => (g.enemies[0] || {})._tier;
+  ok(!!tierOf(dir.scenes.A.gb) && tierOf(dir.scenes.A.gb) !== tierOf(dir.scenes.B.gb) === false, '两栏首位敌人都是同一档 Boss');
+  const bossTier = bossStage.enemies[0].tier;
+  ok(tierOf(dir.scenes.A.gb) === bossTier && tierOf(dir.scenes.B.gb) === bossTier, '每侧各 1 个 Boss（全场合计 2 个 Boss）', tierOf(dir.scenes.A.gb) + ' / ' + tierOf(dir.scenes.B.gb));
+  ok(dir.scenes.A.gb.enemies.length === bossStage.enemies.length && dir.scenes.B.gb.enemies.length === bossStage.enemies.length, '每侧都是完整编成（Boss + 护卫）');
+  const bossCfg = bossStage.enemies[0];
+  ok(dir.scenes.A.gb.enemies[0].base.hp === Math.max(1, Math.floor(bossCfg.base.hp * 0.9)), 'Boss 关按 0.9 缩放', dir.scenes.A.gb.enemies[0].base.hp + ' vs ' + bossCfg.base.hp);
+  /* 非双 Boss 的 Boss 关：mode 仍 single，入口不建导演 */
+  ok(sb.getGroupStage('g4-10').mode === 'single', 'g4-10 仍是单场景（单 Boss）');
+  /* 只有 1 支可战编队 → _startDualGroupTrial 返回 false，调用方回退单场景（不再挡住开战） */
+  sb.getPetSquads = function () { return [{ name: '一队', petIds: ['s1'] }]; };
+  const oneSquad = sb._startDualGroupTrial(sb.getGroupStage('g3-1'), mkUnit('你', 'ally', 100), 'g3');
+  ok(oneSquad === false, '只有 1 支编队 → 返回 false（调用方回退单场景）', String(oneSquad));
+  /* 两支都有但其中一支全员不可战（空队）→ 同样 false */
+  sb.getPetSquads = function () { return [{ name: '一队', petIds: ['s1'] }, { name: '二队', petIds: [] }]; };
+  ok(sb._startDualGroupTrial(sb.getGroupStage('g3-1'), mkUnit('你', 'ally', 100), 'g3') === false, '二队空队 → 同样回退单场景');
+  const gr2 = fs.readFileSync(path.join(PAGE, 'game-render.js'), 'utf8');
+  ok((gr2.match(/_startDualGroupTrial\(/g) || []).length === 2, '开战入口只有 1 处调用（+ 1 处函数定义）', (gr2.match(/_startDualGroupTrial\(/g) || []).length);
+  ok(/if\s*\(_startDualGroupTrial\(glv, player, anchorG0\)\)\s*return/.test(gr2), '入口按返回值决定是否直接收工（false 继续单场景建场）');
 })();
 
 console.log('\n' + (fail === 0 ? '✅ ' : '❌ ') + pass + ' passed, ' + fail + ' failed');

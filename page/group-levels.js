@@ -415,21 +415,25 @@ function genStageEnemies(lg, st) {
 }
 
 /* ============================================
-   v2.14.20（多队双场景 阶段 C）：关卡 `mode` 字段的**唯一派生点**
+   v2.14.20（阶段 C）→ **v2.14.23 作者裁决重写**：关卡 `mode` 字段的**唯一派生点**
    ============================================
-   设计依据 doc/design-pet-squad-battle-v1.md v1.2 §6 / Q6（复核裁决 3）：
-   「双场景敌人遇到次数比较少」→ **g18 起、每 6 大关的 x-5（精英关）**，
-   Boss（x-10）与 1–3 关永不进 multi；按 GROUP_MAX=24 派生，全期只有 g18-5 / g24-5。
-   ⚠️ 本阶段（C）只**派生字段、不消费**：门禁是「仍不启用多队」，
-      真正读 `mode:'multi'` 起双场景的接线在阶段 D（导演对象）。
-      任何生产代码若在此处之外读 mode 决定战斗形态，都属于越过阶段门禁。 */
-var MULTI_SCENE_FIRST_LEVEL = 18;
-var MULTI_SCENE_STEP = 6;
+   ⚠️ 推翻 v1.2 Q6 的「每 6 大关挑 1 个 x-5」：作者新规格 —— **多队双场景是常态**，
+   只有 Boss 关的「双 Boss」是稀有形态（每 3 大关 1 次）。
+     · 普通关 x1–x4 / x6–x9 → `multi`
+     · 精英关 x5             → `multi`
+     · Boss 关 x10           → 仅 `lg % MULTI_BOSS_EVERY === 0`（g3 / g6 / … / g24）为 `multi`；
+                                其余 Boss 关仍 `single`（单场景单 Boss，维持现状）
+   双 Boss 的编成不需要新逻辑：Boss 关每侧拿一份**完整编成**（`genStageEnemies` 的
+   「1 Boss + 2 护卫」），两场景各一份 ⇒ 全场正好 2 个 Boss。
+   ⚠️ 运行时仍要求「≥2 支可战编队」：不足**一律回退单场景**（不再挡住开战）。
+   ⚠️ 系数不在本文件派生（唯一来源 = `group-dual.js` 的 `MULTI_SCENE_SCALE_BY_TYPE`，
+     按 `type` 取 normal 0.85 / elite 0.9 / boss 0.9）。 */
+var MULTI_BOSS_EVERY = 3;          // 「双 Boss」节律：每 3 大关 1 次（g3 / g6 / …）
 function stageIsMulti(lg, st) {
-  if (st !== 5) return false;                                     // 只认 x-5 精英关（Boss x-10 永不）
-  if (lg < MULTI_SCENE_FIRST_LEVEL) return false;
-  if (lg > GROUP_MAX) return false;
-  return (lg - MULTI_SCENE_FIRST_LEVEL) % MULTI_SCENE_STEP === 0;
+  if (lg < 1 || lg > GROUP_MAX) return false;   // 越界不派生（g30-5 之类）
+  if (st < 1 || st > 10) return false;
+  if (st === 10) return (lg % MULTI_BOSS_EVERY) === 0;   // 仅「双 Boss」Boss 关
+  return true;                                          // x1–x9（含 x5 精英）全部多队
 }
 
 /* 生成全部 GROUP_MAX 大关 × 10 小关
@@ -621,8 +625,7 @@ if (typeof window !== 'undefined') {
   window.groupTailMul = groupTailMul;
   window.getGroupStage = getGroupStage;
   window.stageIsMulti = stageIsMulti;
-  window.MULTI_SCENE_FIRST_LEVEL = MULTI_SCENE_FIRST_LEVEL;
-  window.MULTI_SCENE_STEP = MULTI_SCENE_STEP;
+  window.MULTI_BOSS_EVERY = MULTI_BOSS_EVERY;
   window.GROUP_ANCHOR = GROUP_ANCHOR;
   window.groupAnchorT = groupAnchorT;
   window.anchorStageEnemies = anchorStageEnemies;
@@ -655,8 +658,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.groupTailMul = groupTailMul;
   globalThis.getGroupStage = getGroupStage;
   globalThis.stageIsMulti = stageIsMulti;
-  globalThis.MULTI_SCENE_FIRST_LEVEL = MULTI_SCENE_FIRST_LEVEL;
-  globalThis.MULTI_SCENE_STEP = MULTI_SCENE_STEP;
+  globalThis.MULTI_BOSS_EVERY = MULTI_BOSS_EVERY;
   globalThis.GROUP_ANCHOR = GROUP_ANCHOR;
   globalThis.groupAnchorT = groupAnchorT;
   globalThis.anchorStageEnemies = anchorStageEnemies;

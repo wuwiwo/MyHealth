@@ -5,6 +5,54 @@
 
 ---
 
+## v2.14.23
+
+Date: 2026-11-26
+
+**多队双场景改为常态 + 系数按关卡类型分档 + Boss 关双 Boss**（作者新规格，**推翻 v1.2 的 Q6「只有 g18-5 / g24-5」**）
+
+> 作者原话口径：普通关卡 0.85、精英关卡 0.9、Boss 关卡（双 Boss）0.9，双 Boss 每 3 大关出现 1 次。
+> 复核后的三条落地裁决：① 多队适用范围 = **所有关卡的 x1–x9 + 双 Boss 关**；② 双 Boss = **两场景各 1 Boss**；③ 双 Boss 节律 **lg % 3 == 0**（g3 / g6 / … / g24）；④ **其余 Boss 关（lg%3≠0）保持单场景单 Boss**。
+
+### 新增功能
+
+1. **关卡 `mode` 派生重写**（`page/group-levels.js`，唯一派生点）
+   - `stageIsMulti(lg, st)`：`st 1–9` → `multi`（普通关与 x5 精英关全开）；`st === 10` → 仅 `lg % MULTI_BOSS_EVERY === 0` 为 `multi`，其余 `single`；越界（lg<1 / lg>GROUP_MAX / st 越界）→ `single`。
+   - 新常量 `MULTI_BOSS_EVERY = 3`（原 `MULTI_SCENE_FIRST_LEVEL` / `MULTI_SCENE_STEP` 随旧节律作废，导出同步删除）。
+   - 派生结果：**240 关里 224 关 multi**（24 大关 × 9 关 + 8 个双 Boss 关），只剩 16 个「非双 Boss」的 x-10 是 single。
+   - **双 Boss 不需要新编成逻辑**：Boss 关每侧拿一份完整编成（既有 `genStageEnemies` 的「1 Boss + 2 护卫」），两场景各一份 ⇒ 全场正好 2 个 Boss。
+2. **系数改成按关卡类型取值**（`page/group-dual.js`，唯一来源）
+   - `MULTI_SCENE_SCALE_BY_TYPE = { normal: 0.85, elite: 0.9, boss: 0.9 }`；`multiSceneScale(type)` 未知/缺省回落 0.85（绝不返回 0）。
+   - `applyMultiSceneScale(cfgList, scale)` 的 `scale` 可以是**数字**或**关卡 type 字符串**；不传 → 普通档。语义仍是「只乘 base 五项、floor、下限 1、不改原编成」。
+   - `MULTI_SCENE_ENEMY_SCALE` 降级为**兜底默认 0.85**（v2.14.22 的实测单一常量 0.95 已被本规格替换）。
+3. **开战入口改为「能开就开，开不了回退」**（`page/game-render.js`）
+   - `_startDualGroupTrial()` 现在**返回布尔**：`true` = 已开双场景；`false` = 编队不足/空队/导演缺失。
+   - `startGroupTrial` 里 `if (glv.mode === 'multi')` 分支改成 `if (_startDualGroupTrial(...)) return`；返回 `false` 时**给一次说明 toast 后继续走单场景建场** —— 新玩家与「只有 1 支满员队」的存档**不再被挡住开战**（阶段 D 的「两支任一不可战即不可开战」已废止）。
+   - 每侧敌人缩放改为 `multiSceneScale(glv.type)`（不再用单一常量）。
+
+### 修复
+
+1. **新档会被卡住的隐患**：多队改成常态后，若沿用阶段 D「队不足即不可开战」，任何只有 1 支编队的存档都会在 x1–x9 全线无法开战 → 已按上条改为回退单场景 + 提示。
+
+### UI 调整
+
+1. 回退时的提示文案：「ℹ️ 本场按**单场景**开战：需要两支都有可战宠物的编队（宠物面板 → 🐾 编队管理）」。
+2. 双栏渲染与芯片尺寸**一字未改**（阶段 E 的紧凑芯片直接复用，实测三个关卡类型均通过）。
+
+### 测试
+
+1. `scripts/test-attackable.js` §7 全量重写（multi 数量 = 每大关 1–9 关 + 能整除 3 的 Boss 关、`single` 只剩非双 Boss 的 x-10、g1-5 也 multi、g18-10 是双 Boss、`MULTI_BOSS_EVERY === 3`、Boss 编成含 Boss + 护卫）→ **53 断言**。
+2. `scripts/test-dual-battle.js`：§1 改成分档断言（0.85 / 0.9 / 0.9 + 未知回落 + 数字/字符串两种入参 + 下限 1）、§10 常量守卫、§13 集成按精英 0.9、新增 §14（双 Boss 关两侧各 1 Boss / 非双 Boss 关仍 single / 单队与空队回退 false / 入口按返回值收工）→ **93 断言**。
+3. 全量 **84 套件 / 0 失败**；`test-a11y-tokens` **40/40**。
+4. `scripts/verify-dual-layout.js` 增加**关卡 id 参数**（默认 `g18-5`），并实测 **g3-1（普通关）/ g3-10（双 Boss）/ g18-5（精英关）** 三种关卡类型各 **28/28 全绿**（截图含双 Boss 关两栏各 1 Boss + 2 护卫）。
+
+### 版本
+
+1. 缓存戳 `?v186` → **`?v187`**（56 处）；`page/` JS 数 **55**（未新增模块）；最大文件 `game-render.js` **3550 行**。
+2. ⚠️ **平衡影响如实披露**：多队从「全期 2 关」变成「240 关里 224 关」，而普通关系数是 0.85 —— 按 v2.14.22 的实测（同关同阵容、40 种子），双场景在 0.85 时比同关单场景**容易 4~40pp**（双倍宠物池摊薄失败风险），因此**整体难度会明显下移、单场耗时约翻倍**。若体感偏易，只需改 `MULTI_SCENE_SCALE_BY_TYPE` 这一张表（普通档可上调到 0.9~1.0）。
+
+---
+
 ## v2.14.22
 
 Date: 2026-11-26
@@ -1315,6 +1363,7 @@ Date: 2026-10-12
 | 2.14.20 | 54 | 3371 行 game-render.js | **玩家口径阶段 C（`attackable` 单源目标过滤 + 关卡 mode，仍不启用多队）**：`attackable(u)` = 存活且未打 `_untargetable` 标记，接入 `ai.js` 选靶双入口、`battle-group.js` 的 `selectTargets` 双池/嘲讽/声明合法性/强制目标/技能 `pool`+`allPool`/蓄力/迷惑/伤害分担/光环/`onFoeHeal`/额外目标池、`normalAttack` 与 `groupUnitTurn` 两道闸、反噬与魔法镜、`terrain.js` 全部取靶循环 + `applyTerrainResult` 兜底闸；`group-levels.js` 每关派生 `mode:'multi'\|'single'`（`stageIsMulti`，g18 起每 6 大关的 x-5 ⇒ 全期只有 `g18-5`/`g24-5`，Boss 与 1–3 关永不 multi，越界不派生）；**mode 只派生不消费**（源码守卫钉死），普通战斗逐字节等价；新增 `test-attackable`（48 断言）；全量 **83 套件 / 0 失败** + a11y 40/40；缓存戳 `?v183` → **`?v184`** |
 | 2.14.21 | 55 | 3542 行 game-render.js | **多队双场景阶段 D（导演 + 双栏 + 玩家轮转 + 替补绑定，首次开放多队）**：新模块 `group-dual.js`（`MULTI_SCENE_ENEMY_SCALE=0.85` 缩放 / `createDualBattle` / `dualStep` 换边与冻结跳过 / `dualMovePlayer` 回合边界双池搬移 / `dualReinforce` 未上场队列按序满血补给并绑定场景 / `dualMergedBattle` 门面 / 场景文案）；`game-render.js` 唯一 `glv.mode==='multi'` 分支 → `_startDualGroupTrial`（A←一队、B←二队、两队任一不可战即不开战、每侧各调一次 `groupStageEnemies` 完整编成 ×0.85、敌人 id `enemyA-`/`enemyB-`、**一个共享 rng 注入两个 gb**、双场景不做时间旅行），`_groupStep` 改走 `_dualStepOnce` 且 `_groupBattle` 降级为当前场景活指针，导演 notes → toast，`renderGroupBattlePane(gb,sfx)` id 参数化 + 双栏 dense 阈值 5，`renderGroupOverlay` 双栏 `.gb-dual` + 栏头状态 + 两侧合计血量 + 控制条「回合 / 当前 / 替补」，`_gbFindUnit` 跨两场景查单位，结算仍单入口（`dualMergedBattle` 门面喂既有奖励/受伤/统计/历史）；修两处开发期缺陷（替补队列 `buildSquad` 未入 `dir` 导致空转判败、`_groupDual` 未在开战入口复位导致陈旧导演接管下一场）；新增 `test-dual-battle`（78 断言，含真走 g18-5 开战入口的集成段）；全量 **84 套件 / 0 失败** + a11y 40/40；缓存戳 `?v184` → **`?v185`** |
 | 2.14.22 | 55 | 3543 行 game-render.js | **阶段 E（真机双栏复核 + 平衡实测定值）**：新增 `scripts/verify-dual-layout.js`（无头 Chrome + 自建 CDP 客户端，Node 22 自带 WebSocket）在 360×640 / 390×844 真开 g18-5 量测 **28 项**，抓到**双栏芯片溢出广场下沿**（A 越界 153px / B 81px）并修复 —— 双栏改紧凑芯片 `--gb-unit-w:44px` / `--gb-unit-ico:18px`（`min-width`/`min-height` 仍 **44px = 触摸下限**）、中央区压到 2px、`.gb-dual .gb-arena-row` 取消 `max-height` 裁切、控制条标题压成无空格；新增 `scripts/balance-dual.js`（同关同阵容、40 种子、单场景用户基线）实测把 `MULTI_SCENE_ENEMY_SCALE` **0.85 → 0.95**（0.85 时双场景比同关单场景**容易 4~40pp**，与精英关定位相反；0.95 持平或略难）。全量 **84 套件 / 0 失败** + a11y **40/40**，缓存戳 `?v186` |
+| 2.14.23 | 55 | 3550 行 game-render.js | **多队双场景改为常态 + 按关卡类型分档 + 双 Boss**（作者新规格，推翻 v1.2 Q6）：`stageIsMulti` 重写为「x1–x9 全 multi；x10 仅 `lg % MULTI_BOSS_EVERY(3) == 0` 为 multi」，240 关里 **224 关 multi**、16 个非双 Boss 关仍 single；`MULTI_SCENE_SCALE_BY_TYPE = {normal:0.85, elite:0.9, boss:0.9}` 取代单一常量（`multiSceneScale(type)`，未知回落 0.85）；`applyMultiSceneScale` 接受数字或 type 字符串；**双 Boss = 两场景各 1 Boss**（每侧完整编成，天然 2 Boss，无新编成逻辑）；开战入口 `_startDualGroupTrial` 改返回布尔，**队不足回退单场景**（不再挡住新档开战）；`test-attackable` §7 重写（53 断言）、`test-dual-battle` 分档 + 新增 §14（93 断言）；`verify-dual-layout` 支持传关卡 id，g3-1 / g3-10 / g18-5 三种类型各 28/28。全量 **84 套件 / 0 失败**，缓存戳 `?v187` |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。
