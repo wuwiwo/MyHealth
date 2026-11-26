@@ -1,13 +1,14 @@
-# 宠物编队与多队双场景战斗设计 v1（仅文档 · 未施工）
+# 宠物编队与多队双场景战斗设计 v1.1（定稿 · 未施工）
 
-> **状态**：设计提案。本文**只写文档**，不改 `page/*.js`、不改测试、不 bump 版本、不生成 changelog。
-> **基线**：2026-11-26，HEAD `4ff0beb`，`APP_VERSION=2.14.17`。
-> **事实源**：`page/pet-store.js`（编队存档）、`page/game-render.js`（开战与渲染）、`page/battle-group.js`（战斗引擎）、`page/group-levels.js`（关卡）、`page/ai.js`（目标选择）。
-> 凡本文中的 `文件:行号` 均以基线为准；施工前须重新核对。
+> **状态**：**设计定稿 v1.1**（Q1–Q13 已裁决），**未施工**。本文**只写文档**，不改 `page/*.js`、不改测试、不 bump 版本、不生成 changelog（`AGENTS.md` 设计阶段）。
+> **基线**：2026-11-26，HEAD `162d003`，`APP_VERSION=2.14.17`，`page/*.js` 53 个，`scripts/test-*.js` **80 套件 / 0 失败**（本轮实测）。
+> **事实源**：`page/pet-store.js`（编队存档 / 建单位）、`page/pets.js`（参战资格）、`page/game-render.js`（开战与渲染）、`page/battle-group.js`（群战引擎）、`page/group-levels.js`（关卡生成）、`page/ai.js`（目标选择）。
+> 文中 `文件:行号` 均按上述基线**本轮实测复述**；施工前须再核对一次（行号漂移是常态）。
+> **与 v1.0 的差别**：Q1–Q9 由「待裁决」改为**定稿**，并新增 Q10–Q13（敌人拆分 / 玩家状态跨场景 / 回合与 RNG / 渲染与结算落点）。每条裁决都写了**理由**与**改判开关**，作者要改某条时只动对应一行。
 
 ---
 
-## 0. 需求原文与作者裁决
+## 0. 需求原文与四项原始裁决
 
 ### 0.1 需求原文（作者，2026-11-26）
 
@@ -20,7 +21,7 @@
 > 现在玩家不参与战败的结算（我方宠物全部阵亡即算失败）；
 > 先写文档。
 
-### 0.2 四项裁决（作者同日确认）
+### 0.2 四项原始裁决（作者同日确认，不变）
 
 | # | 议题 | 裁决 |
 |---|---|---|
@@ -29,134 +30,165 @@
 | D3 | 一边赢一边输的判定 | **赢的一边结束，输的一边看是否有替补队伍；最后也没有替补则算失败**（不是「任一边失败立即整场失败」） |
 | D4 | 小队跨场景复用 | **本场锁定**：小队一旦上场即绑定该场景，即使清空敌人也不转场、不再参与本场任何替补；下场战斗可重新编队 |
 
+### 0.3 需求原文里的一处关键读法（本轮澄清）
+
+原文第 6 条「**如果是多队战斗，则每回合轮流在不同场景进行战斗**」的主语是**玩家角色**（与「玩家角色不会被敌人攻击·不会阵亡」同一句）。
+
+⇒ 结论：多队战斗中**玩家是「真实在场、真实出手、只是打不到也打不死」的单一单位**，不是「把玩家属性投影到宠物身上」。这条直接决定了 Q4 的答案。
+
 ---
 
-## 1. 现状事实（施工前必读）
+## 1. 现状事实（施工前必读，逐条实测）
 
-### 1.1 编队
+### 1.1 编队与参战资格
 
 | 事实 | 依据 |
 |---|---|
-| 存档 `dh-pets-v1.battlePicks` 是**扁平的 speciesId 数组**，只有一份 | `pet-store.js:20`，schema `:9-33` |
-| `PET_BATTLE_MAX = 4`（唯一来源） | `pet-store.js:303`（`pets.js:20` 的 `maxRoster:4` 只是镜像） |
-| 读 `getPetBattlePicks()` / 存 `savePetBattlePicks(ids)`（按 `slice(0,4)` 截断） | `pet-store.js:266-269` / `:270-275` |
-| 运行时 `_petBattlePicks` 缓存 + `ensurePetBattlePicksLoaded()`（剔除已不存在物种） | `game-render.js:459-460` / `:755-770` |
-| UI 选择逻辑三处同源（培养页卡、列表点击、就地切换） | `game-views.js:88-101` / `:173-185`，`pet-ui.js:568-582` |
-| **目前不能建多个小队**：无 `squads` 字段、无多队 UI、一次开战只生成一个 `allies` | `game-render.js:830-836` |
+| 存档 `dh-pets-v1.battlePicks` 是**扁平的 speciesId 数组**，只有一份 | `pet-store.js:20`、默认值 `:43` |
+| 读 `getPetBattlePicks()` / 存 `savePetBattlePicks(ids)`，写入时 `slice(0, PET_BATTLE_MAX)` 截断 | `pet-store.js:266-274` |
+| `PET_BATTLE_MAX = 4`（唯一来源；`pets.js:20` 的 `maxRoster:4` 只是镜像） | `pet-store.js:303` |
+| **参战资格 = 成熟 + 未阵亡 + 未受伤**（`canPetBattle()`），建单位时就在这里过滤 | `pets.js:48-51`、`pet-store.js:312` |
+| 运行时 `_petBattlePicks` 缓存 + `ensurePetBattlePicksLoaded()` | `game-render.js:459-460`、`:830` |
+| **目前不能建多个小队**：无 `squads` 字段、无多队 UI、一次开战只生成一份 `allies` | `game-render.js:830-836` |
 
-### 1.2 宠物参战、阵亡与换人
+> 📌 由此派生一条**既有行为**（非本设计新增）：存档里若有伤员/阵亡者，建单位时会被 `canPetBattle()` 静默剔除 → 队伍实际人数变少。阶段 A 做编队 UI 时必须把这一点显式化（禁用位显示原因），不能让玩家以为"4 只都上了"。
 
-- 链路：`battlePicks` → `getPetBattlePicks()` → `_petBattlePicks` → `buildGroupBattlePets(petIds, 4)` → `createPetUnitsForBattle` → `createPetUnit` → `allies = [player].concat(petUnits)`（`game-render.js:830-836`，`pet-store.js:1273-1274` → `:306-318`，`pet-codex.js:50-89`）。
-- 战斗中阵亡判据 = `hp <= 0`（`battle-group.js:1645-1646`）；`allies` 在 `createGroupBattle()` 建场时**一次性固定**（`:390-394`），**没有任何战斗中替换/增援路径**。
-- 战后 `applyDefeatInjuries()` 对参战成熟宠物按 `matureInjuryChance`（默认 0.5）掷骰致伤（`pet-store.js:182-193`，调用点 `game-render.js:1748-1757`）。
-- 「后备」目前只用于凝聚/共鸣属性加成，**不是战斗换人**（`pet-store.js:1278`，`doc/changelog-v2.2.md:1491`）。
+### 1.2 阵亡与换人
+
+- 开战即固定：`allies = [player].concat(petUnits)`（`game-render.js:836`），`createGroupBattle({allies,enemies,…})`（`:855`）建场时**一次性固定**（`battle-group.js:388-408` 区域）。
+- 战斗中**没有任何增援 / 替换入口**；阵亡判据 = `hp <= 0`。
+- 「后备」目前**只**用于凝聚/共鸣属性加成，**不是战斗换人**（`pet-store.js` 的 bench 系列，见 `doc/changelog-v2.2.md`）。
+- 战后致伤 `applyDefeatInjuries()` 对**参战成熟宠物**按 `PET_CONFIG.matureInjuryChance`（默认 0.5）掷骰（`pet-store.js:184`）。
 
 ### 1.3 玩家角色
 
-- 玩家 unit 由 `game-render.js:818` 创建（`id:'player', side:'ally'`），置于 `allies[0]`（`:836`）。
-- **当前会被敌人选为目标**：`aiPickTarget()` 用 `aliveOpponents()` 取全部 `gb.allies`（`ai.js:9-11,34-56`），`selectTargets()` 对敌方的 `foes = gb.allies`（`battle-group.js:642-643`），两处都无排除玩家的分支。
-- 当前判负 = **全体 ally（玩家+宠物）皆 hp<=0**（`battle-group.js:1644-1650`）；玩家单人阵亡但宠物存活不判负。
-- **没有**任何「不可被攻击 / untargetable」开关（全库检索无匹配）。
+- 玩家 unit 在 `game-render.js:818` 创建（`id:'player'`、`side:'ally'`），置于 `allies[0]`（`:836`）。
+- 玩家技能挂载在**单个 unit 上**：`attachPlayerSkills(player, getSkillState())`（`:824-826`），数据落在 `_playerSkills`（`player-skill-hooks.js:11-20`）。
+- `_playerSkills` 的消费者按「**在 allies 里找持有者**」定位，例如开战一次的金身护盾：`gb.allies.find(u => u._playerSkills)`（`battle-group.js:1667-1673`）。
+- **当前会被敌人选为目标**：`ai.js:9-13` 的 `aliveOpponents/aliveAllies` 只按阵营过滤、不看任何标记；`battle-group.js:74`、`:121`、`:642-643`、`:1071` 等目标池同理。
+- **全库没有「不可被攻击 / untargetable」机制**（本轮检索无匹配）。
 
-### 1.4 关卡组织
+### 1.4 胜负判定
 
-- `GROUP_LEVELS` = `g1..g24`，每大关 10 小关；小关字段 `id / name / type('normal'|'elite'|'boss') / enemies`（`group-levels.js:419-443`），`type` 是现成的特殊战斗标记位。
-- `GROUP_MAX` 由 `GROUP_STAGE_NAMES` 派生（`:14-23,29`）；`allStageIds()` 线性收集全部关卡 id（`group-progress.js:42-49`）。
-- `groupStageEnemies(groupId, stage, allies)` 是取敌人配置的唯一入口（`group-levels.js:579-584`），实战调用点 `game-render.js:839`。
+```js
+// battle-group.js:1644-1651（现行）
+var alliesAlive = gb.allies.some(a => a.hp > 0);
+var enemiesAlive = gb.enemies.some(e => e.hp > 0);
+if (!alliesAlive)  { gb.done = true; gb.winner = 'enemy'; }
+if (!enemiesAlive) { gb.done = true; gb.winner = 'ally';  }   // 双 KO 时这一行覆盖上一行 → 判我方胜
+```
 
-### 1.5 战斗对象与渲染
+判负口径 = **全体 ally（玩家 + 宠物）皆 0 血**。没有「只看宠物」的开关。
 
-- `createGroupBattle(opts)` 参数 `{allies, enemies, rng?, seed?, terrain?}`；gb 字段 `units / allies / enemies / turn / done / winner / phase / events / log / rng / terrain`（`battle-group.js:388-408`）。
-- 全局只有**一个** `#battleOverlay`（`index.html:210`）、**一个** `#gbArena`（`game-render.js:2513`）、**一个** `_groupBattle`（`:855`）。
-- `renderGroupBattlePane(gb)` 只渲染单个场景的三块固定区：`#gbArenaEnemy` / `#gbArenaMid` / `#gbArenaAlly`（`:2506-2532`）。
-- **当前无法容纳两个独立战场**；全库无「多场景 / 分路 / 双线」战斗实现。
+### 1.5 关卡组织
+
+- `GROUP_LEVELS['g'+lg].stages[]` 由 `group-levels.js:419-443` 的程序化循环生成：每大关固定 10 小关，id `gN-M`；**`st===5` → `type:'elite'`，`st===10` → `type:'boss'`**，其余 `normal`。
+- `GROUP_MAX` 由 `GROUP_STAGE_NAMES` 派生；`allStageIds()` 线性收集（`group-progress.js`）。
+- 取敌人配置的唯一入口 `groupStageEnemies(groupId, stage, allies)`（`group-levels.js:579-584`），实战调用点 `game-render.js:839`。
+
+### 1.6 战斗对象与渲染
+
+- `createGroupBattle(opts)` 参数 `{allies, enemies, rng?, seed?, terrain?}`；gb 字段 `units / allies / enemies / turn / done / winner / phase / events / log / rng / terrain`。
+- 全局只有**一个** `#battleOverlay`、**一个** `#gbArena`、**一个** `_groupBattle`。
+- `renderGroupBattlePane()` 只渲染单场景三区：`#gbArenaEnemy` / `#gbArenaMid` / `#gbArenaAlly`。
+- **当前无法容纳两个独立战场**，全库无「多场景 / 分路 / 双线」实现。
 
 ---
 
-## 2. 数据模型（提案）
+## 2. 数据模型
 
-### 2.1 存档结构
-
-在 `dh-pets-v1` 增加 `squads` 字段，**保留 `battlePicks` 作为兼容镜像**（指向当前选中的首发小队）：
+### 2.1 存档结构（`dh-pets-v1` 扩展）
 
 ```
 squads: [
-  { id: 'sq-1', name: '一队', petIds: ['sparkle', 'dream', 'kirin', 'nonebear'] },  // ≤4
-  { id: 'sq-2', name: '二队', petIds: ['flamechick', 'rocksteady'] },
+  { id: 'sq-1', name: '一队', petIds: ['sparkle','dream','kirin','nonebear'] },  // petIds.length ≤ 4
+  { id: 'sq-2', name: '二队', petIds: ['flamechick','rocksteady'] },
   ...
 ]
-battlePicks: ['sparkle', 'dream', 'kirin', 'nonebear']   // = squads[0].petIds，兼容旧代码
+battlePicks: ['sparkle','dream','kirin','nonebear']   // = squads[0].petIds，兼容旧代码
 ```
 
-- **数量不限**：`squads.length` 无上限；每个 `petIds.length ≤ 4`（`PET_BATTLE_MAX` 仍是唯一来源）。
-- **同一宠物不得重复出现在两个小队**（待裁决 Q1）；建队 UI 需校验。
-- **旧档迁移**：无 `squads` 时，用现有 `battlePicks` 生成 `squads = [{id:'sq-1', name:'一队', petIds: battlePicks}]`；不丢数据、不补偿（对齐既有 `pet-store.js` 的优雅退化惯例）。
-- `battlePicks` 与 `squads[0]` 的**双向同步**必须有单一写入口，避免两份真相漂移（建议：`savePetBattlePicks()` 内部同时更新两者）。
+| 规则 | 定稿 |
+|---|---|
+| 小队数量 | **无上限**（`squads.length` 不设限） |
+| 每队容量 | `petIds.length ≤ PET_BATTLE_MAX`（4，仍为唯一常量来源，不新增第二个 4） |
+| 同宠多队 | **禁止**（Q1） |
+| 旧档迁移 | 无 `squads` 时按现有 `battlePicks` 生成 `{id:'sq-1', name:'一队', petIds:battlePicks.slice()}`；不丢数据、不补偿 |
+| 单一写入口 | `savePetBattlePicks()` 内部**同时**写 `battlePicks` 与 `squads[0].petIds`；新增 `saveSquads()` 内部同步 `battlePicks = squads[0]?.petIds`。**不允许别处直接改这两个字段** |
+| 顺序 | **`squads` 数组顺序即替补顺序**，不另存 `order` 字段（避免两份真相） |
 
-### 2.2 战斗编制对象
-
-新增「编制」概念（运行时，不落盘）：
+### 2.2 战斗编制对象（运行时，不落盘）
 
 ```
-squadOrder: [sq-1, sq-2, ...]   // 本场按此顺序替补
-deployed:   Set<squadId>        // 已上场（本场锁定，D4）
-sceneBind:  { A: sq-1, B: sq-2 } // 多队战斗的初始派驻
+battleDirector = {
+  scenes: [ { key:'A', gb, squadId, status:'active'|'won'|'lost' }, ... ],
+  squadOrder: [sqId...],       // 本场快照（开战时 freeze，战后改队不影响本场）
+  deployed: Set<sqId>,         // 已上场（D4 本场锁定）
+  nextSquadIndex,
+  cycle,                        // 全局回合轮次计数
+  rng,                          // 单套随机源（两侧共用）
+  done, winner
+}
 ```
 
 ---
 
 ## 3. 单队接力（普通战斗）
 
-**规则**：从 `squadOrder` 第 1 队开始上场；该队**全部宠物 hp<=0** 时，派下一队满血上场；直到全部小队用尽。
+**规则**：从 `squadOrder[0]` 开始上场；该队**全部宠物 hp<=0** 时，换下一队**满血**上场；直到全部小队用尽仍全灭 → 判负。
 
-| 项 | 设计 |
+| 项 | 定稿 |
 |---|---|
-| 触发时机 | 本回合判定阶段后检测 `当前队全部宠物 hp<=0` 且 `还有未上场小队` → 下一回合开始前换队 |
-| 换队方式 | 新建 `petUnits` 并 `gb.allies.push(...)`（**不能再走 `createGroupBattle` 重建**，否则敌人/进度/RNG 全变） |
-| 属性链路 | 新单位必须走既有管道 `createPetUnit → applyBattlePetBaseBonuses → boostPetForGroup`，与 `buildGroupBattlePets` 同源（禁止另写一份数值） |
-| 队长/caching | 已阵亡宠物 unit 保留在 `gb.allies`（hp=0，行动循环自然跳过），不删除——保住日志/战报归因 |
-| 敌人缩放 | 不随换队重算（`GROUP_ANCHOR.enabled` 默认 false，现状） |
-| 替补顺序 | `squadOrder` 定义顺序（UI 可拖动调整，待裁决 Q2） |
-| 结束条件 | 全部小队用尽且场上宠物全灭 → 判负（玩家是否计入见 §5） |
+| 触发时机 | 本回合**判定阶段之后**检测「当前队宠物全灭」且「还有未上场小队」→ 下一回合准备阶段开始前换队 |
+| 换队方式 | 向**同一个** `gb.allies` 追加新单位（**不重建 `createGroupBattle`**，否则敌人/词缀/场地/RNG/进度全变） |
+| 属性链路 | 必须复用 `buildGroupBattlePets()` 一条链路（`pet-store.js`）——禁止另写一份数值 |
+| 旧单位 | 保留在 `gb.allies`（hp=0，行动循环自然跳过），**不删除** → 日志/战报归因不丢 |
+| 敌人缩放 | **不随换队重算**（`GROUP_ANCHOR.enabled` 默认 false，沿用现状） |
+| 替补顺序 | `squadOrder` 定义顺序（见 Q2） |
+| 结束条件 | 全部小队用尽且场上宠物全灭 → 判负（普通战斗下玩家是否计入见 Q5） |
+| 玩家 | 普通战斗**维持现状**（玩家在 `allies[0]`、可被攻击、计入判负） |
+
+> ⚠️ 实现注意：往 `gb.allies` 追加单位后，`gb.units` 也必须同步，否则属性遍历 / 场地 DOT / 行动队列会漏掉新单位。**建议提供唯一入口 `gbReinforce(gb, units)`**，不许在两处各写一遍 push。
 
 ---
 
 ## 4. 多队双场景战斗
 
-### 4.1 总体结构
+### 4.1 结构
 
-| 项 | 设计 |
+| 项 | 定稿 |
 |---|---|
-| 场景数 | 固定 **2**（A / B），各自有 `enemies`（由关卡配置决定）、各自绑定 1 个小队 |
-| 初始派驻 | 从 `squadOrder` 取前 2 队，分别进 A / B（顺序：第 1 队→A，第 2 队→B） |
-| 推进 | **轮流结算**（D1）：全局 `turn` 计数，奇数回合推进 A、偶数回合推进 B；单套 RNG（`gb.rng`），保证可复现 |
-| 场景结束 | 该场景敌人全灭 → 该场景**胜利并冻结**（保留展示，不再推进）；胜利小队**本场锁定**（D4），不转场、不替补 |
-| 替补 | 某场景宠物全灭且该场景未胜利 → 从**未上场小队**按 `squadOrder` 取下一队，满血上场（该队即绑定此场景，D4） |
-| 整场胜利 | **A、B 两场景都胜利**（D3） |
-| 整场失败 | 某场景失败且**没有未上场小队可替补**（D3）——不等另一场景 |
-| 替补耗尽顺序 | 两个场景同时需要替补时，按 A→B 顺序分配（待裁决 Q3） |
+| 场景数 | 固定 **2**（A / B） |
+| 初始派驻 | `squadOrder[0] → A`、`squadOrder[1] → B`；不足 2 队时该关卡**不可开战**（UI 置灰 + 说明） |
+| 推进（D1） | 全局 `cycle` 计数推进：A 跑完整四阶段 → B 跑完整四阶段 → `cycle++`；场景内各自 `gb.turn` 独立递增 |
+| RNG（Q12） | 导演持有**一个** `rng`，两个 gb **注入同一个函数引用**；不使用「同种子两个实例」（否则两侧掷出同一序列，可复现但统计相关） |
+| 场景结束 | 该场景敌人全灭 → 该场景 `won` 并**冻结**（保留展示、不再推进）；该场景小队**本场锁定**（D4） |
+| 替补 | 某场景宠物全灭且该场景未胜利 → 从**未上场小队**按 `squadOrder` 取下一队，满血上场并绑定该场景（D4） |
+| 整场胜利 | A、B 两场景都 `won`（D3） |
+| 整场失败 | 某场景宠物全灭且**无未上场小队可替补** → 整场失败（D3，不等另一侧） |
+| 轮转中的空场景 | 已 `won`/`lost` 的场景跳过，另一场景照常逐 cycle 推进（相当于该侧独占节奏，`cycle` 仍递增以保持日志可读） |
 
-### 4.2 双场景引擎载体
+### 4.2 双场景敌人拆分（Q10）
 
-**推荐方案：一个「战斗导演」对象 + 两个独立 `gb`**：
+**定稿**：沿用该关**现有**编成池，按索引**轮转**分给两侧 —— `genStageEnemies()` 返回数组 `[0..n-1]`，**A 取偶数索引、B 取奇数索引**；某侧为空则从另一侧尾部挪 1 个（保证每侧至少 1 敌）。
 
-```
-battleDirector = {
-  scenes: [ { key:'A', gb: gbA, squadId, status:'active'|'won'|'lost' },
-            { key:'B', gb: gbB, squadId, status:... } ],
-  squadOrder, nextSquadIndex, turn
-}
-```
+| 关型 | 原编成 | A | B |
+|---|---|---|---|
+| 普通关（小关 1-3） | 1 敌 | 1 | 0 → 挪 1（A=1、B=1 不可能，故该类小关**不设为多队**，见 §6） |
+| 普通关（4-9） | 2 敌 | idx0 | idx1 |
+| 精英关（x-5） | 3 敌（精英 idx0 + 2 杂兵） | idx0、idx2 | idx1 |
 
-- 两个 `gb` 各自持有 `allies / enemies / units / done / winner / terrain`，**各自调用 `groupBattleStep()` 的等价单步**；但为符合 D1，**每回合只推进其中一个 gb**。
-- 共用一套 RNG：导演持有 `rng`，两个 gb 创建时传同一个种子派生的随机源（或共享 `gb.rng` 引用）——需在实现时验证确定性回放仍成立。
-- 玩家 unit：按 D2，**多队战斗中玩家不可被攻击**。推荐做法：玩家 unit 不放入任一场景的 `allies`（即场景里只有宠物），玩家技能/属性加成通过既有 `attachPlayerSkills` 通道挂到宠物或在导演层统一施加（具体接线待裁决 Q4）。
+- **不改 `groupStageEnemies()` 语义**：它继续返回「整关编成」，供调试 / 锚定 / 既有测试使用；拆分只发生在多队开战路径（导演层），单一来源仍是 `group-levels.js`。
+- **不新增数值**：两侧敌人共用原 per-index 配置，总强度预算与单场景关一致。
+- **备选（作者可改判）**：每侧各生成一份同规格编成（总敌数翻倍、两侧同难度）→ 需重新定平衡，本版**不采用**。
+- 若阶段 E 实测每侧过轻，只调**一个常量** `MULTI_SCENE_SCALE`（默认 `1.0`，不放大）做补偿，禁止散点改数值。
 
-### 4.3 渲染
+### 4.3 渲染（Q13）
 
-- `#battleOverlay` 内改双栏：两个 `.gbArena`（A/B），各调一次 `renderGroupBattlePane(gb)`（需把该函数改为接受 gb 参数并使用局部 DOM id，避免全局 `#gbArena` 冲突）。
-- 顶部控制条显示：当前回合、正在推进的场景（A/B）、两侧状态（active/won/lost）、剩余未上场小队数。
-- 胜负/战报：两侧分别结算，整场结果在导演层判定后统一走既有结算面板（复用 `_groupDone` 的发奖/进度/历史逻辑，避免第二份奖励代码）。
+- `#battleOverlay` 内改双栏：两个 `.gbArena`（A/B），各调一次 `renderGroupBattlePane(gb, ids)` —— **参数化容器 id，禁止第二份渲染代码**。
+- 顶部控制条显示：`cycle N`、当前推进场景（A/B）、两侧状态（active / won / lost）、剩余未上场小队数。
+- 战报 / 统计：两场景 `groupBattleStats()` 结果**合并**后再展示（「本场」= A+B 合计，另给分栏小计）。
+- 胜负与发奖：导演层判定后**复用既有 `_groupDone` 发奖/进度/历史链（唯一入口）**，禁止第二份奖励代码。
 
 ---
 
@@ -164,74 +196,108 @@ battleDirector = {
 
 | 项 | 普通战斗 | 多队战斗 |
 |---|---|---|
-| 玩家在场上 | 维持现状（`allies[0]`） | 不进入任一场景的 `allies`（D2 引申） |
-| 玩家被敌人攻击 | 维持现状（可被选为目标） | **不可**（D2） |
-| 玩家阵亡 | 维持现状 | 不适用（不在场） |
-| 判负条件 | **待裁决 Q5**：本文按需求原文「我方宠物全部阵亡即算失败」→ 只看宠物，玩家不计入 | 同左（每场景只看该场景宠物；全局看替补是否耗尽） |
-| 战后受伤结算 | 维持现状（`applyDefeatInjuries` 只作用于宠物，玩家本就不参与） | 同左：宠物按既有逻辑致伤，玩家不参与 |
+| 玩家在场上 | 维持现状（`allies[0]`） | **单一 unit，随推进场景移动**（Q4）：推进 A 时在 `gbA.allies`，推进 B 时移入 `gbB.allies`（同步 `gb.units`） |
+| 玩家被敌人攻击 | 维持现状（可被选为目标） | **不可**（D2）：`_untargetable` 标记 + **唯一**过滤助手 `attackable(u)`，在 `ai.js` 与 `battle-group.js` 的目标池处调用 |
+| 玩家阵亡 | 维持现状 | 不适用（不可被攻击 ⇒ 不可能到 0 血） |
+| 判负条件 | **维持现状**（玩家 + 宠物全灭）→ Q5 | **只看宠物**：某场景宠物全灭且无替补 ⇒ 整场失败 |
+| 玩家状态跨场景 | — | **随单位保留**（Q11）：状态 / 护盾 / 技能 CD 跨场景延续，视为「玩家在两战场之间移动」 |
+| 战后受伤结算 | 维持现状（`applyDefeatInjuries` 只作用于宠物） | 同左；参战集合 = **本场上过场的所有小队**（含冻结、含被灭），未上场小队不掷伤（Q9） |
 
-> ⚠️ **需求原文「现在玩家角色不会被敌人攻击·不会阵亡」与裁决 D2（仅多队战斗）存在张力**。
-> 本文以 D2 为准（普通战斗维持现状），并把「玩家是否从判负条件中移除」列为 Q5 待裁决。
-
----
-
-## 6. 关卡出现规则
-
-- **位置**：后期关卡（`g16+` 为候选，因 g13+ 已启用 `groupTailMul`、g16+ 有 1.24 斜率）。
-- **间隔**：作者只说「间隔出现」，未给具体周期。提案：`g16` 起每 3 个大关的**第 5 小关（精英关）**为多队战斗（如 g18-5、g21-5、g24-5）——复用现成的 `type:'elite'` 标记位扩展。
-- **标记方式**：给小关增加 `mode: 'single' | 'multi'` 字段（默认 single），由 `group-levels.js` 的生成循环按规则写入；`groupStageEnemies()` 不改（敌人照常取）。
-- ⚠️ 具体大关起点与间隔待裁决 Q6。
+> ⚠️ **必须如实登记的口径后果**：玩家「每场一次」的技能效果（金身护盾等，消费者是 `gb.allies.find(u => u._playerSkills)`）在多队战斗里**只会在玩家当时所在的场景触发一次**，不会复制到另一场景。这是「玩家唯一」的直接推论，不额外补偿。
 
 ---
 
-## 7. 引擎 / UI 改动面（评估用，非施工清单）
+## 6. 关卡出现规则（Q6）
+
+**定稿**：`g16` 起、**每 3 大关的第 5 小关（精英关）**为多队战斗 → 试点 **3 场**：`g16-5`、`g19-5`、`g22-5`。
+
+| 项 | 定稿 | 理由 |
+|---|---|---|
+| 起点 | `g16+`（后期；g13+ 已启用 `groupTailMul`、g16+ 有 1.24 斜率） | 前期关不该强制两套阵容 |
+| 位置 | **第 5 小关（`type:'elite'`）** | 机制位现成；5 关是"精英"，做成双线有叙事感 |
+| **不进 Boss（x-10）** | 明确排除 | 双 Boss + 双场景会同时触发两套 Boss 词条/遗言，现有平衡口径无法复用，风险不可控 |
+| 也不进 1-3 关 | 明确排除 | 那些关只有 1 敌，拆不出两侧（见 §4.2） |
+| 间隔 | 每 3 大关 1 场（试点 3 场） | 可先在真实手感上验证，再加密 |
+| 标记方式 | 小关新增 `mode: 'single' \| 'multi'`（默认 `single`），由 `group-levels.js` 生成循环按上述规则写入 | 单一派生规则，扩量只改一处 |
+| 扩量备用 | 若 3 场太稀疏：第二批加 `x-10`（Boss）或改为每 2 大关的 `x-5` | 只需改派生规则一行 |
+
+---
+
+## 7. 裁决清单（Q1–Q13 定稿）
+
+| # | 议题 | 定稿 | 理由（为什么这么定） | 改判开关 / 影响面 |
+|---|---|---|---|---|
+| **Q1** | 同一宠物能否出现在多个小队 | **不能** | ① 单位按 `speciesId` 生成，重复会造出两只同名同属性单位，日志/战报无法区分；② 存档 `pets[]` 是**单实例状态**（等级/伤/死），同一只宠被两队同时消费语义冲突；③ 战后 `applyDefeatInjuries` 按参战物种掷伤，重复会重复结算 | 放开 = 需在 `createPetUnit` 层造实例 id，并定义"同宠两队同时在场"的受伤归属；成本高，不建议 |
+| **Q2** | 替补顺序是否可调 | **允许，用 ↑/↓ 按钮**（不用拖拽） | 移动端拖拽命中低、无障碍成本高；项目有 44px 热区 + `test-a11y-tokens` 硬护栏。按钮天然键盘可操作，代价 ≈0 | 改拖拽 = 需额外 a11y 测试与手势实现；不影响战斗口径 |
+| **Q3** | 两场景同时需要替补时的分配顺序 | **不成立，已消解** | D1 轮流结算 ⇒ 每回合只有一个场景在推进，灭队只可能发生在这一个场景；同一时刻不存在两侧同时求替补 | 若改判为「两场景并行推进」，Q3 立刻复活，需重写 §4.1 |
+| **Q4** | 多队战斗中玩家的技能/属性如何施加 | **玩家作为唯一单位轮流在场**（真实出手，只是打不到打不死） | ① 需求原文第 6 条的主语就是玩家本人（§0.3）；② "属性投影到宠物"会丢掉玩家全部输出，且要新建第二条数值通道（双份真相）；③ 单 unit 轮转可复用现有一切（`_playerSkills`、状态、CD、战斗日志） | 改投影 = 玩家不出手、要重做数值通道；不推荐 |
+| **Q5** | 普通战斗判负是否也改为「只看宠物」 | **否，维持现状**（玩家计入判负） | ① D2 已把「不被攻击」限定在多队；② 若普通战斗玩家可被打却打不死，会出现"0 血玩家继续出手"，语义自相矛盾；③ 会让现有 240 关的难度体系整体失效（玩家变无敌） | 改判 = 普通战斗全员难度重估 + 大量回归；不建议 |
+| **Q6** | 多队关卡起点与间隔 | `g16` 起、每 3 大关的 `x-5`（精英），试点 `g16-5/g19-5/g22-5`；**排除 Boss 与 1-3 关** | 见 §6 | 扩量只改 `group-levels.js` 派生规则一处 |
+| **Q7** | 替补上场是否满血 / 是否继承旧伤 | **满血、不继承本场战斗伤势**；带伤者按既有 `canPetBattle()` 排除 | ① 本场 hp 是运行时值、天然不落盘；② 既有限制已是「成熟+未阵亡+未受伤」（`pets.js:48-51`、`pet-store.js:312`）——**不是新规格**，只是要在编队 UI 里显式化（否则队伍会静默变少） | 若要"带伤上场"= 推翻既有口径，需同时改建单位过滤与 UI 提示；不建议 |
+| **Q8** | 多队战斗奖励倍率 | **不额外加成**（同关卡同奖励） | 奖励幂等靠 `_groupRewarded` + 关卡 id；额外倍率会开第二条经济通道，和"编队厚度"这一难度来源重复定价 | 改判 = 只需在发奖处加一个常量 |
+| **Q9** | 冻结/被灭小队战后是否照常结算 | **照常**（本场上过场即参战） | D4 的"锁定"是**不可转场**，不等于"未参战"；若不结算，会出现"打赢就免疫受伤"的漏洞 | 改判 = `applyDefeatInjuries` 的参战集合口径改写 |
+| **Q10**（新） | 双场景敌人怎么拆 | **沿用该关编成池按索引轮转**（A=偶、B=奇；空侧从另一侧挪 1），**不新增数值** | 总强度预算不变、无需重新定平衡、`groupStageEnemies()` 语义不动 | 备选「每侧各生成一份同规格编成」在 §4.2 明列，改判需重定平衡 |
+| **Q11**（新） | 玩家状态是否跨场景 | **随单位保留**（状态/护盾/CD 延续） | 玩家只有一个，做"每场景副本"会出现双份血条/双份护盾，且与"不可被攻击"叠加后没有意义 | 改判 = 每次转场清空状态，会显著削弱玩家输出 |
+| **Q12**（新） | 回合计数与 RNG | 全局 `cycle` + 场景内独立 `gb.turn`；**两侧共用同一 `rng` 引用** | 单套随机数才能保证"同种子可复现"（项目已有 `groupSnapshot/groupRestore/groupReplay` 契约） | 改判为两实例同种子 = 两侧序列相关，回放统计会失真 |
+| **Q13**（新） | 渲染与结算落点 | 参数化 `renderGroupBattlePane(gb, ids)` 双栏；发奖**只复用** `_groupDone` 唯一链 | 现有单场景假设根深蒂固，第二份渲染/发奖代码是本项目历史上 bug 的高发源 | — |
+
+### 7.1 已知口径后果（登记，不补偿）
+
+1. **玩家技能 CD 按"每个场景回合"递减** → 一个全局 `cycle` 内玩家出手 2 次，约为单场输出的 2 倍（宠物各自只在自己场景出手）。属"两场并行"的自然结果，平衡在阶段 E 复测。
+2. **"每场一次"的玩家技能只在一个场景触发**（§5 结尾已述）。
+3. **每侧面对的敌人少于原关卡**（拆半）→ 单侧压力下降，多队的真正成本是"阵容被切成两半"。阶段 E 若偏易，只调 `MULTI_SCENE_SCALE`。
+
+---
+
+## 8. 引擎 / UI 改动面（评估用，非施工清单）
 
 | 模块 | 改动 | 风险 |
 |---|---|---|
-| `pet-store.js` | 新增 `squads` schema + 迁移 + 单写入口同步 `battlePicks` | 中（存档兼容） |
-| `pet-ui.js` / `game-views.js` | 多小队管理 UI（增删/改名/拖拽排序/去重校验） | 中（现有三处同源选择逻辑要收口） |
-| `game-render.js` | 开战按 `mode` 分支；普通战斗换队注入；多队导演与双栏渲染 | **高**（现有单 gb 假设根深蒂固） |
-| `battle-group.js` | 支持运行时向 `gb.allies` 增援；判负条件参数化（是否含玩家） | **高**（引擎核心） |
-| `group-levels.js` | 小关 `mode` 字段 | 低 |
-| `ai.js` | 多队战斗中排除玩家为目标（若玩家在场）或无需改（玩家不在场） | 低 |
-| `index.css` | 双栏场景布局（仍需遵循极简扁平令牌） | 中 |
-| 测试 | 编队 CRUD / 接力 / 双场景轮流 / 替补锁定 / 胜负 / 存档迁移 / 确定性 | 高 |
+| `pet-store.js` | `squads` schema + 旧档迁移 + `saveSquads`/`savePetBattlePicks` 单写入口互同步 | 中（存档兼容，参照既有"优雅退化"惯例） |
+| `pet-ui.js` / `game-views.js` | 多小队管理 UI（增删/改名/排序按钮/去重校验/伤员禁用位与原因） | 中（现有三处同源选择逻辑要收口） |
+| `game-render.js` | 按 `mode` 分支开战；单队接力注入；导演对象与双栏渲染 | **高**（"单 gb + 单 `_groupBattle`"的假设最深） |
+| `battle-group.js` | `gbReinforce(gb, units)` 唯一增援入口；`winnerRule` 参数化（`'all'` 默认 / `'pets'`） | **高**（引擎核心，改判负口径必须全量回归） |
+| `ai.js` + 目标池 | `attackable(u)` 单一过滤助手（`_untargetable`），接入 `aliveOpponents` 与 `battle-group` 的目标池 | 中（多处目标池，必须单源，漏一处就"被打"） |
+| `group-levels.js` | 小关 `mode` 字段（派生规则一处） | 低 |
+| `index.css` | 双栏场景布局（遵守 `design-tokens-v2.1.md` + 44px 热区） | 中 |
+| `sync.js` | **不用改**（`collectOtherKeys()` 自动纳入新键；`squads` 在既有 `dh-pets-v1` 内，连键都不变） | 低 |
 
 ---
 
-## 8. 测试计划（施工时）
+## 9. 测试计划（施工时）
 
-1. **编队**：CRUD、≤4 校验、跨队去重、旧档迁移、与 `battlePicks` 双向同步幂等。
-2. **单队接力**：全队阵亡触发换队、新队属性与既有管道一致、敌人不缩放、全部用尽判负、日志归因不丢。
-3. **多队推进**：轮流序列 A1→B1→A2→B2、单套 RNG 确定性、一边胜利冻结、另一边失败触发替补、替补锁定本场景、两边都胜才算胜、替补耗尽判负。
-4. **玩家口径**：普通战斗玩家仍可被攻击（回归）、多队战斗玩家不可被攻击/不纳入判负。
-5. **关卡**：`mode:'multi'` 只出现在指定后期关卡、派生链不破坏、`allStageIds()` 不变。
-6. **回归**：全量 `test-*.js` 必须全绿；重点 `test-group-battle` / `test-pet-store` / `test-pet-battle-picks` / `test-group-progress` / `test-ai`。
+1. **编队**：CRUD、≤4 校验、跨队去重、旧档迁移、`battlePicks ↔ squads[0]` 双向同步幂等、伤员禁用位。
+2. **单队接力**：全队阵亡触发换队、新队属性与 `buildGroupBattlePets` 同源、敌人不缩放、全部用尽判负、旧单位保留（日志归因不丢）、`gb.units` 同步。
+3. **多队推进**：轮流序列 A1→B1→A2→B2、两侧共用一个 rng 的确定性、一边胜利冻结且不再推进、另一边灭队触发替补、替补绑定场景（D4）、两胜才胜、无替补即败（D3）。
+4. **玩家口径**：普通战斗玩家仍可被攻击（回归）；多队中玩家不可被攻击（**反向断言**：`attackable` 过滤后目标池里无 player）、玩家不计入多队判负、状态跨场景保留。
+5. **关卡**：`mode:'multi'` 只落在 `g16-5/g19-5/g22-5`、派生链不破坏、`allStageIds()` 不变、Boss 与 1-3 关永不为 multi。
+6. **确定性回放**：导演态纳入 `groupSnapshot/groupRestore/groupReplay`，固定种子 A/B 逐字节比对。
+7. **回归**：全量 `scripts/test-*.js` 全绿（基线 **80 套件 / 0 失败**）+ `test-a11y-tokens` 40/40；重点 `test-group-battle` / `test-pet-battle-picks` / `test-pet-store` / `test-group-progress` / `test-ai` / `test-group-determinism`。
 
 ---
 
-## 9. 待裁决清单
+## 10. 施工分期（每阶段独立提交、独立 bump）
 
-| # | 议题 | 提案默认值 |
+| 阶段 | 内容 | 门禁 |
 |---|---|---|
-| Q1 | 同一宠物能否出现在多个小队 | **不能**（避免替补时出现重复单位） |
-| Q2 | 小队替补顺序是否允许玩家调整 | **允许拖拽排序**（否则固定按创建顺序） |
-| Q3 | 两场景同时需要替补时的分配顺序 | **A 优先** |
-| Q4 | 多队战斗中玩家的技能/属性加成如何施加 | 挂到当前场景宠物（复用 `attachPlayerSkills`），**待细化** |
-| Q5 | 普通战斗判负是否也改为「只看宠物」 | **是**（按需求原文），但与 D2 的交互需作者确认 |
-| Q6 | 多队战斗的具体大关起点与间隔 | g16 起每 3 大关的第 5 小关（如 g18-5 / g21-5 / g24-5） |
-| Q7 | 替补上场的宠物是否为满血、是否保留上一场受伤状态 | **满血、不继承战斗中伤势**；战后 `applyDefeatInjuries` 照常结算 |
-| Q8 | 多队战斗的奖励倍率是否高于普通战斗 | **不额外加成**（先按同关卡同奖励，避免过度设计） |
-| Q9 | 已胜利场景中冻结的小队，战斗结束后是否照常参与战后结算 | **照常**（只是本场锁定，不改存档状态） |
+| **A** | 编队数据模型 + UI（多队、≤4、去重、旧档迁移、与 `battlePicks` 同步、伤员禁用位）。**不动战斗** | 编队测试全绿 + a11y |
+| **B** | 普通战斗单队接力（`gbReinforce` + `winnerRule` 参数化，`'all'` 默认 ⇒ 普通战斗行为不变） | 引擎回归逐字节不变（默认规则下） |
+| **C** | 玩家口径（`attackable` 单一助手 + 多队排除）+ 关卡 `mode` 字段（仍不启用多队） | `attackable` 单源守卫测试 |
+| **D** | 多队导演 + 双场景渲染 + 轮流结算 + 替补/胜负 + 双栏 UI | 确定性 + 全量回归 |
+| **E** | 真机 390/360 双栏复核 + 平衡复测（`MULTI_SCENE_SCALE` 定值）+ 文档回填 | 浏览器实测 + 全量绿 |
+
+> 每阶段以 `feat:` 提交并完成版本三项同步（`APP_VERSION` / README 版本表 / changelog / 架构演化表 / `?vNN`）；**本设计文档本身不触发版本**（`docs:` 提交）。
 
 ---
 
-## 10. 施工分期建议（待作者点头后再排）
+## 11. 风险与未决登记
 
-1. **阶段 A**：编队数据模型 + UI（可建多队、≤4、去重、旧档迁移、与 `battlePicks` 同步）。**不动战斗**。
-2. **阶段 B**：普通战斗单队接力（换队注入 + 判负参数化）。**不动多场景**。
-3. **阶段 C**：玩家口径调整（普通维持、多队排除）与关卡 `mode` 字段。
-4. **阶段 D**：多队导演 + 双场景渲染 + 轮流结算 + 替补/胜负。
-5. **阶段 E**：真机 390/360 双栏布局复核 + 全量回归 + 平衡复测。
-
-> 每阶段独立提交、独立 bump（按 `AGENTS.md` 版本纪律）；本设计文档不触发版本。
+| # | 项 | 说明 |
+|---|---|---|
+| R1 | 「单 gb / 单 `_groupBattle`」假设 | `game-render.js` 3314 行里大量单场景假设；双栏必须参数化，任何"再写一份"都会分叉出第二套 bug |
+| R2 | 判负口径改动 | `checkGroupWin` 是全场最高频调用；参数化必须默认 `'all'`，否则普通战斗难度整体漂移 |
+| R3 | 目标池多处 | 全库十余处「按阵营取目标」；`attackable` 漏接一处，玩家就会被某类技能打到（需反向断言兜住） |
+| R4 | 玩家转场的行动队列 | 转场时 `gb.units` / 行动队列需重建，否则会漏掉玩家或残留另一侧引用 |
+| R5 | 平衡未知 | 拆半 + 玩家半时出手 + 8 宠轮换，权重全变；**必须阶段 E 实测**，不在设计阶段猜数字 |
+| R6 | 存档兼容 | 旧档无 `squads`，迁移必须是纯增量、幂等、可重复执行 |
+| R7 | 施工前复核行号 | 本文所有行号基于 `162d003`；阶段 A 动工前先重跑一次核对 |
