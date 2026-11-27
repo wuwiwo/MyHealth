@@ -117,7 +117,7 @@ doc/
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.34）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.33）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.34）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -487,5 +487,6 @@ node scripts/test-bundle-fresh.js # 过期守卫：源码重算指纹 + 重算�
 | **2.14.31** | **2026-11-27** | **线上入口切到打包产物（承接 P3-3）** — ① **产物入库**（`page/_build/app.js` 2.6MB + `page/index.bundle.html`）：Vercel 从仓库构建，`.gitignore` 掉的文件线上不存在。② **`page/vercel.json` 加 rewrite** `/ → /index.bundle.html`：首页走产物（**2 资源 / JS 1**），`/index.html` 直链保留用于比对与回滚。③ **产物内容指纹 `hash:`**（`test-bundle-fresh` 改为**不重建**的过期守卫，13 → 19 断言）。⚠️ **该 rewrite 上线后实测无效**，已由 v2.14.32 取代。缓存戳 `?v194` → **`?v195`** |
 | **2.14.32** | **2026-11-27** | **入口即产物：`page/index.html` 改由构建生成** — v2.14.31 的 `/ → /index.bundle.html` rewrite 上线后被实测证伪（`/` 仍返回逐文件版 18571B，而 `/index.bundle.html` 与 `/_build/app.js` 都 200），根因是 Vercel 静态站点把 `/` 直接解析到 `index.html`。① 源码页改名 **`page/index.src.html`**（唯一真源），`build-bundle.js` 读它把 55 个 `<script>` 换成 1 个后写出 `page/index.html`；② 删旧 bundle 页、移除失效 rewrite；③ 21 个测试/审计脚本改读源码页；④ `test-bundle-fresh` **19 → 22 断言**（新增「重算期望入口页与磁盘 `index.html` 逐字节比对」）、`verify-bundle` 比对 `/index.src.html` vs `/index.html`；**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → **`?v196`**。回滚：`cp page/index.src.html page/index.html` 再推 |
 | **2.14.33** | **2026-11-27** | **全项目评审批次 H：清单剩余四项收口（P2-4 / P2-6 / P2-7 / P2-9）** — ① 边框与色彩纪律写进 `index.css` 文件头（容器 2px / 分隔单边 1px / 强调边 2px；蓝=主操作·红=危险·绿=达成，紫只属数据属性、黄只属瞬时提示），五处「四周 1px」容器收成 2px；② 计划页两块空态改 `.empty-compact`（188px → 125px，360×640 首屏可见两个 CTA），`emptyHtml()` 加类名参数；③ `📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️、属性计算→🧮，宠物「结算」→「离线补算」；④ `test-ui-consistency` 70 → **86 断言**；全量 **87 套件 / 0 失败**；缓存戳 `?v196` → **`?v197`** |
+| **2.14.34** | **2026-11-27** | **无障碍收口：容器级弹层焦点陷阱 + 双主题审计 + 键盘可达性审计** — ① **焦点陷阱**（`page/utils.js` 末尾 `MODAL FOCUS TRAP` 段）：打开弹层记录来源焦点并送焦点入层、Tab 在层内首尾环回、焦点逃到背后被拉回、关闭归还焦点、非 Tab 不拦（Esc 不受影响）；**容器级接管**（`document` 捕获 + `MutationObserver` 同帧合并），12 个弹层调用点一行未改。② **双主题审计**：`scripts/audit-whole-ui.js` 扩为 2 主题 × 2 视口 × 14 视图 = 56 柱，深色对比失败 **0**。③ **键盘可达性审计**：新增 `scripts/audit-tab-order.js`（CDP 9345）量「可点不可聚焦 / 隐藏可聚焦 / DOM 与视觉序倒置 / 焦点环缺失 / 模态焦点」六项，11 视图全 0，模态探针由 false 转 true。④ **新增测试** `scripts/test-modal-focus.js` **21 断言**。修：加载即初始化打崩 4 套 vm 沙箱（`document` stub 缺方法）→ 改能力探测守卫。全量 **88 套件 0 失败**。 |
 
-> 当前版本：**v2.14.33**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+> 当前版本：**v2.14.34**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

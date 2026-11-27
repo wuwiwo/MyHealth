@@ -192,20 +192,31 @@ const VIEWS = [
   await cdp.send('Runtime.enable');
 
   const out = {};
-  for (const vp of [{ w: 360, h: 640, tag: '360x640' }, { w: 390, h: 844, tag: '390x844' }]) {
-    out[vp.tag] = {};
-    await cdp.send('Emulation.setDeviceMetricsOverride', { width: vp.w, height: vp.h, deviceScaleFactor: 2, mobile: true });
-    for (const view of VIEWS) {
-      await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.src.html' });
-      await sleep(900);
-      const r = await cdp.send('Runtime.evaluate', { expression: view.inject, returnByValue: true });
-      if (r.exceptionDetails) { out[vp.tag][view.id] = { error: r.exceptionDetails.text }; continue; }
-      await sleep(350);
-      const m = await cdp.send('Runtime.evaluate', { expression: METRICS, returnByValue: true });
-      if (m.exceptionDetails) { out[vp.tag][view.id] = { error: m.exceptionDetails.text }; continue; }
-      out[vp.tag][view.id] = { label: view.label, ...m.result.value };
-      const s = await cdp.send('Page.captureScreenshot', { format: 'png' });
-      fs.writeFileSync(path.join(OUT_DIR, view.id + '-' + vp.tag + '.png'), Buffer.from(s.data, 'base64'));
+  /* v2.14.34（复评收尾）：补上深色维度 —— 评审 §6 记的「深色 / 主题切换下的对比度只核了浅色」。
+     两主题 × 两视口 × 14 视图 = 56 个采样，键形如 '360x640-light' / '390x844-dark'。 */
+  const THEMES = [{ tag: 'light', v: 'light' }, { tag: 'dark', v: 'dark' }];
+  for (const theme of THEMES) {
+    for (const vp of [{ w: 360, h: 640, tag: '360x640' }, { w: 390, h: 844, tag: '390x844' }]) {
+      const key = vp.tag + '-' + theme.tag;
+      out[key] = {};
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width: vp.w, height: vp.h, deviceScaleFactor: 2, mobile: true });
+      for (const view of VIEWS) {
+        await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.src.html' });
+        await sleep(900);
+        /* 主题在导航后、注入前切换：setTheme 只改 data-theme 属性，不需要重新渲染 */
+        await cdp.send('Runtime.evaluate', { expression: "setTheme('" + theme.v + "'); effTheme()", returnByValue: true });
+        await sleep(120);
+        const r = await cdp.send('Runtime.evaluate', { expression: view.inject, returnByValue: true });
+        if (r.exceptionDetails) { out[key][view.id] = { error: r.exceptionDetails.text }; continue; }
+        await sleep(350);
+        const m = await cdp.send('Runtime.evaluate', { expression: METRICS, returnByValue: true });
+        if (m.exceptionDetails) { out[key][view.id] = { error: m.exceptionDetails.text }; continue; }
+        out[key][view.id] = { label: view.label, viewport: key, ...m.result.value };
+        const s = await cdp.send('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync(path.join(OUT_DIR, view.id + '-' + key + '.png'), Buffer.from(s.data, 'base64'));
+        /* 兼容旧名（其它脚本/文档引用 xxx-360x640.png）：只对浅色写一份 */
+        if (theme.tag === 'light') fs.writeFileSync(path.join(OUT_DIR, view.id + '-' + vp.tag + '.png'), Buffer.from(s.data, 'base64'));
+      }
     }
   }
 
@@ -214,16 +225,27 @@ const VIEWS = [
   const file = path.join(OUT_DIR, 'metrics.json');
   fs.writeFileSync(file, JSON.stringify(out, null, 1), 'utf8');
 
-  const rows = Object.keys(out['360x640']).map(k => {
-    const a = out['360x640'][k] || {}, b = out['390x844'][k] || {};
+  const rows = Object.keys(out['360x640-light']).map(k => {
+    const a = out['360x640-light'][k] || {}, b = out['390x844-light'][k] || {};
+    const c = out['360x640-dark'][k] || {}, d = out['390x844-dark'][k] || {};
     return {
       view: a.label || k,
       overflow360: a.overflowX, small360: a.smallTargets, tiny360: a.tinyText,
-      contrast360: a.contrastFailures, radius360: a.radiusViolations, accents360: a.accentColors,
-      overflow390: b.overflowX, small390: b.smallTargets, contrast390: b.contrastFailures
+      contrastLight: (a.contrastFailures || 0) + (b.contrastFailures || 0),
+      contrastDark: (c.contrastFailures || 0) + (d.contrastFailures || 0),
+      radius: a.radiusViolations, accents: a.accentColors
     };
   });
   console.log('已写出 ' + file + '（截图 ' + OUT_DIR + '）');
   console.table(rows);
+  const darkFails = Object.keys(out).filter(k => k.endsWith('dark'))
+    .flatMap(k => Object.keys(out[k]).map(v => ({ k, v, s: out[k][v].contrastSamples || [] })))
+    .filter(x => x.s.length);
+  if (darkFails.length) {
+    console.log('\n深色主题对比失败样本：');
+    darkFails.forEach(x => console.log('  ' + x.k + ' / ' + x.v + ' :: ' + JSON.stringify(x.s).slice(0, 400)));
+  } else {
+    console.log('\n深色主题：14 视图 × 2 视口 对比失败 = 0');
+  }
   process.exit(0);
 })().catch(e => { console.error('未捕获异常:', e); process.exit(2); });

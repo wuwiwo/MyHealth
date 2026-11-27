@@ -550,3 +550,26 @@ node scripts/test-a11y-tokens.js                 # 40/40 ALL PASS（本轮未改
 
 工厂：`emptyHtml(emoji, title, sub, cta, cls)` —— 第 5 参传 `'empty-compact'` 即紧凑档，不新增函数、不改调用方结构。
 
+## 17. 弹层焦点与会话无障碍（v2.14.34）
+
+### 17.1 弹层焦点生命周期
+任何 `<div class="modal">` / `.modal-sheet` 打开时，焦点必须落在层内；关闭时必须回到打开它的那个元素。
+
+| 时机 | 行为 | 实现 |
+|------|------|------|
+| 打开 | 记录来源焦点 `_modalPrevFocus`，焦点送进层内第一个可聚焦元素 | `modalFocusSync()` + `MutationObserver` |
+| 层内 Tab | 首尾环回（末 → 首，首 → 末） | `modalTrapKeydown()` 捕获阶段 |
+| 焦点逃到背后 | 下一次 `focusin` 拉回层内 | `modalTrapKeydown` 前置守卫 |
+| 关闭 | 焦点还给来源元素 | `modalFocusSync()` |
+| 已在层内 | 不抢焦点（避免每次重渲都重置） | `modalFocusSync()` 早退 |
+
+**约定**：只接管 `document` 捕获阶段，**不改任何调用点**；新增弹层只要用 `.modal` / `.modal-sheet` 两个类名之一就自动获得行为。非 Tab 键（含 Esc）一律放行。
+
+### 17.2 可聚焦与可点必须一致
+- 可点必须可聚焦（`clickOnly = 0`）：`div`/`span` 加 `onclick` 时必须同步 `tabindex`、`role`、`Enter/Space` 处理，否则请改用 `<button>`。
+- 隐藏必须不可聚焦（`hiddenFocusable = 0`）：`display:none` 之外，`visibility:hidden` / `aria-hidden="true"` 的元素不得留在 Tab 链里。
+- 焦点环不得缺失（`ringMissing = 0`）：`:focus-visible` 必须可见，禁止全局 `outline:none` 无替代。
+- DOM 序应与视觉序一致（倒置阈值 80px）：网格/双栏布局若视觉上「左先右后」而 DOM 相反，键盘用户会跳序。
+
+### 17.3 量测口径
+`scripts/audit-tab-order.js`（CDP 9345）对 11 个主视图逐项量测六项指标并落 `_tmp-whole-audit/tab-order.json`；`scripts/audit-whole-ui.js` 对 **2 主题 × 2 视口 × 14 视图** 量对比度、溢出、触摸目标与圆角，浅色/深色分别出表。

@@ -1,4 +1,4 @@
-/* MyHealth bundle · v197 · hash:48aad25a27b075bb · 由 scripts/build-bundle.js 生成，勿手改 */
+/* MyHealth bundle · v198 · hash:aa2a6aadc95f1833 · 由 scripts/build-bundle.js 生成，勿手改 */
 /* ===== store.js ===== */
 /* ============================================
    MyHealth — Store Module v1.3 (M2a S0)
@@ -876,7 +876,7 @@ window.MEDIA_BASE = '';
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.33';
+const APP_VERSION = '2.14.34';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -1106,6 +1106,83 @@ function makeSeededRng(seed) {
   return rnd;
 }
 function beginBattleRng(seed) { var r = makeSeededRng(seed); _BATTLE_RNG = r; return r; }
+
+/* ========== MODAL FOCUS TRAP（v2.14.34，评审 §6「键盘焦点顺序未验证」的收回） ========== */
+/* 问题（实测）：弹窗打开后焦点仍留在背后的页面，键盘用户按 Tab 会走到被遮住的 #syncBtn /
+   #themeToggle / 四个 tab 按钮上；关闭弹窗后焦点也不回到打开它的那个按钮。
+   做法：**容器级**接管，不改 12 个调用点 —— 所有弹层最终都变成可见的 `.modal-sheet` / `.modal`，
+   所以只需 ① 观察 DOM 变化 → 有弹层就把焦点送进去、没有就还给原来的元素；
+   ② 捕获阶段拦 Tab → 在弹层内部首尾环回。Esc 关闭的既有行为不动（各弹层自己的按钮负责关）。 */
+var MODAL_FOCUS_SEL = '.modal-sheet,.modal';
+var _modalPrevFocus = null;
+
+function modalTrapSheet() {
+  var sheets = document.querySelectorAll(MODAL_FOCUS_SEL);
+  for (var i = sheets.length - 1; i >= 0; i--) {
+    var s = sheets[i];
+    var cs = getComputedStyle(s);
+    if (cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0' && s.getClientRects().length) return s;
+  }
+  return null;
+}
+function modalFocusables(sheet) {
+  return Array.prototype.slice.call(sheet.querySelectorAll('button,[href],input,select,textarea,[tabindex]'))
+    .filter(function (n) {
+      if (n.disabled) return false;
+      var ti = n.getAttribute('tabindex');
+      if (ti !== null && Number(ti) < 0) return false;
+      var cs = getComputedStyle(n);
+      return cs.display !== 'none' && cs.visibility !== 'hidden' && n.getClientRects().length > 0;
+    });
+}
+function modalFocusSync() {
+  var sheet = modalTrapSheet();
+  if (!sheet) {
+    /* 弹层已关闭：焦点还给打开它的元素（找不到就放弃，绝不抛错） */
+    if (_modalPrevFocus && _modalPrevFocus.focus) { try { _modalPrevFocus.focus(); } catch (e) { /* 忽略：来源元素可能已被重新渲染销毁 */ } }
+    _modalPrevFocus = null;
+    return;
+  }
+  if (sheet.contains(document.activeElement)) return;   /* 已在弹层内：不抢焦点 */
+  if (!_modalPrevFocus) _modalPrevFocus = document.activeElement;
+  var list = modalFocusables(sheet);
+  if (!list.length) return;
+  try { list[0].focus(); } catch (e) { /* 忽略：元素不可聚焦（如 disabled 竞态） */ }
+}
+function modalTrapKeydown(e) {
+  if (e.key !== 'Tab' || e.defaultPrevented) return;
+  var sheet = modalTrapSheet();
+  if (!sheet) return;
+  var list = modalFocusables(sheet);
+  if (!list.length) { e.preventDefault(); return; }
+  var i = list.indexOf(document.activeElement);
+  if (e.shiftKey) {
+    if (i <= 0) { e.preventDefault(); list[list.length - 1].focus(); }
+  } else if (i === -1 || i === list.length - 1) {
+    e.preventDefault(); list[0].focus();
+  }
+}
+function initModalFocusTrap() {
+  if (window.__modalTrapOn) return;
+  window.__modalTrapOn = true;
+  document.addEventListener('keydown', modalTrapKeydown, true);
+  if (typeof MutationObserver === 'function' && document.body) {
+    var pending = false;
+    var mo = new MutationObserver(function () {
+      if (pending) return;
+      pending = true;
+      setTimeout(function () { pending = false; modalFocusSync(); }, 0);   /* 合并同一帧的连续变动 */
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
+  modalFocusSync();
+}
+/* 沙箱（vm 里只有最小 stub）不执行：缺 body / addEventListener / querySelectorAll 一律跳过，
+   否则 test 沙箱那层假 document 会在加载时直接抛 TypeError（v2.14.34 实测踩到 4 套件）。 */
+if (typeof document !== 'undefined' && document && document.body
+  && typeof document.addEventListener === 'function'
+  && typeof document.querySelectorAll === 'function') initModalFocusTrap();
+
 
 ;
 /* ===== levels.js ===== */

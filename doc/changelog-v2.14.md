@@ -5,6 +5,55 @@
 
 ---
 
+## v2.14.34
+
+Date: 2026-11-27
+
+**无障碍收口：容器级弹层焦点陷阱 + 双主题审计 + 键盘可达性审计（用户「继续任务，直到全部完成」）**
+
+> 接手时标记为「仍未验证」的无障碍项：评审 §17.4 写明「键盘焦点环、弹层焦点管理、深色主题对比度三项未做量测」。本版把这三项都变成可复跑的量测，其中一项量出真缺口并已修。
+
+**① 新增审计：深色主题 × 两视口 × 14 视图**
+- `scripts/audit-whole-ui.js` 由「2 视口 × 14 视图」扩为 **2 主题 × 2 视口 × 14 视图 = 56 柱**；键名 `360x640-light` / `390x844-dark`。
+- 主题注入用 `setTheme(t)`（只切 `data-theme` 属性，不需要重渲），截图落到 `view-<vp>-<theme>.png`，浅色另存一份旧名兼容既有引用。
+- 表格由单列 `contrast` 改为 `contrastLight` / `contrastDark` 两列，失败时打印深色样本。
+- 首跑结论：**深色 14 视图 × 2 视口，对比度失败 = 0**；深色截图人工确认主题真生效（顶栏三钮文案、版本号、深底）。
+
+**② 新增审计：键盘可达性六项**
+- `scripts/audit-tab-order.js`（CDP 9345，输出 `_tmp-whole-audit/tab-order.json`）：可聚焦元素数 / **可点但不可聚焦** / **隐藏却可聚焦** / **DOM 序与视觉序倒置（>80px）** / **焦点环缺失** / **模态焦点管理**。
+- 11 个主视图实跑：`clickOnly`、`hiddenFocusable`、`inversions`、`ringMissing` **全 0**。
+- 模态探针暴露真缺口：打开「属性计算方式」后 `focusInsideOnOpen:false`、背后 **5 个按钮仍可达**、`hasFocusTrap:false`。
+
+**③ 修掉该缺口：容器级弹层焦点陷阱（不改 12 个调用点）**
+- `page/utils.js` 末尾新增 `MODAL FOCUS TRAP` 段：`MODAL_FOCUS_SEL`（`.modal-sheet,.modal`）、`_modalPrevFocus`、`modalTrapSheet()`（倒序取**最后一个可见**弹层）、`modalFocusables()`、`modalFocusSync()`、`modalTrapKeydown()`、`initModalFocusTrap()`。
+- 行为：打开时记录来源焦点并送焦点进弹层（已在弹层内则不抢）；Tab 在弹层内首尾环回；焦点逃到背后被拉回；关闭时把焦点还给来源；**非 Tab 不拦**（Esc 关弹层因此不受影响）。
+- 接管方式是**容器级**：监听 `document` 捕获阶段 + `MutationObserver`（同帧变动用 `pending` 合并），12 个 `.modal` / `.modal-sheet` 调用点一行未改。
+- 修后探针：`{focusInsideOnOpen:true, wrappedToFirst:true, stillInside:true, focusables:1, activeLabel:"attrClose", backgroundButtons:10, trapOn:true}`。
+
+**④ 测试**
+- 新增 `scripts/test-modal-focus.js` **21 断言**：实现存在且唯一（`utils.js` 一份、`app.js` 无第二份）/ fake DOM 行为冒烟（Tab 首尾环回、背后拉回、Esc 不拦）/ 接线与能力探测。
+- 全量回归 **88 套件 / 0 失败**；`verify-bundle` 14 视图逐字一致；`test-bundle-fresh` 22/22；`test-a11y-tokens` 40/40。
+
+**修复（本版施工中踩到并已修）**
+- **加载即初始化打崩 4 套 vm 沙箱**：`if (document.body) initModalFocusTrap();` 在只有最小 `document` stub 的沙箱里抛 `document.addEventListener is not a function`（`test-challenge-monthly` / `test-challenge-tuning` / `test-sync-coverage` / 连带 `test-a11y-tokens`）。改为**能力探测守卫**：`document.body` + `addEventListener` + `querySelectorAll` 三者齐备才初始化。
+- **静默 catch 断言**：陷阱里两处 `catch` 原本只写短注释，补齐「忽略：<原因>」以满足 `test-a11y-tokens` 的静默 catch 规则。
+
+**权衡**
+- 焦点陷阱选**容器级接管**而非逐调用点改造：代价是依赖 `.modal/.modal-sheet` 这一选择器约定（已写进注释与测试），收益是 12 个调用点零改动、后续新弹层自动获得行为。
+- 未做：`aria-hidden`/遮罩点击关闭、弹层内 Tab 顺序的视觉序校正（当前 0 倒置，无必要）。
+
+**验证**
+- `audit-whole-ui`：56 柱，深浅双主题对比失败 0、溢出 0、触摸目标 0、圆角 0。
+- `audit-tab-order`：11 视图六项全 0；模态探针由 `false` 转 `true`。
+- 线上：`/` = `_build/app.js?v198`，版本 v2.14.34，请求全 200、console 0 报错。
+
+**本版文件**
+- 改：`page/utils.js`、`page/index.src.html`（戳 `?v198`）、`page/index.html` / `page/_build/app.js`（构建产物）、`scripts/audit-whole-ui.js`
+- 增：`scripts/audit-tab-order.js`、`scripts/test-modal-focus.js`
+- 文档：`doc/changelog-v2.14.md`、`README.md`、`doc/design-tokens-v2.1.md`（§17）、`doc/ui-ux-review-whole-2026-11-27.md`（§18）、`doc/VERSION-LEDGER.md`
+
+---
+
 ## v2.14.33
 
 Date: 2026-11-27
@@ -1843,6 +1892,7 @@ Date: 2026-10-12
 | 2.14.31 | 55 | 3508 行 game-render.js | **线上入口切到打包产物**（承接 P3-3；作者「修改后推送」）—— ① 产物**入库**（`page/_build/app.js` 2.6MB + `page/index.bundle.html`）：Vercel 从仓库构建，`.gitignore` 掉的文件线上不存在，不入库则 rewrite 落到 404；② `page/vercel.json` 加 `{"source":"/","destination":"/index.bundle.html"}` —— 首页走产物（**2 资源 / JS 1**），`/index.html` 直链仍可打开源码版用于比对与**回滚（删 rewrite 即可）**；③ 产物头部加**内容指纹 `hash:`**（拼接正文 sha256），`test-bundle-fresh` 由「先重建再断言」（过期永远测不出）改为**不重建**：用源码重算指纹比对 + 逐字节包含校验 + 戳/顺序/55 源码/`index.html` 仍走源码 + rewrite 与 `.gitignore` 断言，**13 → 19 断言**；`verify-bundle` 14 视图逐字一致、资源 56 → 2；全量 **87 套件 / 0 失败**；缓存戳 `?v194` → `?v195`。权衡：整包 2.6MB 每版重下（代价与收益见 changelog） |
 | 2.14.32 | 55 | 3508 行 game-render.js | **入口即产物：`page/index.html` 改由构建生成**（v2.14.31 的 rewrite 被线上实测证伪后的修正）—— ① 线上实测：`/` 返回 200 但正文仍是逐文件版（`index.css?v195` + 55 个 `<script>`，18571B），而 `/index.bundle.html`（200/15877B）与 `/_build/app.js`（200/2685742B）均正常 —— **产物部署无问题，只是入口没切**；Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总把 `/` 解析到 `index.html`，`source:"/"` 匹配不到 → 改「入口文件本身即产物」，不依赖平台规则；② 源码页改名 **`page/index.src.html`**（唯一真源，本地/测试/逐文件加载都走它），`build-bundle.js` 读它、把 55 个 `<script src>` 整段换成 `<script src="_build/app.js?vNNN">` 后写出 `page/index.html`（body/header 逐字节同构），删掉旧 `index.bundle.html`（入口只剩一条路径）；③ `page/vercel.json` 移除失效 `rewrites`；④ 21 个测试/审计脚本的 `index.html` → `index.src.html`（保留「源码是唯一真源」）；⑤ `test-bundle-fresh` **19 → 22 断言**：新增「按同一规则重算期望入口页与磁盘 `index.html` **逐字节比对**」（手改产物页或忘重建即红）、入口脚本唯一且戳正确、`index.css` 带戳、旧 bundle 页已移除、`vercel.json` 不再声明 `/` rewrite；⑥ `verify-bundle` 比对对象改 `/index.src.html` vs `/index.html`：**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → `?v196`。回滚：`cp page/index.src.html page/index.html` 再推 |
 | 2.14.33 | 55 | 3508 行 game-render.js | **全项目评审批次 H：清单剩余四项收口** —— ① **P2-4 边框纪律**：写进 `index.css` 文件头（容器 2px `--bw`+`--bd` / 分隔单边 1px `--bw-thin`+`--surface-3` / 强调边 2px），并把五处「四周 1px」容器（`.refine-src` / `.pet-exp-log` / `.orb-bag` / `.pet-rest` / `.train-mat-fold`）收成 2px —— 扁平风无阴影，1px 四周边框会被读成分隔线；② **P2-6 色彩纪律**：三语义定稿（蓝=主操作/进度/选中、红=危险/敌方/BOSS、绿=达成/友方/治疗；紫只属数据属性、黄只属瞬时提示），并断言按钮与空态不得用紫；③ **P2-7 空态**：`emptyHtml()` 加第 5 参类名 + `.empty-compact`（图标与标题同行、CTA 撑满），计划页两块空态 **188px → 125px**，360×640 首屏可见两个 CTA；④ **P2-9 图标语义**：`📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️（4 处）、属性计算→🧮，宠物「结算」→**「离线补算」**；⑤ `test-ui-consistency` **70 → 86 断言**（新增 `[17]` 十六类规则）、`test-pet-panel-layout` 一条文案断言随行为更新；全量 **87 套件 / 0 失败**、`audit-whole-ui` 14×2 复测溢出/对比/触摸/圆角全 0；缓存戳 `?v196` → `?v197`。权衡：强调色计数仍 7–12（成对的主题蓝/绿本就计两个，压低只能减语义色，不做） |
+| 2.14.34 | 55 | 3508 行 game-render.js | **无障碍收口**：容器级弹层焦点陷阱（打开送焦点/关闭归还/Tab 首尾环回/背后拉回，12 个弹层调用点零改动）+ 审计扩为**双主题 × 2 视口 × 14 视图**（深色对比失败 0）+ 新增键盘可达性六项审计（11 视图全 0，模态真缺口已修）。修复：加载即初始化打崩 4 套 vm 沙箱 → 改能力探测守卫。测试 88 套件 0 失败、`test-modal-focus` 21 断言。 |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。
