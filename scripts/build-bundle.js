@@ -46,12 +46,26 @@ const parts = [];
    EXD.load() 注入 <script src="data/exercises-dataset.js?v<版本>">，并在到位后刷新卡片。
    源码页 index.src.html 仍按普通脚本引入（本地开发与全部测试走逐文件加载，行为不变）。 */
 const LAZY = ['data/exercises-dataset.js'];
+/* v2.14.40：挑战/宠物视图**按需包**。实测（scripts/audit-module-deps.js）这三个文件
+   只有进「挑战」tab 或打开宠物面板才用得到，且跨文件调用都带 typeof 守卫：
+     · game-views.js  28KB —— 挑战页视图骨架（p() 移出后 p 只在本文件内用）
+     · pet-ui.js      68KB —— 宠物面板（petIconHtml 的跨文件调用方都有 typeof 守卫）
+     · pet-codex.js   41KB —— 宠物图鉴（createPetUnit 只在战斗路径调用）
+   共 137KB 源码（12%），合成 page/_build/pack-game.js，由 page/game-pack.js 运行时注入。 */
+const PACK_GAME = ['game-views.js', 'pet-ui.js', 'pet-codex.js'];
+let packBytes = 0, packOut = '', packParts = [];
 let lazyBytes = 0;
 for (const m of matches) {
   const file = path.join(PAGE, m.src);
   if (!fs.existsSync(file)) { console.error('缺文件：' + m.src); process.exit(2); }
   if (LAZY.indexOf(m.src) >= 0) { lazyBytes += fs.statSync(file).size; continue; }
   const body = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+  if (PACK_GAME.indexOf(m.src) >= 0) {
+    packBytes += body.length;
+    packParts.push({ src: m.src, bytes: body.length });
+    packOut += '/* ===== ' + m.src + ' ===== */\n' + body + '\n;\n';
+    continue;
+  }
   parts.push({ src: m.src, bytes: body.length });
   out += '/* ===== ' + m.src + ' ===== */\n' + body + '\n;\n';
 }
@@ -62,6 +76,11 @@ for (const m of matches) {
 const FINGERPRINT = require('crypto').createHash('sha256').update(out).digest('hex').slice(0, 16);
 const head = '/* MyHealth bundle · v' + stamp + ' · hash:' + FINGERPRINT + ' · 由 scripts/build-bundle.js 生成，勿手改 */\n';
 fs.writeFileSync(path.join(OUT, 'app.js'), head + out, 'utf8');
+
+/* 按需包：与主包同一套指纹规则（源码改动必须重建，否则 test-bundle-fresh 会抓） */
+const PACK_FP = require('crypto').createHash('sha256').update(packOut).digest('hex').slice(0, 16);
+const packHead = '/* MyHealth game pack · v' + stamp + ' · hash:' + PACK_FP + ' · 按需包（挑战/宠物视图）· 由 scripts/build-bundle.js 生成，勿手改 */\n';
+fs.writeFileSync(path.join(OUT, 'pack-game.js'), packHead + packOut, 'utf8');
 
 /* 生成线上入口 index.html：整段脚本标签替换成一条 */
 const firstIdx = html.indexOf(matches[0].full);
@@ -81,6 +100,7 @@ const bundleKb = Math.round(fs.statSync(path.join(OUT, 'app.js')).size / 1024);
 const quiet = process.argv.includes('--quiet');
 if (!quiet) {
   console.log('✔ 合成 ' + parts.length + ' 个脚本 → page/_build/app.js（' + bundleKb + ' KB）');
+  console.log('✔ 按需包 ' + PACK_GAME.length + ' 个脚本 → page/_build/pack-game.js（' + Math.round(packBytes / 1024) + ' KB，进挑战/宠物才拉）：' + packParts.map(p => p.src).join(' + '));
   console.log('✔ 懒加载 ' + LAZY.length + ' 个数据集脚本（' + Math.round(lazyBytes / 1024) + ' KB，首屏不含）');
   console.log('✔ 生成 page/index.html（线上入口，1 个 <script> + 1 个 <link>；源码页为 page/index.src.html）');
   console.log('  首屏请求：' + (matches.length + 1) + ' → 2（html 本身不计入资源条目；数据集在空闲/用到时才拉）');

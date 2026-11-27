@@ -248,7 +248,24 @@ function switchTab(name){
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active',c.id==='tab'+name.charAt(0).toUpperCase()+name.slice(1)))
   if(name==='training'){renderStr();renderCar()}
   if(name==='profile')renderProf()
-  if(name==='game')renderGame()
+  if(name==='game'){
+    /* v2.14.40：挑战/宠物视图的真身（game-views / pet-ui / pet-codex）已移出首包，
+       改成 _build/pack-game.js 按需注入。这里先画骨架（game-render 对缺失函数都有 typeof 守卫），
+       pack 到位后再重画一次；失败只 toast，页面保持可用，下次再进挑战 tab 会重新拉（retryGamePack）。 */
+    renderGame()
+    if(typeof renderGameViews!=='function'&&typeof loadGamePack==='function'){
+      loadGamePack(function(ok){
+        if(ok){renderGame()}
+        else{
+          if(typeof toast==='function')toast('挑战模块加载失败，请检查网络后重试','e')
+          var r=document.getElementById('gameRetryBtn');if(!r){
+            var host=document.getElementById('tabGame')
+            if(host){var bar=document.createElement('button');bar.id='gameRetryBtn';bar.type='button';bar.className='speed-btn tx-btn';bar.style.cssText='margin:12px 0;width:100%';bar.textContent='🔄 重试加载挑战模块';bar.onclick=function(){bar.remove();if(typeof retryGamePack==='function')retryGamePack(function(k){if(k)renderGame()})};host.insertBefore(bar,host.firstChild)}
+          }
+        }
+      })
+    }
+  }
   if(name==='settings')renderSettings()
 }
 

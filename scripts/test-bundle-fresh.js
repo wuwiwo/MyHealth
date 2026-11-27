@@ -36,10 +36,24 @@ const stamp = srcs.length ? srcs[0].stamp : null;
 /* 与 build-bundle.js 逐字一致的合成规则，用来重算指纹与期望入口页
    v2.14.36：动作数据集不进包（运行时懒加载），重算时必须同样跳过，否则指纹必然对不上 */
 const LAZY_SRC = ['data/exercises-dataset.js'];
+/* v2.14.40：挑战/宠物视图三个大文件移入按需包 _build/pack-game.js，主包重算时必须同样跳过 */
+const PACK_SRC = ['game-views.js', 'pet-ui.js', 'pet-codex.js'];
 function recompute() {
   let out = '';
   for (const m of srcs) {
     if (LAZY_SRC.indexOf(m.src) >= 0) continue;
+    if (PACK_SRC.indexOf(m.src) >= 0) continue;
+    const body = fs.readFileSync(path.join(PAGE, m.src), 'utf8')
+      .replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+    out += '/* ===== ' + m.src + ' ===== */\n' + body + '\n;\n';
+  }
+  return { out, hash: crypto.createHash('sha256').update(out).digest('hex').slice(0, 16) };
+}
+/* 按需包同样重算，防止只改源码忘了重建 pack */
+function recomputePack() {
+  let out = '';
+  for (const m of srcs) {
+    if (PACK_SRC.indexOf(m.src) < 0) continue;
     const body = fs.readFileSync(path.join(PAGE, m.src), 'utf8')
       .replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
     out += '/* ===== ' + m.src + ' ===== */\n' + body + '\n;\n';
@@ -70,6 +84,21 @@ ok(bundle.indexOf('window.EX_DATASET =') < 0, '包内不含动作数据集（懒
 ok(entry.indexOf('data/exercises-dataset.js') < 0, '入口页不直接引用数据集脚本');
 ok(!fs.existsSync(path.join(PAGE, 'index.bundle.html')), '旧的 page/index.bundle.html 已移除（入口只剩 index.html 一条路径）');
 
+console.log('\n[2b] 挑战/宠物按需包（v2.14.40）');
+const PACK = path.join(PAGE, '_build', 'pack-game.js');
+ok(fs.existsSync(PACK), 'page/_build/pack-game.js 存在');
+const packSrc = fs.existsSync(PACK) ? fs.readFileSync(PACK, 'utf8') : '';
+const packFresh = recomputePack();
+ok((packSrc.match(/hash:([0-9a-f]{16})/) || [])[1] === packFresh.hash, '按需包指纹与源码重算一致');
+ok(packSrc.indexOf(packFresh.out) > 0, '按需包正文与三文件拼接结果逐字节包含');
+ok(packSrc.indexOf('/* ===== game-views.js ===== */') > 0 && packSrc.indexOf('/* ===== pet-ui.js ===== */') > 0 && packSrc.indexOf('/* ===== pet-codex.js ===== */') > 0, '按需包含 game-views / pet-ui / pet-codex 三段');
+ok(packSrc.indexOf('function renderGameViews') > 0, '按需包含 renderGameViews 定义');
+ok(bundle.indexOf('function renderGameViews') < 0, '主包已不含 renderGameViews（真的移出了）');
+ok(bundle.indexOf('function renderPetPanel') < 0, '主包已不含 renderPetPanel');
+ok(fs.statSync(PACK).size > 100 * 1024 && fs.statSync(PACK).size < 200 * 1024, '按需包体积 100–200KB（实测 ' + Math.round(fs.statSync(PACK).size / 1024) + 'KB）');
+ok(entry.indexOf('pack-game.js') < 0, '入口页不直接引用按需包（运行时由 game-pack.js 注入）');
+ok(read('game-pack.js').indexOf('_build/pack-game.js') > 0, 'game-pack.js 的注入地址指向 _build/pack-game.js');
+
 function walkJs(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
     const p = path.join(dir, e.name);
@@ -78,16 +107,16 @@ function walkJs(dir) {
   });
 }
 const srcJs = walkJs(PAGE);
-ok(srcJs.length === 55, 'page/（不含 _build）仍是 55 个源码 JS（实测 ' + srcJs.length + '）');
+ok(srcJs.length === 56, 'page/（不含 _build）仍是 56 个源码 JS（实测 ' + srcJs.length + '）');
 ok(!fs.existsSync(path.join(PAGE, 'bundle.js')), 'page/ 根没有遗留 bundle.js（产物只在 _build/）');
 
 console.log('\n[3] 文件清单与顺序');
 const marks = [...bundle.matchAll(/\/\* ===== ([^ ]+) ===== \*\//g)].map(m => m[1]);
-ok(marks.length === srcs.length - LAZY_SRC.length, '标记数 = 打包脚本数（' + marks.length + ' / ' + (srcs.length - LAZY_SRC.length) + '）');
-ok(marks.join(',') === srcs.filter(s => LAZY_SRC.indexOf(s.src) < 0).map(s => s.src).join(','), '标记顺序与 index.src.html 逐项一致（已去掉懒加载项）');
+ok(marks.length === srcs.length - LAZY_SRC.length - PACK_SRC.length, '标记数 = 打包脚本数（' + marks.length + ' / ' + (srcs.length - LAZY_SRC.length - PACK_SRC.length) + '）');
+ok(marks.join(',') === srcs.filter(s => LAZY_SRC.indexOf(s.src) < 0 && PACK_SRC.indexOf(s.src) < 0).map(s => s.src).join(','), '标记顺序与 index.src.html 逐项一致（已去掉懒加载项与按需包文件）');
 
 console.log('\n[4] 源码页仍是唯一真源');
-ok(srcs.length === 55, 'index.src.html 仍是 55 个带戳的逐文件脚本（实测 ' + srcs.length + '）');
+ok(srcs.length === 56, 'index.src.html 仍是 56 个带戳的逐文件脚本（实测 ' + srcs.length + '）');
 const uniq = [...new Set(srcs.map(s => s.stamp))];
 ok(uniq.length === 1, 'index.src.html 全部标签用同一戳（实测 ' + uniq.join(',') + '）');
 ok(!/_build\/app\.js/.test(srcHtml), 'index.src.html 未指向产物（本地/测试继续走源码）');
