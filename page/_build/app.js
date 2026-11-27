@@ -1,4 +1,4 @@
-/* MyHealth bundle · v195 · hash:c32751c4f8ca459b · 由 scripts/build-bundle.js 生成，勿手改 */
+/* MyHealth bundle · v196 · hash:11342cfa85dfd5ab · 由 scripts/build-bundle.js 生成，勿手改 */
 /* ===== store.js ===== */
 /* ============================================
    MyHealth — Store Module v1.3 (M2a S0)
@@ -876,7 +876,7 @@ window.MEDIA_BASE = '';
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.31';
+const APP_VERSION = '2.14.32';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];

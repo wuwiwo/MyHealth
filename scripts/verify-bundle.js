@@ -3,8 +3,8 @@
  *
  * 目的：证明「把 55 个脚本拼成 1 个」不改变任何一屏的渲染结果 ——
  *   逐个视图（14 个，与 audit-whole-ui.js 同一份清单）分别加载
- *     A) page/index.html         （56 个资源，源码路径）
- *     B) page/index.bundle.html  （2 个资源，产物路径）
+ *     A) page/index.src.html  （56 个资源，源码路径，真源）
+ *     B) page/index.html      （2 个资源，产物路径，v2.14.32 起线上入口）
  *   然后比对 `document.body.innerText` 的 sha256；同时记录 B 的 console 错误与资源条目数。
  *
  * 用法：node scripts/verify-bundle.js
@@ -76,8 +76,8 @@ const VIEWS = [
 ];
 
 const TARGETS = [
-  { tag: 'src', url: '/index.html', label: '源码（56 资源）' },
-  { tag: 'bundle', url: '/index.bundle.html', label: '产物（2 资源）' }
+  { tag: 'src', url: '/index.src.html', label: '源码（56 资源）' },
+  { tag: 'bundle', url: '/index.html', label: '产物（2 资源）' }
 ];
 
 (async () => {
@@ -123,7 +123,7 @@ const TARGETS = [
        * 血泪：先跑源码 14 视图（其中宠物面板会 savePetStore 写 5 只宠），再跑产物时
        * 「挑战·培养」读到这批宠 → 598 字 vs 611 字，误报「渲染不一致」。
        * 现在先在同一源下清空 storage，再重新导航到目标页，两侧状态严格对齐。 */
-      await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' });
+      await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.src.html' });
       await sleep(180);
       await cdp.send('Runtime.evaluate', { expression: 'try{localStorage.clear();sessionStorage.clear()}catch(e){}', returnByValue: true });
       await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + t.url });

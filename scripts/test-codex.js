@@ -29,7 +29,7 @@ const codexSrc = fs.readFileSync(path.join(PAGE, 'codex.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(PAGE, 'index.css'), 'utf8');
 
 /* ---------- 沙箱：照抄 test-page-load.js 的加载方式（解析 index.html 的 script 顺序） ---------- */
-const html = fs.readFileSync(path.join(PAGE, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(PAGE, 'index.src.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)\?v\d+"><\/script>/g)].map(m => m[1]);
 /* codex.js 的挂载行由主控加进 index.html —— 本套件两种状态都要能跑：
    已在 html 里就跟 html；还没加就追加在 game-views.js 之后（= 报告里给的预演位置）。 */

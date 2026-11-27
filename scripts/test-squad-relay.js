@@ -17,7 +17,7 @@ function ok(c, m, extra) {
   else { fail++; console.log(' ✗ ' + m + (extra !== undefined ? '  → ' + extra : '')); }
 }
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'page', 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'page', 'index.src.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)\?v\d+"><\/script>/g)].map(m => m[1]);
 
 const ls = {};

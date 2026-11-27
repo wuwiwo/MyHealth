@@ -228,4 +228,32 @@
 
 验证：`verify-bundle` **14 视图逐字一致 / 产物 0 报错 / 资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v194` → `?v195`。
 
+## 15. 落地记录（v2.14.32，入口即产物）
+
+v2.14.31 推送部署后**线上实测证伪了 rewrite 方案**：
+
+| 探测 | 结果 |
+|---|---|
+| `GET /` | 200，正文仍是逐文件版（`index.css?v195` + 55 个 `<script src="*.js?v195">`，18571B） |
+| `GET /index.bundle.html` | 200，15877B |
+| `GET /_build/app.js` | 200，2685742B |
+
+结论：产物部署完全正常，**只是入口没切** —— Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）把 `/` 直接解析到 `index.html`，`source:"/"` 的 rewrite 匹配不到该路径。
+
+改法（不依赖任何平台特性）：**让入口文件本身即产物。**
+
+| 改动 | 文件 | 证据 |
+|---|---|---|
+| 源码页改名，成为唯一真源 | `page/index.src.html`（原 `index.html`） | 55 个带戳脚本、全部测试与调试走它 |
+| 构建生成线上入口（55 script → 1 script） | `scripts/build-bundle.js` → `page/index.html` | 入口 = 1 `<script src="_build/app.js?v196">` + 1 CSS |
+| 删旧产物页，入口只剩一条路径 | `page/index.bundle.html` 已移除 | `test-bundle-fresh` 断言其不存在 |
+| 移除失效 rewrite | `page/vercel.json` | 断言不再声明 `source:"/"` |
+| 测试/审计改读源码页（21 个脚本） | `scripts/*.js` | 全量 87 套件绿 |
+| 过期守卫加强（13 → **22 断言**） | `scripts/test-bundle-fresh.js` | 新增「重算期望入口页与磁盘 `index.html` 逐字节比对」 |
+| 等价性校验对象改 `/index.src.html` vs `/index.html` | `scripts/verify-bundle.js` | 14/14 逐字一致，资源 56 → 2 |
+
+真机复核：`/index.html`（产物页）在 360×640 / 390×844 实拍训练·力量与挑战·战斗，顶栏「同步/主题/状态」文案、副标题 `v2.14.32`、二级页签仅下划线，与源码页一致；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → `?v196`。
+
+回滚：`cp page/index.src.html page/index.html` 再推一次（源码页一直完整可用）。
+
 

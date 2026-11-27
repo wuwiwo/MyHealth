@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-/* v2.14.30（评审 P3-3）：把 page/ 下 55 个脚本合成为一个产物 —— 首屏请求从 56 降到 3。
+/* v2.14.30（评审 P3-3）：把 page/ 下 55 个脚本合成为一个产物 —— 首屏请求从 56 降到 2。
+ * v2.14.32：产物**就是**线上入口 `page/index.html`（源码页改名 `page/index.src.html`）。
+ *   原因：Vercel 静态站点总把 `/` 解析到 `index.html`，v2.14.31 加的 `source:"/"` rewrite 实测不生效
+ *   （上线后 `/` 仍返回逐文件版），故改为「入口文件本身即产物」，不再依赖 rewrite。
  *
  * 为什么「直接拼接」是安全的（不是想当然）：
  *   · index.html 里的 55 个 <script src> 全是**经典脚本**（非 module），它们本来共享同一个全局作用域：
@@ -10,11 +13,11 @@
  *     避免上一条语句少了分号、下一条以 `(` 或 `[` 开头时被合并解析。
  *   · 唯一的内联脚本是末尾 `<script>init()</script>`，位置原样保留在 bundle 之后。
  *
- * 产物：
- *   · page/_build/app.js        —— 合成脚本（不入库，见 .gitignore；放子目录是为了不被「扫 page/*.js」的守卫误伤）
- *   · page/index.bundle.html    —— 与 index.html 同构，仅把 55 个 <script> 换成 1 个
- *   · page/index.html 本身**保持原样**（源码加载路径 / 全部测试 / 本地调试都用它；
- *     是否把生产入口切到 index.bundle.html 由作者决定，见 README「部署」）
+ * 产物（均入库）：
+ *   · page/_build/app.js  —— 合成脚本（放子目录：page/*.js 是「源码清单」，多个套件会扫它，
+ *                            根目录多一个 26k 行合成文件会让这些守卫误报，v2.14.30 实测 6 套件变红）
+ *   · page/index.html     —— **由 index.src.html 生成**，仅把 55 个 <script> 换成 1 个（线上入口）
+ *   · page/index.src.html —— 源码页，唯一真源；本地调试、全部测试、逐文件加载都走它
  *
  * 用法：node scripts/build-bundle.js [--quiet]
  */
@@ -28,12 +31,12 @@ const PAGE = path.join(__dirname, '..', 'page');
    根目录多一个 26k 行的合成文件会让这些守卫直接误报（v2.14.30 实测 6 套件变红）。 */
 const OUT = path.join(PAGE, '_build');
 if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
-const html = fs.readFileSync(path.join(PAGE, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(PAGE, 'index.src.html'), 'utf8');
 
 /* 只匹配真正带版本戳的外部脚本：<script src="xxx.js?v193"></script> */
 const SCRIPT_RE = /<script src="([^"]+)\?v(\d+)"><\/script>/g;
 const matches = [...html.matchAll(SCRIPT_RE)].map(m => ({ full: m[0], src: m[1], stamp: m[2] }));
-if (!matches.length) { console.error('未在 index.html 里找到外部脚本标签'); process.exit(2); }
+if (!matches.length) { console.error('未在 index.src.html 里找到外部脚本标签'); process.exit(2); }
 
 const stamp = matches[0].stamp;
 let out = '';
@@ -53,7 +56,7 @@ const FINGERPRINT = require('crypto').createHash('sha256').update(out).digest('h
 const head = '/* MyHealth bundle · v' + stamp + ' · hash:' + FINGERPRINT + ' · 由 scripts/build-bundle.js 生成，勿手改 */\n';
 fs.writeFileSync(path.join(OUT, 'app.js'), head + out, 'utf8');
 
-/* 生成 index.bundle.html：整段脚本标签替换成一条 */
+/* 生成线上入口 index.html：整段脚本标签替换成一条 */
 const firstIdx = html.indexOf(matches[0].full);
 const lastIdx = html.indexOf(matches[matches.length - 1].full) + matches[matches.length - 1].full.length;
 const before = html.slice(0, firstIdx);
@@ -64,13 +67,14 @@ const residue = between.replace(SCRIPT_RE, '').replace(/<!--[\s\S]*?-->/g, '').t
 if (residue) { console.error('脚本块之间夹了非脚本内容，拒绝生成：\n' + residue.slice(0, 200)); process.exit(2); }
 
 const oneTag = '<script src="_build/app.js?v' + stamp + '"></script>';
-fs.writeFileSync(path.join(PAGE, 'index.bundle.html'), before + oneTag + after, 'utf8');
+const outHtml = before + oneTag + after;
+fs.writeFileSync(path.join(PAGE, 'index.html'), outHtml, 'utf8');
 
 const bundleKb = Math.round(fs.statSync(path.join(OUT, 'app.js')).size / 1024);
 const quiet = process.argv.includes('--quiet');
 if (!quiet) {
   console.log('✔ 合成 ' + matches.length + ' 个脚本 → page/_build/app.js（' + bundleKb + ' KB）');
-  console.log('✔ 生成 page/index.bundle.html（1 个 <script> + 1 个 <link>）');
+  console.log('✔ 生成 page/index.html（线上入口，1 个 <script> + 1 个 <link>；源码页为 page/index.src.html）');
   console.log('  首屏请求：' + (matches.length + 1) + ' → 2（html 本身不计入资源条目）');
   console.log('  最大单文件：' + parts.sort((a, b) => b.bytes - a.bytes).slice(0, 3).map(p => p.src + ' ' + Math.round(p.bytes / 1024) + 'KB').join(' / '));
 }

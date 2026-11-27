@@ -963,7 +963,7 @@ section('6-single', function () {
    ============================================================ */
 console.log('--- 7. index.html 接线 ---');
 section('7', function () {
-  const html = has('index.html') ? src('index.html') : '';
+  const html = has('index.src.html') ? src('index.src.html') : '';
   const iState = html.indexOf('state-core.js?v');
   const iFx = html.indexOf('fx-semantics.js?v');
   const iRender = html.indexOf('game-render.js?v');

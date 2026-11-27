@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-/* 打包产物守卫（v2.14.30 建立，v2.14.31 起产物**入库并作为线上入口**）。
+/* 打包产物守卫（v2.14.30 建立；v2.14.31 产物入库；v2.14.32 起产物**就是**线上入口 index.html）。
  *
  * 本套件的核心不是「生成器能跑」，而是**产物没有过期**：
  *   · 用源码按 build-bundle.js 的同一规则重算内容指纹，与 `page/_build/app.js` 头部 hash 比对 ——
  *     只改源码忘了重建（版本号往往也一起忘）会在这里直接红，避免线上跑旧代码。
- *   · 其余：产物的戳、脚本数量、文件顺序、源码仍是唯一真源、部署 rewrite 指向产物页。
+ *   · 再按同一规则重算「期望的 index.html」，与磁盘上的 page/index.html 逐字节比对 ——
+ *     手改产物页、或只改 index.src.html 忘了重建，同样直接红。
+ *   · 其余：戳、脚本数量、文件顺序、源码仍是唯一真源、vercel.json 不再依赖失效的 rewrite。
  *
  * 注意：本套件**不重建**产物（重建会让「过期」永远测不出来）。重建请跑 node scripts/build-bundle.js。
  */
@@ -26,12 +28,12 @@ console.log('\n[1] 产物存在且与源码同步（过期守卫）');
 ok(fs.existsSync(BUNDLE), 'page/_build/app.js 存在（发布前须 node scripts/build-bundle.js）');
 const bundle = fs.existsSync(BUNDLE) ? fs.readFileSync(BUNDLE, 'utf8') : '';
 
-const html = read('index.html');
-const SRC_RE = /<script src="([^"]+)\?v(\d+)"><\/script>/g;
-const srcs = [...html.matchAll(SRC_RE)].map(m => ({ src: m[1], stamp: m[2] }));
+const srcHtml = read('index.src.html');
+const SCRIPT_RE = /<script src="([^"]+)\?v(\d+)"><\/script>/g;
+const srcs = [...srcHtml.matchAll(SCRIPT_RE)].map(m => ({ src: m[1], stamp: m[2], full: m[0] }));
 const stamp = srcs.length ? srcs[0].stamp : null;
 
-/* 与 build-bundle.js 逐字一致的合成规则，用来重算指纹 */
+/* 与 build-bundle.js 逐字一致的合成规则，用来重算指纹与期望入口页 */
 function recompute() {
   let out = '';
   for (const m of srcs) {
@@ -47,13 +49,20 @@ ok(!!headHash, 'app.js 头部有内容指纹（hash:…）');
 ok(headHash === fresh.hash, '产物指纹与源码重算一致（' + (headHash || '-') + ' vs ' + fresh.hash + '）');
 ok(bundle.indexOf(fresh.out) > 0, '产物正文与源码拼接结果逐字节包含（不是半成品）');
 
-console.log('\n[2] 结构与版本戳');
-ok(bundle.indexOf('v' + stamp + ' ·') > 0, 'app.js 顶部版本戳 = ' + stamp);
-const bhtml = read('index.bundle.html');
-const bScripts = [...bhtml.matchAll(/<script src="([^"]+)"\s*>/g)].map(m => m[1]);
-ok(bScripts.length === 1, 'index.bundle.html 外部脚本 = 1（实测 ' + bScripts.length + '）');
-ok(bScripts[0] === '_build/app.js?v' + stamp, '产物脚本用的是当前缓存戳 ' + stamp);
+console.log('\n[2] 入口 = 产物页（v2.14.32 起 page/index.html 由构建生成）');
+const entry = read('index.html');
+const entryScripts = [...entry.matchAll(/<script src="([^"]+)"\s*>/g)].map(m => m[1]);
+ok(entryScripts.length === 1, 'index.html 外部脚本 = 1（实测 ' + entryScripts.length + '）');
+ok(entryScripts[0] === '_build/app.js?v' + stamp, '入口脚本用的是当前缓存戳 ' + stamp + '（实测 ' + entryScripts[0] + '）');
+/* 期望入口页：把源码页的整段脚本标签换成一条 */
+const firstIdx = srcHtml.indexOf(srcs[0] ? srcs[0].full : '');
+const lastIdx = srcHtml.indexOf(srcs[srcs.length - 1].full) + srcs[srcs.length - 1].full.length;
+const expectEntry = srcHtml.slice(0, firstIdx) + '<script src="_build/app.js?v' + stamp + '"></script>' + srcHtml.slice(lastIdx);
+ok(entry === expectEntry, 'index.html 与「源码页 + 单脚本替换」重算结果逐字节一致（未被手改）');
+ok(/index\.css\?v(\d+)"/.test(entry), '入口页仍引用 index.css 且带戳');
 ok(fs.existsSync(BUNDLE) && fs.statSync(BUNDLE).size > 2 * 1024 * 1024, 'app.js 体积 > 2MB（真的合进去了）');
+ok(!fs.existsSync(path.join(PAGE, 'index.bundle.html')), '旧的 page/index.bundle.html 已移除（入口只剩 index.html 一条路径）');
+
 function walkJs(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
     const p = path.join(dir, e.name);
@@ -68,27 +77,29 @@ ok(!fs.existsSync(path.join(PAGE, 'bundle.js')), 'page/ 根没有遗留 bundle.j
 console.log('\n[3] 文件清单与顺序');
 const marks = [...bundle.matchAll(/\/\* ===== ([^ ]+) ===== \*\//g)].map(m => m[1]);
 ok(marks.length === srcs.length, '标记数 = 脚本数（' + marks.length + ' / ' + srcs.length + '）');
-ok(marks.join(',') === srcs.map(s => s.src).join(','), '标记顺序与 index.html 逐项一致');
+ok(marks.join(',') === srcs.map(s => s.src).join(','), '标记顺序与 index.src.html 逐项一致');
 
-console.log('\n[4] 源码仍是唯一真源');
-ok(srcs.length === 55, 'index.html 仍是 55 个带戳的逐文件脚本');
-ok(!/_build\/app\.js/.test(html), 'index.html 未指向产物（本地/测试继续走源码）');
+console.log('\n[4] 源码页仍是唯一真源');
+ok(srcs.length === 55, 'index.src.html 仍是 55 个带戳的逐文件脚本（实测 ' + srcs.length + '）');
+const uniq = [...new Set(srcs.map(s => s.stamp))];
+ok(uniq.length === 1, 'index.src.html 全部标签用同一戳（实测 ' + uniq.join(',') + '）');
+ok(!/_build\/app\.js/.test(srcHtml), 'index.src.html 未指向产物（本地/测试继续走源码）');
 
-console.log('\n[5] 线上入口 = 产物页（v2.14.31 起）');
+console.log('\n[5] 部署配置');
 const vj = path.join(PAGE, 'vercel.json');
 ok(fs.existsSync(vj), 'page/vercel.json 存在');
 let cfg = null;
 try { cfg = JSON.parse(fs.readFileSync(vj, 'utf8')); } catch (e) { ok(false, 'vercel.json 不是合法 JSON：' + e.message); }
 if (cfg) {
-  const rw = (cfg.rewrites || []).find(r => r && r.source === '/');
-  ok(!!rw, 'rewrites 里有 source "/" 规则');
-  ok(rw && /index\.bundle\.html$/.test(rw.destination || ''), '首页 rewrite 指向 index.bundle.html（实测 ' + (rw && rw.destination) + '）');
+  ok(!cfg.rewrites || !cfg.rewrites.some(r => r && r.source === '/'),
+    '不再声明 source "/" 的 rewrite（Vercel 静态站点实测不生效，v2.14.31 已证伪）');
+  ok(cfg.outputDirectory === '.', 'outputDirectory 仍为 "."');
 }
 
 console.log('\n[6] 产物入库');
 const gi = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
-ok(!/\/page\/_build\//.test(gi), '.gitignore 不再忽略 page/_build/（产物需随仓库走）');
-ok(!/\/page\/index\.bundle\.html/.test(gi), '.gitignore 不再忽略 page/index.bundle.html');
+ok(!/\/page\/_build\//.test(gi), '.gitignore 不忽略 page/_build/（产物需随仓库走）');
+ok(!/(^|\n)\/page\/index\.html\b/.test(gi), '.gitignore 不忽略 page/index.html（它现在是线上入口）');
 
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 if (fail) { console.log('失败项:\n - ' + fails.join('\n - ')); process.exit(1); }

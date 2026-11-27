@@ -23,7 +23,7 @@ const ROOT = path.join(__dirname, '..');
 const PAGE = path.join(ROOT, 'page');
 const src = f => fs.readFileSync(path.join(PAGE, f), 'utf8');
 const css = () => src('index.css');
-const html = () => src('index.html');
+const html = () => src('index.src.html');
 
 let pass = 0, fail = 0;
 const fails = [];

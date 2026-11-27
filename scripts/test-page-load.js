@@ -12,7 +12,7 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) { pass++; console.log(' ✓ ' + m); } else { fail++; console.log(' ✗ ' + m); } }
 
 /* 1. 解析 index.html 的 script 顺序 */
-const html = fs.readFileSync(path.join(__dirname, '..', 'page', 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'page', 'index.src.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)\?v\d+"><\/script>/g)].map(m => m[1]);
 ok(scripts.length >= 40, 'script 标签数量 ' + scripts.length + ' (≥40)');
 

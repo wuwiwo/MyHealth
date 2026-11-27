@@ -14,7 +14,7 @@ function ok(c, m, extra) {
 }
 
 const PAGE = path.join(__dirname, '..', 'page');
-const html = fs.readFileSync(path.join(PAGE, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(PAGE, 'index.src.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)\?v\d+"><\/script>/g)].map(m => m[1]);
 
 const ls = {};

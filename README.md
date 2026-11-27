@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.31
+> Personal Health Manager — 个人健身健康管理应用 v2.14.32
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -99,7 +99,10 @@ page/
 ├── skill-store.js      dh-skills-v1 持久化
 ├── skill-ui.js         技能面板 UI
 ├── orbs.js             宝珠系统（5 类型×4 品质 · 分解等价碎片/合成/装配/月重置）
-├── index.html          页面骨架
+├── index.src.html      源码页（唯一真源：55 个脚本逐文件加载；本地调试与全部测试都走它）
+├── index.html          线上入口（由 scripts/build-bundle.js 生成：1 个 script + 1 个 CSS）
+├── _build/
+│   └── app.js          合成脚本（55 个源码脚本 → 1 个，被 index.html 引用，产物入库）
 ├── index.css           样式表
 ├── media/              媒体资源（images/ 动作图 · videos/ 动作视频 · pets/ 14 只宠物头像 SVG · monsters/ 18 原型怪兽头像 SVG · skills/ 48 枚技能图标 SVG · orbs/ 5 枚宝珠图标 SVG）
 ├── data/
@@ -112,9 +115,9 @@ doc/
 ├── wiki/  ← 📚 **系统现行事实（唯一权威）**：`00 系统总览.md` 总索引 + 12 个大类各一页 + `01 Glossary/` 术语真源，`[[wikilinks]]` 互联
 ├── HANDOFF.md  ← 🤝 AI/开发者交接文档（环境/纪律/模块/测试/待办/踩坑；§6 为历史快照）
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
-├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.27）
+├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.33）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.31）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.32）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -162,20 +165,20 @@ Vercel 项目设置：
 仓库 `wuwiwo/MyHealth` 接入 Vercel 自动部署，`git push origin main` 会触发重新构建。
 部署后访问：<https://my-health-six.vercel.app/>
 
-### 打包产物（v2.14.31 起为线上入口）
+### 打包产物（v2.14.32 起 `page/index.html` 本身即产物）
 
-- **线上**：`page/vercel.json` 把 `/` rewrite 到 `/index.bundle.html` → 首屏 **2 个资源（1 个 JS）**，`_build/app.js` 由 55 个源码脚本合成。
-- **本地/测试**：`page/index.html` 仍是逐文件加载（55 个脚本）—— 源码是唯一真源，全部测试与调试都走它；线上也可用 `/index.html` 直链比对源码版。
+- **入口分工**：`page/index.src.html` = 源码页（唯一真源，55 个脚本逐文件加载，本地调试与全部测试都走它）；`page/index.html` = **构建生成的线上入口**（只有 1 个 `<script src="_build/app.js?vNNN">` + 1 个 CSS）→ 首屏 **2 个资源（1 个 JS）**。
+- **为什么不再用 rewrite**：v2.14.31 曾把 `/` rewrite 到 `/index.bundle.html`，但 Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总会把 `/` 解析到 `index.html`，那条 `source:"/"` 规则**实测不生效**（上线后 `/` 仍返回逐文件版）。改让入口文件本身是产物，不依赖任何服务端规则。
 
 ```bash
-node scripts/build-bundle.js     # 生成/更新 page/_build/app.js + page/index.bundle.html（产物入库）
-node scripts/verify-bundle.js    # 14 视图逐字比对：源码页 vs 产物页，须 14/14 一致
-node scripts/test-bundle-fresh.js # 产物过期守卫：源码重算指纹 vs app.js 头部 hash
+node scripts/build-bundle.js      # 由 index.src.html 生成 _build/app.js + index.html（产物入库）
+node scripts/verify-bundle.js     # 14 视图逐字比对：/index.src.html vs /index.html，须 14/14 一致
+node scripts/test-bundle-fresh.js # 过期守卫：源码重算指纹 + 重算期望入口页逐字节比对
 ```
 
-**改了 `page/*.js` 就必须重建产物再提交** —— 否则线上仍是旧代码；`test-bundle-fresh.js`（全量回归的一部分）会用源码重算内容指纹，过期直接红。
+**改了 `page/*.js` 或 `page/index.src.html` 就必须重建产物再提交** —— 否则线上仍是旧代码；`test-bundle-fresh.js`（全量回归的一部分）会用源码重算内容指纹并重算期望的 `index.html`，过期或手改入口页都会直接红。
 
-**回滚**：删掉 `page/vercel.json` 里的 `rewrites` 条目再推一次，首页即回到逐文件加载的 `index.html`（源码页一直完整可用）。
+**回滚**：`cp page/index.src.html page/index.html` 推一次，线上即回到逐文件加载（源码页一直完整可用）。
 
 ---
 
@@ -483,4 +486,4 @@ node scripts/test-bundle-fresh.js # 产物过期守卫：源码重算指纹 vs a
 
 | **2.14.31** | **2026-11-27** | **线上入口切到打包产物（承接 P3-3）** — v2.14.30 只交付工具、没动线上配置，本版真正切换。① **产物入库**（`page/_build/app.js` 2.6MB + `page/index.bundle.html`）：Vercel 从仓库构建，`.gitignore` 掉的文件线上不存在，不入库则 rewrite 会落到 404。② **`page/vercel.json` 加 rewrite** `{"source":"/","destination":"/index.bundle.html"}`：首页走产物（**2 个资源 / JS 1 个**），`/index.html` 直链仍可打开源码版用于比对，**回滚只需删掉这条 rewrite**。③ **产物内容指纹 `hash:`**：由拼接正文 sha256 得出，`test-bundle-fresh.js` 从「先重建再断言」（过期永远测不出）改为**不重建**——用源码重算指纹比对、逐字节包含校验，并断言戳/文件顺序/`page/` 仍 55 个源码 JS/`index.html` 仍走源码/rewrite 指向/产物已入库，**13 → 19 断言**。**验证**：`verify-bundle` 14 视图逐字一致、资源 56 → 2、产物 0 报错；全量 **87 套件 / 0 失败**；缓存戳 `?v194` → **`?v195`**。权衡：整包 2.6MB 每版重下（未改文件不再命中缓存），已记入 changelog |
 
-> 当前版本：**v2.14.31**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+> 当前版本：**v2.14.32**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

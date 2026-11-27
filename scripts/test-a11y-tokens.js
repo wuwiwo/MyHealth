@@ -14,7 +14,7 @@ function ok(c, m) { if (c) { pass++; console.log(' ✓ ' + m); } else { fail++; 
 
 const ROOT = path.join(__dirname, '..', 'page');
 const css = fs.readFileSync(path.join(ROOT, 'index.css'), 'utf8');
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(ROOT, 'index.src.html'), 'utf8');
 
 /* ---------- 工具：解析 CSS 自定义属性 ---------- */
 function blockBody(selector) {

@@ -5,6 +5,47 @@
 
 ---
 
+## v2.14.32
+
+Date: 2026-11-27
+
+**入口即产物：`page/index.html` 改由构建生成（v2.14.31 的 rewrite 已被线上实测证伪）**
+
+> v2.14.31 把 `/` rewrite 到 `/index.bundle.html`，推送后线上实测：`/` 返回 200 但正文仍是逐文件版（`index.css?v195` + 55 个 `<script src="*.js?v195">`，18571B），而 `/index.bundle.html`（200 / 15877B）与 `/_build/app.js`（200 / 2685742B）都正常可访问 —— **产物部署无问题，只是入口没切**。Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总会把 `/` 解析到 `index.html`，`source:"/"` 的 rewrite 匹配不到。本版改为**让入口文件本身即产物**，不再依赖任何服务端规则。
+
+### 新增功能 / 部署
+
+1. **源码页改名 `page/index.src.html`；`page/index.html` 变为构建生成**
+   - `scripts/build-bundle.js` 读 `index.src.html`，把 55 个 `<script src="x.js?vNNN">` 这一整段替换成 `<script src="_build/app.js?vNNN"></script>`，写出 `page/index.html`。
+   - 为什么这样能生效：`/` 由 Vercel 直接落到 `index.html`，产物就是入口，**无需 rewrite、无需任何平台特性**；改动范围只有页尾那段脚本标签，body/header 与源码页逐字节一致。
+   - `page/index.bundle.html` 删除（入口只剩 `index.html` 一条路径，避免出现「哪个才是线上」的歧义）。
+2. **`page/vercel.json` 移除 `rewrites`**：那条 `source:"/"` 规则线上不生效，留着只会让后来者以为入口是它。
+3. **测试与验证脚本改读源码页**：`scripts/` 下 21 个脚本的 `'index.html'` / `'/index.html'` 全部改成 `index.src.html`（改前统计到的清单：audit-squad-ui、audit-whole-ui、balance-dual、test-a11y-tokens、test-attackable、test-bundle-fresh、test-codex、test-custom-weight、test-display-float、test-dual-battle、test-fx-matrix、test-monster-icons、test-page-load、test-pet-battle-picks、test-pet-squads、test-skill-icons、test-squad-relay、test-ui-consistency、verify-bundle、verify-dual-layout、verify-squad-ui）。
+   - 保留「源码是唯一真源、断言的仍是源码」这一原则；产物页由守卫另行校验。
+
+### 修复
+
+1. **`scripts/test-bundle-fresh.js` 13 → 22 断言**（仍**不重建**）
+   - 新增：`index.html` 外部脚本 = 1 且戳正确；**按同一规则重算「期望入口页」与磁盘 `page/index.html` 逐字节比对**（手改产物页、或改了源码页忘了重建都会红）；入口页仍引用带戳的 `index.css`；旧 `index.bundle.html` 已移除；`vercel.json` 不再声明 `source:"/"` 的 rewrite；`index.src.html` 全部标签同一戳且不指向产物。
+   - 保留：内容指纹重算比对、正文逐字节包含、标记数与顺序、`page/`（不含 `_build`）仍 55 个源码 JS、产物入库（`.gitignore` 不再忽略）。
+2. **`scripts/verify-bundle.js` 比对对象改为 `/index.src.html` vs `/index.html`**（原来对比 `index.bundle.html`）。
+
+### 验证
+
+- `node scripts/build-bundle.js`：55 → 1，`app.js` 2623 KB，`hash:11342cfa85dfd5ab`；入口 `index.html` = 1 个 `<script>` + 1 个 `<link>`。
+- `node scripts/verify-bundle.js`：**14/14 视图 innerText 逐字一致**，产物 0 报错，资源条目 **56 → 2（JS 55 → 1）**。
+- 全量回归：**87 套件 / 0 失败**；`test-bundle-fresh` 22/22。
+- 缓存戳 `?v195` → **`?v196`**（56 处，均在 `index.src.html`）。
+
+### UI 调整
+
+无（纯构建与部署链改动）。
+
+### 权衡
+
+- 整包 2.6MB 每版重下（只改一个文件也不命中缓存），与 v2.14.30 记录一致；拆包（core/views/battle 三包）仍等真实网络数据再定。
+- 线上 `/index.src.html` 现在是一个**可访问的源码页**（55 个请求）。这一条实际是「顺手保留的对照/回滚路径」，一直存在；回滚只需 `cp page/index.src.html page/index.html` 再推一次。
+
 ## v2.14.31
 
 Date: 2026-11-27
@@ -1760,6 +1801,7 @@ Date: 2026-10-12
 | 2.14.29 | 55 | 3508 行 game-render.js | **全项目评审批次 F：层级与顶栏收尾**（P3-1 / P3-2 / P3-5）—— ① 两级页签原来同时实心填充、与区块标题引导线同色，一屏三条同宽蓝条；改**一级实心、二级只留 2px 品牌下划线 + 品牌字**（hover 仅 8% 淡底），`.section-hdr::after` 引导线 `--orange-g` → 中性 `--bd`（蓝只表示状态/主操作）；② 顶栏三枚 44px 按钮从纯 emoji（🔄/🌙/🔄，无可见文案）改**图标 16px + 文案 11px 竖排**（同步 / 主题 / 状态），状态灯空闲图标 🔄 → ○；`setTheme`/`setSync` 从整块 `textContent` 改为只换 `.hb-ico`，否则会把新文案冲掉；③ 小屏版本号回归 —— 副标题拆 `.hs-brand` + `.hs-ver`，**≤430 只藏英文词**（390 宽英文会折两行，故阈值取 430），版本号在 360/390 均可见；`test-ui-consistency` 61 → **70 断言**；14 视图 × 2 视口溢出 0、对比 0（每视图 <12px +3 来自三枚顶栏文案，预期内）；全量 **86 套件 / 0 失败**；缓存戳 `?v192` → `?v193` |
 | 2.14.30 | 55 | 3508 行 game-render.js | **全项目评审批次 G：首屏请求 56 → 2（P3-3）** —— 交付打包工具链，**不改默认入口/部署**：① `scripts/build-bundle.js` 按 `index.html` 原始顺序合成 55 脚本 → `page/_build/app.js`（2.6MB）+ `page/index.bundle.html`（1 script + 1 link），每文件 `/* ===== 名 ===== */` 标记 + **末尾补 `\n;\n`** 显式化脚本边界 ASI；安全依据已核：全为经典脚本共全局作用域、`document.currentScript` 0 处、无文件以 `"use strict"` 开头、内联 `init()` 原样保留；产物落 `_build/` 子目录（放 page/ 根会让 6 个「扫 page/*.js」守卫误报）；② `scripts/verify-bundle.js` 14 视图逐字比对 innerText 哈希 —— **14/14 一致、产物 0 报错、资源 56 → 2（JS 55 → 1）**，并写进两个采样坑（单次 300ms 过早读、同源 localStorage 交叉污染）；③ `scripts/test-bundle-fresh.js` **13 断言**守卫（源码仍是唯一真源、戳一致、标记顺序逐项对齐、产物不入库）；全量 **87 套件 / 0 失败**；缓存戳 `?v193` → `?v194`。⚠️ 是否切生产入口待作者拍板 |
 | 2.14.31 | 55 | 3508 行 game-render.js | **线上入口切到打包产物**（承接 P3-3；作者「修改后推送」）—— ① 产物**入库**（`page/_build/app.js` 2.6MB + `page/index.bundle.html`）：Vercel 从仓库构建，`.gitignore` 掉的文件线上不存在，不入库则 rewrite 落到 404；② `page/vercel.json` 加 `{"source":"/","destination":"/index.bundle.html"}` —— 首页走产物（**2 资源 / JS 1**），`/index.html` 直链仍可打开源码版用于比对与**回滚（删 rewrite 即可）**；③ 产物头部加**内容指纹 `hash:`**（拼接正文 sha256），`test-bundle-fresh` 由「先重建再断言」（过期永远测不出）改为**不重建**：用源码重算指纹比对 + 逐字节包含校验 + 戳/顺序/55 源码/`index.html` 仍走源码 + rewrite 与 `.gitignore` 断言，**13 → 19 断言**；`verify-bundle` 14 视图逐字一致、资源 56 → 2；全量 **87 套件 / 0 失败**；缓存戳 `?v194` → `?v195`。权衡：整包 2.6MB 每版重下（代价与收益见 changelog） |
+| 2.14.32 | 55 | 3508 行 game-render.js | **入口即产物：`page/index.html` 改由构建生成**（v2.14.31 的 rewrite 被线上实测证伪后的修正）—— ① 线上实测：`/` 返回 200 但正文仍是逐文件版（`index.css?v195` + 55 个 `<script>`，18571B），而 `/index.bundle.html`（200/15877B）与 `/_build/app.js`（200/2685742B）均正常 —— **产物部署无问题，只是入口没切**；Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总把 `/` 解析到 `index.html`，`source:"/"` 匹配不到 → 改「入口文件本身即产物」，不依赖平台规则；② 源码页改名 **`page/index.src.html`**（唯一真源，本地/测试/逐文件加载都走它），`build-bundle.js` 读它、把 55 个 `<script src>` 整段换成 `<script src="_build/app.js?vNNN">` 后写出 `page/index.html`（body/header 逐字节同构），删掉旧 `index.bundle.html`（入口只剩一条路径）；③ `page/vercel.json` 移除失效 `rewrites`；④ 21 个测试/审计脚本的 `index.html` → `index.src.html`（保留「源码是唯一真源」）；⑤ `test-bundle-fresh` **19 → 22 断言**：新增「按同一规则重算期望入口页与磁盘 `index.html` **逐字节比对**」（手改产物页或忘重建即红）、入口脚本唯一且戳正确、`index.css` 带戳、旧 bundle 页已移除、`vercel.json` 不再声明 `/` rewrite；⑥ `verify-bundle` 比对对象改 `/index.src.html` vs `/index.html`：**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → `?v196`。回滚：`cp page/index.src.html page/index.html` 再推 |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。

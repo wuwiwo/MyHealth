@@ -25,7 +25,7 @@ const PAGE = path.join(ROOT, 'page');
 const src = f => fs.readFileSync(path.join(PAGE, f), 'utf8');
 const SRC_STRENGTH = src('tab-strength.js');
 const CSS = src('index.css');
-const HTML = src('index.html');
+const HTML = src('index.src.html');
 
 let pass = 0, fail = 0;
 const fails = [];

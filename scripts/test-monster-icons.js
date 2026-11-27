@@ -354,7 +354,7 @@ ok(/\.mon-ico\s*\{[^}]*image-rendering\s*:\s*pixelated/.test(css),
   'index.css 的 .mon-ico 缺少 image-rendering:pixelated');
 
 /* 5e monster-archetype.js 必须在 index.html 里被引入（否则整个模块不生效） */
-const html = src('index.html');
+const html = src('index.src.html');
 ok(html.includes('monster-archetype.js'), 'index.html 未引入 monster-archetype.js');
 const levelsPos = html.indexOf('levels.js');
 const maPos = html.indexOf('monster-archetype.js');

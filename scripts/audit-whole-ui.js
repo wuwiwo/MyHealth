@@ -169,7 +169,7 @@ const VIEWS = [
 ];
 
 (async () => {
-  try { const r = await fetch('http://127.0.0.1:' + PORT + '/index.html'); if (!r.ok) throw new Error('HTTP ' + r.status); }
+  try { const r = await fetch('http://127.0.0.1:' + PORT + '/index.src.html'); if (!r.ok) throw new Error('HTTP ' + r.status); }
   catch (e) { console.error('静态服务未就绪（8099）：' + e.message); process.exit(2); }
   if (!fs.existsSync(CHROME)) { console.error('找不到 Chrome：' + CHROME); process.exit(2); }
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -196,7 +196,7 @@ const VIEWS = [
     out[vp.tag] = {};
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: vp.w, height: vp.h, deviceScaleFactor: 2, mobile: true });
     for (const view of VIEWS) {
-      await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' });
+      await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.src.html' });
       await sleep(900);
       const r = await cdp.send('Runtime.evaluate', { expression: view.inject, returnByValue: true });
       if (r.exceptionDetails) { out[vp.tag][view.id] = { error: r.exceptionDetails.text }; continue; }

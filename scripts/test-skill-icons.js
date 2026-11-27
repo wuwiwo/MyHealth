@@ -401,7 +401,7 @@ ok(/skill-card-ico/.test(suSrc), 'skill-ui.js 技能卡片图标未带 .skill-ca
    注意：必须匹配 `<script src="...">` 标签本身 —— 直接 indexOf('game-render.js')
    会先命中注释里提到的文件名（本轮就踩过这个坑，误报为顺序错误）。 */
 {
-  const html = src('index.html');
+  const html = src('index.src.html');
   const tagPos = f => {
     const m = new RegExp('<script\\s+src="' + f.replace('.', '\\.') + '[^"]*"').exec(html);
     return m ? m.index : -1;

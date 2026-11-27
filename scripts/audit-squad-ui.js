@@ -204,7 +204,7 @@ const M_PET = COMMON + `
 
 (async () => {
   const result = {};
-  try { const r = await fetch('http://127.0.0.1:' + PORT + '/index.html'); if (!r.ok) throw new Error('HTTP ' + r.status); }
+  try { const r = await fetch('http://127.0.0.1:' + PORT + '/index.src.html'); if (!r.ok) throw new Error('HTTP ' + r.status); }
   catch (e) { console.error('静态服务未就绪（8099）：' + e.message); process.exit(2); }
   if (!fs.existsSync(CHROME)) { console.error('找不到 Chrome：' + CHROME); process.exit(2); }
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -229,7 +229,7 @@ const M_PET = COMMON + `
   async function load(vp, inject) {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: vp.w, height: vp.h, deviceScaleFactor: 2, mobile: true });
     const ev = new Promise(res => { const h = ev2 => { if (ev2) { } }; res(); });
-    await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' });
+    await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.src.html' });
     await sleep(1200);
     const r = await cdp.send('Runtime.evaluate', { expression: inject, returnByValue: true });
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.text + ' ' + ((r.exceptionDetails.exception || {}).description || ''));
