@@ -232,11 +232,20 @@ function showExEditor(editId){
 }
 
 function delExercise(id){
-  var list=getExercises().filter(function(x){return x.id!==id});
-  saveExercises(list);
-  renderExLibrary();
-  if(typeof initCardioTypes==='function')initCardioTypes();
-  toast('已删除','s');
+  var all=getExercises(),idx=-1,obj=null
+  all.forEach(function(x,i){if(x.id===id){idx=i;obj=x}})
+  saveExercises(all.filter(function(x){return x.id!==id}))
+  renderExLibrary()
+  if(typeof initCardioTypes==='function')initCardioTypes()
+  /* v2.14.35：删除可撤销（30 秒），按原下标插回 */
+  if(obj&&typeof showUndoBar==='function'){
+    showUndoBar('已删除动作「'+obj.name+'」',function(){
+      saveExercises(insertAt(getExercises(),obj,idx))
+      renderExLibrary()
+      if(typeof initCardioTypes==='function')initCardioTypes()
+      if(typeof renderStr==='function')renderStr()
+    })
+  }else toast('已删除','s')
 }
 
 /* ========== DATASET PICKER / ENCYCLOPEDIA OVERLAY ==========
@@ -442,11 +451,17 @@ function onSettingsEvent(el,id,act){
   if(act==='gotoTraining'){switchTab('training');switchSub('training','strength');return true}
   if(act==='gotoCardio'){switchTab('training');switchSub('training','cardio');return true}
   if(act==='setDelStrPlan'){
-    if(confirm('确定删除这个计划？')){savePlans(getPlans().filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderStr()}
+    var ps=getPlans(),pi=-1,pobj=null
+    ps.forEach(function(p,i){if(p.id===el.dataset.pid){pi=i;pobj=p}})
+    if(pobj&&confirm('确定删除这个计划？')){savePlans(ps.filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderStr()
+      if(typeof showUndoBar==='function')showUndoBar('已删除计划「'+pobj.name+'」',function(){savePlans(insertAt(getPlans(),pobj,pi));renderSettingsPlans();renderStr()})}
     return true}
   if(act==='setEditCarPlan'){openCardioPlanEditor(el.dataset.pid);return true}
   if(act==='setDelCarPlan'){
-    if(confirm('确定删除这个计划？')){saveCardioPlans(getCardioPlans().filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderCar()}
+    var cps=getCardioPlans(),ci=-1,cobj=null
+    cps.forEach(function(p,i){if(p.id===el.dataset.pid){ci=i;cobj=p}})
+    if(cobj&&confirm('确定删除这个计划？')){saveCardioPlans(cps.filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderCar()
+      if(typeof showUndoBar==='function')showUndoBar('已删除计划「'+cobj.name+'」',function(){saveCardioPlans(insertAt(getCardioPlans(),cobj,ci));renderSettingsPlans();renderCar()})}
     return true}
   if(id==='setAttrLogBtn'){showAttrLog();return true}
   if(id==='setAttrInfoBtn'){showAttrInfo();return true}

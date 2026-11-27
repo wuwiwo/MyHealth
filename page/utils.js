@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.34';
+const APP_VERSION = '2.14.35';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -160,6 +160,60 @@ c.id='cf'+i
 const s=document.createElement('style');s.textContent=`@keyframes cf${i}{0%{transform:translateY(0) rotate(0deg) scale(0);opacity:1}20%{transform:translateY(20vh) rotate(180deg) scale(1);opacity:1}100%{transform:translateY(100vh) rotate(720deg) scale(.5);opacity:0}}`
 c.appendChild(s);o.appendChild(c)}
 document.body.appendChild(o);setTimeout(()=>o.remove(),3500)}
+
+/* ========== UNDO DELETE (v2.14.35) ==========
+   评审 §18.4：Nielsen 第 3 项「用户控制与自由」唯一扣分是「删除不可撤销」。
+   做法：删除后底部出一条 30 秒撤销条，点「撤销」把刚删的条目按**原下标**插回；
+   超时或关闭 = 确认删除（数据早已落库，不靠撤销条存活）。
+   一次只保留一条：新删除顶掉旧条（旧条目已落库，不再可撤销）。
+   只管「本地列表可复原」的删除（动作 / 计划），不碰历史训练记录。 */
+var UNDO_MS=30000,_undoTimer=null,_undoTick=null
+
+/* 纯函数：把 item 插回 list 的 index（越界一律追加，不改入参） */
+function insertAt(list,item,index){
+  var arr=(list||[]).slice()
+  var i=(typeof index==='number'&&index>=0&&index<=arr.length)?index:arr.length
+  arr.splice(i,0,item)
+  return arr
+}
+
+function _undoBarHost(){
+  var c=document.getElementById('undoC')
+  if(!c){c=document.createElement('div');c.id='undoC';c.className='undo-c'
+    if(document.body)document.body.appendChild(c)}
+  return c
+}
+
+function clearUndoBar(){
+  if(_undoTimer){clearTimeout(_undoTimer);_undoTimer=null}
+  if(_undoTick){clearInterval(_undoTick);_undoTick=null}
+  var c=document.getElementById('undoC');if(c)c.innerHTML=''
+}
+
+function showUndoBar(text,onUndo){
+  var c=_undoBarHost();if(!c)return null
+  clearUndoBar()
+  var bar=document.createElement('div');bar.className='undo-bar';bar.setAttribute('role','status')
+  var t=document.createElement('span');t.className='undo-txt';t.textContent=text
+  /* 时限用独立小标签 + 每秒倒数：写进正文会被 360px 截断（v2.14.35 真机踩到过）。
+     aria-hidden —— 读屏只念一次正文，不每秒播报数字。 */
+  var sec=document.createElement('span');sec.className='undo-sec';sec.setAttribute('aria-hidden','true')
+  var left=Math.round(UNDO_MS/1000);sec.textContent=left+'s'
+  var b=document.createElement('button');b.className='undo-btn';b.type='button';b.textContent='撤销'
+  var x=document.createElement('button');x.className='undo-x';x.type='button';x.setAttribute('aria-label','关闭撤销提示');x.textContent='✕'
+  b.addEventListener('click',function(){
+    if(_undoTimer){clearTimeout(_undoTimer);_undoTimer=null}
+    if(_undoTick){clearInterval(_undoTick);_undoTick=null}
+    try{onUndo()}catch(e){toast('恢复失败','e')}
+    c.innerHTML='';toast('已恢复','s')
+  })
+  x.addEventListener('click',clearUndoBar)
+  bar.appendChild(t);bar.appendChild(sec);bar.appendChild(b);bar.appendChild(x);c.appendChild(bar)
+  _undoTick=setInterval(function(){left--;if(left>0)sec.textContent=left+'s'},1000)
+  _undoTimer=setTimeout(function(){_undoTimer=null;if(_undoTick){clearInterval(_undoTick);_undoTick=null}
+    if(bar.parentNode)bar.parentNode.removeChild(bar)},UNDO_MS)
+  return bar
+}
 
 /* ========== THEME ========== */
 /* P0-10：三态 system / dark / light，默认跟随系统。

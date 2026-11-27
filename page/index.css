@@ -628,6 +628,15 @@ box-shadow:none}
 @keyframes ti{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
 .toast.out{opacity:0;transform:translateY(-10px)}
 
+/* 撤销条（v2.14.35）：底部一条，压在主导航之上；一次性只显示一条。
+   高度 ≥ --touch-min（44px），撤销按钮独立可聚焦，关闭按钮带 aria-label。 */
+.undo-c{position:fixed;left:0;right:0;bottom:calc(var(--tabbar-h) + var(--sat) + var(--sp-2));z-index:998;display:flex;justify-content:center;padding:0 var(--pad-screen);pointer-events:none}
+.undo-bar{display:flex;align-items:center;gap:var(--sp-2);width:100%;max-width:var(--mw);min-height:var(--touch-min);padding:var(--sp-1) var(--sp-2);background:var(--surface-2);color:var(--text);border:var(--bw) solid var(--bd);pointer-events:auto}
+.undo-txt{flex:1;min-width:0;font-size:var(--fs-xs);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.undo-sec{flex:none;font-size:var(--fs-2xs);font-weight:700;color:var(--text2);font-variant-numeric:tabular-nums}
+.undo-btn{min-height:var(--touch-min);padding:0 var(--sp-3);border:var(--bw) solid var(--blue);background:transparent;color:var(--blue);font-size:var(--fs-xs);font-weight:700;cursor:pointer}
+.undo-x{min-width:var(--touch-min);min-height:var(--touch-min);border:none;background:transparent;color:var(--text2);font-size:var(--fs-sm);cursor:pointer}
+
 /* Responsive */
 @media(max-width:380px){
   :root{--pad-screen:12px}

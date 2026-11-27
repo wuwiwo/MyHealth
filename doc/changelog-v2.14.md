@@ -5,6 +5,49 @@
 
 ---
 
+## v2.14.35
+
+Date: 2026-11-27
+
+**删除可撤销（评审 §18.4 剩余建议①；Nielsen 第 3 项唯一扣分点）**
+
+> 评审批次把「删除不可撤销」留成了唯一缺口：删动作、删计划都是 `confirm` 后立刻落库，删错了只能重建。本版补 30 秒撤销窗口，并把「删错」这件事从「不可逆」降成「可挽回」。
+
+**① 撤销条（`page/utils.js`：`UNDO DELETE` 段）**
+- `UNDO_MS = 30000`：删除后底部出一条撤销条，30 秒内可撤销；超时/关闭 = 确认删除。
+- 展开 `showUndoBar(text,onUndo)` / `clearUndoBar()` / `insertAt(list,item,index)`（纯函数，把条目按**原下标**插回，越界退化为追加、不改入参）。
+- **一次只有一条**：新删除顶掉旧条（旧条目已落库，不再可撤销），避免叠出一列撤销条。
+- 结构：`role="status"` 正文 + **独立倒计时标签 `30s`**（`aria-hidden`，每秒递减）+「撤销」按钮 + `✕`（`aria-label="关闭撤销提示"`）。
+- 撤销不静默：成功 `toast('已恢复')`，失败 `toast('恢复失败')`（catch 不吞）。
+
+**② 三处删除接线（`page/tab-settings.js`）**
+- 删动作 `delExercise()`：先记下标与对象，删后出「已删除动作「名字」」，撤销按原下标插回并重渲动作库 + 训练页。
+- 删力量计划 / 删有氧计划：同样记下标，撤销按原下标插回并重渲计划页与训练页。
+- **`confirm` 一个没拆**：预防（删前确认）+ 可撤销（删后 30 秒）双保险，不靠「有撤销就免确认」偷懒。
+
+**③ 样式（`page/index.css`）**
+- `.undo-c` / `.undo-bar` / `.undo-txt` / `.undo-sec` / `.undo-btn` / `.undo-x`：贴着主导航上方（`bottom:calc(var(--tabbar-h) + --sat + --sp-2)`）、层级 **998**（低于 toast 999）、按钮 **≥ 44×44**、只用既有令牌（`--text2`，不写不存在的 `--text-2`）。
+
+**修复（真机抓到的两处）**
+- **正文被截断**：初版把「（30 秒内可撤销）」写进正文，360px 下 ellipsis 把时限吃掉（真机截图实测 `已删除动作「二头弯举」（30 秒内...`）。改为独立倒计时标签，正文与标签实测 177/177 不截断。
+- **四周 1px 边框**：`.undo-x` 初版用 `1px` 四周透明边做点击区 → 触发 v2.14.33 的「容器不得四周 1px」断言；改为 `border:none` + `min-width/min-height` 撑尺寸。
+
+**测试与验证**
+- 新增 `scripts/test-undo-delete.js` **38 断言**（源码契约 / `insertAt` 在 vm 里跑真函数 7 例 / 三处接线 / CSS 尺寸与令牌）。
+- 新增 `scripts/verify-undo.js`（真机，CDP 9346）**13 断言**：删 → 条出现（文案/30s/role/44px/唯一）→ 点撤销 → 动作数 **26 → 25 → 26** → 再删等 **31 秒** → 条自动消失。截图 `_tmp-whole-audit/undo-bar-360x640.png`。
+- 全量 **89 套件 / 0 失败**；`verify-bundle` 14 视图逐字一致；`audit-whole-ui` 双主题 0 失败；`audit-tab-order` 模态 `trapOn:true`。
+
+**权衡**
+- 只做「最近一次删除可撤销」而不做删除历史/回收站：一次一条 + 30 秒，足够应付误删，成本最低；要做多步撤销得引入命令栈，与「扁平本地存档」模型不匹配。
+- 撤销条 fixed 在导航上方而非顶部 toast 区：删除按钮在长列表里，靠近底部更贴近手指与视线。
+
+**本版文件**
+- 改：`page/utils.js`、`page/tab-settings.js`、`page/index.css`、`page/index.src.html`（戳 `?v199`）、`page/index.html` / `page/_build/app.js`（构建产物）
+- 增：`scripts/test-undo-delete.js`、`scripts/verify-undo.js`
+- 文档：`doc/changelog-v2.14.md`、`README.md`、`doc/design-tokens-v2.1.md`（§18）、`doc/ui-ux-review-whole-2026-11-27.md`（§19）、`doc/VERSION-LEDGER.md`
+
+---
+
 ## v2.14.34
 
 Date: 2026-11-27
@@ -1893,6 +1936,7 @@ Date: 2026-10-12
 | 2.14.32 | 55 | 3508 行 game-render.js | **入口即产物：`page/index.html` 改由构建生成**（v2.14.31 的 rewrite 被线上实测证伪后的修正）—— ① 线上实测：`/` 返回 200 但正文仍是逐文件版（`index.css?v195` + 55 个 `<script>`，18571B），而 `/index.bundle.html`（200/15877B）与 `/_build/app.js`（200/2685742B）均正常 —— **产物部署无问题，只是入口没切**；Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总把 `/` 解析到 `index.html`，`source:"/"` 匹配不到 → 改「入口文件本身即产物」，不依赖平台规则；② 源码页改名 **`page/index.src.html`**（唯一真源，本地/测试/逐文件加载都走它），`build-bundle.js` 读它、把 55 个 `<script src>` 整段换成 `<script src="_build/app.js?vNNN">` 后写出 `page/index.html`（body/header 逐字节同构），删掉旧 `index.bundle.html`（入口只剩一条路径）；③ `page/vercel.json` 移除失效 `rewrites`；④ 21 个测试/审计脚本的 `index.html` → `index.src.html`（保留「源码是唯一真源」）；⑤ `test-bundle-fresh` **19 → 22 断言**：新增「按同一规则重算期望入口页与磁盘 `index.html` **逐字节比对**」（手改产物页或忘重建即红）、入口脚本唯一且戳正确、`index.css` 带戳、旧 bundle 页已移除、`vercel.json` 不再声明 `/` rewrite；⑥ `verify-bundle` 比对对象改 `/index.src.html` vs `/index.html`：**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → `?v196`。回滚：`cp page/index.src.html page/index.html` 再推 |
 | 2.14.33 | 55 | 3508 行 game-render.js | **全项目评审批次 H：清单剩余四项收口** —— ① **P2-4 边框纪律**：写进 `index.css` 文件头（容器 2px `--bw`+`--bd` / 分隔单边 1px `--bw-thin`+`--surface-3` / 强调边 2px），并把五处「四周 1px」容器（`.refine-src` / `.pet-exp-log` / `.orb-bag` / `.pet-rest` / `.train-mat-fold`）收成 2px —— 扁平风无阴影，1px 四周边框会被读成分隔线；② **P2-6 色彩纪律**：三语义定稿（蓝=主操作/进度/选中、红=危险/敌方/BOSS、绿=达成/友方/治疗；紫只属数据属性、黄只属瞬时提示），并断言按钮与空态不得用紫；③ **P2-7 空态**：`emptyHtml()` 加第 5 参类名 + `.empty-compact`（图标与标题同行、CTA 撑满），计划页两块空态 **188px → 125px**，360×640 首屏可见两个 CTA；④ **P2-9 图标语义**：`📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️（4 处）、属性计算→🧮，宠物「结算」→**「离线补算」**；⑤ `test-ui-consistency` **70 → 86 断言**（新增 `[17]` 十六类规则）、`test-pet-panel-layout` 一条文案断言随行为更新；全量 **87 套件 / 0 失败**、`audit-whole-ui` 14×2 复测溢出/对比/触摸/圆角全 0；缓存戳 `?v196` → `?v197`。权衡：强调色计数仍 7–12（成对的主题蓝/绿本就计两个，压低只能减语义色，不做） |
 | 2.14.34 | 55 | 3508 行 game-render.js | **无障碍收口**：容器级弹层焦点陷阱（打开送焦点/关闭归还/Tab 首尾环回/背后拉回，12 个弹层调用点零改动）+ 审计扩为**双主题 × 2 视口 × 14 视图**（深色对比失败 0）+ 新增键盘可达性六项审计（11 视图全 0，模态真缺口已修）。修复：加载即初始化打崩 4 套 vm 沙箱 → 改能力探测守卫。测试 88 套件 0 失败、`test-modal-focus` 21 断言。 |
+| 2.14.35 | 55 | 3508 行 game-render.js | **删除可撤销**：`showUndoBar` / `clearUndoBar` / `insertAt`（30 秒窗口、按原下标插回、一次一条、独立倒计时 `30s` 且 `aria-hidden`、撤销按钮 ≥44×44、层级 998）；删动作 / 删力量计划 / 删有氧计划三处接线，`confirm` 一条未拆。真机抓修：正文被 360px 截断 → 改倒计时标签；`.undo-x` 四周 1px → `border:none`。新增 `test-undo-delete`（38 断言）+ `verify-undo`（真机 13 断言，26→25→26）。89 套件 0 失败。 |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。

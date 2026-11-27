@@ -1,4 +1,4 @@
-/* MyHealth bundle · v198 · hash:aa2a6aadc95f1833 · 由 scripts/build-bundle.js 生成，勿手改 */
+/* MyHealth bundle · v199 · hash:b4ac94ac6e767752 · 由 scripts/build-bundle.js 生成，勿手改 */
 /* ===== store.js ===== */
 /* ============================================
    MyHealth — Store Module v1.3 (M2a S0)
@@ -876,7 +876,7 @@ window.MEDIA_BASE = '';
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.34';
+const APP_VERSION = '2.14.35';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -1034,6 +1034,60 @@ c.id='cf'+i
 const s=document.createElement('style');s.textContent=`@keyframes cf${i}{0%{transform:translateY(0) rotate(0deg) scale(0);opacity:1}20%{transform:translateY(20vh) rotate(180deg) scale(1);opacity:1}100%{transform:translateY(100vh) rotate(720deg) scale(.5);opacity:0}}`
 c.appendChild(s);o.appendChild(c)}
 document.body.appendChild(o);setTimeout(()=>o.remove(),3500)}
+
+/* ========== UNDO DELETE (v2.14.35) ==========
+   评审 §18.4：Nielsen 第 3 项「用户控制与自由」唯一扣分是「删除不可撤销」。
+   做法：删除后底部出一条 30 秒撤销条，点「撤销」把刚删的条目按**原下标**插回；
+   超时或关闭 = 确认删除（数据早已落库，不靠撤销条存活）。
+   一次只保留一条：新删除顶掉旧条（旧条目已落库，不再可撤销）。
+   只管「本地列表可复原」的删除（动作 / 计划），不碰历史训练记录。 */
+var UNDO_MS=30000,_undoTimer=null,_undoTick=null
+
+/* 纯函数：把 item 插回 list 的 index（越界一律追加，不改入参） */
+function insertAt(list,item,index){
+  var arr=(list||[]).slice()
+  var i=(typeof index==='number'&&index>=0&&index<=arr.length)?index:arr.length
+  arr.splice(i,0,item)
+  return arr
+}
+
+function _undoBarHost(){
+  var c=document.getElementById('undoC')
+  if(!c){c=document.createElement('div');c.id='undoC';c.className='undo-c'
+    if(document.body)document.body.appendChild(c)}
+  return c
+}
+
+function clearUndoBar(){
+  if(_undoTimer){clearTimeout(_undoTimer);_undoTimer=null}
+  if(_undoTick){clearInterval(_undoTick);_undoTick=null}
+  var c=document.getElementById('undoC');if(c)c.innerHTML=''
+}
+
+function showUndoBar(text,onUndo){
+  var c=_undoBarHost();if(!c)return null
+  clearUndoBar()
+  var bar=document.createElement('div');bar.className='undo-bar';bar.setAttribute('role','status')
+  var t=document.createElement('span');t.className='undo-txt';t.textContent=text
+  /* 时限用独立小标签 + 每秒倒数：写进正文会被 360px 截断（v2.14.35 真机踩到过）。
+     aria-hidden —— 读屏只念一次正文，不每秒播报数字。 */
+  var sec=document.createElement('span');sec.className='undo-sec';sec.setAttribute('aria-hidden','true')
+  var left=Math.round(UNDO_MS/1000);sec.textContent=left+'s'
+  var b=document.createElement('button');b.className='undo-btn';b.type='button';b.textContent='撤销'
+  var x=document.createElement('button');x.className='undo-x';x.type='button';x.setAttribute('aria-label','关闭撤销提示');x.textContent='✕'
+  b.addEventListener('click',function(){
+    if(_undoTimer){clearTimeout(_undoTimer);_undoTimer=null}
+    if(_undoTick){clearInterval(_undoTick);_undoTick=null}
+    try{onUndo()}catch(e){toast('恢复失败','e')}
+    c.innerHTML='';toast('已恢复','s')
+  })
+  x.addEventListener('click',clearUndoBar)
+  bar.appendChild(t);bar.appendChild(sec);bar.appendChild(b);bar.appendChild(x);c.appendChild(bar)
+  _undoTick=setInterval(function(){left--;if(left>0)sec.textContent=left+'s'},1000)
+  _undoTimer=setTimeout(function(){_undoTimer=null;if(_undoTick){clearInterval(_undoTick);_undoTick=null}
+    if(bar.parentNode)bar.parentNode.removeChild(bar)},UNDO_MS)
+  return bar
+}
 
 /* ========== THEME ========== */
 /* P0-10：三态 system / dark / light，默认跟随系统。
@@ -18466,11 +18520,20 @@ function showExEditor(editId){
 }
 
 function delExercise(id){
-  var list=getExercises().filter(function(x){return x.id!==id});
-  saveExercises(list);
-  renderExLibrary();
-  if(typeof initCardioTypes==='function')initCardioTypes();
-  toast('已删除','s');
+  var all=getExercises(),idx=-1,obj=null
+  all.forEach(function(x,i){if(x.id===id){idx=i;obj=x}})
+  saveExercises(all.filter(function(x){return x.id!==id}))
+  renderExLibrary()
+  if(typeof initCardioTypes==='function')initCardioTypes()
+  /* v2.14.35：删除可撤销（30 秒），按原下标插回 */
+  if(obj&&typeof showUndoBar==='function'){
+    showUndoBar('已删除动作「'+obj.name+'」',function(){
+      saveExercises(insertAt(getExercises(),obj,idx))
+      renderExLibrary()
+      if(typeof initCardioTypes==='function')initCardioTypes()
+      if(typeof renderStr==='function')renderStr()
+    })
+  }else toast('已删除','s')
 }
 
 /* ========== DATASET PICKER / ENCYCLOPEDIA OVERLAY ==========
@@ -18676,11 +18739,17 @@ function onSettingsEvent(el,id,act){
   if(act==='gotoTraining'){switchTab('training');switchSub('training','strength');return true}
   if(act==='gotoCardio'){switchTab('training');switchSub('training','cardio');return true}
   if(act==='setDelStrPlan'){
-    if(confirm('确定删除这个计划？')){savePlans(getPlans().filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderStr()}
+    var ps=getPlans(),pi=-1,pobj=null
+    ps.forEach(function(p,i){if(p.id===el.dataset.pid){pi=i;pobj=p}})
+    if(pobj&&confirm('确定删除这个计划？')){savePlans(ps.filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderStr()
+      if(typeof showUndoBar==='function')showUndoBar('已删除计划「'+pobj.name+'」',function(){savePlans(insertAt(getPlans(),pobj,pi));renderSettingsPlans();renderStr()})}
     return true}
   if(act==='setEditCarPlan'){openCardioPlanEditor(el.dataset.pid);return true}
   if(act==='setDelCarPlan'){
-    if(confirm('确定删除这个计划？')){saveCardioPlans(getCardioPlans().filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderCar()}
+    var cps=getCardioPlans(),ci=-1,cobj=null
+    cps.forEach(function(p,i){if(p.id===el.dataset.pid){ci=i;cobj=p}})
+    if(cobj&&confirm('确定删除这个计划？')){saveCardioPlans(cps.filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderCar()
+      if(typeof showUndoBar==='function')showUndoBar('已删除计划「'+cobj.name+'」',function(){saveCardioPlans(insertAt(getCardioPlans(),cobj,ci));renderSettingsPlans();renderCar()})}
     return true}
   if(id==='setAttrLogBtn'){showAttrLog();return true}
   if(id==='setAttrInfoBtn'){showAttrInfo();return true}
