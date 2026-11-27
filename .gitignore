@@ -10,3 +10,7 @@ backup/
 .tmp-analysis/
 .workbuddy/
 .workbuddy-ai/
+
+# v2.14.30 打包产物（node scripts/build-bundle.js 生成，不入库）
+/page/_build/
+/page/index.bundle.html

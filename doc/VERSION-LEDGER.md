@@ -18,7 +18,9 @@
 
 ## 当前领号指针
 
-**2.14.30**（下一个可用）
+**2.14.31**（下一个可用）
+
+> 2026-11-27：`2.14.30` 已领用 —— **全项目评审批次 G：首屏请求 56 → 2**（`scripts/build-bundle.js` 按 index.html 原序合成 `page/_build/app.js` + `page/index.bundle.html`、`scripts/verify-bundle.js` 14 视图逐字比对、`scripts/test-bundle-fresh.js` 13 断言守卫；产物不入库、默认入口与部署配置均未改），属同一 UI 评审大类内的 patch；领号前确认全仓无既有使用，指针推进到 `2.14.31`。全项目评审的 P0–P3 至此全部有主。
 
 > 2026-11-27：`2.14.29` 已领用 —— **全项目评审批次 F：层级与顶栏收尾**（两级页签不再同时实心填充 + 区块标题引导线改中性；顶栏三枚按钮改「图标 + 11px 文案」竖排、状态灯空闲图标改 ○；小屏 ≤430 只藏英文品牌词、保留版本号），属同一 UI 评审大类内的 patch；领号前确认全仓无既有使用，指针推进到 `2.14.30`。下一批次（打包 / 首屏请求数）将另领号。
 
@@ -103,6 +105,7 @@
 
 | 版本 | 线 / 负责人 | 工作内容 | commit | changelog |
 |---|---|---|---|---|
+| 2.14.30 | 主控线（全项目 UI/UX） | **评审批次 G：首屏请求 56 → 2（P3-3）** —— `scripts/build-bundle.js`（原序合成 55 脚本 → `page/_build/app.js` 2.6MB + `page/index.bundle.html`，文件标记 + 末尾 `\n;\n` 显式化 ASI；产物落子目录避免污染 `page/*.js` 守卫）、`scripts/verify-bundle.js`（14 视图 innerText sha256 逐字比对：14/14 一致、产物 0 报错、资源 56 → 2 / JS 55 → 1）、`scripts/test-bundle-fresh.js`（13 断言守卫）；产物不入库，默认入口与部署均未改；全量 87 套件 / 0 失败；缓存戳 `?v194` | PENDING | `doc/changelog-v2.14.md` |
 | 2.14.29 | 主控线（全项目 UI/UX） | **评审批次 F：层级与顶栏收尾** —— ① 两级页签改「一级实心 / 二级 2px 品牌下划线 + 品牌字」、`section-hdr::after` 引导线改中性 `--bd`；② 顶栏三钮改「图标 16px + 文案 11px」竖排（同步/主题/状态）、状态灯空闲图标 ○，`setTheme`/`setSync` 只换 `.hb-ico`；③ 小屏保留版本号（`.hs-brand`/`.hs-ver` 拆分，≤430 只藏英文词）；`test-ui-consistency` 61 → 70 断言；全量 86 套件 / 0 失败；缓存戳 `?v193` | c7c5f61 | `doc/changelog-v2.14.md` |
 | 2.14.28 | 主控线（全项目 UI/UX） | **评审批次 E：个人表单降层 + 导入语义** —— 个人资料卡原为「卡 2px 框 → label → 每行 input 2px 框」三层盒子，改输入项 `border:0` + 只留一条 2px `border-bottom`、底色 transparent，获焦只换 `--brand` 不改宽度（`min-height:44` 保留）；设置·数据旧提示只写「用于备份」，真实语义 `store.mergeAll` 是**按键合并**（整块替换同名键、其余保留），说明行改 `.data-hint` 三句写清 + 导入前确认；`test-ui-consistency` 51 → 61 断言；全量 86 套件 / 0 失败；缓存戳 `?v192` | 24b2903 | `doc/changelog-v2.14.md` |
 | 2.14.27 | 主控线（全项目 UI/UX） | **评审批次 D：字号阶梯（P2-10）** —— `--fs-3xs` 由 10px 提到 **11px**（保留 token 名，49 处引用一次抬升），360 宽实机 10px 中文字形仅 ~5px 高却承载「还差 4 天 / 单敌·敌群 / 标签」等信息；`.gl-group-desc`/`.gl-group-state` 11px → 12px（战斗页 <12px 文本 48 → 0，12px 下仍折 2 行、卡高不变）；14 视图 × 2 视口横向溢出 0、对比 0；全量 86 套件 / 0 失败；缓存戳 `?v191` | `2b5f479` | `doc/changelog-v2.14.md` |

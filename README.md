@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.29
+> Personal Health Manager — 个人健身健康管理应用 v2.14.30
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -114,7 +114,7 @@ doc/
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.27）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.29）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.30）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -161,6 +161,21 @@ Vercel 项目设置：
 
 仓库 `wuwiwo/MyHealth` 接入 Vercel 自动部署，`git push origin main` 会触发重新构建。
 部署后访问：<https://my-health-six.vercel.app/>
+
+### 打包产物（可选，v2.14.30 起）
+
+默认入口 `page/index.html` 是**逐文件加载**（55 个脚本 / 56 个请求）—— 源码调试、所有测试、日常开发都用它。
+
+```bash
+node scripts/build-bundle.js     # 生成 page/_build/app.js + page/index.bundle.html
+node scripts/verify-bundle.js    # 14 视图逐字比对：源码 vs 产物，须 14/14 一致
+```
+
+- 产物随后者验证通过才可用：**首屏资源 56 → 2（JS 55 → 1）**，`innerText` 逐字相同。
+- 产物**不入库**（`.gitignore` 已收），发布前现跑。
+- 想把线上入口切到产物页，两种做法（**均未在 v2.14.30 应用**，需自行决定且会改动部署）：
+  1. `page/vercel.json` 加 rewrite：`{"source":"/","destination":"/index.bundle.html"}`；
+  2. 直接把 `index.bundle.html` 复制为服务器入口 `index.html`（源码文件保持不动，回滚只需恢复原 `index.html`）。
 
 ---
 
@@ -464,4 +479,6 @@ Vercel 项目设置：
 
 | **2.14.29** | **2026-11-27** | **全项目评审批次 F：层级与顶栏收尾（P3-1 / P3-2 / P3-5）** — ① **两级页签不再同时实心填充**：原来一级页签与子页签都填满品牌蓝、区块标题引导线又同色，一屏三条同宽蓝条 → 一级保持实心，**二级只留 2px 品牌下划线 + 品牌字**（底色透明，hover 仅 8% 淡底）；`.section-hdr::after` 引导线 `--orange-g` → 中性 `--bd`，蓝只表示「状态 / 主操作」。② **顶栏三枚按钮从纯 emoji 改「图标 + 文案」**：44px 方框里只有 🔄/🌙/🔄 且无可见文案（手机上也没有 hover）→ 图标 16px + 11px 竖排文案「同步 / 主题 / 状态」，尺寸不变；状态灯空闲图标改 ○ 与同步按钮区分；`setTheme`/`setSync` 改为只更新 `.hb-ico`（原来整块 `textContent` 会把文案冲掉）。③ **小屏版本号回归**：原来 ≤380 整行隐藏副标题、版本号一起消失 → 拆 `.hs-brand` + `.hs-ver`，**≤430 只藏英文词**（390 宽英文会折两行，阈值取 430），360/390 均可看到版本号。**验证**：14 视图 × 2 视口横向溢出 0、对比失败 0（每视图 <12px +3 即三枚顶栏文案，预期内）；`test-ui-consistency` 61 → **70 断言**；全量 **86 套件 / 0 失败**；缓存戳 `?v192` → **`?v193`** |
 
-> 当前版本：**v2.14.29**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+| **2.14.30** | **2026-11-27** | **全项目评审批次 G：首屏请求 56 → 2（P3-3）** — 交付打包工具链，**不改默认入口、不动线上配置**。① `scripts/build-bundle.js`：按 `index.html` 的**原始顺序**把 55 个脚本合成 `page/_build/app.js`（2.6MB）+ `page/index.bundle.html`（1 个 script + 1 个 link），每个文件加标记、**末尾补 `\n;\n`** 把脚本边界的自动分号插入显式化；安全性已核（全为经典脚本共享全局作用域、`document.currentScript` 0 处、无文件以 `"use strict"` 开头、内联 `init()` 原样保留），产物放 `_build/` 子目录避免污染「扫 page/*.js」的守卫。② `scripts/verify-bundle.js`：14 视图分别加载源码页与产物页，比对 `body.innerText` 的 sha256 —— **14/14 逐字一致、产物 0 报错、资源条目 56 → 2（JS 55 → 1）**。③ `scripts/test-bundle-fresh.js`（13 断言）：源码仍是唯一真源、戳一致、文件标记数与顺序逐项对齐、产物不入库。**验证**：全量 **87 套件 / 0 失败**、a11y 40/40；缓存戳 `?v193` → **`?v194`**。⚠️ 是否把生产入口切到 `index.bundle.html` 待拍板（属部署变更），README 已写两种做法 |
+
+> 当前版本：**v2.14.30**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
