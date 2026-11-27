@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.38
+> Personal Health Manager — 个人健身健康管理应用 v2.14.39
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -117,7 +117,7 @@ doc/
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.34）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.38）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.39）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -492,5 +492,6 @@ node scripts/test-bundle-fresh.js # 过期守卫：源码重算指纹 + 重算�
 | **2.14.36** | **2026-11-27** | **首屏 2.6MB → 1.5MB：动作数据集懒加载** — 先量后改：线上压缩后 `app.js` **662KB**、整包 715KB，且版本戳每次发版换 URL，**按体积切三段收益≈0**（否决原「拆包」建议）。改找「首屏不需要的部分」：`data/exercises-dataset.js` **1161KB = 源码 43.8%**，只服务动作百科 / 动作卡配图 / dsId 关联。① `page/ex-dataset.js` 新增 `bind()`（可重绑，清空索引缓存）与 `load(cb)`（幂等：已有→同步回调 `true`；首次→注入带版本戳的 `<script>`；加载中→排队不重复请求；失败→回调 `false`）。② `scripts/build-bundle.js` 增 `LAZY` 清单把数据集移出包（**2630 → 1472KB**），源码页仍逐文件引入、测试行为不变。③ 三触发点：**空闲预取**（`init` 后 1200ms + `refreshAfterDataset()`）、`autoLinkExercises` 数据未到先拉、`openDsPicker` 打开百科先拉（失败 toast）。④ 新增 `scripts/test-lazy-dataset.js`（28 断言）+ `scripts/verify-lazy-dataset.js`（真机 7 断言：数据集在 app.js 之后才拉、1324 条、201 张卡图、百科 40 芯片）。⑤ `test-bundle-fresh` 22 → **25**。全量 **90 套件 0 失败**，`verify-bundle` 14 视图逐字一致。**上线实测**：`app.js` 662 → **491 KB**，首屏 715 → **544 KB（−24%）**，数据集 173 KB 改在首屏后 1.2s 拉取。 |
 | **2.14.37** | **2026-11-27** | **真开战视觉复核：飘字不再压血量、双方血量格式统一**（评审 §20.5 唯一「仍未验证」项收口） — 新增 `scripts/verify-battle-visual.js`（CDP 9350）：预置「今天 1-1 已尝试」绕过训练拦截 → 真 startBattle 单敌关 → 抓含飘字的一帧 → 自动 + 8 倍速打到底 → 量结算区，**11 断言**。抓到并修掉两个缺陷：① **飘字盖住血量**（锚点 `top:30%` 正压 `bc-hp-bar/bc-hp-text`、字号 `--fs-2xl`）→ 改锚到角色上方 `bottom:100%` + 字号 `--fs-xl`，`showMark` 同修，真机复测重叠 **0**；② **同屏两种血量格式**（玩家 `HP: 56` vs 敌方 `HP: 118/120`）→ `renderBattleHP` 统一 `cur/max`。另复核控制条 6 钮 ≥44×44、双方卡片对称差 0px、结算「💀 战败 / 继续」可读。群战路径由既有 `verify-squad-ui` 与 `verify-dual-layout`（28 项）守着。全量 **90 套件 0 失败**。 |
 | **2.14.38** | **2026-11-27** | **视口盘点与系统主题复核**（评审 §21.4 扣分项 ②③ 收口，一误判一真缺陷） — ② **误判纠正**：`utils.js:228-230` 早有 `_sysMq` change 监听，新增 `scripts/verify-theme-follow.js`（CDP 9351，`Emulation.setEmulatedMedia` 只切系统偏好不刷新）**7/7**：系统切浅自动跟随、图标 🌙↔☀️ 与 aria 同步、手动选择不被系统覆盖、改回 system 立即对齐 → 主题化 3→4。③ **真缺陷修复**：新增 `scripts/audit-viewports.js`（3 视口 × 14 视图 = **42 柱**）抓到手机横放 844×390 首屏只见导航（首内容块 230px）→ `index.css` 末尾媒体查询压头部 **74→58**、页签 **50→46**、段间距 **56→32**，首内容块 **230→190**，快照卡整块进第一屏；平板 ≥700 段间距 56→40。踩坑：媒体查询必须放文件末尾（`:root` 后置覆盖）；不能整段藏副标题（`test-ui-consistency` 有断言）。全量 **90 套件 0 失败**。 |
+| **2.14.39** | **2026-11-27** | **内联样式抽类第一刀**（评审 §22.4 ④ 收口第一刀） — 先量：`page/*.js` 内联 style 引用 `var(--*)` **441 处 / 231 种串**，其中 **152 处**是同一串重复 ≥4 次（最狠一条 `color:var(--text3);font-size:var(--fs-3xs)` 写了 20 遍）。只抽这 152 处：`index.css` 末尾新增 **22 个 `.tx-*`** 工具类（文本色 `.tx-dim/.tx-ok/.tx-warn/.tx-err`、字阶 `.tx-hint/.tx-note/.tx-sub/...`、44px 触摸基样式 `.tx-tap/.tx-btn/.tx-btn-sm`），按「整串完全匹配」静态替换并合并 class，样式等价 → 内联 `var()` **441 → 289（−34.5%）**。新增 `scripts/test-inline-style-discipline.js`（**26 断言**：22 串不得回潮、CSS 定义逐项一致、内联上限 300）。两处旧断言改口径（不删）：`test-a11y-tokens` 字阶级改为 JS+CSS 合计、`test-pet-panel-layout` 热区接受 `.tx-tap` 并新增「CSS 真定义 44px」断言（90 → **91**）。全量 **91 套件 0 失败**；真机 42 柱 / 56 柱 / 键盘 11 视图全绿。 |
 
-> 当前版本：**v2.14.38**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+> 当前版本：**v2.14.39**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

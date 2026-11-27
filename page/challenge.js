@@ -320,7 +320,7 @@ function renderSummonPanel(){
     el.innerHTML='<div class="summon-card done">'
       +'<div class="summon-title">🔮 隐藏挑战</div>'
       +'<div class="summon-info">'+(info.reason||'今日不可召唤')+'</div>'
-      +(isFinite(info.total)?'<div class="summon-info" style="font-size:var(--fs-3xs);color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+Math.max(0,isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
+      +(isFinite(info.total)?'<div class="summon-info tx-hint">今日容量 <b class="tx-warn">'+Math.round(info.vol||0)+'kg</b> · 可用 '+Math.max(0,isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
       +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:var(--bw) solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
       +'</div>'
       +chDebugBlock(info,strVol,c,'cannot')
@@ -337,7 +337,7 @@ function renderSummonPanel(){
   el.innerHTML='<div class="summon-card">'
     +'<div class="summon-title">🔮 隐藏挑战</div>'
     +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次）</div>'
-    +(info.borrowed>0?'<div class="summon-info" style="color:var(--green)">🔁 昨日补召机会剩 '+info.remainBorrow+'/'+info.borrowed+' 次（昨日 '+Math.round(info.yVol||0)+'kg · 优先消耗 · 不占今日名额）</div>':'')
+    +(info.borrowed>0?'<div class="summon-info tx-ok">🔁 昨日补召机会剩 '+info.remainBorrow+'/'+info.borrowed+' 次（昨日 '+Math.round(info.yVol||0)+'kg · 优先消耗 · 不占今日名额）</div>':'')
     +'<div class="summon-rate-wrap">'
     +  '<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=5?' · 必成 100%':usedN===4?' · 保底 80%':' · 基础 10%')+'）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'
@@ -526,7 +526,7 @@ function startHiddenChallenge(hotBuff){
     
     // Visual feedback
     damageEl.textContent=state.totalDamage
-    infoEl.innerHTML=(crit?'<span style="color:var(--yellow);font-weight:700">💥 暴击! +'+dmg+'</span>':'<span style="color:var(--orange)">+'+dmg+'</span>')
+    infoEl.innerHTML=(crit?'<span style="color:var(--yellow);font-weight:700">💥 暴击! +'+dmg+'</span>':'<span class="tx-warn">+'+dmg+'</span>')
     // Hit log
     var hitDiv=document.createElement('div')
     hitDiv.className='ch-hit'+(crit?' crit':'')
@@ -695,10 +695,10 @@ function startHiddenChallenge(hotBuff){
       +'</div>'
       +'<div class="ch-reward">'
       +  '<div style="font-weight:700;margin-bottom:6px">🎁 本月属性奖励（月度重置）</div>'
-      +  '<div class="ch-reward-info">'      +(bonusAtk>0?'  <span style="color:var(--orange)">⚔️ +'+bonusAtk+'</span>':'')
+      +  '<div class="ch-reward-info">'      +(bonusAtk>0?'  <span class="tx-warn">⚔️ +'+bonusAtk+'</span>':'')
       +(bonusDef>0?'  <span style="color:var(--blue)">🛡️ +'+bonusDef+'</span>':'')
-      +(bonusHp>0?'  <span style="color:var(--green)">❤️ +'+bonusHp+'</span>':'')
-      +(bonusAtk+bonusDef+bonusHp===0?'  <span style="color:var(--text3)">伤害不足，未获得奖励</span>':'')
+      +(bonusHp>0?'  <span class="tx-ok">❤️ +'+bonusHp+'</span>':'')
+      +(bonusAtk+bonusDef+bonusHp===0?'  <span class="tx-dim">伤害不足，未获得奖励</span>':'')
       +  '</div>'
       +'</div>'
       +'<div class="ch-reward">'
@@ -706,12 +706,12 @@ function startHiddenChallenge(hotBuff){
       +  '<div class="ch-reward-info">'
       +((state.matReward && state.matReward.length) ? state.matReward.map(function(d){
           var names={nutrition:'🧪 营养液',feed:'🍖 饲料',spirit:'✨ 灵能',refineNormal:'🪨 炼化石',refineHigh:'💎 高炼石',orbShard:'🔮 宝珠碎片'};
-          return '<span style="margin-right:8px">'+(names[d.type]||d.type)+' <b style="color:var(--green)">+'+d.n+'</b></span>';
-        }).join('') : '<span style="color:var(--text3)">—</span>')
+          return '<span style="margin-right:8px">'+(names[d.type]||d.type)+' <b class="tx-ok">+'+d.n+'</b></span>';
+        }).join('') : '<span class="tx-dim">—</span>')
       +(state.skillPointReward > 0 ? '<div style="margin-top:4px">💠 技能点 <b style="color:var(--blue)">+'+state.skillPointReward+'</b>（本周 '+weekCount+' 次额外奖励）</div>' : '')
       +(state.petEggReward ? '<div style="margin-top:4px;display:flex;align-items:center;gap:6px">'
         + ((typeof petIconHtml === 'function') ? petIconHtml(state.petEggReward.speciesId, 32) : '')
-        + '🥚 宠物蛋 <b style="color:var(--orange)">'+state.petEggReward.name+'</b></div>' : '')
+        + '🥚 宠物蛋 <b class="tx-warn">'+state.petEggReward.name+'</b></div>' : '')
       /* v2.15：宝珠结算也带图标（与库存 / 槽位同一入口 orbIconHtml，缺模块时回退 🔮）。
          ⚠️ challenge.js 比 pet-ui.js 先加载，但结算面板是运行时渲染，届时全局函数已就绪；
             仍保留 typeof 守卫，与上方 petEggReward 的 petIconHtml 同一手法。 */
@@ -752,7 +752,7 @@ function startHiddenChallenge(hotBuff){
       var v=perSec[i]||0
       var bh=Math.max(2,Math.round(v/maxHits*56))
       var c=v>=maxHits&&maxHits>1?'var(--orange)':'var(--blue)'
-      h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px" title="第'+(i+1)+'秒: '+v+'次"><div style="height:'+bh+'px;background:'+c+';border-radius:3px 3px 0 0;width:100%;min-width:4px"></div><span style="font-size:var(--fs-3xs);color:var(--text3)">'+(i+1)+'</span></div>'
+      h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px" title="第'+(i+1)+'秒: '+v+'次"><div style="height:'+bh+'px;background:'+c+';border-radius:3px 3px 0 0;width:100%;min-width:4px"></div><span class="tx-hint">'+(i+1)+'</span></div>'
     }
     h+='</div>'
     container.innerHTML=h
@@ -787,7 +787,7 @@ function showChallengeHistory(){
   }else{
     var rows=h.slice().reverse().map(function(r,i){
       var buffLabel=r.buff?hotBuffLabel(r.buff):'无 buff'
-      return'<div class="ec" style="margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+r.date+'</div><div class="ec-actions"><span style="font-size:var(--fs-3xs);color:var(--text3)">#'+(h.length-i)+'</span></div></div>'
+      return'<div class="ec" style="margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+r.date+'</div><div class="ec-actions"><span class="tx-hint">#'+(h.length-i)+'</span></div></div>'
         +'<div style="font-size:var(--fs-2xs);color:var(--text2);line-height:1.7;padding:2px 0">'
         +'⚔️ '+r.dmg+' 伤害 · 🎯 '+r.hits+' 次 ('+r.avgRate+'/秒) · 💥 '+r.crits+' 暴击<br>'
         +'🥇 最强 '+r.maxHit+' · 🎁 ⚔️+'+r.atk+' 🛡️+'+r.def+' ❤️+'+r.hp

@@ -663,3 +663,27 @@ node scripts/test-a11y-tokens.js                 # 40/40 ALL PASS（本轮未改
 
 ### 21.4 平板（`min-width:700px`）
 只收段间距（56 → 40），不动字号、卡片宽、圆角：平板是「更宽的同一套 UI」，改尺寸类 token 会回冲 360/390 的既有基线。
+
+## 22. 工具类与内联样式的边界（v2.14.39）
+
+### 22.1 什么时候允许 `style=""`
+- **一次性、动态**（值随数据变）：如进度条宽度、按数值变色的文字，允许内联，但**颜色走 `var(--*)` 令牌**，不许写死色值。
+- **结构性定位**（骨架位置、`display:none` 切换）：允许内联。
+- **重复 ≥4 次的样式组合**：**必须**抽成工具类（当前 152 处已清零，`test-inline-style-discipline` 守着）。
+
+### 22.2 `.tx-*` 工具类清单（文本/触摸）
+| 分组 | 类 | 等价写法 |
+|---|---|---|
+| 弱提示 | `.tx-hint` | `color:var(--text3);font-size:var(--fs-3xs)` |
+| 弱提示（柔和） | `.tx-hint-soft` | 上者 + `font-weight:400` |
+| 纯色 | `.tx-dim` / `.tx-ok` / `.tx-warn` / `.tx-err` / `.tx-muted-only` | text3 / green / orange / red / text2 |
+| 正文+色 | `.tx-note` / `.tx-sub` / `.tx-sub-mb` | text3 + fs-xs / fs-2xs / fs-2xs + mb6 |
+| 纯字阶 | `.tx-3xs` / `.tx-xs` / `.tx-base` / `.tx-h` / `.tx-b` / `.tx-sec` | fs-3xs / fs-xs / fs-base / fs-lg+700 / fs-base+700 / fs-lg+700+margin 18/0/10 |
+| 触摸基样式 | `.tx-tap` / `.tx-btn` / `.tx-btn-sm` | 44×44+12 / fs-sm+44+12 / fs-sm+44+8/10 |
+
+### 22.3 命名纪律
+- 工具类统一 `tx-` 前缀；组件类继续用领域前缀（`ec-`、`gb-`、`det-`、`pet-`、`orb-`…）。两者不得互相借名。
+- 新增工具类必须同时：① 写进本节表格；② 写进 `test-inline-style-discipline.js` 的 `MAP`；③ 保证断言 3 的上限不上调。
+
+### 22.4 断言口径的迁移规则
+抽类会让「JS 内联里的令牌引用数」下降——这是**搬家**不是**回退**。原断言若盯的是「某文件里出现多少次令牌」，必须改成「页面合计出现多少次」；断言盯的应该是「有没有人还在写硬编码」，不是「某个文件里写了多少次」。

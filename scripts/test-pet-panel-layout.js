@@ -248,8 +248,14 @@ const exchBtn = /<button[^>]*id="petExchange"[^>]*>/.exec(actM ? actM[1] : '');
 ok(!!healBtn && !!exchBtn, '一键治疗与兑换都在按钮组内');
 ok(healBtn && healBtn[0].includes('pet-btn-wide'),
   '一键治疗带 .pet-btn-wide（flex-basis 100% → 全宽独占一行，不再与兑换并列）', healBtn ? healBtn[0] : '');
-ok(healBtn && /min-height:44px/.test(healBtn[0]), '一键治疗热区 ≥44px', healBtn ? healBtn[0] : '');
-ok(exchBtn && /min-height:44px/.test(exchBtn[0]), '兑换按钮热区 ≥44px');
+/* v2.14.39：按钮热区的 44px 可能来自内联（老写法）或 .tx-tap/.tx-btn 工具类（抽类后），两者都算，
+   但必须证明工具类真的定义了 44 —— 否则断言会变成空头承诺 */
+const petCss = fs.readFileSync(path.join(__dirname, '..', 'page', 'index.css'), 'utf8');
+const cssDefines44 = cls => new RegExp('.' + cls + '\\{[^}]*min-height:44px').test(petCss);
+ok(cssDefines44('tx-tap') && cssDefines44('tx-btn'), '.tx-tap / .tx-btn 在 CSS 里定义 min-height:44px');
+const hot44 = s => /min-height:44px/.test(s) || /tx-(tap|btn|btn-sm)/.test(s);
+ok(healBtn && hot44(healBtn[0]), '一键治疗热区 ≥44px', healBtn ? healBtn[0] : '');
+ok(exchBtn && hot44(exchBtn[0]), '兑换按钮热区 ≥44px', exchBtn ? exchBtn[0] : '');
 ok(H.indexOf('一键治疗（1）') >= 0, '一键治疗显示受伤数量（本 fixture 1 只受伤）');
 
 /* 结算按钮：无可结算内容 → 整块不渲染 */

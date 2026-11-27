@@ -5,6 +5,59 @@
 
 ---
 
+## v2.14.39
+
+Date: 2026-11-27
+
+**内联样式抽类第一刀：重复 ≥4 次的静态内联样式搬成 .tx-* 工具类（评审 §22.4 ④ 收口第一刀）**
+
+> §22.4 剩下的两件里，④ 是「内联 `var()` 颜色未全量抽类」。按「先量后改」先量了一遍：
+> `page/*.js` 里内联 style 引用 `var(--*)` 共 **441 处**，分属 231 个不同的样式串；
+> 其中 **152 处**是「同一串重复 ≥4 次」——最狠的一条「弱提示」（`color:var(--text3);font-size:var(--fs-3xs)`）写了 20 遍。
+> 本版只动这 152 处，不动剩下 289 处零散串。
+
+**① 量测（可复算）**
+| 指标 | 抽类前 | 抽类后 |
+|---|---|---|
+| 内联 style 里引用 `var(--*)` 的处数 | 441 | **289（−34.5%）** |
+| 其中「同一串重复 ≥4 次」 | 152 | **0** |
+| 不同样式串数量 | 231 | 未变（零散的不动） |
+| `index.css` 新增工具类 | 0 | **22 个 `.tx-*`** |
+
+**② 落地的 22 个工具类（前缀 `tx-`）**
+- 文本色：`.tx-dim`（text3）、`.tx-ok`（green）、`.tx-warn`（orange）、`.tx-err`（red）、`.tx-muted-only`（text2）
+- 字阶：`.tx-hint`（3xs+text3，原 20 处）、`.tx-hint-soft`、`.tx-note`（text3+xs）、`.tx-sub`（text3+2xs）、`.tx-sub-mb`、`.tx-3xs`、`.tx-xs`、`.tx-base`、`.tx-h`、`.tx-b`、`.tx-sec`
+- 触摸目标基样式：`.tx-tap`（44×44 + 12px 内距）、`.tx-btn`、`.tx-btn-sm`（均含 `min-height:44px`）
+- 替换方式：只匹配「整串完全等于目标串」的静态内联（不含拼接、不含模板字符串），样式等价；元素已有 `class` 时合并追加。
+
+**③ 守门断言（新增 `scripts/test-inline-style-discipline.js`，26 断言）**
+1. 这 22 种串**不得再以 `style=""` 回到任何 `page/*.js`**（回潮检查，实际 0 处）；
+2. `index.css` 必须真的定义了这 22 个类，且属性集合与约定**逐项一致**（不是"说了就算"）；
+3. 内联 `var()` 总处数设**上限 300**（现在 289，只能降不能涨）；
+4. `.tx-*` 类数量 = 22 且无重复定义。
+
+**④ 两处旧断言按新事实改口径（不是删断言）**
+- `test-a11y-tokens`：原「JS 内联字阶令牌引用 > 250 处」在抽类后自然降到 207 —— 口径改为 **JS + CSS 合计 > 250**（防的是"字号没人用令牌"，不是"JS 里必须写够 250 次"）。
+- `test-pet-panel-layout`：「兑换按钮热区 ≥44px」原来只看内联 `min-height:44px`，抽类后变成 `.tx-tap` —— 口径改为「内联有 44 **或** 带 `.tx-tap/.tx-btn`」，并新增一条断言证明 **CSS 里这些类真的定义了 44px**（否则断言就是空头承诺）。断言数 90 → **91**。
+
+**测试与验证**
+- 全量 **91 套件 / 0 失败**（新增 `test-inline-style-discipline` 26 断言）；`test-bundle-fresh` 25 断言（戳 `?v203`）。
+- 真机：`audit-viewports` **42 柱 0 问题**；`audit-whole-ui` 双主题 × 双视口 **56 柱 0 失败**（深色对比失败 0）；`audit-tab-order` 11 视图 0 问题、模态焦点 4 项 true。
+- 视觉抽查（390×844 浅色截图）：宠物面板（34 处改动）、挑战·记录、挑战·培养、设置·动作库、训练·力量 —— 颜色、字号、44px 热区、空态均与抽类前一致。
+
+**权衡**
+- 只抽「重复 ≥4 次」的串：剩下的 289 处大多是「一次性样式」（含动态拼接的颜色，如按数值变色的进度条），强行抽类要引入变量或 data 属性，风险大于收益。
+- 22 个类全部带 `tx-` 前缀：项目类名空间已经很密（`ec-*`、`gb-*`、`det-*` 等），统一前缀能一眼区分「工具类」与「组件类」。
+- 没有顺手把 `index.src.html` 里的 8 处内联 `var()` 一起改：它们是页面骨架上的定位样式，不属于「重复串」，改它要重新量布局。
+
+**本版文件**
+- 改：15 个 `page/*.js`（内联抽类：pet-ui 34 / game-views 26 / tab-strength 23 / challenge 12 / tab-settings 12 / game-render 11 / debug 6 / game-records 6 / game-refine 5 / skill-ui 5 / sync 5 / level-system 3 / tab-profile 2 / codex 1 / tab-cardio 1）、`page/index.css`（22 个 `.tx-*` 类）、`page/utils.js`（`APP_VERSION` 2.14.39）、`page/index.src.html`（56 处戳 `?v202` → `?v203`）、`page/index.html` / `page/_build/app.js`（构建产物）
+- 增：`scripts/test-inline-style-discipline.js`
+- 改测试口径：`scripts/test-a11y-tokens.js`、`scripts/test-pet-panel-layout.js`（90 → 91 断言）
+- 文档：`doc/changelog-v2.14.md`、`README.md`、`doc/design-tokens-v2.1.md`（§22）、`doc/ui-ux-review-whole-2026-11-27.md`（§23）、`doc/VERSION-LEDGER.md`
+
+---
+
 ## v2.14.38
 
 Date: 2026-11-27
@@ -2068,6 +2121,7 @@ Date: 2026-10-12
 | 2.14.32 | 55 | 3508 行 game-render.js | **入口即产物：`page/index.html` 改由构建生成**（v2.14.31 的 rewrite 被线上实测证伪后的修正）—— ① 线上实测：`/` 返回 200 但正文仍是逐文件版（`index.css?v195` + 55 个 `<script>`，18571B），而 `/index.bundle.html`（200/15877B）与 `/_build/app.js`（200/2685742B）均正常 —— **产物部署无问题，只是入口没切**；Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总把 `/` 解析到 `index.html`，`source:"/"` 匹配不到 → 改「入口文件本身即产物」，不依赖平台规则；② 源码页改名 **`page/index.src.html`**（唯一真源，本地/测试/逐文件加载都走它），`build-bundle.js` 读它、把 55 个 `<script src>` 整段换成 `<script src="_build/app.js?vNNN">` 后写出 `page/index.html`（body/header 逐字节同构），删掉旧 `index.bundle.html`（入口只剩一条路径）；③ `page/vercel.json` 移除失效 `rewrites`；④ 21 个测试/审计脚本的 `index.html` → `index.src.html`（保留「源码是唯一真源」）；⑤ `test-bundle-fresh` **19 → 22 断言**：新增「按同一规则重算期望入口页与磁盘 `index.html` **逐字节比对**」（手改产物页或忘重建即红）、入口脚本唯一且戳正确、`index.css` 带戳、旧 bundle 页已移除、`vercel.json` 不再声明 `/` rewrite；⑥ `verify-bundle` 比对对象改 `/index.src.html` vs `/index.html`：**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → `?v196`。回滚：`cp page/index.src.html page/index.html` 再推 |
 | 2.14.33 | 55 | 3508 行 game-render.js | **全项目评审批次 H：清单剩余四项收口** —— ① **P2-4 边框纪律**：写进 `index.css` 文件头（容器 2px `--bw`+`--bd` / 分隔单边 1px `--bw-thin`+`--surface-3` / 强调边 2px），并把五处「四周 1px」容器（`.refine-src` / `.pet-exp-log` / `.orb-bag` / `.pet-rest` / `.train-mat-fold`）收成 2px —— 扁平风无阴影，1px 四周边框会被读成分隔线；② **P2-6 色彩纪律**：三语义定稿（蓝=主操作/进度/选中、红=危险/敌方/BOSS、绿=达成/友方/治疗；紫只属数据属性、黄只属瞬时提示），并断言按钮与空态不得用紫；③ **P2-7 空态**：`emptyHtml()` 加第 5 参类名 + `.empty-compact`（图标与标题同行、CTA 撑满），计划页两块空态 **188px → 125px**，360×640 首屏可见两个 CTA；④ **P2-9 图标语义**：`📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️（4 处）、属性计算→🧮，宠物「结算」→**「离线补算」**；⑤ `test-ui-consistency` **70 → 86 断言**（新增 `[17]` 十六类规则）、`test-pet-panel-layout` 一条文案断言随行为更新；全量 **87 套件 / 0 失败**、`audit-whole-ui` 14×2 复测溢出/对比/触摸/圆角全 0；缓存戳 `?v196` → `?v197`。权衡：强调色计数仍 7–12（成对的主题蓝/绿本就计两个，压低只能减语义色，不做） |
 | 2.14.34 | 55 | 3508 行 game-render.js | **无障碍收口**：容器级弹层焦点陷阱（打开送焦点/关闭归还/Tab 首尾环回/背后拉回，12 个弹层调用点零改动）+ 审计扩为**双主题 × 2 视口 × 14 视图**（深色对比失败 0）+ 新增键盘可达性六项审计（11 视图全 0，模态真缺口已修）。修复：加载即初始化打崩 4 套 vm 沙箱 → 改能力探测守卫。测试 88 套件 0 失败、`test-modal-focus` 21 断言。 |
+| 2.14.39 | 55 | 3508 行 game-render.js | **内联样式抽类第一刀（评审 §22.4 ④ 收口第一刀）** —— 先量：`page/*.js` 内联 style 引用 `var(--*)` 共 **441 处 / 231 种串**，其中 152 处是「同一串重复 ≥4 次」（最狠一条弱提示写 20 遍）。只动这 152 处：`index.css` 末尾新增 **22 个 `.tx-*`** 工具类（文本色 / 字阶 / 44px 触摸基样式），按「整串完全匹配」静态替换（含 class 合并，样式等价），内联 var() **441 → 289（−34.5%）**。新增 `test-inline-style-discipline`（**26 断言**：22 串回潮=0、CSS 定义逐项一致、内联上限 300）。两处旧断言改口径不删断言：`test-a11y-tokens` 字阶引用改 JS+CSS 合计、`test-pet-panel-layout` 热区接受 `.tx-tap/.tx-btn` 并新增「CSS 真定义 44px」断言（90 → **91**）。91 套件 0 失败；真机 42 柱 + 56 柱 + 键盘 11 视图全绿；视觉抽查宠物面板等 5 视图一致。 |
 | 2.14.38 | 55 | 3508 行 game-render.js | **视口盘点 + 系统主题复核（评审 §21.4 扣分项 ②③ 收口）** —— ② 实测为**误判纠正**：`utils.js` 早有 `_sysMq` change 监听，新增 `verify-theme-follow`（CDP 9351，Emulation.setEmulatedMedia，不刷新只切系统偏好）**7/7**：系统切浅自动跟随、图标与 aria 同步、手动选择不被覆盖、改回 system 立即对齐；主题化 3→4。③ 为**真缺陷修复**：新增 `audit-viewports`（9352，3 视口 × 14 视图 = **42 柱**）抓到手机横放 844×390 首屏只剩导航（首内容块 230px）→ 末尾媒体查询压头部（74→58）、页签（50→46）、段间距（56→32），**首内容块 230→190**，快照卡整块进第一屏；平板 ≥700 段间距 56→40。复测 42 柱 0 问题、双主题双视口 56 柱 0 失败。90 套件 0 失败。 |
 | 2.14.37 | 55 | 3508 行 game-render.js | **真开战视觉复核（评审唯一「仍未验证」项收口）** —— 新增 `verify-battle-visual`（CDP 9350，真开战 + 真打到结束，11 断言）抓出并修掉两个一直没被发现的缺陷：① **伤害/状态飘字盖住血量读数**：锚点 `top:30%` 正压在 `bc-hp-bar/bc-hp-text` 上、字号 `--fs-2xl` → 改锚到角色上方（`bottom:100%`）+ 字号降一档 `--fs-xl`（`showMark` 同修），真机复测重叠 **0**；② **同屏两种血量格式**：玩家 `HP: 56` vs 敌方 `HP: 118/120` → `renderBattleHP` 统一 `cur/max`。另复核：控制条 6 钮均 ≥44×44、双方卡片对称差 0px、结算区「💀 战败 / 继续」可读；编队 overlay（verify-squad-ui）与双栏群战（verify-dual-layout 28 项）均通过。90 套件 0 失败。 |
 | 2.14.36 | 55 | 3508 行 game-render.js | **首屏 2.6MB → 1.5MB：动作数据集懒加载**（对「拆包」建议的实测替代）—— 线上实测压缩后 app.js **662KB**、整包 715KB，且版本戳每次发版换 URL → **按体积切三段收益≈0**（否决原建议）；改找「首屏不需要的部分」：`data/exercises-dataset.js` **1161KB = 源码 43.8%** 只服务动作百科/配图 → `ex-dataset.js` 增 `bind()`（可重绑）与 `load(cb)`（幂等注入脚本、失败回调 false），构建脚本加 `LAZY` 清单移出包（2630 → **1472KB**）；三触发点：空闲 1.2s 预取 / `autoLink` 先拉 / 打开百科先拉。新增 `test-lazy-dataset`（28 断言）+ `verify-lazy-dataset`（真机 7 断言：数据集在 app.js 之后才拉、1324 条、201 张卡图）；`test-bundle-fresh` 22 → 25。90 套件 0 失败。 |

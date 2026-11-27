@@ -98,7 +98,7 @@ function orbBagHtml(d) {
         + orbIconHtml(o.type, 32)
         + '<div class="orb-bag-info">' + ot.name + ' <span class="orb-q">' + o.rarity + '</span> Lv'
         + (o.level || 1) + ' <span class="orb-pct">+' + val + '%</span></div>'
-        + '<button class="speed-btn" data-orb-bag="' + o.id + '" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">♻️ +' + back + '</button>'
+        + '<button class="speed-btn tx-btn-sm" data-orb-bag="' + o.id + '">♻️ +' + back + '</button>'
         + '</div>';
     });
     h += '</div></details>';
@@ -112,14 +112,14 @@ function orbSlotsHtml(pet, d) {
   if (typeof ORB_TYPES === 'undefined') return '';
   var sh = (d.materials || {}).orbShard || 0;
   var h = '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">';
-  h += '<div style="font-weight:700;margin-bottom:4px">💎 宝珠 <span style="color:var(--text3);font-weight:400">（每类型 1 颗 · 碎片 <b>' + sh + '</b>）</span></div>';
+  h += '<div style="font-weight:700;margin-bottom:4px">💎 宝珠 <span class="tx-dim-soft">（每类型 1 颗 · 碎片 <b>' + sh + '</b>）</span></div>';
   var eq = pet.orbs || {};
   /* WP-I A-5-5：5 槽全空、且库存也为空时，原来逐条渲染「（空）/ 无库存」共 5 行 ≈180px 零信息，
      折叠成一行文案即可；只要任一类已装配、或库存里有货，就仍逐条展开（装配/升级/卸下）。 */
   var orbTypes = Object.keys(ORB_TYPES);
   var anyEquipped = orbTypes.some(function (t) { return !!eq[t]; });
   if (!anyEquipped && !(d.orbs || []).length) {
-    h += '<div style="color:var(--text3)">' + orbTypes.length + ' 槽均空 · 通关隐藏挑战掉落宝珠，装配到宠物身上生效</div>';
+    h += '<div class="tx-dim">' + orbTypes.length + ' 槽均空 · 通关隐藏挑战掉落宝珠，装配到宠物身上生效</div>';
   } else {
   orbTypes.forEach(function (t) {
     var ot = ORB_TYPES[t], o = eq[t];
@@ -133,18 +133,18 @@ function orbSlotsHtml(pet, d) {
       var spec = ((typeof ORB_QUALITY_SPEC !== 'undefined' && ORB_QUALITY_SPEC[o.rarity]) || { maxLv: 10, next: null });
       var maxed = !spec.next && (o.level || 1) >= spec.maxLv;
       var cost = (typeof orbUpgradeCost === 'function') ? orbUpgradeCost(o) : 0;
-      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span style="color:var(--green)">+' + val + '%</span>'
-        + (spec.next ? ' <span style="color:var(--text3)">（' + spec.maxLv + ' 级 → ' + spec.next + '）</span>' : '') + '</div>';
+      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span class="tx-ok">+' + val + '%</span>'
+        + (spec.next ? ' <span class="tx-dim">（' + spec.maxLv + ' 级 → ' + spec.next + '）</span>' : '') + '</div>';
       h += maxed
         ? '<span style="color:var(--green);font-size:var(--fs-2xs)">满级</span>'
-        : '<button class="speed-btn" data-orb-op="upgrade" data-orb-type="' + t + '" data-pet-idx="__IDX__" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">⬆' + cost + '💎</button>';
-      h += '<button class="speed-btn" data-orb-op="unequip" data-orb-type="' + t + '" data-pet-idx="__IDX__" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">卸下</button>';
+        : '<button class="speed-btn tx-btn-sm" data-orb-op="upgrade" data-orb-type="' + t + '" data-pet-idx="__IDX__">⬆' + cost + '💎</button>';
+      h += '<button class="speed-btn tx-btn-sm" data-orb-op="unequip" data-orb-type="' + t + '" data-pet-idx="__IDX__">卸下</button>';
     } else {
       var stock = (d.orbs || []).filter(function (x) { return x.type === t; });
       h += '<div style="flex:1;color:var(--text3)">' + ot.name + '（空）</div>';
       h += stock.length
         ? '<button class="speed-btn" data-orb-op="equip" data-orb-id="' + stock[0].id + '" data-pet-idx="__IDX__" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm);border-color:var(--green);color:var(--green)">装配 ' + stock[0].rarity + '</button>'
-        : '<span style="color:var(--text3);font-size:var(--fs-2xs)">无库存</span>';
+        : '<span class="tx-sub">无库存</span>';
     }
     h += '</div>';
   });
@@ -363,8 +363,8 @@ function renderPetPanel() {
   /* v2.3：结算按钮的可用判据（不写存档的纯函数） */
   var st = (typeof petSettleStatus === 'function') ? petSettleStatus(d) : { ready: false }
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="petClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
-    +'<span style="font-size:var(--fs-lg);font-weight:700">🐾 宠物面板</span>'
+    +'<button class="speed-btn tx-tap" id="petClose">✕</button>'
+    +'<span class="tx-h">🐾 宠物面板</span>'
     +'<span style="flex:1"></span>'
     /* v2.3：**有用才显示** —— 没有可结算内容（今天已结算过 / 只剩阵亡宠 / 没有宠物）时整块不渲染 */
     +(st.ready
@@ -442,17 +442,17 @@ function renderPetPanel() {
   }
   h += '<div class="pet-mat">'
     +'<div class="pet-mat-row">'
-    +'<span>🧪 营养液 <b style="font-size:var(--fs-base)">'+m.nutrition+'</b></span>'
-    +'<span>🍖 饲料 <b style="font-size:var(--fs-base)">'+m.feed+'</b></span>'
-    +'<span>✨ 灵能 <b style="font-size:var(--fs-base)">'+m.spirit+'</b></span>'
-    +'<span>🪨 炼化石 <b style="font-size:var(--fs-base)">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:var(--fs-base)">'+m.refineHigh+'</b></span>'
-    +'<span>💎 宝珠碎片 <b style="font-size:var(--fs-base)">'+m.orbShard+'</b></span>'
+    +'<span>🧪 营养液 <b class="tx-base">'+m.nutrition+'</b></span>'
+    +'<span>🍖 饲料 <b class="tx-base">'+m.feed+'</b></span>'
+    +'<span>✨ 灵能 <b class="tx-base">'+m.spirit+'</b></span>'
+    +'<span>🪨 炼化石 <b class="tx-base">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:var(--fs-base)">'+m.refineHigh+'</b></span>'
+    +'<span>💎 宝珠碎片 <b class="tx-base">'+m.orbShard+'</b></span>'
     +'</div>'
     +'<div class="pet-mat-actions">'
     + exRows.map(function(row){
         return row.from === 'nutrition' ? exBtnHtml(row, '🧪', '🍖') : exBtnHtml(row, '🍖', '🧪')
       }).join('')
-    +'<button class="speed-btn" id="petExchange" title="10 个普通炼化石兑换 1 个高级炼化石" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">🔄 兑换 10→1</button>'
+    +'<button class="speed-btn tx-btn-sm" id="petExchange" title="10 个普通炼化石兑换 1 个高级炼化石">🔄 兑换 10→1</button>'
     /* v2.3：一键治疗**全宽独占一行**（.pet-btn-wide 的 flex:1 1 100%），不再与兑换并列 */
     +'<button class="speed-btn pet-btn-wide" id="petHealAll" title="自动消耗营养液，把所有受伤宠物一次治好（已阵亡/未成熟的不参与）" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(injuredN?';border-color:var(--red);color:var(--red)':'')+'">🧪 一键治疗'+(injuredN?'（'+injuredN+'）':'')+'</button>'
     +'</div>'
@@ -468,7 +468,7 @@ function renderPetPanel() {
   h += orbBagHtml(d)
   // 宠物列表
   if (!d.pets.length) {
-    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:var(--fs-base);background:var(--bg2);border-radius:var(--r)">还没有宠物 🐾<br><span style="font-size:var(--fs-xs)">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:var(--fs-md);border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
+    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:var(--fs-base);background:var(--bg2);border-radius:var(--r)">还没有宠物 🐾<br><span class="tx-xs">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:var(--fs-md);border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
   } else {
     /* ===== v2.15：**列表缩短**（作者原话：「优化宠物列表，现在列表太长了」）=====
        改前：每只 141px（标题行 + 状态行 + 6px 进度条 + 独立 44px 按钮行）——
@@ -509,9 +509,9 @@ function renderPetPanel() {
       var codex = getPetCodex(p.speciesId) || { name: p.name, rarity: p.rarity }
       /* v2.2.29：头像改用宠物专属图标（petIconStageHtml 内部兜底回原来的阶段 emoji） */
       var stageText = p.stage==='egg'?'孵化 '+Math.round(p.hatchProgress)+'%':p.stage==='grow'?'成长 '+Math.round(p.growth)+'%':'成熟'
-      var dead = p.isDead ? '<span style="color:var(--red)">💀 阵亡</span>' : ''
+      var dead = p.isDead ? '<span class="tx-err">💀 阵亡</span>' : ''
       // v2.1.19 受伤状态：无法参战，需喂养把恢复进度喂到 100
-      var inj = (!p.isDead && p.injured) ? '<span style="color:var(--red)">🤕 受伤 ' + Math.round(p.injuryHeal || 0) + '%</span>' : ''
+      var inj = (!p.isDead && p.injured) ? '<span class="tx-err">🤕 受伤 ' + Math.round(p.injuryHeal || 0) + '%</span>' : ''
       var petName = (codex.name||p.name)
       /* v2.17：列表里就看得到等级（成熟期才累计；未成熟 / 旧档一律 Lv0） */
       var lvInfo = (typeof petLevelInfo === 'function') ? petLevelInfo(p) : null
@@ -534,10 +534,10 @@ function renderPetPanel() {
         +'</div>'
         // 操作按钮（大按钮 44px）—— 默认收起，展开后与改前完全一致
         +'<div class="pet-card-actions" id="petActs'+i+'"'+(open?'':' hidden')+'>'
-        +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">🍖喂</button>'
+        +'<button class="speed-btn tx-btn" data-pet-op="feed" data-pet-idx="'+i+'">🍖喂</button>'
         +((p.stage==='egg'||(p.stage==='mature'&&!p.isDead))?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(p.injured?';border-color:var(--red);color:var(--red)':'')+'">🧪营养</button>':'')
         +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">✨炼化</button>':'')
-        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="detail" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">📋</button>':'')
+        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn tx-btn" data-pet-op="detail" data-pet-idx="'+i+'">📋</button>':'')
         +'</div>'
         +'</div>'
     }
@@ -1077,8 +1077,8 @@ function petLevelHtml(pet, bd) {
   h += '<div class="pet-sec-hd">🏅 宠物等级 <span class="pet-sec-sub">（成熟期起累计 · 每级 +' + v.ratePct
     + '% 基础属性 · 上限 +' + v.capPct + '%＝Lv' + v.maxLevel + ' · 每月清空）</span></div>';
   h += '<div style="display:flex;align-items:baseline;gap:6px;font-weight:700;margin-bottom:6px">'
-    + '<span style="font-size:var(--fs-xs)" id="petLvTitle">🏅 Lv ' + v.level + '</span>'
-    + '<span style="font-size:var(--fs-xs);color:var(--text3)">/ ' + v.maxLevel + '</span>'
+    + '<span id="petLvTitle" class="tx-xs">🏅 Lv ' + v.level + '</span>'
+    + '<span class="tx-note">/ ' + v.maxLevel + '</span>'
     + '<span style="flex:1"></span>'
     + '<span style="font-size:var(--fs-xs);color:var(--text2)">等级加成 +' + v.bonusPct + '%</span>'
     + '</div>';
@@ -1145,10 +1145,10 @@ function renderPetDetail(pet, idx) {
   var bag = d.materials || {}
   var codex = getPetCodex(pet.speciesId) || {}
   var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="petDBack" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">←</button>'
+    +'<button class="speed-btn tx-tap" id="petDBack">←</button>'
     /* v2.2.29：详情页头部也挂头像（与卡片同一个渲染入口） */
     +'<span class="pet-detail-ico">'+petIconHtml(pet.speciesId, 32)+'</span>'
-    +'<span style="font-size:var(--fs-lg);font-weight:700">'+(codex.name||pet.name)+' <span style="color:var(--purple);font-size:var(--fs-xs)">'+pet.rarity+'</span></span>'
+    +'<span class="tx-h">'+(codex.name||pet.name)+' <span style="color:var(--purple);font-size:var(--fs-xs)">'+pet.rarity+'</span></span>'
     +'<span style="flex:1"></span>'
     +'<span style="font-size:var(--fs-sm);color:var(--text2)">✨ 灵能 <b>'+(bag.spirit||0)+'</b></span>'
     +'</div>'
@@ -1161,8 +1161,8 @@ function renderPetDetail(pet, idx) {
   h += '<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">'
     +'<div style="display:flex;align-items:baseline;gap:6px;font-weight:700;margin-bottom:6px">'
     +'<span>✨ 炼化</span><span style="font-size:var(--fs-xl);color:var(--brand)">Lv'+rl+'</span>'
-    +'<span style="color:var(--text3)">/ '+maxLv+'</span><span style="flex:1"></span>'
-    +'<span style="color:var(--text3);font-weight:400">'+pct+'%</span></div>'
+    +'<span class="tx-dim">/ '+maxLv+'</span><span style="flex:1"></span>'
+    +'<span class="tx-dim-soft">'+pct+'%</span></div>'
     +'<div style="height:8px;background:var(--surface-3);border-radius:var(--r);overflow:hidden"><div style="width:'+pct+'%;height:100%;background:var(--brand-fill);border-radius:var(--r);transition:width var(--dur-2) var(--ease-out)"></div></div>'
     +'<div style="margin-top:6px;color:var(--text3)">成功率：普通石 '+(rateN ? rateN+'%' : '不可用（Lv≥50）')+'　·　高级石 '+rateH+'%</div>'
     +'</div>'
@@ -1181,29 +1181,29 @@ function renderPetDetail(pet, idx) {
   h += orbSlotsHtml(pet, d).replace(/__IDX__/g, idx)
   // 技能（v2.1.3：指定技能升级，消耗灵能）
   h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">⚡ 技能 <span style="color:var(--text3);font-weight:400">（消耗 ✨ 升级，上限 Lv'+PET_SKILL_MAX_LEVEL+'）</span></div>'
+  h += '<div style="font-weight:700;margin-bottom:4px">⚡ 技能 <span class="tx-dim-soft">（消耗 ✨ 升级，上限 Lv'+PET_SKILL_MAX_LEVEL+'）</span></div>'
   ;(codex.skills||[]).forEach(function(sid){
     var s = SKILLS[sid]
     if (!s) return
     var slv = pet.skillLevels ? pet.skillLevels[sid] || 0 : 0
     var cost = petSkillUpgradeCost(pet, sid)
     h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0">'
-      +'<div style="flex:1">'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' '+s.power+'%':'')+' · Lv'+slv+'</span></div>'
+      +'<div style="flex:1">'+s.name+' <span class="tx-dim">· '+s.type+(s.power?' '+s.power+'%':'')+' · Lv'+slv+'</span></div>'
       +(slv >= PET_SKILL_MAX_LEVEL
         ? '<span style="color:var(--green);font-size:var(--fs-2xs)">已满级</span>'
-        : '<button class="speed-btn" data-pet-skill="'+sid+'" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">⬆ '+cost+'✨</button>')
+        : '<button class="speed-btn tx-btn-sm" data-pet-skill="'+sid+'">⬆ '+cost+'✨</button>')
       +'</div>'
   })
-  if (!(codex.skills||[]).length) h += '<div style="color:var(--text3)">（无技能）</div>'
+  if (!(codex.skills||[]).length) h += '<div class="tx-dim">（无技能）</div>'
   h += '</div>'
   // 天赋（固有专属，design-v2.0.md §2.6：不可解锁、不可跨宠物装配）
   var curT = getPetTalents(pet)
   h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋 <span style="color:var(--text3);font-weight:400">（固有 '+curT.length+' 个）</span></div>'
-  if (!curT.length) h += '<div style="color:var(--text3)">该稀有度暂无天赋</div>'
+  h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋 <span class="tx-dim-soft">（固有 '+curT.length+' 个）</span></div>'
+  if (!curT.length) h += '<div class="tx-dim">该稀有度暂无天赋</div>'
   curT.forEach(function(tid){
     var t = TALENTS[tid]
-    h += '<div>'+(t?t.name:tid)+' <span style="color:var(--text3)">· '+(t?t.desc:'')+'</span></div>'
+    h += '<div>'+(t?t.name:tid)+' <span class="tx-dim">· '+(t?t.desc:'')+'</span></div>'
   })
   h += '</div>'
   /* 重渲染前记下滚动位置，赋值后还原 —— 详情页比一屏高，

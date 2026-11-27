@@ -15,7 +15,7 @@ function showRefineDialog(){
   h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:10px">';
   /* v2.14.13：`totalEarned` 只统计「容量兑换」这一条来源（关卡战利品只进 points，不进 totalEarned），
      原来的「本月已获得」会低估实际获得量 → 文案改成与字段口径一致。 */
-  h+='<div style="font-size:var(--fs-xs);color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:var(--fs-lg)">'+(refine.points||0)+'</b> <span style="color:var(--text3);font-size:var(--fs-3xs)">（本月容量兑换 '+(refine.totalEarned||0)+'）</span></div>';
+  h+='<div style="font-size:var(--fs-xs);color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:var(--fs-lg)">'+(refine.points||0)+'</b> <span class="tx-hint">（本月容量兑换 '+(refine.totalEarned||0)+'）</span></div>';
   h+='</div>';
   /* ===== v2.14.13：把「炼化点怎么来」讲清楚（作者反馈「力量训练 700 多 kg 没有获得炼化」）=====
      一句话常显 + 详细折算默认折叠。文案里的数字全部与实现同源：
@@ -46,7 +46,7 @@ function showRefineDialog(){
   h+='<div style="background:var(--bg);border:2px solid '+gradeColor+';border-radius:var(--r);padding:12px 14px;margin-bottom:12px">';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
   h+='<span style="font-size:var(--fs-xl);font-weight:900;color:'+gradeColor+'">'+curGrade+'</span>';
-  h+='<span style="font-size:var(--fs-xs);color:var(--text3)">成功率 '+Math.round(g.successRate*100)+'%</span>';
+  h+='<span class="tx-note">成功率 '+Math.round(g.successRate*100)+'%</span>';
   h+='</div>';
   h+='<div style="font-size:var(--fs-2xs);color:var(--text2);margin-bottom:4px">进度: '+prog.total+'/'+prog.max+' ('+prog.percent+'%)</div>';
   h+='<div style="height:8px;background:var(--bg3);border-radius:var(--rp);overflow:hidden"><div style="height:100%;width:'+prog.percent+'%;background:'+gradeColor+';border-radius:var(--rp);transition:width .3s"></div></div>';
@@ -54,7 +54,7 @@ function showRefineDialog(){
   // Stats detail
   var u=(refine.upgrades&&refine.upgrades[curGrade])||{atk:0,def:0,hp:0,soulAtk:0,soulDef:0};
   var statIcons={atk:'⚔️',def:'🛡️',hp:'❤️',soulAtk:'👻',soulDef:'🔮'};
-  h+='<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">当前等级强化（'+curGrade+'级，满级'+g.maxLevel+'）：</div>';
+  h+='<div class="tx-sub-mb">当前等级强化（'+curGrade+'级，满级'+g.maxLevel+'）：</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">';
   REFINE_STATS.forEach(function(stat){
     var lv=u[stat]||0;
@@ -64,9 +64,9 @@ function showRefineDialog(){
     var perLevel=Math.round(g[stat]*100)/100;
     var unit=stat==='hp'?'Hp':'';
     h+='<div style="background:var(--bg);border:var(--bw) solid '+(maxed?'var(--green)':'var(--bd)')+';border-radius:var(--rs);padding:8px 10px">';
-    h+='<div style="font-size:var(--fs-2xs);color:var(--text2)">'+statIcons[stat]+' '+statName(stat)+'</div>';
+    h+='<div class="tx-muted">'+statIcons[stat]+' '+statName(stat)+'</div>';
     h+='<div style="font-size:var(--fs-base);font-weight:700;color:'+(maxed?'var(--green)':'var(--text)')+'">Lv.'+lv+'/'+g.maxLevel+(maxed?' ✅':'')+'</div>';
-    h+='<div style="font-size:var(--fs-3xs);color:var(--text3)">'+bonusVal+unit+' (每级'+perLevel+unit+')</div>';
+    h+='<div class="tx-hint">'+bonusVal+unit+' (每级'+perLevel+unit+')</div>';
     h+='</div>';
   });
   h+='</div>';

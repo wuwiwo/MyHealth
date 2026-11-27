@@ -619,7 +619,7 @@ function codexShellHtml() {
   var c = codexCounts();
   var h = '<div class="panel-inner">';
   h += '<div class="codex-hdr">'
-    + '<button class="speed-btn" id="codexClose" aria-label="关闭图鉴" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
+    + '<button class="speed-btn tx-tap" id="codexClose" aria-label="关闭图鉴">✕</button>'
     + '<span class="codex-title">📖 图鉴</span>'
     + '<span class="codex-hint">只读 · 内容来自既有定义</span>'
     + '</div>';

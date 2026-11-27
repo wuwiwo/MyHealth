@@ -11,8 +11,8 @@ function renderSkillPanel() {
   if (!ov) return
   var st = getSkillState()
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="skillClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
-    +'<span style="font-size:var(--fs-lg);font-weight:700">⚡ 技能培养</span>'
+    +'<button class="speed-btn tx-tap" id="skillClose">✕</button>'
+    +'<span class="tx-h">⚡ 技能培养</span>'
     +'<span style="flex:1"></span>'
     +'<span style="font-size:var(--fs-lg);font-weight:700;color:var(--blue,#3b82f6)">💠 '+st.points+' 点</span>'
     +'</div>'
@@ -43,16 +43,16 @@ function renderSkillPanel() {
     /* v2.3.2：技能卡片给图标。守卫式调用 —— 模块缺失时退化为纯文字，不留裂图。 */
     var sIco = (typeof skillIconHtml === 'function') ? skillIconHtml(id, 32, 'skill-card-ico') : ''
     h += '<div class="skill-card">'
-      +'<div class="skill-card-name">'+sIco+s.name+' <span style="color:var(--text3);font-size:var(--fs-xs)">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
+      +'<div class="skill-card-name">'+sIco+s.name+' <span class="tx-note">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
       +'<div class="skill-card-desc">'+(typeof fillPlayerSkillDesc==='function'?fillPlayerSkillDesc(s,lv):String(s.desc||'').replace(/n/g,String(lv)))+'</div>'
       +'<div class="skill-card-lv">Lv '+lv+'/'+s.maxLevel+(lv>=s.maxLevel?' · 已满级':' · 升级需 '+cost+' 点')+'</div>'
       // 操作（大按钮 44px）
       +'<div class="skill-card-actions">'
       // v2.1.14：技能详情（当前等级数值 / 满级预览 / 升级花费）
-      +'<button class="speed-btn" data-skill-info="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">ℹ️ 详情</button>'
+      +'<button class="speed-btn tx-btn" data-skill-info="'+id+'">ℹ️ 详情</button>'
       +(equippedSlot>-1
         ? '<button class="speed-btn" data-skill-equip="'+id+'" data-slot="'+equippedSlot+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--green);color:var(--green)">装备中</button>'
-        : '<button class="speed-btn" data-skill-equip="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">装备</button>')
+        : '<button class="speed-btn tx-btn" data-skill-equip="'+id+'">装备</button>')
       +'<button class="speed-btn" data-skill-up="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);'+(lv>=s.maxLevel||st.points<cost?'opacity:.4':'')+'" '+(lv>=s.maxLevel||st.points<cost?'disabled':'')+'>↑ 升级'+(cost?'('+cost+')':'')+'</button>'
       +'</div>'
       +'</div>'

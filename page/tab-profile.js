@@ -51,7 +51,7 @@ function renderWtList(){
     var dLabel=list.length>1?' <span style="font-size:var(--fs-3xs);color:'+(delta<=0?'var(--green)':'var(--orange)')+'">'+(delta>0?'+':'')+(Math.round(delta*100)/100)+'</span>':''
     h+='<div data-wtm="'+mk+'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:var(--bg2);border:var(--bw) solid var(--bd);border-radius:var(--r);cursor:pointer;box-shadow:var(--shadow)">'
       +'<span style="font-size:var(--fs-sm);font-weight:700">'+mk.replace('-','年 ')+'月</span>'
-      +'<span style="font-size:var(--fs-2xs);color:var(--text3)">'+list.length+' 条 · 最新 <b style="color:var(--text)">'+fmtW(latest)+'</b>kg'+dLabel+' <span style="display:inline-block;transition:transform .2s;transform:rotate('+(open?90:0)+'deg)">▸</span></span></div>'
+      +'<span class="tx-sub">'+list.length+' 条 · 最新 <b style="color:var(--text)">'+fmtW(latest)+'</b>kg'+dLabel+' <span style="display:inline-block;transition:transform .2s;transform:rotate('+(open?90:0)+'deg)">▸</span></span></div>'
     if(open){
       h+=list.map(function(r){return'<div class="wt-entry" style="margin-left:12px"><div><span class="wt-val">'+fmtW(r.weight)+'</span> <span class="wt-date">kg · '+r.date+'</span>'+(r.note?'<br><span class="wt-note">💬 '+r.note+'</span>':'')+'</div><button class="ec-act" data-a="wtDel" data-id="'+r.id+'">🗑️</button></div>'}).join('')
     }
@@ -136,7 +136,7 @@ function renderPRs(){
       var ratio=exMap[ex]&&exMap[ex].ratio!=null?exMap[ex].ratio:100
       if(ratio<100){
         var eff=Math.round(pr.maxVolume*ratio/100)
-        h+='📊 '+Math.round(pr.maxVolume)+'kg <span style="font-size:var(--fs-3xs);color:var(--text3)">→'+eff+'</span>'
+        h+='📊 '+Math.round(pr.maxVolume)+'kg <span class="tx-hint">→'+eff+'</span>'
       }else{
         h+='📊 '+Math.round(pr.maxVolume)+'kg'
       }

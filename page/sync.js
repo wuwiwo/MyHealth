@@ -290,7 +290,7 @@ function showSyncDialog(){
     // Local card
     h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px">'
       +'<div style="font-weight:700;margin-bottom:6px;color:var(--orange)">📱 本地数据'+localAge+'</div>'
-      +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">'+localSummary.time+'</div>'
+      +'<div class="tx-sub-mb">'+localSummary.time+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:var(--fs-xs);color:var(--text2)">'
       +'<div>🏋️ 力量: '+localSummary.strE+' 组</div><div>🏃 有氧: '+localSummary.carE+' 次</div>'
       +'<div>⚖️ 体重: '+localSummary.wtE+' 条</div><div>📋 计划: '+localSummary.plans+' 个</div>'
@@ -311,7 +311,7 @@ function showSyncDialog(){
     // Remote card
     h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px">'
       +'<div style="font-weight:700;margin-bottom:6px;color:var(--blue)">☁️ 云端数据'+remoteAge+'</div>'
-      +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">'+remoteSummary.time+'</div>'
+      +'<div class="tx-sub-mb">'+remoteSummary.time+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:var(--fs-xs);color:var(--text2)">'
       +'<div>🏋️ 力量: '+remoteSummary.strE+' 组</div><div>🏃 有氧: '+remoteSummary.carE+' 次</div>'
       +'<div>⚖️ 体重: '+remoteSummary.wtE+' 条</div><div>📋 计划: '+remoteSummary.plans+' 个</div>'
@@ -336,15 +336,15 @@ function showSyncDialog(){
     if(isFirst){
       suggestion='<div style="background:rgba(100,116,139,.08);border:2px solid var(--bd-l);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
         +'<div style="font-weight:700;color:var(--text);margin-bottom:4px">🆕 首次同步</div>'
-        +'<div style="color:var(--text2)">请选择：推送本地数据到云端，或从云端拉取数据覆盖本地。</div></div>'
+        +'<div class="tx-muted-only">请选择：推送本地数据到云端，或从云端拉取数据覆盖本地。</div></div>'
     }else if(localNewer&&remoteData.entries){
       suggestion='<div style="background:rgba(var(--brand-rgb),.12);border:2px solid var(--orange);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
         +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">💡 建议：推送本地数据到云端</div>'
-        +'<div style="color:var(--text2)">本地数据更新 ('+localSummary.time+')，包含 '+localSummary.strE+' 组力量.'+localSummary.prsC+'项PR。云端数据较旧。</div></div>'
+        +'<div class="tx-muted-only">本地数据更新 ('+localSummary.time+')，包含 '+localSummary.strE+' 组力量.'+localSummary.prsC+'项PR。云端数据较旧。</div></div>'
     }else if(remoteNewer&&remoteData.entries){
       suggestion='<div style="background:rgba(var(--success-rgb),.08);border:2px solid var(--green);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
         +'<div style="font-weight:700;color:var(--green);margin-bottom:4px">💡 建议：从云端拉取数据</div>'
-        +'<div style="color:var(--text2)">云端数据更新 ('+remoteSummary.time+')，包含 '+remoteSummary.strE+' 组力量。本地数据较旧。</div></div>'
+        +'<div class="tx-muted-only">云端数据更新 ('+remoteSummary.time+')，包含 '+remoteSummary.strE+' 组力量。本地数据较旧。</div></div>'
     }else if(hasLocal&&remoteData.entries&&localSummary.strE===remoteSummary.strE){
       suggestion='<div style="background:rgba(100,116,139,.08);border:var(--bw) solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);text-align:center">✅ 本地与云端数据一致，无需同步</div>'
     }else{

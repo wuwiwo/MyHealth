@@ -23,15 +23,15 @@ function renderPeriodCard(stats,strVol,carDur,carEff){
   var prevPen=calculatePeriodPenalty(6-stats.periodDays)
   var settle=''
   var parts=[]
-  if(curBonus.daysMet)parts.push('天数达标 <b style="color:var(--green)">+30攻 +6防</b>')
-  if(curBonus.volMet)parts.push('容量达标 <b style="color:var(--green)">+60攻 +12防</b>')
-  if(!curBonus.daysMet)parts.push('天数还差'+daysLeft+'天 <b style="color:var(--red)">-'+prevPen.atkPen+'攻 -'+prevPen.defPen+'防</b>')
+  if(curBonus.daysMet)parts.push('天数达标 <b class="tx-ok">+30攻 +6防</b>')
+  if(curBonus.volMet)parts.push('容量达标 <b class="tx-ok">+60攻 +12防</b>')
+  if(!curBonus.daysMet)parts.push('天数还差'+daysLeft+'天 <b class="tx-err">-'+prevPen.atkPen+'攻 -'+prevPen.defPen+'防</b>')
   if(!curBonus.volMet&&volLeft>0)parts.push('容量还差'+volLeft+'kg')
   if(parts.length)settle=parts.join(' · ')
 
   var dateRange=p.start.slice(5).replace('-','/')+' ~ '+p.end.slice(5).replace('-','/')+' ('+p.days+'天)'
   card.innerHTML='<div class="period-card">'
-    +'<div class="period-hdr"><span>🗓️ 本旬目标 · '+p.name+' <span style="font-size:var(--fs-3xs);color:var(--text3)">'+dateRange+'</span></span><span class="period-stamp">结算预告</span></div>'
+    +'<div class="period-hdr"><span>🗓️ 本旬目标 · '+p.name+' <span class="tx-hint">'+dateRange+'</span></span><span class="period-stamp">结算预告</span></div>'
     +'<div class="period-row"><span class="period-lbl">训练天数</span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div><span class="period-val" style="color:'+dayColor+'">'+stats.periodDays+'/6天</span></div>'
     +'<div class="period-row"><span class="period-lbl">训练容量</span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div><span class="period-val" style="color:'+volColor+'">'+Math.round(stats.periodVol)+'/'+p.volThreshold+'kg</span></div>'
     +'<div class="period-settle">⚖️ '+settle+'</div>'
@@ -68,9 +68,9 @@ function renderGame(){
 
   var periodItemHtml;
   if(!stats.periodEnabled){
-    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v" style="color:var(--text3);font-size:var(--fs-xs)">7月启用</div><div class="gs-l" style="font-size:var(--fs-3xs)">旬奖励待启用</div></div>';
+    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v tx-note">7月启用</div><div class="gs-l tx-3xs">旬奖励待启用</div></div>';
   }else{
-    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.periodDays+'<span style="font-size:var(--fs-3xs)">/6天</span>'+(stats.permBonusAtk>0?' <span style="font-size:var(--fs-3xs);color:var(--green)">+'+stats.permBonusAtk+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:var(--fs-3xs);color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:var(--fs-3xs)">'+p.name+' · '+wkStatus+'</div></div>';
+    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.periodDays+'<span class="tx-3xs">/6天</span>'+(stats.permBonusAtk>0?' <span class="tx-ok-3xs">+'+stats.permBonusAtk+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:var(--fs-3xs);color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l tx-3xs">'+p.name+' · '+wkStatus+'</div></div>';
   }
   // v2.0 三视图接管后旧属性条容器已移除（培养视图角色卡替代）；保留渲染逻辑以防回滚
   var _gsBar=document.getElementById('gameStatsBar')
@@ -82,8 +82,8 @@ function renderGame(){
     '<div class="gs-item"><div class="gs-v" style="color:var(--purple)">'+stats.soulDef+'</div><div class="gs-l">🔮 魂防</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+getGame().cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
     periodItemHtml+
-    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:var(--fs-3xs)">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
-    (stats.refineUnlocked?'<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="refineBtn" title="炼魂系统" style="font-size:var(--fs-xs)">🔮</button></div>':'')
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span class="tx-3xs">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
+    (stats.refineUnlocked?'<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn tx-xs" id="refineBtn" title="炼魂系统">🔮</button></div>':'')
   renderPeriodCard(stats,strVol,carDur,carEff)
   _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,carEff:carEff,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,permBonusAtk:stats.permBonusAtk,permBonusDef:stats.permBonusDef,lastPeriodDays:stats.lastPeriodDays,thisPeriodDays:stats.periodDays,period:p,soulAtk:stats.soulAtk,soulDef:stats.soulDef,refineUnlocked:stats.refineUnlocked,refinePoints:stats.refinePoints,refineBonus:stats.refineBonus}
   trackStats(stats,{strVol:strVol,carDur:carDur,carEff:carEff})

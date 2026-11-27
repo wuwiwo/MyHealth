@@ -1833,3 +1833,30 @@ box-shadow:none}
   :root{--sec-y:var(--sp-10)}
 }
 
+
+/* v2.14.39（评审 §22.4 ④ 第一刀）：把反复出现的静态内联样式抽成工具类（前缀 tx-，text）。
+   起因：page/*.js 里有 425 处内联 style 引用 var(--*)，其中 152 处是「同一串重复 ≥4 次」——
+   同一个「弱提示」写了 20 遍（color:var(--text3);font-size:var(--fs-3xs)），改一次颜色要动 20 个文件。
+   纪律：新代码用 .tx-*，不要再把同样的属性组合写回 style=""；test-inline-style-discipline.js 守着。 */
+.tx-hint{color:var(--text3);font-size:var(--fs-3xs)}
+.tx-dim{color:var(--text3)}
+.tx-ok{color:var(--green)}
+.tx-note{color:var(--text3);font-size:var(--fs-xs)}
+.tx-3xs{font-size:var(--fs-3xs)}
+.tx-xs{font-size:var(--fs-xs)}
+.tx-base{font-size:var(--fs-base)}
+.tx-h{font-size:var(--fs-lg);font-weight:700}
+.tx-b{font-size:var(--fs-base);font-weight:700}
+.tx-sec{font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px}
+.tx-warn{color:var(--orange)}
+.tx-err{color:var(--red)}
+.tx-sub{color:var(--text3);font-size:var(--fs-2xs)}
+.tx-sub-mb{color:var(--text3);font-size:var(--fs-2xs);margin-bottom:6px}
+.tx-hint-soft{color:var(--text3);font-size:var(--fs-3xs);font-weight:400}
+.tx-dim-soft{color:var(--text3);font-weight:400}
+.tx-muted{color:var(--text2);font-size:var(--fs-2xs)}
+.tx-muted-only{color:var(--text2)}
+.tx-ok-3xs{color:var(--green);font-size:var(--fs-3xs)}
+.tx-btn{font-size:var(--fs-sm);min-height:44px;padding:10px 12px}
+.tx-btn-sm{font-size:var(--fs-sm);min-height:44px;padding:8px 10px}
+.tx-tap{font-size:var(--fs-base);min-height:44px;min-width:44px;padding:10px 12px}

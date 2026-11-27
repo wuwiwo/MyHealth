@@ -165,7 +165,10 @@ for (const f of fs.readdirSync(ROOT).filter(x => x.endsWith('.js'))) {
 ok(relapses.length === 0, 'JS 内联字号全部令牌化' + (relapses.length ? '（残留 ' + relapses.length + ' 处: ' + relapses.slice(0, 5).join(', ') + '）' : ''));
 const tokenUses = (fs.readdirSync(ROOT).filter(x => x.endsWith('.js'))
   .reduce((n, f) => n + (fs.readFileSync(path.join(ROOT, f), 'utf8').match(/var\(--fs-/g) || []).length, 0));
-ok(tokenUses > 250, '字阶令牌引用 ' + tokenUses + ' 处（>250）');
+/* v2.14.39：抽类把字阶引用从 JS 内联搬进了 index.css（JS 内联 250 → 207 是好事，不是回退），
+   所以口径改成「JS + CSS 合计」——防的是「字号没人用令牌」，不是「JS 里必须写够 250 次」 */
+const cssFsUses = (fs.readFileSync(path.join(ROOT, 'index.css'), 'utf8').match(/var\(--fs-/g) || []).length;
+ok(tokenUses + cssFsUses > 250, '字阶令牌引用 JS ' + tokenUses + ' + CSS ' + cssFsUses + ' = ' + (tokenUses + cssFsUses) + ' 处（>250）');
 
 /* ---------- 6. aria 引用 ---------- */
 console.log('\n[6] aria 引用完整性');

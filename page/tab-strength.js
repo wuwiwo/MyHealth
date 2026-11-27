@@ -207,15 +207,15 @@ function renderTodaySnapshot(){
   var volColor=volPct>=100?'var(--green)':volPct>=60?'var(--orange)':'var(--text3)'
   var dayColor=periodDays>=6?'var(--green)':periodDays>=4?'var(--orange)':'var(--text3)'
   var statusHtml=trainedToday
-    ?'<span style="color:var(--green)">✅ 今天已训练</span>'
-    :'<span style="color:var(--text2)">💤 今天还没动</span>'
+    ?'<span class="tx-ok">✅ 今天已训练</span>'
+    :'<span class="tx-muted-only">💤 今天还没动</span>'
   var periodLabel=period.name+' ('+period.start.slice(5).replace('-','/')+'~'+period.end.slice(5).replace('-','/')+')'
 
   el.innerHTML='<div class="snap-card">'
-    +'<div class="snap-row"><span class="snap-lbl">📅 本周</span><span class="snap-val">'+weekCount+'<span style="font-size:var(--fs-3xs)">/7天</span></span><div class="snap-bar"><div class="snap-fill wk" style="width:'+weekPct+'%"></div></div>'+(weekCount>=4?'<span style="color:var(--green);font-size:var(--fs-3xs)">🏅 达标</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">还差'+(4-weekCount>0?4-weekCount:0)+'天</span>')+'</div>'
-    +'<div class="snap-row"><span class="snap-lbl">🗓️ '+periodLabel+'</span><span class="snap-val" style="color:'+dayColor+'">'+periodDays+'<span style="font-size:var(--fs-3xs)">/6天</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div>'+(periodDays>=6?'<span style="color:var(--green);font-size:var(--fs-3xs)">🎯 达标</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">还差'+(6-periodDays)+'天</span>')+'</div>'
-    +'<div class="snap-row"><span class="snap-lbl">🏋️ 旬容量</span><span class="snap-val" style="color:'+volColor+'">'+Math.round(periodVol)+'<span style="font-size:var(--fs-3xs)">/'+period.volThreshold+'</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div>'+(volPct>=100?'<span style="color:var(--green);font-size:var(--fs-3xs)">💯 超额</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">'+Math.max(0,Math.round(period.volThreshold-periodVol))+'kg</span>')+'</div>'
-    +'<div class="snap-foot">'+statusHtml+' <span style="color:var(--text3);font-size:var(--fs-3xs)">· 满4天获周奖励，满6天获旬奖励</span></div>'
+    +'<div class="snap-row"><span class="snap-lbl">📅 本周</span><span class="snap-val">'+weekCount+'<span class="tx-3xs">/7天</span></span><div class="snap-bar"><div class="snap-fill wk" style="width:'+weekPct+'%"></div></div>'+(weekCount>=4?'<span class="tx-ok-3xs">🏅 达标</span>':'<span class="tx-hint">还差'+(4-weekCount>0?4-weekCount:0)+'天</span>')+'</div>'
+    +'<div class="snap-row"><span class="snap-lbl">🗓️ '+periodLabel+'</span><span class="snap-val" style="color:'+dayColor+'">'+periodDays+'<span class="tx-3xs">/6天</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div>'+(periodDays>=6?'<span class="tx-ok-3xs">🎯 达标</span>':'<span class="tx-hint">还差'+(6-periodDays)+'天</span>')+'</div>'
+    +'<div class="snap-row"><span class="snap-lbl">🏋️ 旬容量</span><span class="snap-val" style="color:'+volColor+'">'+Math.round(periodVol)+'<span class="tx-3xs">/'+period.volThreshold+'</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div>'+(volPct>=100?'<span class="tx-ok-3xs">💯 超额</span>':'<span class="tx-hint">'+Math.max(0,Math.round(period.volThreshold-periodVol))+'kg</span>')+'</div>'
+    +'<div class="snap-foot">'+statusHtml+' <span class="tx-hint">· 满4天获周奖励，满6天获旬奖励</span></div>'
     +'</div>'
 }
 
@@ -285,7 +285,7 @@ function renderStr(){
       var ratio=(exDef&&exDef.ratio!=null)?exDef.ratio:100
       var effW=(e.eqWeight!=null?e.eqWeight:(e.weight||0))
       var effVol=Math.round(effW*e.actualReps*(ratio/100))
-      var ratioTxt=ratio!==100?('<span style="color:var(--text3)">×'+ratio/100+'</span>'):''
+      var ratioTxt=ratio!==100?('<span class="tx-dim">×'+ratio/100+'</span>'):''
       var volTag=effVol>0?'<div class="ec-vol">⚡ 等效 '+effVol+'kg '+ratioTxt+(ratio!==100?'（倍率 '+ratio+'%）':'')+'</div>':''
       /* v2.2.25：条目缺 targetReps（外部同步 / 老存档条目）时不再渲染「目标 undefined 次」；
          与上方 r 的 `e.targetReps>0` 判定同一口径 —— 没有目标就只显示实际值 */
@@ -323,7 +323,7 @@ function renderStrStats(){
   var exCount={}
   we.forEach(function(e){exCount[e.exercise]=(exCount[e.exercise]||0)+1})
   var fav=Object.keys(exCount).sort(function(a,b){return exCount[b]-exCount[a]})[0]||'—'
-  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span style="font-size:var(--fs-3xs)"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+Math.round(v)+'<span style="font-size:var(--fs-3xs)"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v" style="font-size:var(--fs-xs)">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
+  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span class="tx-3xs"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+Math.round(v)+'<span class="tx-3xs"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v tx-xs">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
 }
 function getWeekStr(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(store.get('strength')||{entries:[]}).entries.filter(e=>e.date>=toDate(m))}
 
@@ -341,7 +341,7 @@ function renderMissed(){
     /* WP-I C-02：原来「日期 + ✏️说明原因 + 🛌休息日 + ➕补签」4 个元素挤在同一 flex 行，
        4 个全部折成 2 行。现在拆成「日期一行（.md-hdr）/ 操作一行（.md-actions）」，
        按钮仍各自 min-height:var(--touch-min)=44px（不缩热区）。 */
-    return '<div class="md-item'+(isRest?' rest':'')+'"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span></div><div class="md-actions"><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button>'+(isRest?'':'<button class="md-write" data-date="'+dd+'" data-rest="1" style="color:var(--green)">🛌 休息日</button>')+'<button class="md-write" data-date="'+dd+'" data-makeup="1" style="color:var(--green)">➕ 补签</button></div>'+(isRest?'<span class="md-rest-badge">🛌 休息日</span>':'')+'<div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(isRest?'':note)+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
+    return '<div class="md-item'+(isRest?' rest':'')+'"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span></div><div class="md-actions"><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button>'+(isRest?'':'<button class="md-write tx-ok" data-date="'+dd+'" data-rest="1">🛌 休息日</button>')+'<button class="md-write tx-ok" data-date="'+dd+'" data-makeup="1">➕ 补签</button></div>'+(isRest?'<span class="md-rest-badge">🛌 休息日</span>':'')+'<div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(isRest?'':note)+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
   }).join('')
   c.querySelectorAll('.md-write').forEach(b=>b.addEventListener('click',()=>{
     const dd=b.dataset.date
@@ -367,7 +367,7 @@ function openMakeupDialog(dateStr){
     +'<div style="margin-bottom:12px">'
   plans.forEach(function(p,i){
     var tags=p.exercises.map(function(e){return e.exercise}).slice(0,5).join('、')
-    h+='<div class="ec" style="cursor:pointer;margin-bottom:8px" data-pick="'+p.id+'"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><span style="font-size:var(--fs-2xs);color:var(--text3)">'+p.exercises.length+' 组</span></div></div><div class="ec-prog"><div style="font-size:var(--fs-2xs);color:var(--text2)">'+tags+'</div></div></div>'
+    h+='<div class="ec" style="cursor:pointer;margin-bottom:8px" data-pick="'+p.id+'"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><span class="tx-sub">'+p.exercises.length+' 组</span></div></div><div class="ec-prog"><div class="tx-muted">'+tags+'</div></div></div>'
   })
   h+='</div><div class="modal-actions"><button class="m-btn-cancel" id="muCancel">取消</button></div></div>'
   modal.innerHTML=h;void modal
@@ -507,7 +507,7 @@ function showWoSummary(){
   if(!el)return
   el.innerHTML='<div style="text-align:center"><div style="font-size:var(--fs-hero);margin-bottom:4px">🎉</div><div style="font-size:var(--fs-2xl);font-weight:800;margin-bottom:12px">训练完成！</div>'
     +_woDone.map(d=>'<div style="font-size:var(--fs-sm);color:var(--text2)">'+d.exercise+' '+fmtKg(d.weight)+'kg × '+d.actualReps+'/'+d.targetReps+(d.actualReps>=d.targetReps?' ✅':'')+'</div>').join('')
-    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总次数</div></div><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--blue)">'+vol+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总容量</div></div></div>'
+    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div class="tx-hint">总次数</div></div><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--blue)">'+vol+'</div><div class="tx-hint">总容量</div></div></div>'
     +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
   document.getElementById('woFinish').addEventListener('click',()=>{
     _woDone.forEach(d=>{addStr({date:today(),exercise:d.exercise,weight:d.weight,targetReps:d.targetReps,actualReps:d.actualReps})})
@@ -791,7 +791,7 @@ function strExPickCardHtml(ex,isCommon){
     +'<div style="font-size:var(--fs-base);font-weight:700;color:var(--text1)">'+strAttr(linked?linked.zh:ex.name)+(isCommon?'<span class="ex-common-tag">⭐ 常用</span>':'')+'</div>'
     +(linked?'<div style="margin-top:2px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+tagHtml(linked.target,'cat')+'</div>':'')
     +'</div>'
-    +'<span style="font-size:var(--fs-3xs);color:var(--text3)"></span>'
+    +'<span class="tx-hint"></span>'
     +'</button>';
 }
 function strExPickerHtml(sp){

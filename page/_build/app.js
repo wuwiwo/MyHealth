@@ -1,4 +1,4 @@
-/* MyHealth bundle · v202 · hash:1169c5b005b9b721 · 由 scripts/build-bundle.js 生成，勿手改 */
+/* MyHealth bundle · v203 · hash:ec56fc83ebbe3c2e · 由 scripts/build-bundle.js 生成，勿手改 */
 /* ===== store.js ===== */
 /* ============================================
    MyHealth — Store Module v1.3 (M2a S0)
@@ -908,7 +908,7 @@ window.MEDIA_BASE = '';
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.38';
+const APP_VERSION = '2.14.39';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -2976,10 +2976,10 @@ function levelCardHtml(now) {
   var h = ''
     + '<div style="background:var(--bg2);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:14px">'
     + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'
-    + '<span id="lvCardTitle" style="font-size:var(--fs-lg);font-weight:700">我的等级 · Lv ' + st.level + '</span>'
-    + '<span style="font-size:var(--fs-xs);color:var(--text3)">称号 ' + levelTitle(st.level) + '</span>'
+    + '<span id="lvCardTitle" class="tx-h">我的等级 · Lv ' + st.level + '</span>'
+    + '<span class="tx-note">称号 ' + levelTitle(st.level) + '</span>'
     + '<span style="flex:1"></span>'
-    + '<span style="font-size:var(--fs-3xs);color:var(--text3)">本季度 ' + st.quarterKey + '</span>'
+    + '<span class="tx-hint">本季度 ' + st.quarterKey + '</span>'
     + '</div>'
     + '<div style="height:8px;background:var(--surface-3);border-radius:var(--rad-full);overflow:hidden" role="progressbar" aria-labelledby="lvCardTitle" aria-valuenow="' + st.inLevel + '" aria-valuemin="0" aria-valuemax="' + st.need + '">'
     + '<div style="height:100%;width:' + pct + '%;background:var(--brand-fill)"></div>'
@@ -10383,7 +10383,7 @@ function renderSummonPanel(){
     el.innerHTML='<div class="summon-card done">'
       +'<div class="summon-title">🔮 隐藏挑战</div>'
       +'<div class="summon-info">'+(info.reason||'今日不可召唤')+'</div>'
-      +(isFinite(info.total)?'<div class="summon-info" style="font-size:var(--fs-3xs);color:var(--text3)">今日容量 <b style="color:var(--orange)">'+Math.round(info.vol||0)+'kg</b> · 可用 '+Math.max(0,isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
+      +(isFinite(info.total)?'<div class="summon-info tx-hint">今日容量 <b class="tx-warn">'+Math.round(info.vol||0)+'kg</b> · 可用 '+Math.max(0,isFinite(info.used)?info.total-info.used:0)+'/'+info.total+' 次（已用 '+(isFinite(info.used)?info.used:0)+'）</div>':'')
       +'<button class="summon-btn" id="chHistoryBtn" style="margin-top:8px;background:var(--bg3);color:var(--text2);border:var(--bw) solid var(--bd);padding:10px;font-size:var(--fs-sm)">📜 历史召唤成绩</button>'
       +'</div>'
       +chDebugBlock(info,strVol,c,'cannot')
@@ -10400,7 +10400,7 @@ function renderSummonPanel(){
   el.innerHTML='<div class="summon-card">'
     +'<div class="summon-title">🔮 隐藏挑战</div>'
     +'<div class="summon-info">今日训练容量 <b>'+Math.round(strVol)+'kg</b> · 召唤机会 <b>'+remain+'/'+totalN+'</b> 次（每 100kg +1 次）</div>'
-    +(info.borrowed>0?'<div class="summon-info" style="color:var(--green)">🔁 昨日补召机会剩 '+info.remainBorrow+'/'+info.borrowed+' 次（昨日 '+Math.round(info.yVol||0)+'kg · 优先消耗 · 不占今日名额）</div>':'')
+    +(info.borrowed>0?'<div class="summon-info tx-ok">🔁 昨日补召机会剩 '+info.remainBorrow+'/'+info.borrowed+' 次（昨日 '+Math.round(info.yVol||0)+'kg · 优先消耗 · 不占今日名额）</div>':'')
     +'<div class="summon-rate-wrap">'
     +  '<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:4px">本次召唤成功率（第 '+(usedN+1)+' 次'+(usedN>=5?' · 必成 100%':usedN===4?' · 保底 80%':' · 基础 10%')+'）</div>'
     +  '<div class="summon-rate-bar"><div class="summon-rate-fill" style="width:'+rate+'%;background:'+rateColor+'"></div></div>'
@@ -10589,7 +10589,7 @@ function startHiddenChallenge(hotBuff){
     
     // Visual feedback
     damageEl.textContent=state.totalDamage
-    infoEl.innerHTML=(crit?'<span style="color:var(--yellow);font-weight:700">💥 暴击! +'+dmg+'</span>':'<span style="color:var(--orange)">+'+dmg+'</span>')
+    infoEl.innerHTML=(crit?'<span style="color:var(--yellow);font-weight:700">💥 暴击! +'+dmg+'</span>':'<span class="tx-warn">+'+dmg+'</span>')
     // Hit log
     var hitDiv=document.createElement('div')
     hitDiv.className='ch-hit'+(crit?' crit':'')
@@ -10758,10 +10758,10 @@ function startHiddenChallenge(hotBuff){
       +'</div>'
       +'<div class="ch-reward">'
       +  '<div style="font-weight:700;margin-bottom:6px">🎁 本月属性奖励（月度重置）</div>'
-      +  '<div class="ch-reward-info">'      +(bonusAtk>0?'  <span style="color:var(--orange)">⚔️ +'+bonusAtk+'</span>':'')
+      +  '<div class="ch-reward-info">'      +(bonusAtk>0?'  <span class="tx-warn">⚔️ +'+bonusAtk+'</span>':'')
       +(bonusDef>0?'  <span style="color:var(--blue)">🛡️ +'+bonusDef+'</span>':'')
-      +(bonusHp>0?'  <span style="color:var(--green)">❤️ +'+bonusHp+'</span>':'')
-      +(bonusAtk+bonusDef+bonusHp===0?'  <span style="color:var(--text3)">伤害不足，未获得奖励</span>':'')
+      +(bonusHp>0?'  <span class="tx-ok">❤️ +'+bonusHp+'</span>':'')
+      +(bonusAtk+bonusDef+bonusHp===0?'  <span class="tx-dim">伤害不足，未获得奖励</span>':'')
       +  '</div>'
       +'</div>'
       +'<div class="ch-reward">'
@@ -10769,12 +10769,12 @@ function startHiddenChallenge(hotBuff){
       +  '<div class="ch-reward-info">'
       +((state.matReward && state.matReward.length) ? state.matReward.map(function(d){
           var names={nutrition:'🧪 营养液',feed:'🍖 饲料',spirit:'✨ 灵能',refineNormal:'🪨 炼化石',refineHigh:'💎 高炼石',orbShard:'🔮 宝珠碎片'};
-          return '<span style="margin-right:8px">'+(names[d.type]||d.type)+' <b style="color:var(--green)">+'+d.n+'</b></span>';
-        }).join('') : '<span style="color:var(--text3)">—</span>')
+          return '<span style="margin-right:8px">'+(names[d.type]||d.type)+' <b class="tx-ok">+'+d.n+'</b></span>';
+        }).join('') : '<span class="tx-dim">—</span>')
       +(state.skillPointReward > 0 ? '<div style="margin-top:4px">💠 技能点 <b style="color:var(--blue)">+'+state.skillPointReward+'</b>（本周 '+weekCount+' 次额外奖励）</div>' : '')
       +(state.petEggReward ? '<div style="margin-top:4px;display:flex;align-items:center;gap:6px">'
         + ((typeof petIconHtml === 'function') ? petIconHtml(state.petEggReward.speciesId, 32) : '')
-        + '🥚 宠物蛋 <b style="color:var(--orange)">'+state.petEggReward.name+'</b></div>' : '')
+        + '🥚 宠物蛋 <b class="tx-warn">'+state.petEggReward.name+'</b></div>' : '')
       /* v2.15：宝珠结算也带图标（与库存 / 槽位同一入口 orbIconHtml，缺模块时回退 🔮）。
          ⚠️ challenge.js 比 pet-ui.js 先加载，但结算面板是运行时渲染，届时全局函数已就绪；
             仍保留 typeof 守卫，与上方 petEggReward 的 petIconHtml 同一手法。 */
@@ -10815,7 +10815,7 @@ function startHiddenChallenge(hotBuff){
       var v=perSec[i]||0
       var bh=Math.max(2,Math.round(v/maxHits*56))
       var c=v>=maxHits&&maxHits>1?'var(--orange)':'var(--blue)'
-      h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px" title="第'+(i+1)+'秒: '+v+'次"><div style="height:'+bh+'px;background:'+c+';border-radius:3px 3px 0 0;width:100%;min-width:4px"></div><span style="font-size:var(--fs-3xs);color:var(--text3)">'+(i+1)+'</span></div>'
+      h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px" title="第'+(i+1)+'秒: '+v+'次"><div style="height:'+bh+'px;background:'+c+';border-radius:3px 3px 0 0;width:100%;min-width:4px"></div><span class="tx-hint">'+(i+1)+'</span></div>'
     }
     h+='</div>'
     container.innerHTML=h
@@ -10850,7 +10850,7 @@ function showChallengeHistory(){
   }else{
     var rows=h.slice().reverse().map(function(r,i){
       var buffLabel=r.buff?hotBuffLabel(r.buff):'无 buff'
-      return'<div class="ec" style="margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+r.date+'</div><div class="ec-actions"><span style="font-size:var(--fs-3xs);color:var(--text3)">#'+(h.length-i)+'</span></div></div>'
+      return'<div class="ec" style="margin-bottom:6px"><div class="ec-hdr"><div class="ec-ex">'+r.date+'</div><div class="ec-actions"><span class="tx-hint">#'+(h.length-i)+'</span></div></div>'
         +'<div style="font-size:var(--fs-2xs);color:var(--text2);line-height:1.7;padding:2px 0">'
         +'⚔️ '+r.dmg+' 伤害 · 🎯 '+r.hits+' 次 ('+r.avgRate+'/秒) · 💥 '+r.crits+' 暴击<br>'
         +'🥇 最强 '+r.maxHit+' · 🎁 ⚔️+'+r.atk+' 🛡️+'+r.def+' ❤️+'+r.hp
@@ -11987,7 +11987,7 @@ function showSyncDialog(){
     // Local card
     h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px">'
       +'<div style="font-weight:700;margin-bottom:6px;color:var(--orange)">📱 本地数据'+localAge+'</div>'
-      +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">'+localSummary.time+'</div>'
+      +'<div class="tx-sub-mb">'+localSummary.time+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:var(--fs-xs);color:var(--text2)">'
       +'<div>🏋️ 力量: '+localSummary.strE+' 组</div><div>🏃 有氧: '+localSummary.carE+' 次</div>'
       +'<div>⚖️ 体重: '+localSummary.wtE+' 条</div><div>📋 计划: '+localSummary.plans+' 个</div>'
@@ -12008,7 +12008,7 @@ function showSyncDialog(){
     // Remote card
     h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px">'
       +'<div style="font-weight:700;margin-bottom:6px;color:var(--blue)">☁️ 云端数据'+remoteAge+'</div>'
-      +'<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">'+remoteSummary.time+'</div>'
+      +'<div class="tx-sub-mb">'+remoteSummary.time+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:var(--fs-xs);color:var(--text2)">'
       +'<div>🏋️ 力量: '+remoteSummary.strE+' 组</div><div>🏃 有氧: '+remoteSummary.carE+' 次</div>'
       +'<div>⚖️ 体重: '+remoteSummary.wtE+' 条</div><div>📋 计划: '+remoteSummary.plans+' 个</div>'
@@ -12033,15 +12033,15 @@ function showSyncDialog(){
     if(isFirst){
       suggestion='<div style="background:rgba(100,116,139,.08);border:2px solid var(--bd-l);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
         +'<div style="font-weight:700;color:var(--text);margin-bottom:4px">🆕 首次同步</div>'
-        +'<div style="color:var(--text2)">请选择：推送本地数据到云端，或从云端拉取数据覆盖本地。</div></div>'
+        +'<div class="tx-muted-only">请选择：推送本地数据到云端，或从云端拉取数据覆盖本地。</div></div>'
     }else if(localNewer&&remoteData.entries){
       suggestion='<div style="background:rgba(var(--brand-rgb),.12);border:2px solid var(--orange);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
         +'<div style="font-weight:700;color:var(--orange);margin-bottom:4px">💡 建议：推送本地数据到云端</div>'
-        +'<div style="color:var(--text2)">本地数据更新 ('+localSummary.time+')，包含 '+localSummary.strE+' 组力量.'+localSummary.prsC+'项PR。云端数据较旧。</div></div>'
+        +'<div class="tx-muted-only">本地数据更新 ('+localSummary.time+')，包含 '+localSummary.strE+' 组力量.'+localSummary.prsC+'项PR。云端数据较旧。</div></div>'
     }else if(remoteNewer&&remoteData.entries){
       suggestion='<div style="background:rgba(var(--success-rgb),.08);border:2px solid var(--green);border-radius:var(--rs);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);line-height:1.6">'
         +'<div style="font-weight:700;color:var(--green);margin-bottom:4px">💡 建议：从云端拉取数据</div>'
-        +'<div style="color:var(--text2)">云端数据更新 ('+remoteSummary.time+')，包含 '+remoteSummary.strE+' 组力量。本地数据较旧。</div></div>'
+        +'<div class="tx-muted-only">云端数据更新 ('+remoteSummary.time+')，包含 '+remoteSummary.strE+' 组力量。本地数据较旧。</div></div>'
     }else if(hasLocal&&remoteData.entries&&localSummary.strE===remoteSummary.strE){
       suggestion='<div style="background:rgba(100,116,139,.08);border:var(--bw) solid var(--text3);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text2);text-align:center">✅ 本地与云端数据一致，无需同步</div>'
     }else{
@@ -12477,15 +12477,15 @@ function renderTodaySnapshot(){
   var volColor=volPct>=100?'var(--green)':volPct>=60?'var(--orange)':'var(--text3)'
   var dayColor=periodDays>=6?'var(--green)':periodDays>=4?'var(--orange)':'var(--text3)'
   var statusHtml=trainedToday
-    ?'<span style="color:var(--green)">✅ 今天已训练</span>'
-    :'<span style="color:var(--text2)">💤 今天还没动</span>'
+    ?'<span class="tx-ok">✅ 今天已训练</span>'
+    :'<span class="tx-muted-only">💤 今天还没动</span>'
   var periodLabel=period.name+' ('+period.start.slice(5).replace('-','/')+'~'+period.end.slice(5).replace('-','/')+')'
 
   el.innerHTML='<div class="snap-card">'
-    +'<div class="snap-row"><span class="snap-lbl">📅 本周</span><span class="snap-val">'+weekCount+'<span style="font-size:var(--fs-3xs)">/7天</span></span><div class="snap-bar"><div class="snap-fill wk" style="width:'+weekPct+'%"></div></div>'+(weekCount>=4?'<span style="color:var(--green);font-size:var(--fs-3xs)">🏅 达标</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">还差'+(4-weekCount>0?4-weekCount:0)+'天</span>')+'</div>'
-    +'<div class="snap-row"><span class="snap-lbl">🗓️ '+periodLabel+'</span><span class="snap-val" style="color:'+dayColor+'">'+periodDays+'<span style="font-size:var(--fs-3xs)">/6天</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div>'+(periodDays>=6?'<span style="color:var(--green);font-size:var(--fs-3xs)">🎯 达标</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">还差'+(6-periodDays)+'天</span>')+'</div>'
-    +'<div class="snap-row"><span class="snap-lbl">🏋️ 旬容量</span><span class="snap-val" style="color:'+volColor+'">'+Math.round(periodVol)+'<span style="font-size:var(--fs-3xs)">/'+period.volThreshold+'</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div>'+(volPct>=100?'<span style="color:var(--green);font-size:var(--fs-3xs)">💯 超额</span>':'<span style="color:var(--text3);font-size:var(--fs-3xs)">'+Math.max(0,Math.round(period.volThreshold-periodVol))+'kg</span>')+'</div>'
-    +'<div class="snap-foot">'+statusHtml+' <span style="color:var(--text3);font-size:var(--fs-3xs)">· 满4天获周奖励，满6天获旬奖励</span></div>'
+    +'<div class="snap-row"><span class="snap-lbl">📅 本周</span><span class="snap-val">'+weekCount+'<span class="tx-3xs">/7天</span></span><div class="snap-bar"><div class="snap-fill wk" style="width:'+weekPct+'%"></div></div>'+(weekCount>=4?'<span class="tx-ok-3xs">🏅 达标</span>':'<span class="tx-hint">还差'+(4-weekCount>0?4-weekCount:0)+'天</span>')+'</div>'
+    +'<div class="snap-row"><span class="snap-lbl">🗓️ '+periodLabel+'</span><span class="snap-val" style="color:'+dayColor+'">'+periodDays+'<span class="tx-3xs">/6天</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div>'+(periodDays>=6?'<span class="tx-ok-3xs">🎯 达标</span>':'<span class="tx-hint">还差'+(6-periodDays)+'天</span>')+'</div>'
+    +'<div class="snap-row"><span class="snap-lbl">🏋️ 旬容量</span><span class="snap-val" style="color:'+volColor+'">'+Math.round(periodVol)+'<span class="tx-3xs">/'+period.volThreshold+'</span></span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div>'+(volPct>=100?'<span class="tx-ok-3xs">💯 超额</span>':'<span class="tx-hint">'+Math.max(0,Math.round(period.volThreshold-periodVol))+'kg</span>')+'</div>'
+    +'<div class="snap-foot">'+statusHtml+' <span class="tx-hint">· 满4天获周奖励，满6天获旬奖励</span></div>'
     +'</div>'
 }
 
@@ -12555,7 +12555,7 @@ function renderStr(){
       var ratio=(exDef&&exDef.ratio!=null)?exDef.ratio:100
       var effW=(e.eqWeight!=null?e.eqWeight:(e.weight||0))
       var effVol=Math.round(effW*e.actualReps*(ratio/100))
-      var ratioTxt=ratio!==100?('<span style="color:var(--text3)">×'+ratio/100+'</span>'):''
+      var ratioTxt=ratio!==100?('<span class="tx-dim">×'+ratio/100+'</span>'):''
       var volTag=effVol>0?'<div class="ec-vol">⚡ 等效 '+effVol+'kg '+ratioTxt+(ratio!==100?'（倍率 '+ratio+'%）':'')+'</div>':''
       /* v2.2.25：条目缺 targetReps（外部同步 / 老存档条目）时不再渲染「目标 undefined 次」；
          与上方 r 的 `e.targetReps>0` 判定同一口径 —— 没有目标就只显示实际值 */
@@ -12593,7 +12593,7 @@ function renderStrStats(){
   var exCount={}
   we.forEach(function(e){exCount[e.exercise]=(exCount[e.exercise]||0)+1})
   var fav=Object.keys(exCount).sort(function(a,b){return exCount[b]-exCount[a]})[0]||'—'
-  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span style="font-size:var(--fs-3xs)"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+Math.round(v)+'<span style="font-size:var(--fs-3xs)"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v" style="font-size:var(--fs-xs)">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
+  g.innerHTML='<div class="sc sc-rate"><div class="sc-ring"><svg viewBox="0 0 70 70"><circle class="sc-ring__bg" cx="35" cy="35" r="31.5"/><circle class="sc-ring__fill" cx="35" cy="35" r="31.5" stroke-dasharray="'+circ+'" stroke-dashoffset="'+(circ-circ*rate/100)+'"/></svg><span class="sc-ring__text">'+rate+'%</span></div><div class="sc-l">完成率</div></div><div class="sc sc-total"><div class="sc-v">'+r+'<span class="tx-3xs"> 次</span></div><div class="sc-l">总次数</div></div><div class="sc sc-vol"><div class="sc-v">'+Math.round(v)+'<span class="tx-3xs"> kg</span></div><div class="sc-l">总容量</div></div><div class="sc sc-fav"><div class="sc-v tx-xs">'+days+'天 · '+fav+'</div><div class="sc-l">本周训练</div></div>'
 }
 function getWeekStr(){const n=new Date();const d=n.getDay();const m=new Date(n);m.setDate(n.getDate()+(d===0?-6:1-d));return(store.get('strength')||{entries:[]}).entries.filter(e=>e.date>=toDate(m))}
 
@@ -12611,7 +12611,7 @@ function renderMissed(){
     /* WP-I C-02：原来「日期 + ✏️说明原因 + 🛌休息日 + ➕补签」4 个元素挤在同一 flex 行，
        4 个全部折成 2 行。现在拆成「日期一行（.md-hdr）/ 操作一行（.md-actions）」，
        按钮仍各自 min-height:var(--touch-min)=44px（不缩热区）。 */
-    return '<div class="md-item'+(isRest?' rest':'')+'"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span></div><div class="md-actions"><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button>'+(isRest?'':'<button class="md-write" data-date="'+dd+'" data-rest="1" style="color:var(--green)">🛌 休息日</button>')+'<button class="md-write" data-date="'+dd+'" data-makeup="1" style="color:var(--green)">➕ 补签</button></div>'+(isRest?'<span class="md-rest-badge">🛌 休息日</span>':'')+'<div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(isRest?'':note)+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
+    return '<div class="md-item'+(isRest?' rest':'')+'"><div class="md-hdr"><span class="md-date">📅 '+dd+'</span></div><div class="md-actions"><button class="md-write" data-date="'+dd+'">'+(note?'✏️ 编辑':'✏️ 说明原因')+'</button>'+(isRest?'':'<button class="md-write tx-ok" data-date="'+dd+'" data-rest="1">🛌 休息日</button>')+'<button class="md-write tx-ok" data-date="'+dd+'" data-makeup="1">➕ 补签</button></div>'+(isRest?'<span class="md-rest-badge">🛌 休息日</span>':'')+'<div class="md-reason'+(note?' show':'')+'" id="mr_'+dd+'">'+(isRest?'':note)+'</div><div class="md-edit" id="me_'+dd+'" style="display:none"><textarea class="md-input" id="mi_'+dd+'" rows="2">'+(note||'')+'</textarea><button class="md-save" data-date="'+dd+'">保存</button></div></div>'
   }).join('')
   c.querySelectorAll('.md-write').forEach(b=>b.addEventListener('click',()=>{
     const dd=b.dataset.date
@@ -12637,7 +12637,7 @@ function openMakeupDialog(dateStr){
     +'<div style="margin-bottom:12px">'
   plans.forEach(function(p,i){
     var tags=p.exercises.map(function(e){return e.exercise}).slice(0,5).join('、')
-    h+='<div class="ec" style="cursor:pointer;margin-bottom:8px" data-pick="'+p.id+'"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><span style="font-size:var(--fs-2xs);color:var(--text3)">'+p.exercises.length+' 组</span></div></div><div class="ec-prog"><div style="font-size:var(--fs-2xs);color:var(--text2)">'+tags+'</div></div></div>'
+    h+='<div class="ec" style="cursor:pointer;margin-bottom:8px" data-pick="'+p.id+'"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><span class="tx-sub">'+p.exercises.length+' 组</span></div></div><div class="ec-prog"><div class="tx-muted">'+tags+'</div></div></div>'
   })
   h+='</div><div class="modal-actions"><button class="m-btn-cancel" id="muCancel">取消</button></div></div>'
   modal.innerHTML=h;void modal
@@ -12777,7 +12777,7 @@ function showWoSummary(){
   if(!el)return
   el.innerHTML='<div style="text-align:center"><div style="font-size:var(--fs-hero);margin-bottom:4px">🎉</div><div style="font-size:var(--fs-2xl);font-weight:800;margin-bottom:12px">训练完成！</div>'
     +_woDone.map(d=>'<div style="font-size:var(--fs-sm);color:var(--text2)">'+d.exercise+' '+fmtKg(d.weight)+'kg × '+d.actualReps+'/'+d.targetReps+(d.actualReps>=d.targetReps?' ✅':'')+'</div>').join('')
-    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总次数</div></div><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--blue)">'+vol+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总容量</div></div></div>'
+    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div class="tx-hint">总次数</div></div><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--blue)">'+vol+'</div><div class="tx-hint">总容量</div></div></div>'
     +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
   document.getElementById('woFinish').addEventListener('click',()=>{
     _woDone.forEach(d=>{addStr({date:today(),exercise:d.exercise,weight:d.weight,targetReps:d.targetReps,actualReps:d.actualReps})})
@@ -13061,7 +13061,7 @@ function strExPickCardHtml(ex,isCommon){
     +'<div style="font-size:var(--fs-base);font-weight:700;color:var(--text1)">'+strAttr(linked?linked.zh:ex.name)+(isCommon?'<span class="ex-common-tag">⭐ 常用</span>':'')+'</div>'
     +(linked?'<div style="margin-top:2px">'+tagHtml(linked.cat,'cat')+tagHtml(linked.eq,'eq')+tagHtml(linked.target,'cat')+'</div>':'')
     +'</div>'
-    +'<span style="font-size:var(--fs-3xs);color:var(--text3)"></span>'
+    +'<span class="tx-hint"></span>'
     +'</button>';
 }
 function strExPickerHtml(sp){
@@ -13482,7 +13482,7 @@ function showCardioSummary(){
       var ct=getAllCardioTypes().find(function(x){return x.id===d.type})||{emoji:'🏃',name:d.type}
       return '<div style="font-size:var(--fs-sm);color:var(--text2)">'+ct.emoji+' '+ct.name+' '+d.duration+'分钟 · 强度×'+d.intensity+'</div>'
     }).join('')
-    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总分钟</div></div></div>'
+    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div class="tx-hint">总分钟</div></div></div>'
     +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
   document.getElementById('woFinish').addEventListener('click',function(){
     _woDone.forEach(function(d){addCar({date:today(),type:d.type,duration:d.duration,intensity:d.intensity,distance:0,note:''})})
@@ -13546,7 +13546,7 @@ function renderWtList(){
     var dLabel=list.length>1?' <span style="font-size:var(--fs-3xs);color:'+(delta<=0?'var(--green)':'var(--orange)')+'">'+(delta>0?'+':'')+(Math.round(delta*100)/100)+'</span>':''
     h+='<div data-wtm="'+mk+'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:var(--bg2);border:var(--bw) solid var(--bd);border-radius:var(--r);cursor:pointer;box-shadow:var(--shadow)">'
       +'<span style="font-size:var(--fs-sm);font-weight:700">'+mk.replace('-','年 ')+'月</span>'
-      +'<span style="font-size:var(--fs-2xs);color:var(--text3)">'+list.length+' 条 · 最新 <b style="color:var(--text)">'+fmtW(latest)+'</b>kg'+dLabel+' <span style="display:inline-block;transition:transform .2s;transform:rotate('+(open?90:0)+'deg)">▸</span></span></div>'
+      +'<span class="tx-sub">'+list.length+' 条 · 最新 <b style="color:var(--text)">'+fmtW(latest)+'</b>kg'+dLabel+' <span style="display:inline-block;transition:transform .2s;transform:rotate('+(open?90:0)+'deg)">▸</span></span></div>'
     if(open){
       h+=list.map(function(r){return'<div class="wt-entry" style="margin-left:12px"><div><span class="wt-val">'+fmtW(r.weight)+'</span> <span class="wt-date">kg · '+r.date+'</span>'+(r.note?'<br><span class="wt-note">💬 '+r.note+'</span>':'')+'</div><button class="ec-act" data-a="wtDel" data-id="'+r.id+'">🗑️</button></div>'}).join('')
     }
@@ -13631,7 +13631,7 @@ function renderPRs(){
       var ratio=exMap[ex]&&exMap[ex].ratio!=null?exMap[ex].ratio:100
       if(ratio<100){
         var eff=Math.round(pr.maxVolume*ratio/100)
-        h+='📊 '+Math.round(pr.maxVolume)+'kg <span style="font-size:var(--fs-3xs);color:var(--text3)">→'+eff+'</span>'
+        h+='📊 '+Math.round(pr.maxVolume)+'kg <span class="tx-hint">→'+eff+'</span>'
       }else{
         h+='📊 '+Math.round(pr.maxVolume)+'kg'
       }
@@ -13812,15 +13812,15 @@ function renderPeriodCard(stats,strVol,carDur,carEff){
   var prevPen=calculatePeriodPenalty(6-stats.periodDays)
   var settle=''
   var parts=[]
-  if(curBonus.daysMet)parts.push('天数达标 <b style="color:var(--green)">+30攻 +6防</b>')
-  if(curBonus.volMet)parts.push('容量达标 <b style="color:var(--green)">+60攻 +12防</b>')
-  if(!curBonus.daysMet)parts.push('天数还差'+daysLeft+'天 <b style="color:var(--red)">-'+prevPen.atkPen+'攻 -'+prevPen.defPen+'防</b>')
+  if(curBonus.daysMet)parts.push('天数达标 <b class="tx-ok">+30攻 +6防</b>')
+  if(curBonus.volMet)parts.push('容量达标 <b class="tx-ok">+60攻 +12防</b>')
+  if(!curBonus.daysMet)parts.push('天数还差'+daysLeft+'天 <b class="tx-err">-'+prevPen.atkPen+'攻 -'+prevPen.defPen+'防</b>')
   if(!curBonus.volMet&&volLeft>0)parts.push('容量还差'+volLeft+'kg')
   if(parts.length)settle=parts.join(' · ')
 
   var dateRange=p.start.slice(5).replace('-','/')+' ~ '+p.end.slice(5).replace('-','/')+' ('+p.days+'天)'
   card.innerHTML='<div class="period-card">'
-    +'<div class="period-hdr"><span>🗓️ 本旬目标 · '+p.name+' <span style="font-size:var(--fs-3xs);color:var(--text3)">'+dateRange+'</span></span><span class="period-stamp">结算预告</span></div>'
+    +'<div class="period-hdr"><span>🗓️ 本旬目标 · '+p.name+' <span class="tx-hint">'+dateRange+'</span></span><span class="period-stamp">结算预告</span></div>'
     +'<div class="period-row"><span class="period-lbl">训练天数</span><div class="snap-bar"><div class="snap-fill" style="width:'+dayPct+'%;background:'+dayColor+'"></div></div><span class="period-val" style="color:'+dayColor+'">'+stats.periodDays+'/6天</span></div>'
     +'<div class="period-row"><span class="period-lbl">训练容量</span><div class="snap-bar"><div class="snap-fill" style="width:'+volPct+'%;background:'+volColor+'"></div></div><span class="period-val" style="color:'+volColor+'">'+Math.round(stats.periodVol)+'/'+p.volThreshold+'kg</span></div>'
     +'<div class="period-settle">⚖️ '+settle+'</div>'
@@ -13857,9 +13857,9 @@ function renderGame(){
 
   var periodItemHtml;
   if(!stats.periodEnabled){
-    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v" style="color:var(--text3);font-size:var(--fs-xs)">7月启用</div><div class="gs-l" style="font-size:var(--fs-3xs)">旬奖励待启用</div></div>';
+    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v tx-note">7月启用</div><div class="gs-l tx-3xs">旬奖励待启用</div></div>';
   }else{
-    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.periodDays+'<span style="font-size:var(--fs-3xs)">/6天</span>'+(stats.permBonusAtk>0?' <span style="font-size:var(--fs-3xs);color:var(--green)">+'+stats.permBonusAtk+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:var(--fs-3xs);color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l" style="font-size:var(--fs-3xs)">'+p.name+' · '+wkStatus+'</div></div>';
+    periodItemHtml='<div class="gs-item" style="min-width:100px"><div class="gs-v '+wkColor+'">'+stats.periodDays+'<span class="tx-3xs">/6天</span>'+(stats.permBonusAtk>0?' <span class="tx-ok-3xs">+'+stats.permBonusAtk+'</span>':'')+(stats.permPenAtk>0?' <span style="font-size:var(--fs-3xs);color:var(--red)">-'+stats.permPenAtk+'</span>':'')+'</div><div class="gs-l tx-3xs">'+p.name+' · '+wkStatus+'</div></div>';
   }
   // v2.0 三视图接管后旧属性条容器已移除（培养视图角色卡替代）；保留渲染逻辑以防回滚
   var _gsBar=document.getElementById('gameStatsBar')
@@ -13871,8 +13871,8 @@ function renderGame(){
     '<div class="gs-item"><div class="gs-v" style="color:var(--purple)">'+stats.soulDef+'</div><div class="gs-l">🔮 魂防</div></div>'+
     '<div class="gs-item"><div class="gs-v">'+getGame().cleared.length+'</div><div class="gs-l">🏆 通关</div></div>'+
     periodItemHtml+
-    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span style="font-size:var(--fs-3xs)">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
-    (stats.refineUnlocked?'<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn" id="refineBtn" title="炼魂系统" style="font-size:var(--fs-xs)">🔮</button></div>':'')
+    '<div class="gs-item" style="min-width:80px"><div class="gs-v blue">'+stats.monthDays+'<span class="tx-3xs">天</span></div><div class="gs-l">'+monthLabel+'</div></div>'+
+    (stats.refineUnlocked?'<div class="gs-item" style="flex:0;min-width:auto"><button class="header-btn tx-xs" id="refineBtn" title="炼魂系统">🔮</button></div>':'')
   renderPeriodCard(stats,strVol,carDur,carEff)
   _attrCalcInfo={atk:atkInfo,def:defInfo,hp:hpInfo,vol:strVol,dur:carDur,carEff:carEff,permPenAtk:stats.permPenAtk,permPenDef:stats.permPenDef,permBonusAtk:stats.permBonusAtk,permBonusDef:stats.permBonusDef,lastPeriodDays:stats.lastPeriodDays,thisPeriodDays:stats.periodDays,period:p,soulAtk:stats.soulAtk,soulDef:stats.soulDef,refineUnlocked:stats.refineUnlocked,refinePoints:stats.refinePoints,refineBonus:stats.refineBonus}
   trackStats(stats,{strVol:strVol,carDur:carDur,carEff:carEff})
@@ -18119,7 +18119,7 @@ function renderRecords(){
   h+='<h2 class="section-hdr" style="margin-bottom:4px">📅 '+mLabel+'最佳 <span style="font-size:var(--fs-3xs);font-weight:400;margin-left:8px"><button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" onclick="_recMonth=prevMonth(_recMonth);renderRecords()">◀</button> <button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" id="recMonthNow">本月</button> <button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" onclick="_recMonth=nextMonth(_recMonth);renderRecords()">▶</button></span></h2>'
   if(m&&(m.maxAtk||m.maxCleared)){
     h+='<div class="stats-grid">'
-    if(m.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+m.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
+    if(m.maxCleared)h+='<div class="sc"><div class="sc-v tx-base">🏁 '+m.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
     if(m.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+m.maxAtk+'</div><div class="sc-l">最高攻击</div></div>'
     if(m.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+m.maxDef+'</div><div class="sc-l">最高防御</div></div>'
     if(m.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+m.maxHp+'</div><div class="sc-l">最高生命</div></div>'
@@ -18128,7 +18128,7 @@ function renderRecords(){
 
   // Historical best
   h+='<h2 class="section-hdr">🏆 历史最佳</h2><div class="stats-grid">'
-  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
+  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v tx-base">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>'
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>'
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>'
@@ -18150,14 +18150,14 @@ function showAttrLog(){
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📜 属性变更日志</div><div style="max-height:60vh;overflow-y:auto;font-size:var(--fs-xs)">'
   for(var i=log.length-1;i>=0;i--){
     var l=log[i]
-    function dl(v){return v>0?'<span style="color:var(--green)">+'+v+'</span>':v<0?'<span style="color:var(--red)">'+v+'</span>':''}
+    function dl(v){return v>0?'<span class="tx-ok">+'+v+'</span>':v<0?'<span class="tx-err">'+v+'</span>':''}
     var dlAtk=dl(l.atkDiff),dlDef=dl(l.defDiff),dlHp=dl(l.hpDiff)
     var attrs='⚔️ <b>'+l.atk+'</b>'+dlAtk+' 🛡️ <b>'+l.def+'</b>'+dlDef+' ❤️ <b>'+l.hp+'</b>'+dlHp
     h+='<div style="padding:10px 0;border-bottom:1px solid var(--bd)">'
-      +'<div style="font-weight:700;font-size:var(--fs-sm)">'+l.date+(l.time?' <span style="font-weight:400;color:var(--text3);font-size:var(--fs-3xs)">'+l.time+'</span>':'')+'</div>'
+      +'<div style="font-weight:700;font-size:var(--fs-sm)">'+l.date+(l.time?' <span class="tx-hint-soft">'+l.time+'</span>':'')+'</div>'
       +'<div style="font-size:var(--fs-base);margin:2px 0">'+attrs+'</div>'
       +'<div style="color:var(--text2);margin-bottom:2px">'+l.reason+'</div>'
-      +'<div style="color:var(--text3);font-size:var(--fs-3xs)">训练'+l.wkDays+'天</div>'
+      +'<div class="tx-hint">训练'+l.wkDays+'天</div>'
       +'</div>'
   }
   h+='</div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'
@@ -18186,7 +18186,7 @@ function showRefineDialog(){
   h+='<div style="background:var(--bg);border:var(--bw) solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:10px">';
   /* v2.14.13：`totalEarned` 只统计「容量兑换」这一条来源（关卡战利品只进 points，不进 totalEarned），
      原来的「本月已获得」会低估实际获得量 → 文案改成与字段口径一致。 */
-  h+='<div style="font-size:var(--fs-xs);color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:var(--fs-lg)">'+(refine.points||0)+'</b> <span style="color:var(--text3);font-size:var(--fs-3xs)">（本月容量兑换 '+(refine.totalEarned||0)+'）</span></div>';
+  h+='<div style="font-size:var(--fs-xs);color:var(--text2)">炼化点数: <b style="color:var(--orange);font-size:var(--fs-lg)">'+(refine.points||0)+'</b> <span class="tx-hint">（本月容量兑换 '+(refine.totalEarned||0)+'）</span></div>';
   h+='</div>';
   /* ===== v2.14.13：把「炼化点怎么来」讲清楚（作者反馈「力量训练 700 多 kg 没有获得炼化」）=====
      一句话常显 + 详细折算默认折叠。文案里的数字全部与实现同源：
@@ -18217,7 +18217,7 @@ function showRefineDialog(){
   h+='<div style="background:var(--bg);border:2px solid '+gradeColor+';border-radius:var(--r);padding:12px 14px;margin-bottom:12px">';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
   h+='<span style="font-size:var(--fs-xl);font-weight:900;color:'+gradeColor+'">'+curGrade+'</span>';
-  h+='<span style="font-size:var(--fs-xs);color:var(--text3)">成功率 '+Math.round(g.successRate*100)+'%</span>';
+  h+='<span class="tx-note">成功率 '+Math.round(g.successRate*100)+'%</span>';
   h+='</div>';
   h+='<div style="font-size:var(--fs-2xs);color:var(--text2);margin-bottom:4px">进度: '+prog.total+'/'+prog.max+' ('+prog.percent+'%)</div>';
   h+='<div style="height:8px;background:var(--bg3);border-radius:var(--rp);overflow:hidden"><div style="height:100%;width:'+prog.percent+'%;background:'+gradeColor+';border-radius:var(--rp);transition:width .3s"></div></div>';
@@ -18225,7 +18225,7 @@ function showRefineDialog(){
   // Stats detail
   var u=(refine.upgrades&&refine.upgrades[curGrade])||{atk:0,def:0,hp:0,soulAtk:0,soulDef:0};
   var statIcons={atk:'⚔️',def:'🛡️',hp:'❤️',soulAtk:'👻',soulDef:'🔮'};
-  h+='<div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">当前等级强化（'+curGrade+'级，满级'+g.maxLevel+'）：</div>';
+  h+='<div class="tx-sub-mb">当前等级强化（'+curGrade+'级，满级'+g.maxLevel+'）：</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">';
   REFINE_STATS.forEach(function(stat){
     var lv=u[stat]||0;
@@ -18235,9 +18235,9 @@ function showRefineDialog(){
     var perLevel=Math.round(g[stat]*100)/100;
     var unit=stat==='hp'?'Hp':'';
     h+='<div style="background:var(--bg);border:var(--bw) solid '+(maxed?'var(--green)':'var(--bd)')+';border-radius:var(--rs);padding:8px 10px">';
-    h+='<div style="font-size:var(--fs-2xs);color:var(--text2)">'+statIcons[stat]+' '+statName(stat)+'</div>';
+    h+='<div class="tx-muted">'+statIcons[stat]+' '+statName(stat)+'</div>';
     h+='<div style="font-size:var(--fs-base);font-weight:700;color:'+(maxed?'var(--green)':'var(--text)')+'">Lv.'+lv+'/'+g.maxLevel+(maxed?' ✅':'')+'</div>';
-    h+='<div style="font-size:var(--fs-3xs);color:var(--text3)">'+bonusVal+unit+' (每级'+perLevel+unit+')</div>';
+    h+='<div class="tx-hint">'+bonusVal+unit+' (每级'+perLevel+unit+')</div>';
     h+='</div>';
   });
   h+='</div>';
@@ -18363,7 +18363,7 @@ function renderExLibrary(){
   var strength=list.filter(function(ex){return ex.type==='strength'});
   var cardio=list.filter(function(ex){return ex.type==='cardio'});
 
-  var h='<h2 class="section-hdr">🏋️ 力量动作 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+strength.length+')</span></h2>';
+  var h='<h2 class="section-hdr">🏋️ 力量动作 <span class="tx-hint-soft">('+strength.length+')</span></h2>';
   if(strength.length){
     h+='<div class="ex-lib-list">';
     strength.forEach(function(ex){
@@ -18376,7 +18376,7 @@ function renderExLibrary(){
     h+='<div class="empty"><span class="empty-e">🏋️</span><div class="empty-t">还没有力量动作</div></div>';
   }
 
-  h+='<h2 class="section-hdr" style="margin-top:16px">🏃 有氧类型 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+cardio.length+')</span></h2>';
+  h+='<h2 class="section-hdr" style="margin-top:16px">🏃 有氧类型 <span class="tx-hint-soft">('+cardio.length+')</span></h2>';
   if(cardio.length){
     h+='<div class="ex-lib-list">';
     cardio.forEach(function(ex){
@@ -18427,7 +18427,7 @@ function exCardHtml(ex,badge,isCardio){
   }
   if(ex.description){
     var first=mdFirstLine(ex.description);
-    h+='<div style="margin-top:8px;font-size:var(--fs-sm);color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span style="color:var(--text3);font-size:var(--fs-xs)"> …展开</span></div>';
+    h+='<div style="margin-top:8px;font-size:var(--fs-sm);color:var(--text2);cursor:pointer" data-a="exToggle">'+first+'<span class="tx-note"> …展开</span></div>';
     h+='<div class="ex-desc-full" style="display:none;margin-top:6px;padding:10px 12px;background:var(--bg);border-radius:var(--rs);border:var(--bw) solid var(--bd)">'+renderMd(ex.description)+'</div>';
   }
   h+='</div>';
@@ -18472,7 +18472,7 @@ function showExEditor(editId){
         area.innerHTML='<div class="ec" style="margin-top:2px"><div style="display:flex;gap:12px;align-items:center">'
           +'<img src="'+m.primary+'" loading="lazy" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.display='none'")+'" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:var(--bg2);border:var(--bw) solid var(--bd);flex-shrink:0">'
           +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">'+it.zh+'</div>'
-          +'<div style="font-size:var(--fs-2xs);color:var(--text3)">'+it.name+'</div>'
+          +'<div class="tx-sub">'+it.name+'</div>'
           +'<div style="margin-top:4px">'+tagHtml(it.cat,'cat')+tagHtml(it.eq,'eq')+tagHtml(it.target,'cat')+'</div></div>'
           +'<button class="ec-act" id="exLinkClear" title="解除关联">✕</button></div></div>';
         document.getElementById('exLinkClear').addEventListener('click',function(){curDsId=null;renderLinkArea()});
@@ -18635,7 +18635,7 @@ function openDsPicker(onPick){
     return '<button type="button" class="ec" data-id="'+it.id+'" style="display:flex;width:100%;text-align:left;gap:10px;padding:8px;margin-bottom:6px;align-items:center;cursor:pointer">'
       +'<img loading="lazy" src="'+m.primary+'" onerror="'+(m.fallback?"this.onerror=null;this.src='"+m.fallback+"'":"this.style.visibility='hidden'")+'" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--bg2)">'
       +'<div style="flex:1;min-width:0"><div style="font-size:var(--fs-sm);font-weight:600">'+it.zh+'</div>'
-      +'<div style="font-size:var(--fs-3xs);color:var(--text3)">'+it.name+'</div>'
+      +'<div class="tx-hint">'+it.name+'</div>'
       +'<div style="margin-top:3px">'+tagHtml(it.cat,'cat')+tagHtml(it.eq,'eq')+tagHtml(it.target,'cat')+'</div></div></button>';
   }
 
@@ -18682,7 +18682,7 @@ function showDsDetail(id){
   var secTags=(it.sec||[]).map(function(s){return '<span style="font-size:var(--fs-3xs);background:var(--bg);border:var(--bw) solid var(--bd);padding:1px 7px;border-radius:var(--rp)">'+s+'</span>'}).join(' ');
   var steps=(it.steps||[]).map(function(s,i){return '<li style="font-size:var(--fs-xs);line-height:1.65;margin-bottom:5px">'+s+'</li>'}).join('');
   det.innerHTML='<div style="position:absolute;inset:0;background:var(--bg);z-index:2;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column">'
-    +'<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg)"><button class="ec-act" id="dsBack">◀</button><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-base)">'+it.zh+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">'+it.name+'</div></div></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg)"><button class="ec-act" id="dsBack">◀</button><div style="flex:1;min-width:0"><div class="tx-b">'+it.zh+'</div><div class="tx-hint">'+it.name+'</div></div></div>'
     +'<div style="flex:1;padding:14px">'
     +'<div id="dsMediaWrap" style="position:relative;width:200px;height:200px;margin:0 auto 12px;background:var(--bg2);border-radius:14px;overflow:hidden;cursor:pointer">'
     +'<img id="dsImg" loading="lazy" src="'+mi.primary+'" onerror="'+(mi.fallback?"this.onerror=null;this.src='"+mi.fallback+"'":"this.style.visibility='hidden'")+'" style="width:100%;height:100%;object-fit:cover">'
@@ -18691,7 +18691,7 @@ function showDsDetail(id){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span style="font-size:var(--fs-3xs);background:var(--purple);color:#fff;padding:2px 9px;border-radius:var(--rp)">'+it.cat+'</span><span style="font-size:var(--fs-3xs);background:var(--blue);color:#fff;padding:2px 9px;border-radius:var(--rp)">'+it.eq+'</span><span style="font-size:var(--fs-3xs);background:var(--green);color:#fff;padding:2px 9px;border-radius:var(--rp)">🎯 '+it.target+'</span></div>'
     +(it.mg?'<div style="margin-bottom:10px"><div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:4px">协同肌群</div>'+secTags+'</div>':'')
     +(it.ins?'<div style="font-size:var(--fs-sm);line-height:1.7;color:var(--text1);white-space:normal;margin-bottom:12px">'+it.ins+'</div>':'')
-    +(steps?'<div><div style="font-size:var(--fs-2xs);color:var(--text3);margin-bottom:6px">分步说明</div><ol style="padding-left:18px;margin:0">'+steps+'</ol></div>':'')
+    +(steps?'<div><div class="tx-sub-mb">分步说明</div><ol style="padding-left:18px;margin:0">'+steps+'</ol></div>':'')
     +'</div></div>';
   list.style.display='none';det.style.display='block';
   document.getElementById('dsBack').addEventListener('click',function(){det.style.display='none';list.style.display=''});
@@ -18712,17 +18712,17 @@ function renderSettingsPlans(){
   var el=document.getElementById('subPlans');if(!el)return
   var strPlans=getPlans();
   var carPlans=getCardioPlans();
-  var h='<h2 class="section-hdr">🏋️ 力量计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+strPlans.length+')</span></h2>';
+  var h='<h2 class="section-hdr">🏋️ 力量计划 <span class="tx-hint-soft">('+strPlans.length+')</span></h2>';
   if(strPlans.length){
     strPlans.forEach(function(p){
       var tags=p.exercises.map(function(e){return e.exercise}).slice(0,5).join('、');
-      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditStrPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelStrPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="font-size:var(--fs-2xs);color:var(--text2)">'+tags+'</div></div></div>';
+      h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditStrPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelStrPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div class="tx-muted">'+tags+'</div></div></div>';
     });
   }else{
     /* v2.14.26（评审 P2-7）：空态要有一个动作 —— 原来只有一句「还没有力量计划」，用户不知道下一步去哪。 */
     h+=emptyHtml('📋','还没有力量计划','计划在「训练 → 力量」里创建并执行','<button class="empty-cta" data-a="gotoTraining">去训练 ›</button>','empty-compact');
   }
-  h+='<h2 class="section-hdr" style="margin-top:16px">🏃 有氧计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+carPlans.length+')</span></h2>';
+  h+='<h2 class="section-hdr" style="margin-top:16px">🏃 有氧计划 <span class="tx-hint-soft">('+carPlans.length+')</span></h2>';
   if(carPlans.length){
     carPlans.forEach(function(p){
       var tags=p.segments.map(function(s){
@@ -18761,7 +18761,7 @@ function renderSettingsGame(){
   h+='<button class="sb-btn" id="setAttrLogBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">📜 查看日志</button>';
   h+='<h2 class="section-hdr" style="margin-top:16px">🏆 历史最佳记录</h2>';
   h+='<div class="stats-grid">';
-  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
+  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v tx-base">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>';
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>';
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>';
@@ -22033,7 +22033,7 @@ function orbBagHtml(d) {
         + orbIconHtml(o.type, 32)
         + '<div class="orb-bag-info">' + ot.name + ' <span class="orb-q">' + o.rarity + '</span> Lv'
         + (o.level || 1) + ' <span class="orb-pct">+' + val + '%</span></div>'
-        + '<button class="speed-btn" data-orb-bag="' + o.id + '" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">♻️ +' + back + '</button>'
+        + '<button class="speed-btn tx-btn-sm" data-orb-bag="' + o.id + '">♻️ +' + back + '</button>'
         + '</div>';
     });
     h += '</div></details>';
@@ -22047,14 +22047,14 @@ function orbSlotsHtml(pet, d) {
   if (typeof ORB_TYPES === 'undefined') return '';
   var sh = (d.materials || {}).orbShard || 0;
   var h = '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">';
-  h += '<div style="font-weight:700;margin-bottom:4px">💎 宝珠 <span style="color:var(--text3);font-weight:400">（每类型 1 颗 · 碎片 <b>' + sh + '</b>）</span></div>';
+  h += '<div style="font-weight:700;margin-bottom:4px">💎 宝珠 <span class="tx-dim-soft">（每类型 1 颗 · 碎片 <b>' + sh + '</b>）</span></div>';
   var eq = pet.orbs || {};
   /* WP-I A-5-5：5 槽全空、且库存也为空时，原来逐条渲染「（空）/ 无库存」共 5 行 ≈180px 零信息，
      折叠成一行文案即可；只要任一类已装配、或库存里有货，就仍逐条展开（装配/升级/卸下）。 */
   var orbTypes = Object.keys(ORB_TYPES);
   var anyEquipped = orbTypes.some(function (t) { return !!eq[t]; });
   if (!anyEquipped && !(d.orbs || []).length) {
-    h += '<div style="color:var(--text3)">' + orbTypes.length + ' 槽均空 · 通关隐藏挑战掉落宝珠，装配到宠物身上生效</div>';
+    h += '<div class="tx-dim">' + orbTypes.length + ' 槽均空 · 通关隐藏挑战掉落宝珠，装配到宠物身上生效</div>';
   } else {
   orbTypes.forEach(function (t) {
     var ot = ORB_TYPES[t], o = eq[t];
@@ -22068,18 +22068,18 @@ function orbSlotsHtml(pet, d) {
       var spec = ((typeof ORB_QUALITY_SPEC !== 'undefined' && ORB_QUALITY_SPEC[o.rarity]) || { maxLv: 10, next: null });
       var maxed = !spec.next && (o.level || 1) >= spec.maxLv;
       var cost = (typeof orbUpgradeCost === 'function') ? orbUpgradeCost(o) : 0;
-      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span style="color:var(--green)">+' + val + '%</span>'
-        + (spec.next ? ' <span style="color:var(--text3)">（' + spec.maxLv + ' 级 → ' + spec.next + '）</span>' : '') + '</div>';
+      h += '<div style="flex:1">' + ot.name + ' <span style="color:var(--purple,#a855f7)">' + o.rarity + '</span> Lv' + (o.level || 1) + ' <span class="tx-ok">+' + val + '%</span>'
+        + (spec.next ? ' <span class="tx-dim">（' + spec.maxLv + ' 级 → ' + spec.next + '）</span>' : '') + '</div>';
       h += maxed
         ? '<span style="color:var(--green);font-size:var(--fs-2xs)">满级</span>'
-        : '<button class="speed-btn" data-orb-op="upgrade" data-orb-type="' + t + '" data-pet-idx="__IDX__" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">⬆' + cost + '💎</button>';
-      h += '<button class="speed-btn" data-orb-op="unequip" data-orb-type="' + t + '" data-pet-idx="__IDX__" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">卸下</button>';
+        : '<button class="speed-btn tx-btn-sm" data-orb-op="upgrade" data-orb-type="' + t + '" data-pet-idx="__IDX__">⬆' + cost + '💎</button>';
+      h += '<button class="speed-btn tx-btn-sm" data-orb-op="unequip" data-orb-type="' + t + '" data-pet-idx="__IDX__">卸下</button>';
     } else {
       var stock = (d.orbs || []).filter(function (x) { return x.type === t; });
       h += '<div style="flex:1;color:var(--text3)">' + ot.name + '（空）</div>';
       h += stock.length
         ? '<button class="speed-btn" data-orb-op="equip" data-orb-id="' + stock[0].id + '" data-pet-idx="__IDX__" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm);border-color:var(--green);color:var(--green)">装配 ' + stock[0].rarity + '</button>'
-        : '<span style="color:var(--text3);font-size:var(--fs-2xs)">无库存</span>';
+        : '<span class="tx-sub">无库存</span>';
     }
     h += '</div>';
   });
@@ -22298,8 +22298,8 @@ function renderPetPanel() {
   /* v2.3：结算按钮的可用判据（不写存档的纯函数） */
   var st = (typeof petSettleStatus === 'function') ? petSettleStatus(d) : { ready: false }
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="petClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
-    +'<span style="font-size:var(--fs-lg);font-weight:700">🐾 宠物面板</span>'
+    +'<button class="speed-btn tx-tap" id="petClose">✕</button>'
+    +'<span class="tx-h">🐾 宠物面板</span>'
     +'<span style="flex:1"></span>'
     /* v2.3：**有用才显示** —— 没有可结算内容（今天已结算过 / 只剩阵亡宠 / 没有宠物）时整块不渲染 */
     +(st.ready
@@ -22377,17 +22377,17 @@ function renderPetPanel() {
   }
   h += '<div class="pet-mat">'
     +'<div class="pet-mat-row">'
-    +'<span>🧪 营养液 <b style="font-size:var(--fs-base)">'+m.nutrition+'</b></span>'
-    +'<span>🍖 饲料 <b style="font-size:var(--fs-base)">'+m.feed+'</b></span>'
-    +'<span>✨ 灵能 <b style="font-size:var(--fs-base)">'+m.spirit+'</b></span>'
-    +'<span>🪨 炼化石 <b style="font-size:var(--fs-base)">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:var(--fs-base)">'+m.refineHigh+'</b></span>'
-    +'<span>💎 宝珠碎片 <b style="font-size:var(--fs-base)">'+m.orbShard+'</b></span>'
+    +'<span>🧪 营养液 <b class="tx-base">'+m.nutrition+'</b></span>'
+    +'<span>🍖 饲料 <b class="tx-base">'+m.feed+'</b></span>'
+    +'<span>✨ 灵能 <b class="tx-base">'+m.spirit+'</b></span>'
+    +'<span>🪨 炼化石 <b class="tx-base">'+m.refineNormal+'</b>/<b style="color:var(--purple,#a855f7);font-size:var(--fs-base)">'+m.refineHigh+'</b></span>'
+    +'<span>💎 宝珠碎片 <b class="tx-base">'+m.orbShard+'</b></span>'
     +'</div>'
     +'<div class="pet-mat-actions">'
     + exRows.map(function(row){
         return row.from === 'nutrition' ? exBtnHtml(row, '🧪', '🍖') : exBtnHtml(row, '🍖', '🧪')
       }).join('')
-    +'<button class="speed-btn" id="petExchange" title="10 个普通炼化石兑换 1 个高级炼化石" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">🔄 兑换 10→1</button>'
+    +'<button class="speed-btn tx-btn-sm" id="petExchange" title="10 个普通炼化石兑换 1 个高级炼化石">🔄 兑换 10→1</button>'
     /* v2.3：一键治疗**全宽独占一行**（.pet-btn-wide 的 flex:1 1 100%），不再与兑换并列 */
     +'<button class="speed-btn pet-btn-wide" id="petHealAll" title="自动消耗营养液，把所有受伤宠物一次治好（已阵亡/未成熟的不参与）" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(injuredN?';border-color:var(--red);color:var(--red)':'')+'">🧪 一键治疗'+(injuredN?'（'+injuredN+'）':'')+'</button>'
     +'</div>'
@@ -22403,7 +22403,7 @@ function renderPetPanel() {
   h += orbBagHtml(d)
   // 宠物列表
   if (!d.pets.length) {
-    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:var(--fs-base);background:var(--bg2);border-radius:var(--r)">还没有宠物 🐾<br><span style="font-size:var(--fs-xs)">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:var(--fs-md);border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
+    h += '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:var(--fs-base);background:var(--bg2);border-radius:var(--r)">还没有宠物 🐾<br><span class="tx-xs">先领一颗蛋开始养成吧</span><br><button class="speed-btn" id="petGetEgg" style="margin-top:14px;padding:12px 20px;min-height:48px;font-size:var(--fs-md);border-color:var(--orange);color:var(--orange)">🥚 获取初始蛋</button></div>'
   } else {
     /* ===== v2.15：**列表缩短**（作者原话：「优化宠物列表，现在列表太长了」）=====
        改前：每只 141px（标题行 + 状态行 + 6px 进度条 + 独立 44px 按钮行）——
@@ -22444,9 +22444,9 @@ function renderPetPanel() {
       var codex = getPetCodex(p.speciesId) || { name: p.name, rarity: p.rarity }
       /* v2.2.29：头像改用宠物专属图标（petIconStageHtml 内部兜底回原来的阶段 emoji） */
       var stageText = p.stage==='egg'?'孵化 '+Math.round(p.hatchProgress)+'%':p.stage==='grow'?'成长 '+Math.round(p.growth)+'%':'成熟'
-      var dead = p.isDead ? '<span style="color:var(--red)">💀 阵亡</span>' : ''
+      var dead = p.isDead ? '<span class="tx-err">💀 阵亡</span>' : ''
       // v2.1.19 受伤状态：无法参战，需喂养把恢复进度喂到 100
-      var inj = (!p.isDead && p.injured) ? '<span style="color:var(--red)">🤕 受伤 ' + Math.round(p.injuryHeal || 0) + '%</span>' : ''
+      var inj = (!p.isDead && p.injured) ? '<span class="tx-err">🤕 受伤 ' + Math.round(p.injuryHeal || 0) + '%</span>' : ''
       var petName = (codex.name||p.name)
       /* v2.17：列表里就看得到等级（成熟期才累计；未成熟 / 旧档一律 Lv0） */
       var lvInfo = (typeof petLevelInfo === 'function') ? petLevelInfo(p) : null
@@ -22469,10 +22469,10 @@ function renderPetPanel() {
         +'</div>'
         // 操作按钮（大按钮 44px）—— 默认收起，展开后与改前完全一致
         +'<div class="pet-card-actions" id="petActs'+i+'"'+(open?'':' hidden')+'>'
-        +'<button class="speed-btn" data-pet-op="feed" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">🍖喂</button>'
+        +'<button class="speed-btn tx-btn" data-pet-op="feed" data-pet-idx="'+i+'">🍖喂</button>'
         +((p.stage==='egg'||(p.stage==='mature'&&!p.isDead))?'<button class="speed-btn" data-pet-op="nutrition" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)'+(p.injured?';border-color:var(--red);color:var(--red)':'')+'">🧪营养</button>':'')
         +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="refine" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">✨炼化</button>':'')
-        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn" data-pet-op="detail" data-pet-idx="'+i+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">📋</button>':'')
+        +(p.stage==='mature'&&!p.isDead?'<button class="speed-btn tx-btn" data-pet-op="detail" data-pet-idx="'+i+'">📋</button>':'')
         +'</div>'
         +'</div>'
     }
@@ -23012,8 +23012,8 @@ function petLevelHtml(pet, bd) {
   h += '<div class="pet-sec-hd">🏅 宠物等级 <span class="pet-sec-sub">（成熟期起累计 · 每级 +' + v.ratePct
     + '% 基础属性 · 上限 +' + v.capPct + '%＝Lv' + v.maxLevel + ' · 每月清空）</span></div>';
   h += '<div style="display:flex;align-items:baseline;gap:6px;font-weight:700;margin-bottom:6px">'
-    + '<span style="font-size:var(--fs-xs)" id="petLvTitle">🏅 Lv ' + v.level + '</span>'
-    + '<span style="font-size:var(--fs-xs);color:var(--text3)">/ ' + v.maxLevel + '</span>'
+    + '<span id="petLvTitle" class="tx-xs">🏅 Lv ' + v.level + '</span>'
+    + '<span class="tx-note">/ ' + v.maxLevel + '</span>'
     + '<span style="flex:1"></span>'
     + '<span style="font-size:var(--fs-xs);color:var(--text2)">等级加成 +' + v.bonusPct + '%</span>'
     + '</div>';
@@ -23080,10 +23080,10 @@ function renderPetDetail(pet, idx) {
   var bag = d.materials || {}
   var codex = getPetCodex(pet.speciesId) || {}
   var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="petDBack" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">←</button>'
+    +'<button class="speed-btn tx-tap" id="petDBack">←</button>'
     /* v2.2.29：详情页头部也挂头像（与卡片同一个渲染入口） */
     +'<span class="pet-detail-ico">'+petIconHtml(pet.speciesId, 32)+'</span>'
-    +'<span style="font-size:var(--fs-lg);font-weight:700">'+(codex.name||pet.name)+' <span style="color:var(--purple);font-size:var(--fs-xs)">'+pet.rarity+'</span></span>'
+    +'<span class="tx-h">'+(codex.name||pet.name)+' <span style="color:var(--purple);font-size:var(--fs-xs)">'+pet.rarity+'</span></span>'
     +'<span style="flex:1"></span>'
     +'<span style="font-size:var(--fs-sm);color:var(--text2)">✨ 灵能 <b>'+(bag.spirit||0)+'</b></span>'
     +'</div>'
@@ -23096,8 +23096,8 @@ function renderPetDetail(pet, idx) {
   h += '<div style="font-size:var(--fs-xs);line-height:1.8;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">'
     +'<div style="display:flex;align-items:baseline;gap:6px;font-weight:700;margin-bottom:6px">'
     +'<span>✨ 炼化</span><span style="font-size:var(--fs-xl);color:var(--brand)">Lv'+rl+'</span>'
-    +'<span style="color:var(--text3)">/ '+maxLv+'</span><span style="flex:1"></span>'
-    +'<span style="color:var(--text3);font-weight:400">'+pct+'%</span></div>'
+    +'<span class="tx-dim">/ '+maxLv+'</span><span style="flex:1"></span>'
+    +'<span class="tx-dim-soft">'+pct+'%</span></div>'
     +'<div style="height:8px;background:var(--surface-3);border-radius:var(--r);overflow:hidden"><div style="width:'+pct+'%;height:100%;background:var(--brand-fill);border-radius:var(--r);transition:width var(--dur-2) var(--ease-out)"></div></div>'
     +'<div style="margin-top:6px;color:var(--text3)">成功率：普通石 '+(rateN ? rateN+'%' : '不可用（Lv≥50）')+'　·　高级石 '+rateH+'%</div>'
     +'</div>'
@@ -23116,29 +23116,29 @@ function renderPetDetail(pet, idx) {
   h += orbSlotsHtml(pet, d).replace(/__IDX__/g, idx)
   // 技能（v2.1.3：指定技能升级，消耗灵能）
   h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">⚡ 技能 <span style="color:var(--text3);font-weight:400">（消耗 ✨ 升级，上限 Lv'+PET_SKILL_MAX_LEVEL+'）</span></div>'
+  h += '<div style="font-weight:700;margin-bottom:4px">⚡ 技能 <span class="tx-dim-soft">（消耗 ✨ 升级，上限 Lv'+PET_SKILL_MAX_LEVEL+'）</span></div>'
   ;(codex.skills||[]).forEach(function(sid){
     var s = SKILLS[sid]
     if (!s) return
     var slv = pet.skillLevels ? pet.skillLevels[sid] || 0 : 0
     var cost = petSkillUpgradeCost(pet, sid)
     h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0">'
-      +'<div style="flex:1">'+s.name+' <span style="color:var(--text3)">· '+s.type+(s.power?' '+s.power+'%':'')+' · Lv'+slv+'</span></div>'
+      +'<div style="flex:1">'+s.name+' <span class="tx-dim">· '+s.type+(s.power?' '+s.power+'%':'')+' · Lv'+slv+'</span></div>'
       +(slv >= PET_SKILL_MAX_LEVEL
         ? '<span style="color:var(--green);font-size:var(--fs-2xs)">已满级</span>'
-        : '<button class="speed-btn" data-pet-skill="'+sid+'" style="padding:8px 10px;min-height:44px;font-size:var(--fs-sm)">⬆ '+cost+'✨</button>')
+        : '<button class="speed-btn tx-btn-sm" data-pet-skill="'+sid+'">⬆ '+cost+'✨</button>')
       +'</div>'
   })
-  if (!(codex.skills||[]).length) h += '<div style="color:var(--text3)">（无技能）</div>'
+  if (!(codex.skills||[]).length) h += '<div class="tx-dim">（无技能）</div>'
   h += '</div>'
   // 天赋（固有专属，design-v2.0.md §2.6：不可解锁、不可跨宠物装配）
   var curT = getPetTalents(pet)
   h += '<div style="font-size:var(--fs-xs);line-height:1.7;background:var(--bg2);border-radius:var(--r);padding:10px 12px">'
-  h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋 <span style="color:var(--text3);font-weight:400">（固有 '+curT.length+' 个）</span></div>'
-  if (!curT.length) h += '<div style="color:var(--text3)">该稀有度暂无天赋</div>'
+  h += '<div style="font-weight:700;margin-bottom:4px">✨ 天赋 <span class="tx-dim-soft">（固有 '+curT.length+' 个）</span></div>'
+  if (!curT.length) h += '<div class="tx-dim">该稀有度暂无天赋</div>'
   curT.forEach(function(tid){
     var t = TALENTS[tid]
-    h += '<div>'+(t?t.name:tid)+' <span style="color:var(--text3)">· '+(t?t.desc:'')+'</span></div>'
+    h += '<div>'+(t?t.name:tid)+' <span class="tx-dim">· '+(t?t.desc:'')+'</span></div>'
   })
   h += '</div>'
   /* 重渲染前记下滚动位置，赋值后还原 —— 详情页比一屏高，
@@ -24067,8 +24067,8 @@ function renderSkillPanel() {
   if (!ov) return
   var st = getSkillState()
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="skillClose" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
-    +'<span style="font-size:var(--fs-lg);font-weight:700">⚡ 技能培养</span>'
+    +'<button class="speed-btn tx-tap" id="skillClose">✕</button>'
+    +'<span class="tx-h">⚡ 技能培养</span>'
     +'<span style="flex:1"></span>'
     +'<span style="font-size:var(--fs-lg);font-weight:700;color:var(--blue,#3b82f6)">💠 '+st.points+' 点</span>'
     +'</div>'
@@ -24099,16 +24099,16 @@ function renderSkillPanel() {
     /* v2.3.2：技能卡片给图标。守卫式调用 —— 模块缺失时退化为纯文字，不留裂图。 */
     var sIco = (typeof skillIconHtml === 'function') ? skillIconHtml(id, 32, 'skill-card-ico') : ''
     h += '<div class="skill-card">'
-      +'<div class="skill-card-name">'+sIco+s.name+' <span style="color:var(--text3);font-size:var(--fs-xs)">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
+      +'<div class="skill-card-name">'+sIco+s.name+' <span class="tx-note">'+s.type+'</span>'+(equippedSlot>-1?' <span style="color:var(--green);font-size:var(--fs-xs)">● 槽'+equippedSlot+'</span>':'')+'</div>'
       +'<div class="skill-card-desc">'+(typeof fillPlayerSkillDesc==='function'?fillPlayerSkillDesc(s,lv):String(s.desc||'').replace(/n/g,String(lv)))+'</div>'
       +'<div class="skill-card-lv">Lv '+lv+'/'+s.maxLevel+(lv>=s.maxLevel?' · 已满级':' · 升级需 '+cost+' 点')+'</div>'
       // 操作（大按钮 44px）
       +'<div class="skill-card-actions">'
       // v2.1.14：技能详情（当前等级数值 / 满级预览 / 升级花费）
-      +'<button class="speed-btn" data-skill-info="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">ℹ️ 详情</button>'
+      +'<button class="speed-btn tx-btn" data-skill-info="'+id+'">ℹ️ 详情</button>'
       +(equippedSlot>-1
         ? '<button class="speed-btn" data-skill-equip="'+id+'" data-slot="'+equippedSlot+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);border-color:var(--green);color:var(--green)">装备中</button>'
-        : '<button class="speed-btn" data-skill-equip="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm)">装备</button>')
+        : '<button class="speed-btn tx-btn" data-skill-equip="'+id+'">装备</button>')
       +'<button class="speed-btn" data-skill-up="'+id+'" style="padding:10px 12px;min-height:44px;font-size:var(--fs-sm);'+(lv>=s.maxLevel||st.points<cost?'opacity:.4':'')+'" '+(lv>=s.maxLevel||st.points<cost?'disabled':'')+'>↑ 升级'+(cost?'('+cost+')':'')+'</button>'
       +'</div>'
       +'</div>'
@@ -24594,9 +24594,9 @@ function renderTrainView() {
   var h = '<div style="background:var(--bg2);border:var(--bw) solid var(--orange-g);border-radius:16px;padding:18px;margin-bottom:16px">'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-2xl);width:56px;height:56px;background:var(--bg2);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--orange)">🧑</div>'
-    +'<div style="flex:1"><div style="font-size:var(--fs-lg);font-weight:700">我的角色</div>'
+    +'<div style="flex:1"><div class="tx-h">我的角色</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">'+_lvInline+'</div></div>'
-    +'<div style="text-align:center;background:var(--bg2);border-radius:12px;padding:8px 16px"><div style="font-size:var(--fs-2xl);font-weight:700;color:var(--orange)">⚔️ '+stats.atk+'</div><div style="font-size:var(--fs-xs);color:var(--text3)">攻击</div></div>'
+    +'<div style="text-align:center;background:var(--bg2);border-radius:12px;padding:8px 16px"><div style="font-size:var(--fs-2xl);font-weight:700;color:var(--orange)">⚔️ '+stats.atk+'</div><div class="tx-note">攻击</div></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
     +statCell('❤️','生命',stats.hp)
@@ -24668,13 +24668,13 @@ function renderTrainView() {
     +   '🐾 更多养成（喂食 / 炼化 / 宝珠）<span class="btn-caret" aria-hidden="true">›</span></button>'
     + '</div>'
   // 技能区块
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚡ 技能 <span style="font-size:var(--fs-xs);color:var(--text3)">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
+  h += '<div class="tx-sec">⚡ 技能 <span class="tx-note">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
   h += '<button class="speed-btn btn-entry" data-open-skill>⚡ 技能培养面板<span class="btn-caret" aria-hidden="true">›</span></button>'
   /* v2.14.3：📖 图鉴（只读）—— 主入口。宠物面板 / 技能面板就在上面两行，
      图鉴要查的正是这三样东西（宠物 / 技能 / 天赋），放成一排最顺手。
      不新增 tab、不新增路由：点开复用 #panelOverlay，渲染在 page/codex.js。 */
   h += '<button class="speed-btn btn-entry" data-open-codex>📖 图鉴（宠物 / 技能 / 天赋）<span class="btn-caret" aria-hidden="true">›</span></button>'
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">🔮 炼魂 <span style="font-size:var(--fs-xs);color:var(--text3)">角色属性强化</span></div>'
+  h += '<div class="tx-sec">🔮 炼魂 <span class="tx-note">角色属性强化</span></div>'
   h += '<button class="speed-btn btn-entry" data-open-refine>🔮 炼魂系统<span class="btn-caret" aria-hidden="true">›</span></button>'
   /* 材料区块：v2.15 精简 —— 「获取方式 + 最近获取」两张长卡合并进一个默认折叠的
      原生 <details>，培养页首屏只剩角色卡 / 出战阵容 / 技能 / 炼魂 / 图鉴五个主块。
@@ -24689,20 +24689,20 @@ function renderTrainView() {
     h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:var(--fs-sm);border-bottom:1px solid var(--bg2)">'
       +'<span style="width:110px;font-weight:600">'+getMaterialName(t)+'</span>'
       +'<span style="flex:1;color:var(--text3);font-size:var(--fs-xs)">'+MATERIAL_SOURCES[t]+'</span>'
-      +'<span style="font-weight:700;font-size:var(--fs-base)">×'+(d.materials[t]||0)+'</span>'
+      +'<span class="tx-b">×'+(d.materials[t]||0)+'</span>'
       +'</div>'
   })
   h += '</div>'
   h += '<div style="background:var(--bg2);border-radius:14px;padding:14px">'
   h += '<div style="font-size:var(--fs-sm);font-weight:700;margin-bottom:8px">📜 最近获取</div>'
   if (!log.length) {
-    h += '<div style="font-size:var(--fs-sm);color:var(--text3);text-align:center;padding:14px">暂无获取记录<br><span style="font-size:var(--fs-xs)">通关隐藏挑战可获得材料</span></div>'
+    h += '<div style="font-size:var(--fs-sm);color:var(--text3);text-align:center;padding:14px">暂无获取记录<br><span class="tx-xs">通关隐藏挑战可获得材料</span></div>'
   } else {
     log.slice(0, 10).forEach(function(l){
       h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:var(--fs-sm);border-bottom:1px solid var(--bg2)">'
         +'<span style="flex:1">'+getMaterialName(l.type)+'</span>'
         +'<span style="color:var(--green);font-weight:700;font-size:var(--fs-base)">+'+(l.n||1)+'</span>'
-        +'<span style="color:var(--text3);font-size:var(--fs-xs)">'+l.date+'</span>'
+        +'<span class="tx-note">'+l.date+'</span>'
         +'</div>'
     })
   }
@@ -24744,7 +24744,7 @@ function renderTrainView() {
 }
 
 function statCell(icon, label, val) {
-  return '<div style="background:var(--bg2);border-radius:12px;padding:10px 6px"><div style="font-size:var(--fs-lg);font-weight:700">'+icon+' '+val+'</div><div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">'+label+'</div></div>'
+  return '<div style="background:var(--bg2);border-radius:12px;padding:10px 6px"><div class="tx-h">'+icon+' '+val+'</div><div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">'+label+'</div></div>'
 }
 
 /* ===== 战斗视图：本旬目标 + 敌群 + 关卡 ===== */
@@ -24772,8 +24772,8 @@ function showGroupStages(groupId) {
   // v2.1.7：大关内页也直接显示本大关进度（外侧看不到进度是历史痛点）
   var pg = groupClearedCount(groupId)
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="groupBack" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">←</button>'
-    +'<span style="font-size:var(--fs-lg);font-weight:700">'+glv.name+'</span>'
+    +'<button class="speed-btn tx-tap" id="groupBack">←</button>'
+    +'<span class="tx-h">'+glv.name+'</span>'
     +'<span class="gl-group-count">'+pg.cleared+'/'+pg.total+'</span>'
     +'</div>'
   h += '<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">'+glv.desc+'</div>'
@@ -24849,8 +24849,8 @@ function renderBattleView() {
   // 敌群战斗（v2.1.7：12 大关 × 10 小关；文案与进度均由数据派生，不再写死）
   var gStats = groupProgressStats()
   var gKeys = Object.keys(GROUP_LEVELS || {})
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">👥 敌群试炼'
-    +' <span style="font-size:var(--fs-xs);color:var(--text3)">'+gKeys.length+' 大关 · 每关 10 小关 · 已通关 '+gStats.cleared+'/'+gStats.total+'</span></div>'
+  h += '<div class="tx-sec">👥 敌群试炼'
+    +' <span class="tx-note">'+gKeys.length+' 大关 · 每关 10 小关 · 已通关 '+gStats.cleared+'/'+gStats.total+'</span></div>'
   h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">'
   gKeys.forEach(function (k) {
     var glv = GROUP_LEVELS[k]
@@ -24871,7 +24871,7 @@ function renderBattleView() {
   h += '</div>'
 
   // 关卡试炼（原关卡列表，简化为入口）
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚔️ 关卡试炼</div>'
+  h += '<div class="tx-sec">⚔️ 关卡试炼</div>'
   h += '<button class="speed-btn btn-entry" data-open-levels>🗺️ 挑战关卡（'+Object.keys(LEVELS).length+' 章）<span class="btn-caret" aria-hidden="true">›</span></button>'
 
   v.innerHTML = h
@@ -24926,9 +24926,9 @@ function renderBattleHistoryBlock() {
     var st = (typeof battleHistoryStats === 'function') ? battleHistoryStats(mk) : null
     h += '<div style="background:var(--bg2);border:var(--bw) solid var(--bd-l);border-radius:14px;padding:14px;margin-bottom:10px">'
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-      + '<span style="font-size:var(--fs-base);font-weight:700">' + m[1] + '</span>'
+      + '<span class="tx-b">' + m[1] + '</span>'
       + '<span style="flex:1"></span>'
-      + '<span style="font-size:var(--fs-2xs);color:var(--text3)">' + (st ? ('共 ' + st.total + ' 场') : '—') + '</span>'
+      + '<span class="tx-sub">' + (st ? ('共 ' + st.total + ' 场') : '—') + '</span>'
       + '</div>'
     h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
       + statCell('📊', '场次', st ? st.count : '—')
@@ -24945,21 +24945,21 @@ function renderBattleHistoryBlock() {
   /* 最近战斗：最多 10 条、最新在前；两种模式混排但**逐条标出模式**，不做跨模式排名 */
   var recent = (typeof battleHistoryRecent === 'function') ? (battleHistoryRecent(10) || []) : hist.slice(-10).reverse()
   h += '<div style="font-size:var(--fs-sm);font-weight:700;margin:14px 0 8px">🕒 最近战斗 '
-    + '<span style="font-size:var(--fs-2xs);color:var(--text3)">最多 10 条</span></div>'
+    + '<span class="tx-sub">最多 10 条</span></div>'
   if (!recent.length) {
     h += gvEmpty('🕒', '暂无战斗记录', '完成一场挑战后自动记录')
     return h
   }
   var labels = { single: '⚔️ 单敌', group: '👥 敌群' }
   recent.forEach(function (r) {
-    var res = r.result === 'win' ? '<b style="color:var(--green)">胜</b>'
-      : (r.result === 'loss' ? '<b style="color:var(--red)">败</b>' : '<b style="color:var(--orange)">异常中止</b>')
+    var res = r.result === 'win' ? '<b class="tx-ok">胜</b>'
+      : (r.result === 'loss' ? '<b class="tx-err">败</b>' : '<b class="tx-warn">异常中止</b>')
     var stageName = ''
     if (typeof findLevel === 'function') { var lv = findLevel(r.stageId); if (lv && lv.npc) stageName = lv.npc }
     if (!stageName && typeof getGroupStage === 'function') { var gs = getGroupStage(r.stageId); if (gs && gs.name) stageName = gs.name }
     h += '<div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px">'
       + '<div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)">'
-      + '<span style="color:var(--text3)">' + bhEsc(bhTime(r.endedAt)) + '</span>'
+      + '<span class="tx-dim">' + bhEsc(bhTime(r.endedAt)) + '</span>'
       + '<span>' + bhEsc(labels[r.mode] || r.mode) + '</span>'
       + '<span style="flex:1"></span>' + res + '</div>'
       + '<div style="font-size:var(--fs-xs);color:var(--text2);margin-top:6px">🗺️ ' + bhEsc(r.stageId || '—')
@@ -25026,14 +25026,14 @@ function renderRecordView() {
       var isCur = m.month === curMk
       h += '<div style="background:var(--bg2);border:var(--bw) solid ' + (isCur ? 'var(--orange-g)' : 'var(--bd-l)') + ';border-radius:12px;padding:12px;margin-bottom:8px">'
         + '<div style="display:flex;align-items:center;gap:8px">'
-        +   '<span style="font-size:var(--fs-base);font-weight:700">' + m.month + '</span>'
+        +   '<span class="tx-b">' + m.month + '</span>'
         +   (isCur ? '<span style="font-size:var(--fs-3xs);color:var(--orange);border:var(--bw) solid var(--orange-g);border-radius:var(--rad-full);padding:1px 6px">本月</span>' : '')
         +   '<span style="flex:1"></span>'
-        +   '<span style="font-size:var(--fs-xs);color:var(--text3)">' + (m.count || 0) + ' 次</span>'
+        +   '<span class="tx-note">' + (m.count || 0) + ' 次</span>'
         + '</div>'
         + '<div style="font-size:var(--fs-xs);color:var(--text2);line-height:1.8;margin-top:4px">'
-        +   '🥇 单次最高伤害 <b style="color:var(--orange)">' + (m.bestDmg || 0) + '</b>'
-        +   (m.bestDate ? '<span style="color:var(--text3)">（' + m.bestDate + '）</span>' : '')
+        +   '🥇 单次最高伤害 <b class="tx-warn">' + (m.bestDmg || 0) + '</b>'
+        +   (m.bestDate ? '<span class="tx-dim">（' + m.bestDate + '）</span>' : '')
         +   '<br>🎁 属性奖励合计 ⚔️+' + (m.atk || 0) + ' 🛡️+' + (m.def || 0) + ' ❤️+' + (m.hp || 0)
         +   '<br>💥 累计伤害 ' + (m.totalDmg || 0)
         + '</div>'
@@ -25126,7 +25126,7 @@ function initGameViews() {
       var open = state.openKey === k;
       var h = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:2px 0">'
         + '<b style="color:var(--blue);font-size:var(--fs-2xs);flex:1;min-width:40%;word-break:break-all">' + esc(k) + '</b>'
-        + '<span style="color:var(--text3);font-size:var(--fs-3xs)">' + bytes(sz) + '</span>'
+        + '<span class="tx-hint">' + bytes(sz) + '</span>'
         + '<span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.viewKey(\'' + esc(k) + '\')">' + (open ? '收起' : '展开') + '</span>'
         + '<span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.copyKey(\'' + esc(k) + '\')">复制</span></div>';
       if (open) h += pre(j(tryFn(function () { return JSON.parse(v); }, v.slice(0, 2000))));
@@ -25445,7 +25445,7 @@ function initGameViews() {
     var head = errs.length
       ? '<div style="display:flex;justify-content:flex-end"><span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.clearErrors()">清空</span></div>'
       : '';
-    return head + (errs.length ? pre(errs.join('\n')) : '<i style="color:var(--green)">暂无捕获的 JS 错误 ✅</i>');
+    return head + (errs.length ? pre(errs.join('\n')) : '<i class="tx-ok">暂无捕获的 JS 错误 ✅</i>');
   }
 
   /* v2.14.26（评审 P1-B）：调试 FAB 不再无条件常驻。实测 360 宽下它是 position:fixed 右下 44px 圆钮，
@@ -25558,7 +25558,7 @@ function initGameViews() {
       }
     } catch (e) { console.warn('[debug] 读取 performance.memory 失败（非 Chrome 内核属正常），已忽略', e); }
     L.push('');
-    L.push('<span style="color:var(--text3)">FPS 每秒刷新一次；群战单步在 game-render 的 _groupStep 里埋点。</span>');
+    L.push('<span class="tx-dim">FPS 每秒刷新一次；群战单步在 game-render 的 _groupStep 里埋点。</span>');
     return L.join('<br>');
   }
 
@@ -25615,7 +25615,7 @@ function initGameViews() {
     if (typeof window !== 'undefined' && window.__groupInitSnap) {
       L.push('<button type="button" onclick="window.__dbgReplayVerify()">▶ 重放验证（同种子应完全一致）</button>');
     } else {
-      L.push('<span style="color:var(--text3)">开局后才有初始快照，可重放 / 回退。</span>');
+      L.push('<span class="tx-dim">开局后才有初始快照，可重放 / 回退。</span>');
     }
     L.push('');
     var list = (typeof window !== 'undefined' && window.__groupSnaps) ? window.__groupSnaps : [];
@@ -25637,7 +25637,7 @@ function initGameViews() {
       });
     }
     L.push('');
-    L.push('<span style="color:var(--text3)">确定性依赖 gb.rng 为可播种 RNG；若某处仍直接用 Math.random，重放会不一致。</span>');
+    L.push('<span class="tx-dim">确定性依赖 gb.rng 为可播种 RNG；若某处仍直接用 Math.random，重放会不一致。</span>');
     return L.join('<br>');
   }
 
@@ -25666,7 +25666,7 @@ function initGameViews() {
       + '<div class="modal-handle"></div>'
       + '<div class="modal-title" id="debugTitle">🐞 Debug 面板</div>'
       + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" role="tablist" aria-label="调试分区">' + tabs + '</div>'
-      + '<div style="font-size:var(--fs-2xs);color:var(--text2)">' + body + '</div>'
+      + '<div class="tx-muted">' + body + '</div>'
       + '<div class="modal-actions"><button type="button" onclick="DebugPanel.close()">关闭</button></div>'
       + '</div>';
     _perf.renderMs = perfNow() - _rT0;   // v2.1.26 [7b]
@@ -26399,7 +26399,7 @@ function codexShellHtml() {
   var c = codexCounts();
   var h = '<div class="panel-inner">';
   h += '<div class="codex-hdr">'
-    + '<button class="speed-btn" id="codexClose" aria-label="关闭图鉴" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">✕</button>'
+    + '<button class="speed-btn tx-tap" id="codexClose" aria-label="关闭图鉴">✕</button>'
     + '<span class="codex-title">📖 图鉴</span>'
     + '<span class="codex-hint">只读 · 内容来自既有定义</span>'
     + '</div>';

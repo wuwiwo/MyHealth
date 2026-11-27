@@ -73,7 +73,7 @@ function renderRecords(){
   h+='<h2 class="section-hdr" style="margin-bottom:4px">📅 '+mLabel+'最佳 <span style="font-size:var(--fs-3xs);font-weight:400;margin-left:8px"><button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" onclick="_recMonth=prevMonth(_recMonth);renderRecords()">◀</button> <button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" id="recMonthNow">本月</button> <button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" onclick="_recMonth=nextMonth(_recMonth);renderRecords()">▶</button></span></h2>'
   if(m&&(m.maxAtk||m.maxCleared)){
     h+='<div class="stats-grid">'
-    if(m.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+m.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
+    if(m.maxCleared)h+='<div class="sc"><div class="sc-v tx-base">🏁 '+m.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
     if(m.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+m.maxAtk+'</div><div class="sc-l">最高攻击</div></div>'
     if(m.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+m.maxDef+'</div><div class="sc-l">最高防御</div></div>'
     if(m.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+m.maxHp+'</div><div class="sc-l">最高生命</div></div>'
@@ -82,7 +82,7 @@ function renderRecords(){
 
   // Historical best
   h+='<h2 class="section-hdr">🏆 历史最佳</h2><div class="stats-grid">'
-  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
+  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v tx-base">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>'
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>'
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>'
@@ -104,14 +104,14 @@ function showAttrLog(){
   var h='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📜 属性变更日志</div><div style="max-height:60vh;overflow-y:auto;font-size:var(--fs-xs)">'
   for(var i=log.length-1;i>=0;i--){
     var l=log[i]
-    function dl(v){return v>0?'<span style="color:var(--green)">+'+v+'</span>':v<0?'<span style="color:var(--red)">'+v+'</span>':''}
+    function dl(v){return v>0?'<span class="tx-ok">+'+v+'</span>':v<0?'<span class="tx-err">'+v+'</span>':''}
     var dlAtk=dl(l.atkDiff),dlDef=dl(l.defDiff),dlHp=dl(l.hpDiff)
     var attrs='⚔️ <b>'+l.atk+'</b>'+dlAtk+' 🛡️ <b>'+l.def+'</b>'+dlDef+' ❤️ <b>'+l.hp+'</b>'+dlHp
     h+='<div style="padding:10px 0;border-bottom:1px solid var(--bd)">'
-      +'<div style="font-weight:700;font-size:var(--fs-sm)">'+l.date+(l.time?' <span style="font-weight:400;color:var(--text3);font-size:var(--fs-3xs)">'+l.time+'</span>':'')+'</div>'
+      +'<div style="font-weight:700;font-size:var(--fs-sm)">'+l.date+(l.time?' <span class="tx-hint-soft">'+l.time+'</span>':'')+'</div>'
       +'<div style="font-size:var(--fs-base);margin:2px 0">'+attrs+'</div>'
       +'<div style="color:var(--text2);margin-bottom:2px">'+l.reason+'</div>'
-      +'<div style="color:var(--text3);font-size:var(--fs-3xs)">训练'+l.wkDays+'天</div>'
+      +'<div class="tx-hint">训练'+l.wkDays+'天</div>'
       +'</div>'
   }
   h+='</div><div class="modal-actions"><button class="m-btn-cancel" id="attrClose">关闭</button></div></div>'

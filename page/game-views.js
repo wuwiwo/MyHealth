@@ -81,9 +81,9 @@ function renderTrainView() {
   var h = '<div style="background:var(--bg2);border:var(--bw) solid var(--orange-g);border-radius:16px;padding:18px;margin-bottom:16px">'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-2xl);width:56px;height:56px;background:var(--bg2);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--orange)">🧑</div>'
-    +'<div style="flex:1"><div style="font-size:var(--fs-lg);font-weight:700">我的角色</div>'
+    +'<div style="flex:1"><div class="tx-h">我的角色</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">'+_lvInline+'</div></div>'
-    +'<div style="text-align:center;background:var(--bg2);border-radius:12px;padding:8px 16px"><div style="font-size:var(--fs-2xl);font-weight:700;color:var(--orange)">⚔️ '+stats.atk+'</div><div style="font-size:var(--fs-xs);color:var(--text3)">攻击</div></div>'
+    +'<div style="text-align:center;background:var(--bg2);border-radius:12px;padding:8px 16px"><div style="font-size:var(--fs-2xl);font-weight:700;color:var(--orange)">⚔️ '+stats.atk+'</div><div class="tx-note">攻击</div></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
     +statCell('❤️','生命',stats.hp)
@@ -155,13 +155,13 @@ function renderTrainView() {
     +   '🐾 更多养成（喂食 / 炼化 / 宝珠）<span class="btn-caret" aria-hidden="true">›</span></button>'
     + '</div>'
   // 技能区块
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚡ 技能 <span style="font-size:var(--fs-xs);color:var(--text3)">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
+  h += '<div class="tx-sec">⚡ 技能 <span class="tx-note">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
   h += '<button class="speed-btn btn-entry" data-open-skill>⚡ 技能培养面板<span class="btn-caret" aria-hidden="true">›</span></button>'
   /* v2.14.3：📖 图鉴（只读）—— 主入口。宠物面板 / 技能面板就在上面两行，
      图鉴要查的正是这三样东西（宠物 / 技能 / 天赋），放成一排最顺手。
      不新增 tab、不新增路由：点开复用 #panelOverlay，渲染在 page/codex.js。 */
   h += '<button class="speed-btn btn-entry" data-open-codex>📖 图鉴（宠物 / 技能 / 天赋）<span class="btn-caret" aria-hidden="true">›</span></button>'
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">🔮 炼魂 <span style="font-size:var(--fs-xs);color:var(--text3)">角色属性强化</span></div>'
+  h += '<div class="tx-sec">🔮 炼魂 <span class="tx-note">角色属性强化</span></div>'
   h += '<button class="speed-btn btn-entry" data-open-refine>🔮 炼魂系统<span class="btn-caret" aria-hidden="true">›</span></button>'
   /* 材料区块：v2.15 精简 —— 「获取方式 + 最近获取」两张长卡合并进一个默认折叠的
      原生 <details>，培养页首屏只剩角色卡 / 出战阵容 / 技能 / 炼魂 / 图鉴五个主块。
@@ -176,20 +176,20 @@ function renderTrainView() {
     h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:var(--fs-sm);border-bottom:1px solid var(--bg2)">'
       +'<span style="width:110px;font-weight:600">'+getMaterialName(t)+'</span>'
       +'<span style="flex:1;color:var(--text3);font-size:var(--fs-xs)">'+MATERIAL_SOURCES[t]+'</span>'
-      +'<span style="font-weight:700;font-size:var(--fs-base)">×'+(d.materials[t]||0)+'</span>'
+      +'<span class="tx-b">×'+(d.materials[t]||0)+'</span>'
       +'</div>'
   })
   h += '</div>'
   h += '<div style="background:var(--bg2);border-radius:14px;padding:14px">'
   h += '<div style="font-size:var(--fs-sm);font-weight:700;margin-bottom:8px">📜 最近获取</div>'
   if (!log.length) {
-    h += '<div style="font-size:var(--fs-sm);color:var(--text3);text-align:center;padding:14px">暂无获取记录<br><span style="font-size:var(--fs-xs)">通关隐藏挑战可获得材料</span></div>'
+    h += '<div style="font-size:var(--fs-sm);color:var(--text3);text-align:center;padding:14px">暂无获取记录<br><span class="tx-xs">通关隐藏挑战可获得材料</span></div>'
   } else {
     log.slice(0, 10).forEach(function(l){
       h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:var(--fs-sm);border-bottom:1px solid var(--bg2)">'
         +'<span style="flex:1">'+getMaterialName(l.type)+'</span>'
         +'<span style="color:var(--green);font-weight:700;font-size:var(--fs-base)">+'+(l.n||1)+'</span>'
-        +'<span style="color:var(--text3);font-size:var(--fs-xs)">'+l.date+'</span>'
+        +'<span class="tx-note">'+l.date+'</span>'
         +'</div>'
     })
   }
@@ -231,7 +231,7 @@ function renderTrainView() {
 }
 
 function statCell(icon, label, val) {
-  return '<div style="background:var(--bg2);border-radius:12px;padding:10px 6px"><div style="font-size:var(--fs-lg);font-weight:700">'+icon+' '+val+'</div><div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">'+label+'</div></div>'
+  return '<div style="background:var(--bg2);border-radius:12px;padding:10px 6px"><div class="tx-h">'+icon+' '+val+'</div><div style="font-size:var(--fs-xs);color:var(--text3);margin-top:2px">'+label+'</div></div>'
 }
 
 /* ===== 战斗视图：本旬目标 + 敌群 + 关卡 ===== */
@@ -259,8 +259,8 @@ function showGroupStages(groupId) {
   // v2.1.7：大关内页也直接显示本大关进度（外侧看不到进度是历史痛点）
   var pg = groupClearedCount(groupId)
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'
-    +'<button class="speed-btn" id="groupBack" style="padding:10px 12px;min-height:44px;min-width:44px;font-size:var(--fs-base)">←</button>'
-    +'<span style="font-size:var(--fs-lg);font-weight:700">'+glv.name+'</span>'
+    +'<button class="speed-btn tx-tap" id="groupBack">←</button>'
+    +'<span class="tx-h">'+glv.name+'</span>'
     +'<span class="gl-group-count">'+pg.cleared+'/'+pg.total+'</span>'
     +'</div>'
   h += '<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">'+glv.desc+'</div>'
@@ -336,8 +336,8 @@ function renderBattleView() {
   // 敌群战斗（v2.1.7：12 大关 × 10 小关；文案与进度均由数据派生，不再写死）
   var gStats = groupProgressStats()
   var gKeys = Object.keys(GROUP_LEVELS || {})
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">👥 敌群试炼'
-    +' <span style="font-size:var(--fs-xs);color:var(--text3)">'+gKeys.length+' 大关 · 每关 10 小关 · 已通关 '+gStats.cleared+'/'+gStats.total+'</span></div>'
+  h += '<div class="tx-sec">👥 敌群试炼'
+    +' <span class="tx-note">'+gKeys.length+' 大关 · 每关 10 小关 · 已通关 '+gStats.cleared+'/'+gStats.total+'</span></div>'
   h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">'
   gKeys.forEach(function (k) {
     var glv = GROUP_LEVELS[k]
@@ -358,7 +358,7 @@ function renderBattleView() {
   h += '</div>'
 
   // 关卡试炼（原关卡列表，简化为入口）
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚔️ 关卡试炼</div>'
+  h += '<div class="tx-sec">⚔️ 关卡试炼</div>'
   h += '<button class="speed-btn btn-entry" data-open-levels>🗺️ 挑战关卡（'+Object.keys(LEVELS).length+' 章）<span class="btn-caret" aria-hidden="true">›</span></button>'
 
   v.innerHTML = h
@@ -413,9 +413,9 @@ function renderBattleHistoryBlock() {
     var st = (typeof battleHistoryStats === 'function') ? battleHistoryStats(mk) : null
     h += '<div style="background:var(--bg2);border:var(--bw) solid var(--bd-l);border-radius:14px;padding:14px;margin-bottom:10px">'
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-      + '<span style="font-size:var(--fs-base);font-weight:700">' + m[1] + '</span>'
+      + '<span class="tx-b">' + m[1] + '</span>'
       + '<span style="flex:1"></span>'
-      + '<span style="font-size:var(--fs-2xs);color:var(--text3)">' + (st ? ('共 ' + st.total + ' 场') : '—') + '</span>'
+      + '<span class="tx-sub">' + (st ? ('共 ' + st.total + ' 场') : '—') + '</span>'
       + '</div>'
     h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
       + statCell('📊', '场次', st ? st.count : '—')
@@ -432,21 +432,21 @@ function renderBattleHistoryBlock() {
   /* 最近战斗：最多 10 条、最新在前；两种模式混排但**逐条标出模式**，不做跨模式排名 */
   var recent = (typeof battleHistoryRecent === 'function') ? (battleHistoryRecent(10) || []) : hist.slice(-10).reverse()
   h += '<div style="font-size:var(--fs-sm);font-weight:700;margin:14px 0 8px">🕒 最近战斗 '
-    + '<span style="font-size:var(--fs-2xs);color:var(--text3)">最多 10 条</span></div>'
+    + '<span class="tx-sub">最多 10 条</span></div>'
   if (!recent.length) {
     h += gvEmpty('🕒', '暂无战斗记录', '完成一场挑战后自动记录')
     return h
   }
   var labels = { single: '⚔️ 单敌', group: '👥 敌群' }
   recent.forEach(function (r) {
-    var res = r.result === 'win' ? '<b style="color:var(--green)">胜</b>'
-      : (r.result === 'loss' ? '<b style="color:var(--red)">败</b>' : '<b style="color:var(--orange)">异常中止</b>')
+    var res = r.result === 'win' ? '<b class="tx-ok">胜</b>'
+      : (r.result === 'loss' ? '<b class="tx-err">败</b>' : '<b class="tx-warn">异常中止</b>')
     var stageName = ''
     if (typeof findLevel === 'function') { var lv = findLevel(r.stageId); if (lv && lv.npc) stageName = lv.npc }
     if (!stageName && typeof getGroupStage === 'function') { var gs = getGroupStage(r.stageId); if (gs && gs.name) stageName = gs.name }
     h += '<div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px">'
       + '<div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)">'
-      + '<span style="color:var(--text3)">' + bhEsc(bhTime(r.endedAt)) + '</span>'
+      + '<span class="tx-dim">' + bhEsc(bhTime(r.endedAt)) + '</span>'
       + '<span>' + bhEsc(labels[r.mode] || r.mode) + '</span>'
       + '<span style="flex:1"></span>' + res + '</div>'
       + '<div style="font-size:var(--fs-xs);color:var(--text2);margin-top:6px">🗺️ ' + bhEsc(r.stageId || '—')
@@ -513,14 +513,14 @@ function renderRecordView() {
       var isCur = m.month === curMk
       h += '<div style="background:var(--bg2);border:var(--bw) solid ' + (isCur ? 'var(--orange-g)' : 'var(--bd-l)') + ';border-radius:12px;padding:12px;margin-bottom:8px">'
         + '<div style="display:flex;align-items:center;gap:8px">'
-        +   '<span style="font-size:var(--fs-base);font-weight:700">' + m.month + '</span>'
+        +   '<span class="tx-b">' + m.month + '</span>'
         +   (isCur ? '<span style="font-size:var(--fs-3xs);color:var(--orange);border:var(--bw) solid var(--orange-g);border-radius:var(--rad-full);padding:1px 6px">本月</span>' : '')
         +   '<span style="flex:1"></span>'
-        +   '<span style="font-size:var(--fs-xs);color:var(--text3)">' + (m.count || 0) + ' 次</span>'
+        +   '<span class="tx-note">' + (m.count || 0) + ' 次</span>'
         + '</div>'
         + '<div style="font-size:var(--fs-xs);color:var(--text2);line-height:1.8;margin-top:4px">'
-        +   '🥇 单次最高伤害 <b style="color:var(--orange)">' + (m.bestDmg || 0) + '</b>'
-        +   (m.bestDate ? '<span style="color:var(--text3)">（' + m.bestDate + '）</span>' : '')
+        +   '🥇 单次最高伤害 <b class="tx-warn">' + (m.bestDmg || 0) + '</b>'
+        +   (m.bestDate ? '<span class="tx-dim">（' + m.bestDate + '）</span>' : '')
         +   '<br>🎁 属性奖励合计 ⚔️+' + (m.atk || 0) + ' 🛡️+' + (m.def || 0) + ' ❤️+' + (m.hp || 0)
         +   '<br>💥 累计伤害 ' + (m.totalDmg || 0)
         + '</div>'

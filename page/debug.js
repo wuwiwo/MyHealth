@@ -72,7 +72,7 @@
       var open = state.openKey === k;
       var h = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:2px 0">'
         + '<b style="color:var(--blue);font-size:var(--fs-2xs);flex:1;min-width:40%;word-break:break-all">' + esc(k) + '</b>'
-        + '<span style="color:var(--text3);font-size:var(--fs-3xs)">' + bytes(sz) + '</span>'
+        + '<span class="tx-hint">' + bytes(sz) + '</span>'
         + '<span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.viewKey(\'' + esc(k) + '\')">' + (open ? '收起' : '展开') + '</span>'
         + '<span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.copyKey(\'' + esc(k) + '\')">复制</span></div>';
       if (open) h += pre(j(tryFn(function () { return JSON.parse(v); }, v.slice(0, 2000))));
@@ -391,7 +391,7 @@
     var head = errs.length
       ? '<div style="display:flex;justify-content:flex-end"><span role="button" tabindex="0" style="' + LINK + '" onclick="DebugPanel.clearErrors()">清空</span></div>'
       : '';
-    return head + (errs.length ? pre(errs.join('\n')) : '<i style="color:var(--green)">暂无捕获的 JS 错误 ✅</i>');
+    return head + (errs.length ? pre(errs.join('\n')) : '<i class="tx-ok">暂无捕获的 JS 错误 ✅</i>');
   }
 
   /* v2.14.26（评审 P1-B）：调试 FAB 不再无条件常驻。实测 360 宽下它是 position:fixed 右下 44px 圆钮，
@@ -504,7 +504,7 @@
       }
     } catch (e) { console.warn('[debug] 读取 performance.memory 失败（非 Chrome 内核属正常），已忽略', e); }
     L.push('');
-    L.push('<span style="color:var(--text3)">FPS 每秒刷新一次；群战单步在 game-render 的 _groupStep 里埋点。</span>');
+    L.push('<span class="tx-dim">FPS 每秒刷新一次；群战单步在 game-render 的 _groupStep 里埋点。</span>');
     return L.join('<br>');
   }
 
@@ -561,7 +561,7 @@
     if (typeof window !== 'undefined' && window.__groupInitSnap) {
       L.push('<button type="button" onclick="window.__dbgReplayVerify()">▶ 重放验证（同种子应完全一致）</button>');
     } else {
-      L.push('<span style="color:var(--text3)">开局后才有初始快照，可重放 / 回退。</span>');
+      L.push('<span class="tx-dim">开局后才有初始快照，可重放 / 回退。</span>');
     }
     L.push('');
     var list = (typeof window !== 'undefined' && window.__groupSnaps) ? window.__groupSnaps : [];
@@ -583,7 +583,7 @@
       });
     }
     L.push('');
-    L.push('<span style="color:var(--text3)">确定性依赖 gb.rng 为可播种 RNG；若某处仍直接用 Math.random，重放会不一致。</span>');
+    L.push('<span class="tx-dim">确定性依赖 gb.rng 为可播种 RNG；若某处仍直接用 Math.random，重放会不一致。</span>');
     return L.join('<br>');
   }
 
@@ -612,7 +612,7 @@
       + '<div class="modal-handle"></div>'
       + '<div class="modal-title" id="debugTitle">🐞 Debug 面板</div>'
       + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" role="tablist" aria-label="调试分区">' + tabs + '</div>'
-      + '<div style="font-size:var(--fs-2xs);color:var(--text2)">' + body + '</div>'
+      + '<div class="tx-muted">' + body + '</div>'
       + '<div class="modal-actions"><button type="button" onclick="DebugPanel.close()">关闭</button></div>'
       + '</div>';
     _perf.renderMs = perfNow() - _rT0;   // v2.1.26 [7b]

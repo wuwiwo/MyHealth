@@ -299,7 +299,7 @@ function showCardioSummary(){
       var ct=getAllCardioTypes().find(function(x){return x.id===d.type})||{emoji:'🏃',name:d.type}
       return '<div style="font-size:var(--fs-sm);color:var(--text2)">'+ct.emoji+' '+ct.name+' '+d.duration+'分钟 · 强度×'+d.intensity+'</div>'
     }).join('')
-    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div style="font-size:var(--fs-3xs);color:var(--text3)">总分钟</div></div></div>'
+    +'<div style="display:flex;justify-content:center;gap:24px;margin:16px 0"><div><div style="font-size:var(--fs-2xl);font-weight:800;color:var(--orange)">'+total+'</div><div class="tx-hint">总分钟</div></div></div>'
     +'<button class="sb-btn" id="woFinish" style="max-width:300px">✅ 记录并完成</button></div>'
   document.getElementById('woFinish').addEventListener('click',function(){
     _woDone.forEach(function(d){addCar({date:today(),type:d.type,duration:d.duration,intensity:d.intensity,distance:0,note:''})})
