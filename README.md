@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.32
+> Personal Health Manager — 个人健身健康管理应用 v2.14.33
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -115,9 +115,9 @@ doc/
 ├── wiki/  ← 📚 **系统现行事实（唯一权威）**：`00 系统总览.md` 总索引 + 12 个大类各一页 + `01 Glossary/` 术语真源，`[[wikilinks]]` 互联
 ├── HANDOFF.md  ← 🤝 AI/开发者交接文档（环境/纪律/模块/测试/待办/踩坑；§6 为历史快照）
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
-├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.33）
+├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.34）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.32）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.33）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -484,6 +484,8 @@ node scripts/test-bundle-fresh.js # 过期守卫：源码重算指纹 + 重算�
 
 | **2.14.30** | **2026-11-27** | **全项目评审批次 G：首屏请求 56 → 2（P3-3）** — 交付打包工具链，**不改默认入口、不动线上配置**。① `scripts/build-bundle.js`：按 `index.html` 的**原始顺序**把 55 个脚本合成 `page/_build/app.js`（2.6MB）+ `page/index.bundle.html`（1 个 script + 1 个 link），每个文件加标记、**末尾补 `\n;\n`** 把脚本边界的自动分号插入显式化；安全性已核（全为经典脚本共享全局作用域、`document.currentScript` 0 处、无文件以 `"use strict"` 开头、内联 `init()` 原样保留），产物放 `_build/` 子目录避免污染「扫 page/*.js」的守卫。② `scripts/verify-bundle.js`：14 视图分别加载源码页与产物页，比对 `body.innerText` 的 sha256 —— **14/14 逐字一致、产物 0 报错、资源条目 56 → 2（JS 55 → 1）**。③ `scripts/test-bundle-fresh.js`（13 断言）：源码仍是唯一真源、戳一致、文件标记数与顺序逐项对齐、产物不入库。**验证**：全量 **87 套件 / 0 失败**、a11y 40/40；缓存戳 `?v193` → **`?v194`**。⚠️ 是否把生产入口切到 `index.bundle.html` 待拍板（属部署变更），README 已写两种做法 |
 
-| **2.14.31** | **2026-11-27** | **线上入口切到打包产物（承接 P3-3）** — v2.14.30 只交付工具、没动线上配置，本版真正切换。① **产物入库**（`page/_build/app.js` 2.6MB + `page/index.bundle.html`）：Vercel 从仓库构建，`.gitignore` 掉的文件线上不存在，不入库则 rewrite 会落到 404。② **`page/vercel.json` 加 rewrite** `{"source":"/","destination":"/index.bundle.html"}`：首页走产物（**2 个资源 / JS 1 个**），`/index.html` 直链仍可打开源码版用于比对，**回滚只需删掉这条 rewrite**。③ **产物内容指纹 `hash:`**：由拼接正文 sha256 得出，`test-bundle-fresh.js` 从「先重建再断言」（过期永远测不出）改为**不重建**——用源码重算指纹比对、逐字节包含校验，并断言戳/文件顺序/`page/` 仍 55 个源码 JS/`index.html` 仍走源码/rewrite 指向/产物已入库，**13 → 19 断言**。**验证**：`verify-bundle` 14 视图逐字一致、资源 56 → 2、产物 0 报错；全量 **87 套件 / 0 失败**；缓存戳 `?v194` → **`?v195`**。权衡：整包 2.6MB 每版重下（未改文件不再命中缓存），已记入 changelog |
+| **2.14.31** | **2026-11-27** | **线上入口切到打包产物（承接 P3-3）** — ① **产物入库**（`page/_build/app.js` 2.6MB + `page/index.bundle.html`）：Vercel 从仓库构建，`.gitignore` 掉的文件线上不存在。② **`page/vercel.json` 加 rewrite** `/ → /index.bundle.html`：首页走产物（**2 资源 / JS 1**），`/index.html` 直链保留用于比对与回滚。③ **产物内容指纹 `hash:`**（`test-bundle-fresh` 改为**不重建**的过期守卫，13 → 19 断言）。⚠️ **该 rewrite 上线后实测无效**，已由 v2.14.32 取代。缓存戳 `?v194` → **`?v195`** |
+| **2.14.32** | **2026-11-27** | **入口即产物：`page/index.html` 改由构建生成** — v2.14.31 的 `/ → /index.bundle.html` rewrite 上线后被实测证伪（`/` 仍返回逐文件版 18571B，而 `/index.bundle.html` 与 `/_build/app.js` 都 200），根因是 Vercel 静态站点把 `/` 直接解析到 `index.html`。① 源码页改名 **`page/index.src.html`**（唯一真源），`build-bundle.js` 读它把 55 个 `<script>` 换成 1 个后写出 `page/index.html`；② 删旧 bundle 页、移除失效 rewrite；③ 21 个测试/审计脚本改读源码页；④ `test-bundle-fresh` **19 → 22 断言**（新增「重算期望入口页与磁盘 `index.html` 逐字节比对」）、`verify-bundle` 比对 `/index.src.html` vs `/index.html`；**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → **`?v196`**。回滚：`cp page/index.src.html page/index.html` 再推 |
+| **2.14.33** | **2026-11-27** | **全项目评审批次 H：清单剩余四项收口（P2-4 / P2-6 / P2-7 / P2-9）** — ① 边框与色彩纪律写进 `index.css` 文件头（容器 2px / 分隔单边 1px / 强调边 2px；蓝=主操作·红=危险·绿=达成，紫只属数据属性、黄只属瞬时提示），五处「四周 1px」容器收成 2px；② 计划页两块空态改 `.empty-compact`（188px → 125px，360×640 首屏可见两个 CTA），`emptyHtml()` 加类名参数；③ `📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️、属性计算→🧮，宠物「结算」→「离线补算」；④ `test-ui-consistency` 70 → **86 断言**；全量 **87 套件 / 0 失败**；缓存戳 `?v196` → **`?v197`** |
 
-> 当前版本：**v2.14.32**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+> 当前版本：**v2.14.33**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

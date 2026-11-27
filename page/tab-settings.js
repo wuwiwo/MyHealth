@@ -361,7 +361,7 @@ function renderSettingsPlans(){
     });
   }else{
     /* v2.14.26（评审 P2-7）：空态要有一个动作 —— 原来只有一句「还没有力量计划」，用户不知道下一步去哪。 */
-    h+=emptyHtml('📋','还没有力量计划','计划在「训练 → 力量」里创建并执行','<button class="empty-cta" data-a="gotoTraining">去训练 ›</button>');
+    h+=emptyHtml('📋','还没有力量计划','计划在「训练 → 力量」里创建并执行','<button class="empty-cta" data-a="gotoTraining">去训练 ›</button>','empty-compact');
   }
   h+='<h2 class="section-hdr" style="margin-top:16px">🏃 有氧计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+carPlans.length+')</span></h2>';
   if(carPlans.length){
@@ -373,7 +373,7 @@ function renderSettingsPlans(){
       h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditCarPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelCarPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:var(--bw) solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>';
     });
   }else{
-    h+=emptyHtml('📋','还没有有氧计划','计划在「训练 → 有氧」里创建并执行','<button class="empty-cta" data-a="gotoCardio">去训练 ›</button>');
+    h+=emptyHtml('📋','还没有有氧计划','计划在「训练 → 有氧」里创建并执行','<button class="empty-cta" data-a="gotoCardio">去训练 ›</button>','empty-compact');
   }
   h+='<div style="text-align:center;margin-top:8px;font-size:var(--fs-2xs);color:var(--text3)">计划在训练 Tab 中创建和执行</div>';
   el.innerHTML=h;
@@ -384,8 +384,8 @@ function renderSettingsGame(){
   var el=document.getElementById('subGame');if(!el)return
   var g=getGame();
   var recs=store.get('records')||{};
-  var h='<h2 class="section-hdr">📖 属性计算</h2>';
-  h+='<button class="sb-btn" id="setAttrInfoBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd);margin-bottom:16px">📖 查看属性计算方式</button>';
+  var h='<h2 class="section-hdr">🧮 属性计算</h2>';
+  h+='<button class="sb-btn" id="setAttrInfoBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd);margin-bottom:16px">🧮 查看属性计算方式</button>';
   /* ===== v2.14.3：图鉴入口（宠物 / 技能 / 天赋，只读）=====
      两个入口指向同一个只读面板（page/codex.js 的 renderCodexPanel）：
        · **主入口**在「挑战 → 🐾 培养」（game-views.js，宠物面板 / 技能面板旁边）——
@@ -402,7 +402,7 @@ function renderSettingsGame(){
   h+='<button class="sb-btn" id="setAttrLogBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">📜 查看日志</button>';
   h+='<h2 class="section-hdr" style="margin-top:16px">🏆 历史最佳记录</h2>';
   h+='<div class="stats-grid">';
-  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">📖 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
+  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>';
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>';
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>';
@@ -472,7 +472,7 @@ function showAttrInfo(){
   var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据',vol:0,dur:0,permPenAtk:0,permPenDef:0,permBonusAtk:0,permBonusDef:0,period:{name:'—',volThreshold:2500}};
   var p=info.period||{name:'—',volThreshold:2500};
   var modal=openModal();
-  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
+  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🧮 属性计算方式</div>'
     +'<div style="font-size:var(--fs-sm);line-height:1.7;color:var(--text2);padding:4px 0">'
     +'<div style="color:var(--orange);font-weight:700;margin-bottom:4px">⚔️ '+info.atk+'</div>'
     +'<div style="color:var(--blue);font-weight:700;margin-bottom:4px">🛡️ '+info.def+'</div>'

@@ -262,7 +262,7 @@ seedPanel(REAL_YEST);
 sb2.renderPetPanel();
 const H2 = sb2.__ov.innerHTML;
 ok(H2.indexOf('id="petSettle"') >= 0, '有 1 天离线 → 「结算」按钮出现');
-ok(/id="petSettle"[^>]*>结算</.test(H2), '按钮文案仍是「结算」');
+ok(/id="petSettle"[^>]*>离线补算</.test(H2), '按钮文案是「离线补算」（v2.14.33 P2-9：原来只写「结算」，读不出是补算离线天数）');
 ok(/id="petSettle"[^>]*title="[^"]*\d+ 只宠物/.test(H2), '按钮 title 说明待结算只数',
   (/id="petSettle"[^>]*title="([^"]*)"/.exec(H2) || [])[1] || '');
 ok(H2.indexOf('id="petSettle"') < H2.indexOf('id="petClose"') + 400,

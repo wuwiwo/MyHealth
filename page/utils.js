@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.32';
+const APP_VERSION = '2.14.33';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -140,9 +140,12 @@ function openModal(html,id,opts){
 }
 
 /* ========== EMPTY STATE ========== */
-/* 统一空态工厂，避免各页面 innerHTML='' 留白 */
-function emptyHtml(emoji,title,sub,cta){
-  return '<div class="empty"><span class="empty-e">'+(emoji||'📭')+'</span>'
+/* 统一空态工厂，避免各页面 innerHTML='' 留白。
+   v2.14.33（评审 P2-7 收尾）：第 5 参 cls 传入 'empty-compact' 得到紧凑态 ——
+   图标与标题同行、CTA 撑满宽度，高度从 ≈190px 降到 ≈120px，
+   用于「一屏里并列两个空态」的场景（设置·计划的力量 / 有氧两块）。 */
+function emptyHtml(emoji,title,sub,cta,cls){
+  return '<div class="empty'+(cls?' '+cls:'')+'"><span class="empty-e">'+(emoji||'📭')+'</span>'
     +'<div class="empty-t">'+title+'</div>'
     +(sub?'<div class="empty-s">'+sub+'</div>':'')
     +(cta||'')+'</div>'

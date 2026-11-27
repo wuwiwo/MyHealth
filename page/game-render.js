@@ -135,7 +135,7 @@ function renderGame(){
     h+='<div style="margin-bottom:10px"><button class="speed-btn" id="lvBack" style="padding:10px 16px;min-height:44px;font-size:var(--fs-base)">← 返回战斗</button></div>'
   }
   Object.entries(LEVELS).forEach(([k,ch])=>{
-    h+='<div class="chapter-hdr">📖 '+ch.name+'</div><div class="lv-grid">'
+    h+='<div class="chapter-hdr">🗺️ '+ch.name+'</div><div class="lv-grid">'
     ch.levels.forEach(lv=>{
       const cleared=getGame().cleared.includes(lv.id)
       const isCur=getGame().current===lv.id
@@ -3390,7 +3390,7 @@ function showSkillDetail(skillId, unit){
   if(s.priority)h+=detRow('先制度', '+'+s.priority+'（本回合使用该技能时，出手排在所有非先制单位之前）')
   if(unit)h+=detRow('当前状态', cd>0?('冷却中，还需 '+cd+' 回合'):'就绪')
   h+='</div>'
-  h+='<div class="det-card"><div class="det-h">📖 效果说明</div>'
+  h+='<div class="det-card"><div class="det-h">ℹ️ 效果说明</div>'
   h+='<div class="det-line">'+escHtml(doc?doc.desc:'（该技能暂无说明文案）')+'</div>'
   if(doc&&doc.wip)h+='<div class="det-wip">⚠ 与设计文档不一致：'+escHtml(doc.wip)+'</div>'
   h+='</div>'
@@ -3411,7 +3411,7 @@ function showTerrainDetail(terrain){
   h+='<div class="det-line">对<strong>敌我双方</strong>均有效 —— 场地不偏向任何一方：'
     +'加成与损伤同时作用于你和敌人（设计文档：<code>doc/2.0 敌群设计.md</code> §场地）。</div>'
   h+='</div>'
-  h+='<div class="det-card"><div class="det-h">📖 效果</div>'
+  h+='<div class="det-card"><div class="det-h">ℹ️ 效果</div>'
   var segs=String(terrain.desc||'').split('；')
   segs.forEach(function(seg){
     seg=seg.trim()
@@ -3441,7 +3441,7 @@ function showPlayerSkillDetail(skillId, unit, restore){
   h+=detRow('类别', _SKILL_TYPE_NAMES[s.type]||s.type)
   h+=detRow('当前等级', 'Lv'+lv+' / '+s.maxLevel)
   h+='</div>'
-  h+='<div class="det-card"><div class="det-h">📖 效果说明</div>'
+  h+='<div class="det-card"><div class="det-h">ℹ️ 效果说明</div>'
   h+='<div class="det-line">'+escHtml(fillPlayerSkillDesc(s,lv))+'</div>'
   h+='<div class="det-line dim">（说明中的 n = 当前等级 '+lv+'）</div>'
   h+='</div>'
@@ -3477,7 +3477,7 @@ function showTalentDetail(talentId, unit){
     +'<span class="det-title">✨ '+escHtml(t.name)+'</span>'
     +(unit?('<span class="det-sub">'+escHtml(unit.name)+'</span>'):'')
     +'</div>'
-  h+='<div class="det-card"><div class="det-h">📖 说明</div>'
+  h+='<div class="det-card"><div class="det-h">ℹ️ 说明</div>'
   h+='<div class="det-line">'+escHtml(t.desc||'（无说明）')+'</div></div>'
   var hooks=(t.hooks&&Object.keys(t.hooks))||[]
   h+='<div class="det-card"><div class="det-h">⏱ 触发时机</div>'

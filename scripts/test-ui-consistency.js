@@ -142,5 +142,32 @@ ok(/\.hs-brand\{display:none\}/.test(c) && !/\.header-subtitle\{display:none\}/.
 ok(/\.sub-tab-bar>\.tab-btn\.active,[^}]*background:transparent!important/.test(c), '子页签激活不再实心填充（只留 2px 下划线）');
 ok(/\.section-hdr::after\{content:'';flex:1;height:1px;background:var\(--bd\)\}/.test(c), '区块标题引导线改中性（蓝只表示状态/主操作）');
 
+console.log('\n[17] P2-4/P2-7/P2-6/P2-9 收尾（v2.14.33：边框与色彩纪律、紧凑空态、图标语义）');
+/* ① 边框两档分工：容器一律 2px（--bw），分隔一律单边 1px（--bw-thin）。
+      「四周环绕的 1px」= 又把区块读成分隔线的写法，禁止。 */
+const thinWrap = c.split('\n').filter(l => /border:\s*var\(--bw-thin\)\s+solid/.test(l));
+ok(thinWrap.length === 0, '没有「四周 1px 边框」的容器（实测 ' + thinWrap.length + ' 处）');
+const thinOneSide = (c.match(/border-(top|bottom|left|right):var\(--bw-thin\)/g) || []).length;
+ok(thinOneSide > 0, '1px 只用于单边分隔（实测 ' + thinOneSide + ' 处）');
+ok(/v2\.14\.33 结构与色彩纪律/.test(c), 'index.css 头部写明边框 / 色彩纪律（容器 2px、分隔 1px 单边）');
+/* ② 三色语义：紫 / 黄不得出现在按钮与区块装饰上（只保留给数据属性与瞬时提示） */
+ok(!/\.btn-(primary|entry|quiet)[^{]*\{[^}]*var\(--purple\)/.test(c), '按钮不用紫色（紫只表示数据属性）');
+ok(!/\.empty[^{]*\{[^}]*var\(--purple\)/.test(c), '空态不用紫色');
+/* ③ 紧凑空态：设置·计划 两块空态各自带 empty-compact（一屏可见两个 CTA） */
+const tset = src('tab-settings.js');
+ok(/\.empty-compact\{padding:var\(--sp-4\)/.test(c), '.empty-compact 存在且内边距 16px');
+ok(/\.empty-compact \.empty-e\{display:inline-block/.test(c), '紧凑态图标与标题同行');
+ok(/\.empty-compact \.empty-cta\{display:block;width:100%/.test(c), '紧凑态 CTA 撑满宽度（触控面积不缩水）');
+ok((tset.match(/'empty-compact'\)/g) || []).length === 2, '力量 / 有氧两块空态都用紧凑态（实测 ' + ((tset.match(/'empty-compact'\)/g) || []).length) + '）');
+ok(/function emptyHtml\(emoji,title,sub,cta,cls\)/.test(ts2), 'emptyHtml 支持第 5 参（类名）');
+/* ④ 图标语义：📖 只留给图鉴 / 动作百科 */
+ok(!/<div class="det-h">📖/.test(src('game-render.js')), '详情卡不再用 📖（改 ℹ️）');
+ok(!/<div class="chapter-hdr">📖/.test(src('game-render.js')), '章节标题不再用 📖（改 🗺️）');
+ok(!/>📖 '\+(m|recs)\.maxCleared/.test(src('game-records.js')) && !/>📖 '\+recs\.maxCleared/.test(src('tab-settings.js')), '最高关卡不再用 📖（改 🏁）');
+ok(!/📖 属性计算/.test(src('tab-settings.js')), '属性计算不再用 📖（改 🧮）');
+ok(/📖 图鉴/.test(src('codex.js')) && /📖 动作百科/.test(src('tab-settings.js')), '📖 仍只表示图鉴 / 动作百科');
+const pui = src('pet-ui.js');
+ok(/id="petSettle"[^>]*>离线补算</.test(pui), '宠物「结算」按钮改「离线补算」（读得出是补算离线天数）');
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 if (fail) { console.log('失败项:\n - ' + fails.join('\n - ')); process.exit(1); }

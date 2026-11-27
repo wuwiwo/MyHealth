@@ -369,7 +369,7 @@ function renderPetPanel() {
     /* v2.3：**有用才显示** —— 没有可结算内容（今天已结算过 / 只剩阵亡宠 / 没有宠物）时整块不渲染 */
     +(st.ready
       ? '<button class="speed-btn" id="petSettle" title="把离线天数补算到今天（待结算 '
-          + (st.due + st.firstTimers) + ' 只宠物）" style="padding:10px 14px;min-height:44px;font-size:var(--fs-base);border-color:var(--green);color:var(--green)">结算</button>'
+          + (st.due + st.firstTimers) + ' 只宠物）" style="padding:10px 14px;min-height:44px;font-size:var(--fs-base);border-color:var(--green);color:var(--green)">离线补算</button>'
       : '')
     +'</div>'
   /* ⚔️ 出战编队（v2.14.25 收口，评审 P1-1）——

@@ -1,4 +1,4 @@
-/* MyHealth bundle · v196 · hash:11342cfa85dfd5ab · 由 scripts/build-bundle.js 生成，勿手改 */
+/* MyHealth bundle · v197 · hash:48aad25a27b075bb · 由 scripts/build-bundle.js 生成，勿手改 */
 /* ===== store.js ===== */
 /* ============================================
    MyHealth — Store Module v1.3 (M2a S0)
@@ -876,7 +876,7 @@ window.MEDIA_BASE = '';
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.32';
+const APP_VERSION = '2.14.33';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -1014,9 +1014,12 @@ function openModal(html,id,opts){
 }
 
 /* ========== EMPTY STATE ========== */
-/* 统一空态工厂，避免各页面 innerHTML='' 留白 */
-function emptyHtml(emoji,title,sub,cta){
-  return '<div class="empty"><span class="empty-e">'+(emoji||'📭')+'</span>'
+/* 统一空态工厂，避免各页面 innerHTML='' 留白。
+   v2.14.33（评审 P2-7 收尾）：第 5 参 cls 传入 'empty-compact' 得到紧凑态 ——
+   图标与标题同行、CTA 撑满宽度，高度从 ≈190px 降到 ≈120px，
+   用于「一屏里并列两个空态」的场景（设置·计划的力量 / 有氧两块）。 */
+function emptyHtml(emoji,title,sub,cta,cls){
+  return '<div class="empty'+(cls?' '+cls:'')+'"><span class="empty-e">'+(emoji||'📭')+'</span>'
     +'<div class="empty-t">'+title+'</div>'
     +(sub?'<div class="empty-s">'+sub+'</div>':'')
     +(cta||'')+'</div>'
@@ -13740,7 +13743,7 @@ function renderGame(){
     h+='<div style="margin-bottom:10px"><button class="speed-btn" id="lvBack" style="padding:10px 16px;min-height:44px;font-size:var(--fs-base)">← 返回战斗</button></div>'
   }
   Object.entries(LEVELS).forEach(([k,ch])=>{
-    h+='<div class="chapter-hdr">📖 '+ch.name+'</div><div class="lv-grid">'
+    h+='<div class="chapter-hdr">🗺️ '+ch.name+'</div><div class="lv-grid">'
     ch.levels.forEach(lv=>{
       const cleared=getGame().cleared.includes(lv.id)
       const isCur=getGame().current===lv.id
@@ -16995,7 +16998,7 @@ function showSkillDetail(skillId, unit){
   if(s.priority)h+=detRow('先制度', '+'+s.priority+'（本回合使用该技能时，出手排在所有非先制单位之前）')
   if(unit)h+=detRow('当前状态', cd>0?('冷却中，还需 '+cd+' 回合'):'就绪')
   h+='</div>'
-  h+='<div class="det-card"><div class="det-h">📖 效果说明</div>'
+  h+='<div class="det-card"><div class="det-h">ℹ️ 效果说明</div>'
   h+='<div class="det-line">'+escHtml(doc?doc.desc:'（该技能暂无说明文案）')+'</div>'
   if(doc&&doc.wip)h+='<div class="det-wip">⚠ 与设计文档不一致：'+escHtml(doc.wip)+'</div>'
   h+='</div>'
@@ -17016,7 +17019,7 @@ function showTerrainDetail(terrain){
   h+='<div class="det-line">对<strong>敌我双方</strong>均有效 —— 场地不偏向任何一方：'
     +'加成与损伤同时作用于你和敌人（设计文档：<code>doc/2.0 敌群设计.md</code> §场地）。</div>'
   h+='</div>'
-  h+='<div class="det-card"><div class="det-h">📖 效果</div>'
+  h+='<div class="det-card"><div class="det-h">ℹ️ 效果</div>'
   var segs=String(terrain.desc||'').split('；')
   segs.forEach(function(seg){
     seg=seg.trim()
@@ -17046,7 +17049,7 @@ function showPlayerSkillDetail(skillId, unit, restore){
   h+=detRow('类别', _SKILL_TYPE_NAMES[s.type]||s.type)
   h+=detRow('当前等级', 'Lv'+lv+' / '+s.maxLevel)
   h+='</div>'
-  h+='<div class="det-card"><div class="det-h">📖 效果说明</div>'
+  h+='<div class="det-card"><div class="det-h">ℹ️ 效果说明</div>'
   h+='<div class="det-line">'+escHtml(fillPlayerSkillDesc(s,lv))+'</div>'
   h+='<div class="det-line dim">（说明中的 n = 当前等级 '+lv+'）</div>'
   h+='</div>'
@@ -17082,7 +17085,7 @@ function showTalentDetail(talentId, unit){
     +'<span class="det-title">✨ '+escHtml(t.name)+'</span>'
     +(unit?('<span class="det-sub">'+escHtml(unit.name)+'</span>'):'')
     +'</div>'
-  h+='<div class="det-card"><div class="det-h">📖 说明</div>'
+  h+='<div class="det-card"><div class="det-h">ℹ️ 说明</div>'
   h+='<div class="det-line">'+escHtml(t.desc||'（无说明）')+'</div></div>'
   var hooks=(t.hooks&&Object.keys(t.hooks))||[]
   h+='<div class="det-card"><div class="det-h">⏱ 触发时机</div>'
@@ -17928,7 +17931,7 @@ function renderRecords(){
   h+='<h2 class="section-hdr" style="margin-bottom:4px">📅 '+mLabel+'最佳 <span style="font-size:var(--fs-3xs);font-weight:400;margin-left:8px"><button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" onclick="_recMonth=prevMonth(_recMonth);renderRecords()">◀</button> <button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" id="recMonthNow">本月</button> <button class="hm-nav-btn" style="display:inline;width:auto;padding:1px 6px" onclick="_recMonth=nextMonth(_recMonth);renderRecords()">▶</button></span></h2>'
   if(m&&(m.maxAtk||m.maxCleared)){
     h+='<div class="stats-grid">'
-    if(m.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">📖 '+m.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
+    if(m.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+m.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
     if(m.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+m.maxAtk+'</div><div class="sc-l">最高攻击</div></div>'
     if(m.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+m.maxDef+'</div><div class="sc-l">最高防御</div></div>'
     if(m.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+m.maxHp+'</div><div class="sc-l">最高生命</div></div>'
@@ -17937,7 +17940,7 @@ function renderRecords(){
 
   // Historical best
   h+='<h2 class="section-hdr">🏆 历史最佳</h2><div class="stats-grid">'
-  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">📖 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
+  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>'
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>'
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>'
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>'
@@ -18515,7 +18518,7 @@ function renderSettingsPlans(){
     });
   }else{
     /* v2.14.26（评审 P2-7）：空态要有一个动作 —— 原来只有一句「还没有力量计划」，用户不知道下一步去哪。 */
-    h+=emptyHtml('📋','还没有力量计划','计划在「训练 → 力量」里创建并执行','<button class="empty-cta" data-a="gotoTraining">去训练 ›</button>');
+    h+=emptyHtml('📋','还没有力量计划','计划在「训练 → 力量」里创建并执行','<button class="empty-cta" data-a="gotoTraining">去训练 ›</button>','empty-compact');
   }
   h+='<h2 class="section-hdr" style="margin-top:16px">🏃 有氧计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+carPlans.length+')</span></h2>';
   if(carPlans.length){
@@ -18527,7 +18530,7 @@ function renderSettingsPlans(){
       h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditCarPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelCarPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:var(--bw) solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>';
     });
   }else{
-    h+=emptyHtml('📋','还没有有氧计划','计划在「训练 → 有氧」里创建并执行','<button class="empty-cta" data-a="gotoCardio">去训练 ›</button>');
+    h+=emptyHtml('📋','还没有有氧计划','计划在「训练 → 有氧」里创建并执行','<button class="empty-cta" data-a="gotoCardio">去训练 ›</button>','empty-compact');
   }
   h+='<div style="text-align:center;margin-top:8px;font-size:var(--fs-2xs);color:var(--text3)">计划在训练 Tab 中创建和执行</div>';
   el.innerHTML=h;
@@ -18538,8 +18541,8 @@ function renderSettingsGame(){
   var el=document.getElementById('subGame');if(!el)return
   var g=getGame();
   var recs=store.get('records')||{};
-  var h='<h2 class="section-hdr">📖 属性计算</h2>';
-  h+='<button class="sb-btn" id="setAttrInfoBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd);margin-bottom:16px">📖 查看属性计算方式</button>';
+  var h='<h2 class="section-hdr">🧮 属性计算</h2>';
+  h+='<button class="sb-btn" id="setAttrInfoBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd);margin-bottom:16px">🧮 查看属性计算方式</button>';
   /* ===== v2.14.3：图鉴入口（宠物 / 技能 / 天赋，只读）=====
      两个入口指向同一个只读面板（page/codex.js 的 renderCodexPanel）：
        · **主入口**在「挑战 → 🐾 培养」（game-views.js，宠物面板 / 技能面板旁边）——
@@ -18556,7 +18559,7 @@ function renderSettingsGame(){
   h+='<button class="sb-btn" id="setAttrLogBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">📜 查看日志</button>';
   h+='<h2 class="section-hdr" style="margin-top:16px">🏆 历史最佳记录</h2>';
   h+='<div class="stats-grid">';
-  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">📖 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
+  if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">🏁 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>';
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>';
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>';
@@ -18626,7 +18629,7 @@ function showAttrInfo(){
   var info=_attrCalcInfo||{atk:'暂无数据',def:'暂无数据',hp:'暂无数据',vol:0,dur:0,permPenAtk:0,permPenDef:0,permBonusAtk:0,permBonusDef:0,period:{name:'—',volThreshold:2500}};
   var p=info.period||{name:'—',volThreshold:2500};
   var modal=openModal();
-  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">📖 属性计算方式</div>'
+  modal.innerHTML='<div class="modal-sheet"><div class="modal-handle"></div><div class="modal-title">🧮 属性计算方式</div>'
     +'<div style="font-size:var(--fs-sm);line-height:1.7;color:var(--text2);padding:4px 0">'
     +'<div style="color:var(--orange);font-weight:700;margin-bottom:4px">⚔️ '+info.atk+'</div>'
     +'<div style="color:var(--blue);font-weight:700;margin-bottom:4px">🛡️ '+info.def+'</div>'
@@ -22093,7 +22096,7 @@ function renderPetPanel() {
     /* v2.3：**有用才显示** —— 没有可结算内容（今天已结算过 / 只剩阵亡宠 / 没有宠物）时整块不渲染 */
     +(st.ready
       ? '<button class="speed-btn" id="petSettle" title="把离线天数补算到今天（待结算 '
-          + (st.due + st.firstTimers) + ' 只宠物）" style="padding:10px 14px;min-height:44px;font-size:var(--fs-base);border-color:var(--green);color:var(--green)">结算</button>'
+          + (st.due + st.firstTimers) + ' 只宠物）" style="padding:10px 14px;min-height:44px;font-size:var(--fs-base);border-color:var(--green);color:var(--green)">离线补算</button>'
       : '')
     +'</div>'
   /* ⚔️ 出战编队（v2.14.25 收口，评审 P1-1）——
