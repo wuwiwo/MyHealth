@@ -693,17 +693,27 @@ node scripts/test-a11y-tokens.js                 # 40/40 ALL PASS（本轮未改
 ### 23.1 什么可以移出首包
 必须同时满足：
 1. **没有任何首屏路径调用方** —— 首屏路径 = `app.js`（含 init）、`sync.js`、`tab-strength.js`、`tab-profile.js`、`tab-settings.js`、`tab-cardio.js`、`tab-game.js`、`state-core.js`；
-2. **跨文件调用带 `typeof` 守卫** —— 未加载时调用不能抛异常，只能静默跳过/等包到位再画；
-3. 体量 ≥ 20KB（小于 20KB 切了不值一次请求）。
+2. **跨文件调用带 `typeof` 守卫** —— 未加载时调用不能抛异常，只能静默跳过/等包到位再画；**必须能被 `node scripts/test-pack-call-guards.js` 证明**（判定口径见 §23.5）；
+3. **是视图层，不是数据层** —— 数据/领域模型（如 `pet-codex.js` 的物种图鉴、`createPet`/`listPetCodex`）留在首包：它们被多个首包模块当纯函数调用，切开就要在 `pet-store` / `challenge` / 召唤面板 / 战斗结算四处补接线，隐性崩溃面远大于体积收益（v2.14.41 的回退即由此而来）；
+4. 体量 ≥ 20KB（小于 20KB 切了不值一次请求）。
 
 判定脚本：`node scripts/audit-module-deps.js`（输出「被首屏挡住 / 可整体懒加载」两栏 + 断言）。
 
 ### 23.2 当前分包图
 | 包 | 内容 | 体积 | 何时拉 |
 |---|---|---|---|
-| `_build/app.js`（首包） | 52 个脚本 | 1300 KB（源） | 首屏 |
-| `_build/pack-game.js`（按需） | game-views + pet-ui + pet-codex | 134 KB（源） | 进「挑战」tab |
-| `data/exercises-dataset.js`（按需） | 动作数据集 | 1161 KB（源） | 空闲 1.2s 预取 / 打开动作百科 |
+| `_build/app.js`（首包） | 53 个脚本 | 1356 KB（源）/ gzip 454 KB | 首屏 |
+| `_build/pack-game.js`（按需） | game-views + pet-ui | 116 KB（源）/ gzip 38 KB | 进「挑战」tab |
+| `data/exercises-dataset.js`（按需） | 动作数据集 | 1161 KB（源）/ gzip 172 KB | 空闲 1.2s 预取 / 打开动作百科 |
+
+> `pet-codex.js`（41KB）**不在按需包**：v2.14.40 曾切出，v2.14.41 因 §23.1 第 3 条回退到首包。
+
+### 23.2.1 包调用守卫的判定口径（v2.14.41）
+`scripts/test-pack-call-guards.js`（第 93 套件）扫「首包文件里调用按需包导出函数」的每一处，只认三种可证明安全的形态：
+1. **同行 `typeof`**：`if (typeof renderGameViews === 'function') renderGameViews()`；
+2. **上文 8 行内 `typeof`**：守卫写在上一行也算（形如 174 行判 `typeof`、175 行调用）；
+3. **注释文本**：函数名只出现在说明性注释里（脚本按「行首 `*` / `//` / 中文说明」剔除，避免误报）。
+其余一律判缺守卫 —— 宁可加一个恒真的 `typeof` 判断，也不让「运行时恰好已加载」成为唯一保险。当前基线：按需包 53 个导出函数、首包内 10 处调用点、**0 缺守卫**。
 
 ### 23.3 加载器纪律（与 `ex-dataset.js` 一致）
 - **幂等**：ready 后再次调用同步回调 `true`，不重发请求；

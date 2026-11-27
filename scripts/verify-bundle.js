@@ -54,14 +54,14 @@ const VIEWS = [
   { id: 'train-cardio', label: '训练·有氧', inject: "switchTab('training'); switchSub('training','cardio')" },
   { id: 'profile-personal', label: '个人·个人数据', inject: "switchTab('profile'); switchSub('profile','personal')" },
   { id: 'profile-stats', label: '个人·训练数据', inject: "switchTab('profile'); switchSub('profile','stats')" },
-  { id: 'game-train', label: '挑战·培养', inject: "switchTab('game'); switchGameTab('train')" },
-  { id: 'game-battle', label: '挑战·战斗', inject: "switchTab('game'); switchGameTab('battle')" },
-  { id: 'game-record', label: '挑战·记录', inject: "switchTab('game'); switchGameTab('record')" },
+  { id: 'game-train', label: '挑战·培养', needsPack: true, inject: "switchTab('game'); switchGameTab('train')" },
+  { id: 'game-battle', label: '挑战·战斗', needsPack: true, inject: "switchTab('game'); switchGameTab('battle')" },
+  { id: 'game-record', label: '挑战·记录', needsPack: true, inject: "switchTab('game'); switchGameTab('record')" },
   { id: 'set-library', label: '设置·动作库', inject: "switchTab('settings'); switchSub('settings','library')" },
   { id: 'set-plans', label: '设置·计划', inject: "switchTab('settings'); switchSub('settings','plans')" },
   { id: 'set-game', label: '设置·挑战', inject: "switchTab('settings'); switchSub('settings','game')" },
   { id: 'set-data', label: '设置·数据', inject: "switchTab('settings'); switchSub('settings','data')" },
-  { id: 'panel-pet', label: '宠物面板（含编队）', inject: `
+  { id: 'panel-pet', label: '宠物面板（含编队）', needsPack: true, inject: `
       (function(){
         var d=getPetStore();
         d.pets=['sparkle','dream','nonebear','kirin','flamechick'].map(function(sid){
@@ -72,7 +72,7 @@ const VIEWS = [
         savePetStore(d); _petBattlePicks=['sparkle','dream']; _petSquadsOpen=true; renderPetPanel(); return 1;
       })()` },
   { id: 'panel-skill', label: '技能面板', inject: "renderSkillPanel(); 1" },
-  { id: 'panel-codex', label: '图鉴面板', inject: "(typeof renderCodexPanel==='function'?renderCodexPanel():0); 1" }
+  { id: 'panel-codex', label: '图鉴面板', needsPack: true, inject: "(typeof renderCodexPanel==='function'?renderCodexPanel():0); 1" }
 ];
 
 const TARGETS = [
@@ -128,6 +128,17 @@ const TARGETS = [
       await cdp.send('Runtime.evaluate', { expression: 'try{localStorage.clear();sessionStorage.clear()}catch(e){}', returnByValue: true });
       await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + t.url });
       await sleep(900);
+      /* v2.14.40：挑战/宠物视图的真身已移出产物主包（_build/pack-game.js 按需注入）。
+         要对比这两个视图，产物侧必须走真实路径先加载按需包 —— 这也顺带证明了
+         「产物 + 按需包」最终渲染与源码页逐字一致（不是靠放宽断言掩盖差异）。 */
+      if (view.needsPack && t.tag === 'bundle') {
+        await cdp.send('Runtime.evaluate', { expression: "(typeof loadGamePack==='function')?(loadGamePack(),1):0", returnByValue: true });
+        for (let i = 0; i < 12; i++) {
+          await sleep(250);
+          const ready = await cdp.send('Runtime.evaluate', { expression: "typeof renderGameViews==='function'", returnByValue: true });
+          if (ready.result.value === true) break;
+        }
+      }
       const r = await cdp.send('Runtime.evaluate', { expression: view.inject, returnByValue: true });
       if (r.exceptionDetails) { result[t.tag][view.id] = { error: r.exceptionDetails.text }; continue; }
       await sleep(300);

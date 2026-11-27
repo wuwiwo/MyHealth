@@ -46,13 +46,13 @@ const parts = [];
    EXD.load() 注入 <script src="data/exercises-dataset.js?v<版本>">，并在到位后刷新卡片。
    源码页 index.src.html 仍按普通脚本引入（本地开发与全部测试走逐文件加载，行为不变）。 */
 const LAZY = ['data/exercises-dataset.js'];
-/* v2.14.40：挑战/宠物视图**按需包**。实测（scripts/audit-module-deps.js）这三个文件
-   只有进「挑战」tab 或打开宠物面板才用得到，且跨文件调用都带 typeof 守卫：
-     · game-views.js  28KB —— 挑战页视图骨架（p() 移出后 p 只在本文件内用）
-     · pet-ui.js      68KB —— 宠物面板（petIconHtml 的跨文件调用方都有 typeof 守卫）
-     · pet-codex.js   41KB —— 宠物图鉴（createPetUnit 只在战斗路径调用）
-   共 137KB 源码（12%），合成 page/_build/pack-game.js，由 page/game-pack.js 运行时注入。 */
-const PACK_GAME = ['game-views.js', 'pet-ui.js', 'pet-codex.js'];
+/* v2.14.40：挑战/宠物视图**按需包**。实测（scripts/audit-module-deps.js）这两个文件
+   只有进「挑战」tab 或打开宠物面板才用得到：
+     · game-views.js  28KB —— 挑战页视图骨架（p() 只在本文件内用）
+     · pet-ui.js      68KB —— 宠物面板（petIconHtml / petIconStageHtml 的跨文件调用方都有 typeof 守卫）
+   pet-codex.js（41KB）**故意留在主包**：它是「宠物数据层」，被 pet-store / challenge / game-render 大量调用，
+   切成按需包要靠散落的 try/catch 和 typeof 兜底，稳健性不值得这 41KB 的收益。 */
+const PACK_GAME = ['game-views.js', 'pet-ui.js'];
 let packBytes = 0, packOut = '', packParts = [];
 let lazyBytes = 0;
 for (const m of matches) {

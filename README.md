@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.40
+> Personal Health Manager — 个人健身健康管理应用 v2.14.41
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -117,7 +117,7 @@ doc/
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.34）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.40）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.41）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -493,6 +493,7 @@ node scripts/test-bundle-fresh.js # 过期守卫：源码重算指纹 + 重算�
 | **2.14.37** | **2026-11-27** | **真开战视觉复核：飘字不再压血量、双方血量格式统一**（评审 §20.5 唯一「仍未验证」项收口） — 新增 `scripts/verify-battle-visual.js`（CDP 9350）：预置「今天 1-1 已尝试」绕过训练拦截 → 真 startBattle 单敌关 → 抓含飘字的一帧 → 自动 + 8 倍速打到底 → 量结算区，**11 断言**。抓到并修掉两个缺陷：① **飘字盖住血量**（锚点 `top:30%` 正压 `bc-hp-bar/bc-hp-text`、字号 `--fs-2xl`）→ 改锚到角色上方 `bottom:100%` + 字号 `--fs-xl`，`showMark` 同修，真机复测重叠 **0**；② **同屏两种血量格式**（玩家 `HP: 56` vs 敌方 `HP: 118/120`）→ `renderBattleHP` 统一 `cur/max`。另复核控制条 6 钮 ≥44×44、双方卡片对称差 0px、结算「💀 战败 / 继续」可读。群战路径由既有 `verify-squad-ui` 与 `verify-dual-layout`（28 项）守着。全量 **90 套件 0 失败**。 |
 | **2.14.38** | **2026-11-27** | **视口盘点与系统主题复核**（评审 §21.4 扣分项 ②③ 收口，一误判一真缺陷） — ② **误判纠正**：`utils.js:228-230` 早有 `_sysMq` change 监听，新增 `scripts/verify-theme-follow.js`（CDP 9351，`Emulation.setEmulatedMedia` 只切系统偏好不刷新）**7/7**：系统切浅自动跟随、图标 🌙↔☀️ 与 aria 同步、手动选择不被系统覆盖、改回 system 立即对齐 → 主题化 3→4。③ **真缺陷修复**：新增 `scripts/audit-viewports.js`（3 视口 × 14 视图 = **42 柱**）抓到手机横放 844×390 首屏只见导航（首内容块 230px）→ `index.css` 末尾媒体查询压头部 **74→58**、页签 **50→46**、段间距 **56→32**，首内容块 **230→190**，快照卡整块进第一屏；平板 ≥700 段间距 56→40。踩坑：媒体查询必须放文件末尾（`:root` 后置覆盖）；不能整段藏副标题（`test-ui-consistency` 有断言）。全量 **90 套件 0 失败**。 |
 | **2.14.39** | **2026-11-27** | **内联样式抽类第一刀**（评审 §22.4 ④ 收口第一刀） — 先量：`page/*.js` 内联 style 引用 `var(--*)` **441 处 / 231 种串**，其中 **152 处**是同一串重复 ≥4 次（最狠一条 `color:var(--text3);font-size:var(--fs-3xs)` 写了 20 遍）。只抽这 152 处：`index.css` 末尾新增 **22 个 `.tx-*`** 工具类（文本色 `.tx-dim/.tx-ok/.tx-warn/.tx-err`、字阶 `.tx-hint/.tx-note/.tx-sub/...`、44px 触摸基样式 `.tx-tap/.tx-btn/.tx-btn-sm`），按「整串完全匹配」静态替换并合并 class，样式等价 → 内联 `var()` **441 → 289（−34.5%）**。新增 `scripts/test-inline-style-discipline.js`（**26 断言**：22 串不得回潮、CSS 定义逐项一致、内联上限 300）。两处旧断言改口径（不删）：`test-a11y-tokens` 字阶级改为 JS+CSS 合计、`test-pet-panel-layout` 热区接受 `.tx-tap` 并新增「CSS 真定义 44px」断言（90 → **91**）。全量 **91 套件 0 失败**；真机 42 柱 / 56 柱 / 键盘 11 视图全绿。 |
+| **2.14.41** | **2026-11-27** | **按需包收口：数据层回主包 + 守卫纪律成文** — 新增 `scripts/test-pack-call-guards.js`（第 93 套件）扫「首包文件调用按需包导出函数」，只认三种可证明安全的形态（同行 `typeof` / 上文 8 行内 `typeof` / 注释文本）：首扫 58 个导出函数 **23 处**疑似 → 11 处注释误报、6 处「守卫写上一行」漏判、6 处真属 `pet-codex`、**1 处真缺守卫**（`game-render.js:171` `switchGameTab('battle')` → 补 `typeof`）。据此把 **`pet-codex.js`（41KB，数据层非视图）回退首包**：`PACK_GAME = ['game-views.js','pet-ui.js']`，主包 1300 → **1356 KB**（53 脚本）、按需包 134 → **116 KB**；gzip 首屏 `app.js` 437 → **454 KB** —— 主动用 17KB 换「数据层任何时刻可用」，因为它的调用点（训练页召唤面板 / 宠物面板 / 战斗结算发蛋）都不是「点挑战 tab 才发生」，漏一处就是只在特定玩法路径才暴露的运行时报错。复扫 10 处调用点 **0 缺守卫**。另修 `verify-bundle.js`：`panel-pet` / `panel-codex` / `game-train` / `game-battle` / `game-record` 加 `needsPack: true`，产物侧注入前先 `loadGamePack()` 并轮询等 `renderGameViews` 就绪 → **14 视图逐字一致**（资源条目源码 57 → 产物 3）。全量 **93 套件 0 失败**；真机 `verify-game-pack` 11/11、`verify-bundle` 14 视图一致、`audit-whole-ui` 56 柱 / `audit-viewports` 42 柱 / `audit-tab-order` 11 视图全 0 问题。 |
 | **2.14.40** | **2026-11-27** | **挑战/宠物视图按需分包**（评审 §23.4 ① 收口） — 依赖分析做成可复跑脚本 `scripts/audit-module-deps.js`：18 个 game 系文件 **665KB（源码 56%）**，按「调用方是不是首屏路径」判定，大头 `game-render(159KB)` / `battle-group(110KB)` / `pet-store(69KB)` / `challenge(44KB)` 全被 app init / sync / 训练页 / 个人页直接调用（硬切会炸首屏），可干净切的只有 **`game-views(28KB)` + `pet-ui(68KB)` + `pet-codex(41KB)` = 137KB**。落地：`build-bundle.js` 新增 `PACK_GAME` → 生成 `_build/pack-game.js`（134KB，独立指纹）；新增 `page/game-pack.js`（幂等 / 排队 / 失败不自动重试 / `retryGamePack` 自救，地址带 `APP_VERSION` 戳）；`switchTab` 的 game 分支先画骨架（renderGame 本来就有 typeof 守卫），视图函数缺失才注入，失败给 toast + 44px「重试」按钮。真机 `verify-game-pack`（CDP 9355）**11/11**：首屏 pack 请求 **0** 次、进挑战拉 **1** 次、离开再回来仍 1 次、挑战页 44 按钮 / 535 字、宠物面板正常。主包 **1469 → 1300 KB**。新增 `test-game-pack`（24 断言）、`test-bundle-fresh` 22 → **35**。全量 **92 套件 0 失败**。 |
 
-> 当前版本：**v2.14.40**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+> 当前版本：**v2.14.41**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

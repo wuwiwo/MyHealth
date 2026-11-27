@@ -168,7 +168,7 @@ function renderGame(){
     gc.style.display = 'none'
     var vv = document.getElementById('gameBattleView')
     if (vv) vv.style.display = 'block'
-    switchGameTab('battle')
+    if (typeof switchGameTab === 'function') switchGameTab('battle')  /* 按需包纪律：该按钮由 pack 渲染，到位才可能点，仍加守卫 */
   })
   // v2.0 挑战页三视图（培养/战斗/记录）
   if (typeof renderGameViews === 'function' && document.getElementById('gameTrainView')) {

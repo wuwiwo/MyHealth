@@ -21,15 +21,16 @@ let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; fails.push(m); console.log('  ✗ ' + m); } }
 
 console.log('\n[1] 构建契约');
-ok(build.indexOf("const PACK_GAME = ['game-views.js', 'pet-ui.js', 'pet-codex.js']") >= 0, '构建脚本显式声明按需包清单（3 个文件）');
+ok(build.indexOf("const PACK_GAME = ['game-views.js', 'pet-ui.js']") >= 0, '构建脚本显式声明按需包清单（2 个文件）');
 ok(build.indexOf('pack-game.js') > 0, '构建会生成 page/_build/pack-game.js');
-ok(bundle.indexOf('function renderGameViews') < 0 && bundle.indexOf('function renderPetPanel') < 0 && bundle.indexOf('function petIconStageHtml') < 0, '主包已不含这三个文件的核心函数（renderGameViews / renderPetPanel / petIconStageHtml）');
+ok(bundle.indexOf('function renderGameViews') < 0 && bundle.indexOf('function renderPetPanel') < 0 && bundle.indexOf('function petIconStageHtml') < 0, '主包已不含按需包的核心函数（renderGameViews / renderPetPanel / petIconStageHtml）');
+ok(bundle.indexOf('function listPetCodex') > 0, '数据层 listPetCodex 仍在主包（pet-codex.js 故意不移出，避免散落兜底）');
 ok(entry.indexOf('pack-game.js') < 0, '入口页不直接引用按需包（运行时注入）');
 ok(src.indexOf('game-pack.js') > 0, '源码页引入 game-pack.js（本地/测试走逐文件加载）');
 const packKB = Math.round(fs.statSync(path.join(ROOT, 'page/_build/pack-game.js')).size / 1024);
 const appKB = Math.round(fs.statSync(path.join(ROOT, 'page/_build/app.js')).size / 1024);
-ok(packKB > 100 && packKB < 200, '按需包 100–200KB（实测 ' + packKB + ' KB）');
-ok(appKB < 1350, '主包回落到 1.35MB 以下（实测 ' + appKB + ' KB，移出前 1469KB）');
+ok(packKB > 60 && packKB < 130, '按需包 60–130KB（实测 ' + packKB + ' KB）');
+ok(appKB < 1420, '主包回落到 1.42MB 以下（实测 ' + appKB + ' KB，移出前 1469KB）');
 
 console.log('\n[2] game-pack.js 语义（vm 跑真源码）');
 const sandbox = {

@@ -37,7 +37,7 @@ const stamp = srcs.length ? srcs[0].stamp : null;
    v2.14.36：动作数据集不进包（运行时懒加载），重算时必须同样跳过，否则指纹必然对不上 */
 const LAZY_SRC = ['data/exercises-dataset.js'];
 /* v2.14.40：挑战/宠物视图三个大文件移入按需包 _build/pack-game.js，主包重算时必须同样跳过 */
-const PACK_SRC = ['game-views.js', 'pet-ui.js', 'pet-codex.js'];
+const PACK_SRC = ['game-views.js', 'pet-ui.js'];
 function recompute() {
   let out = '';
   for (const m of srcs) {
@@ -91,11 +91,11 @@ const packSrc = fs.existsSync(PACK) ? fs.readFileSync(PACK, 'utf8') : '';
 const packFresh = recomputePack();
 ok((packSrc.match(/hash:([0-9a-f]{16})/) || [])[1] === packFresh.hash, '按需包指纹与源码重算一致');
 ok(packSrc.indexOf(packFresh.out) > 0, '按需包正文与三文件拼接结果逐字节包含');
-ok(packSrc.indexOf('/* ===== game-views.js ===== */') > 0 && packSrc.indexOf('/* ===== pet-ui.js ===== */') > 0 && packSrc.indexOf('/* ===== pet-codex.js ===== */') > 0, '按需包含 game-views / pet-ui / pet-codex 三段');
+ok(packSrc.indexOf('/* ===== game-views.js ===== */') > 0 && packSrc.indexOf('/* ===== pet-ui.js ===== */') > 0 && packSrc.indexOf('/* ===== pet-codex.js ===== */') < 0, '按需包含 game-views / pet-ui 两段（pet-codex 留在主包）');
 ok(packSrc.indexOf('function renderGameViews') > 0, '按需包含 renderGameViews 定义');
 ok(bundle.indexOf('function renderGameViews') < 0, '主包已不含 renderGameViews（真的移出了）');
 ok(bundle.indexOf('function renderPetPanel') < 0, '主包已不含 renderPetPanel');
-ok(fs.statSync(PACK).size > 100 * 1024 && fs.statSync(PACK).size < 200 * 1024, '按需包体积 100–200KB（实测 ' + Math.round(fs.statSync(PACK).size / 1024) + 'KB）');
+ok(fs.statSync(PACK).size > 60 * 1024 && fs.statSync(PACK).size < 130 * 1024, '按需包体积 60–130KB（实测 ' + Math.round(fs.statSync(PACK).size / 1024) + 'KB）');
 ok(entry.indexOf('pack-game.js') < 0, '入口页不直接引用按需包（运行时由 game-pack.js 注入）');
 ok(read('game-pack.js').indexOf('_build/pack-game.js') > 0, 'game-pack.js 的注入地址指向 _build/pack-game.js');
 

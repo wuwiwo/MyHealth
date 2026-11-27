@@ -5,6 +5,44 @@
 
 ---
 
+## v2.14.41
+
+Date: 2026-11-27
+
+**按需包收口：数据层不懒加载 + 包调用守卫纪律成文**
+
+> v2.14.40 判决后留了两条尾巴：① `pet-codex.js` 被一起切进按需包，而它被首包多处调用，安全只靠散落的 `try/catch`；② `verify-bundle.js` 在产物页对比 5 个需 pack 的视图时「Uncaught」。本版把两件都收掉，并把「守卫」从口头纪律变成可复跑的断言。
+
+**① 包调用守卫审计（新增 `scripts/test-pack-call-guards.js`，第 93 套件）**
+- 判据只认三种可证明安全的形态：同行 `typeof` / 上文 8 行内 `typeof` / 注释文本（详见 `design-tokens-v2.1.md §23.2.1`）。
+- 首次扫描（三文件包）：58 个导出函数、**23 处**疑似调用。逐条核实结果 —— 11 处是注释说明（`codex.js:11`、`game-render.js:1974/2979` 等）；6 处脚本漏判（守卫写在上一行，如 `game-render.js:174→175`、`2998→3002`）；6 处属 `pet-codex` 的 `listPetCodex()` / `createPet()` / `getPetCodex()`（`challenge.js:642/645`、`pet-store.js:83`，其中 `pet-store.js:83` 与召唤面板无任何兜底）。
+- 真缺守卫 1 处：`game-render.js:171` `switchGameTab('battle')`（在 pack 渲染出的关卡返回按钮回调里，实际运行时安全）→ 补 `if (typeof switchGameTab === 'function')`。
+
+**② `pet-codex.js`（41KB）回主包**
+- `PACK_GAME = ['game-views.js','pet-ui.js']`（96KB 源码）。理由写进纪律：它是**数据层**（物种图鉴 + `createPet` / `listPetCodex` / `getPetCodex`），不是视图；切开就要在 `pet-store` / `challenge` / 召唤面板 / 战斗结算四处补接线，「体积收益 < 隐性崩溃面」。
+- 结果：主包 **1300 → 1356 KB** 源（53 个脚本），按需包 **134 → 116 KB**（2 个文件）；gzip 首屏 `app.js` 437 → **454 KB**（+17KB），换来数据层任何时刻可用。
+- 复扫：按需包 53 个导出函数、首包内 10 处调用点、**0 缺守卫**。
+
+**③ `verify-bundle.js` 连带修正（源码 vs 产物逐字对比）**
+- `panel-pet`、`panel-codex`、`game-train`、`game-battle`、`game-record` 五个视图加 `needsPack: true`；产物侧注入快照前先 `loadGamePack()`，再轮询（12×250ms）等 `renderGameViews` 就绪。
+- 改后 **14 视图逐字一致**，资源条目「源码 57 → 产物 3（JS 56 → 2）」。
+
+**④ 实测（本地全绿，线上待部署后回填）**
+- 全量 **93 套件 / 0 失败**；`test-game-pack` 25 断言、`test-bundle-fresh` 35 断言、`test-pack-call-guards` 0 缺守卫。
+- 真机：`verify-game-pack.js`（CDP 9355，打开产物入口页）**11/11**；`verify-bundle.js` 14 视图逐字一致；`audit-whole-ui.js`（2 主题 × 2 视口 × 14 视图 = 56 柱）0 失败；`audit-viewports.js` 42 柱 0 问题；`audit-tab-order.js` 11 视图 0 问题。
+- 体积（本地 gzip 实测）：`app.js` 1356KB 源 / **454KB** gzip；`pack-game.js` 116KB 源 / 38KB gzip；`index.css` 46KB gzip；首屏合计（app + css + html，不含按需包与数据集）**504KB**。
+
+**权衡**
+- 这 +17KB 是主动买的保险：v2.14.40 的 137KB 里，`pet-codex` 的 41KB 需要四处接线才能安全，而它的调用点（训练页召唤面板、宠物面板、战斗结算发蛋）都不是「点挑战 tab 才发生」——一旦漏一处就是运行时报错，且只在特定玩法路径上暴露，测试很难覆盖。
+- 剩下的 `game-views` + `pet-ui`（96KB）确实是纯视图：只在「挑战」tab 与宠物面板渲染时用，调用点（`renderGameViews` / `renderPetPanel` / `petIconHtml` / `petIconStageHtml`）全部带守卫，守卫现由第 93 套件守着。
+
+**本版文件**
+- 改：`scripts/build-bundle.js`（`PACK_GAME` 两文件 + 注释说明取舍）、`page/game-render.js`（`switchGameTab` 补守卫）、`scripts/test-game-pack.js`、`scripts/test-bundle-fresh.js`（按需包两文件口径）、`scripts/verify-bundle.js`（`needsPack` 5 视图 + 等 pack 就绪）、`page/utils.js`（`APP_VERSION` 2.14.41）、`page/index.src.html`（戳 `?v204` → `?v205`，57 处）、`page/index.html` / `page/_build/app.js` / `page/_build/pack-game.js`（产物）
+- 增：`scripts/test-pack-call-guards.js`
+- 文档：`doc/changelog-v2.14.md`、`README.md`、`doc/design-tokens-v2.1.md`（§23.1 第 2/3 条 + §23.2 分包图 + §23.2.1 守卫口径）、`doc/ui-ux-review-whole-2026-11-27.md`（§25）、`doc/VERSION-LEDGER.md`
+
+---
+
 ## v2.14.40
 
 Date: 2026-11-27
@@ -2176,6 +2214,7 @@ Date: 2026-10-12
 | 2.14.32 | 55 | 3508 行 game-render.js | **入口即产物：`page/index.html` 改由构建生成**（v2.14.31 的 rewrite 被线上实测证伪后的修正）—— ① 线上实测：`/` 返回 200 但正文仍是逐文件版（`index.css?v195` + 55 个 `<script>`，18571B），而 `/index.bundle.html`（200/15877B）与 `/_build/app.js`（200/2685742B）均正常 —— **产物部署无问题，只是入口没切**；Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总把 `/` 解析到 `index.html`，`source:"/"` 匹配不到 → 改「入口文件本身即产物」，不依赖平台规则；② 源码页改名 **`page/index.src.html`**（唯一真源，本地/测试/逐文件加载都走它），`build-bundle.js` 读它、把 55 个 `<script src>` 整段换成 `<script src="_build/app.js?vNNN">` 后写出 `page/index.html`（body/header 逐字节同构），删掉旧 `index.bundle.html`（入口只剩一条路径）；③ `page/vercel.json` 移除失效 `rewrites`；④ 21 个测试/审计脚本的 `index.html` → `index.src.html`（保留「源码是唯一真源」）；⑤ `test-bundle-fresh` **19 → 22 断言**：新增「按同一规则重算期望入口页与磁盘 `index.html` **逐字节比对**」（手改产物页或忘重建即红）、入口脚本唯一且戳正确、`index.css` 带戳、旧 bundle 页已移除、`vercel.json` 不再声明 `/` rewrite；⑥ `verify-bundle` 比对对象改 `/index.src.html` vs `/index.html`：**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → `?v196`。回滚：`cp page/index.src.html page/index.html` 再推 |
 | 2.14.33 | 55 | 3508 行 game-render.js | **全项目评审批次 H：清单剩余四项收口** —— ① **P2-4 边框纪律**：写进 `index.css` 文件头（容器 2px `--bw`+`--bd` / 分隔单边 1px `--bw-thin`+`--surface-3` / 强调边 2px），并把五处「四周 1px」容器（`.refine-src` / `.pet-exp-log` / `.orb-bag` / `.pet-rest` / `.train-mat-fold`）收成 2px —— 扁平风无阴影，1px 四周边框会被读成分隔线；② **P2-6 色彩纪律**：三语义定稿（蓝=主操作/进度/选中、红=危险/敌方/BOSS、绿=达成/友方/治疗；紫只属数据属性、黄只属瞬时提示），并断言按钮与空态不得用紫；③ **P2-7 空态**：`emptyHtml()` 加第 5 参类名 + `.empty-compact`（图标与标题同行、CTA 撑满），计划页两块空态 **188px → 125px**，360×640 首屏可见两个 CTA；④ **P2-9 图标语义**：`📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️（4 处）、属性计算→🧮，宠物「结算」→**「离线补算」**；⑤ `test-ui-consistency` **70 → 86 断言**（新增 `[17]` 十六类规则）、`test-pet-panel-layout` 一条文案断言随行为更新；全量 **87 套件 / 0 失败**、`audit-whole-ui` 14×2 复测溢出/对比/触摸/圆角全 0；缓存戳 `?v196` → `?v197`。权衡：强调色计数仍 7–12（成对的主题蓝/绿本就计两个，压低只能减语义色，不做） |
 | 2.14.34 | 55 | 3508 行 game-render.js | **无障碍收口**：容器级弹层焦点陷阱（打开送焦点/关闭归还/Tab 首尾环回/背后拉回，12 个弹层调用点零改动）+ 审计扩为**双主题 × 2 视口 × 14 视图**（深色对比失败 0）+ 新增键盘可达性六项审计（11 视图全 0，模态真缺口已修）。修复：加载即初始化打崩 4 套 vm 沙箱 → 改能力探测守卫。测试 88 套件 0 失败、`test-modal-focus` 21 断言。 |
+| 2.14.41 | 56 | 3508 行 game-render.js | **按需包收口：数据层回主包 + 守卫纪律成文** —— 新增 `scripts/test-pack-call-guards.js`（第 93 套件）扫「首包调用按需包导出函数」：首扫 58 个导出函数 / 23 处疑似，逐条核实为 11 处注释误报 + 6 处「守卫写上一行」漏判 + 6 处真属 `pet-codex` 的 `listPetCodex`/`createPet`/`getPetCodex` + 1 处真缺守卫（`game-render.js:171` `switchGameTab`，补 `typeof`）。据此把 `pet-codex.js`（41KB，**数据层**非视图）回退首包：`PACK_GAME = ['game-views.js','pet-ui.js']`，主包 1300 → **1356 KB**（53 脚本）、按需包 134 → **116 KB**；gzip 首屏 `app.js` 437 → **454 KB**，换来「数据层任何时刻可用、不存在只在特定玩法路径才暴露的隐性崩溃面」；复扫 10 处调用点 **0 缺守卫**。另修 `verify-bundle.js`：5 个需 pack 的视图加 `needsPack: true`，产物侧注入前先 `loadGamePack()` 并轮询等 `renderGameViews` 就绪 → **14 视图逐字一致**。全量 **93 套件 0 失败**；真机 `verify-game-pack` 11/11、`audit-whole-ui` 56 柱 / `audit-viewports` 42 柱 / `audit-tab-order` 11 视图全 0 问题 |
 | 2.14.40 | 56 | 3508 行 game-render.js | **挑战/宠物视图按需分包（评审 §23.4 ① 收口）** —— 先把依赖分析做成可复跑脚本 `audit-module-deps.js`：18 个 game 系文件 665KB（源码 56%），按「调用方是不是首屏路径」判定，大头 game-render(159)/battle-group(110)/pet-store(69)/challenge(44) 全被 app init、sync、训练页、个人页直接调用 → 硬切会炸首屏；可干净切的只有 **game-views(28) + pet-ui(68) + pet-codex(41) = 137KB**。落地：`build-bundle.js` 新增 `PACK_GAME` 生成 `_build/pack-game.js`（134KB 独立指纹），新增 `page/game-pack.js`（幂等/排队/失败不自动重试/retry 自救，地址带 APP_VERSION 戳），`switchTab` 的 game 分支先画骨架、视图函数缺失才注入、失败给 toast + 44px 重试按钮。真机 `verify-game-pack`（9355）**11/11**：首屏 pack 请求 **0** 次、进挑战拉 **1** 次、再进不重复、挑战页 44 按钮/535 字、宠物面板正常。主包 **1469 → 1300 KB**。新增 `test-game-pack`（24 断言）、`test-bundle-fresh` 22 → **35**（按需包指纹 + 三文件真移出）。92 套件 0 失败。 |
 | 2.14.39 | 55 | 3508 行 game-render.js | **内联样式抽类第一刀（评审 §22.4 ④ 收口第一刀）** —— 先量：`page/*.js` 内联 style 引用 `var(--*)` 共 **441 处 / 231 种串**，其中 152 处是「同一串重复 ≥4 次」（最狠一条弱提示写 20 遍）。只动这 152 处：`index.css` 末尾新增 **22 个 `.tx-*`** 工具类（文本色 / 字阶 / 44px 触摸基样式），按「整串完全匹配」静态替换（含 class 合并，样式等价），内联 var() **441 → 289（−34.5%）**。新增 `test-inline-style-discipline`（**26 断言**：22 串回潮=0、CSS 定义逐项一致、内联上限 300）。两处旧断言改口径不删断言：`test-a11y-tokens` 字阶引用改 JS+CSS 合计、`test-pet-panel-layout` 热区接受 `.tx-tap/.tx-btn` 并新增「CSS 真定义 44px」断言（90 → **91**）。91 套件 0 失败；真机 42 柱 + 56 柱 + 键盘 11 视图全绿；视觉抽查宠物面板等 5 视图一致。 |
 | 2.14.38 | 55 | 3508 行 game-render.js | **视口盘点 + 系统主题复核（评审 §21.4 扣分项 ②③ 收口）** —— ② 实测为**误判纠正**：`utils.js` 早有 `_sysMq` change 监听，新增 `verify-theme-follow`（CDP 9351，Emulation.setEmulatedMedia，不刷新只切系统偏好）**7/7**：系统切浅自动跟随、图标与 aria 同步、手动选择不被覆盖、改回 system 立即对齐；主题化 3→4。③ 为**真缺陷修复**：新增 `audit-viewports`（9352，3 视口 × 14 视图 = **42 柱**）抓到手机横放 844×390 首屏只剩导航（首内容块 230px）→ 末尾媒体查询压头部（74→58）、页签（50→46）、段间距（56→32），**首内容块 230→190**，快照卡整块进第一屏；平板 ≥700 段间距 56→40。复测 42 柱 0 问题、双主题双视口 56 柱 0 失败。90 套件 0 失败。 |
