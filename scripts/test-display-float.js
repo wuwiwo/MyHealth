@@ -70,8 +70,11 @@ sandbox.store.set('strength', { entries: [{ id: 'e1', date: sandbox.today(), exe
   const h = els['gameBattleView'] ? els['gameBattleView'].innerHTML : '';
   ok(h.length > 0, '挑战页战斗视图已渲染');
   ok(h.indexOf(String(vol)) < 0, '① 页面不再出现原始浮点值 ' + vol);
-  ok(h.indexOf(String(Math.round(vol)) + '<span style="font-size:var(--fs-xs)">kg</span>') >= 0,
+  /* v2.14.26（评审 P1-A）：币卡值改成「数字 + .period-kpi-u 单位 span」，断言随之改类名 */
+  ok(h.indexOf(String(Math.round(vol)) + '<span class="period-kpi-u">kg</span>') >= 0,
     '① 旬容量按整数渲染（' + Math.round(vol) + 'kg）');
+  ok(h.indexOf('period-kpi-u">/6天') >= 0, '① 训练天数单位走独立 span（防「0/6 / 天」折行回归）');
+  ok(h.indexOf('本旬状态') >= 0 && h.indexOf('>状态<') < 0, '① 第三卡标签 = 本旬状态（不再是与数值重复的「状态」）');
   ok(!/\d\.\d{3,}/.test(h), '① 战斗视图整体无浮点尾数');
 })();
 

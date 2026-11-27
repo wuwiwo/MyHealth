@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>💪 MyHealth</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
-<link rel="stylesheet" href="index.css?v189">
+<link rel="stylesheet" href="index.css?v190">
 </head>
 <body>
 <div id="app">
@@ -52,7 +52,7 @@
 
     <!-- Sub-tab: Strength -->
     <div class="sub-tab active" id="subStrength">
-      <div class="section-hdr">📅 日期</div>
+      <h2 class="section-hdr">📅 日期</h2>
       <div class="date-nav">
         <button class="dn-btn" id="strPrevDay" aria-label="上一天">◀</button>
         <div class="dn-display">
@@ -64,7 +64,7 @@
       </div>
       <div class="day-vol" id="strDayVol"></div>
 
-      <div class="section-hdr">今日训练</div>
+      <h2 class="section-hdr">今日训练</h2>
       <button class="add-btn" id="strAddBtn">＋ 新增一组</button>
       <div class="add-card" id="strAddCard">
         <div class="fg">
@@ -88,19 +88,19 @@
       <div id="strList"></div>
 
       <!-- Break note for missed days -->
-      <div class="section-hdr" style="margin-top:20px">📋 训练计划</div>
+      <h2 class="section-hdr" style="margin-top:20px">📋 训练计划</h2>
       <div id="strPlansList"></div>
 
-      <div class="section-hdr" style="margin-top:20px">📝 断签说明</div>
+      <h2 class="section-hdr" style="margin-top:20px">📝 断签说明</h2>
       <div id="strMissedDays"></div>
 
-      <div class="section-hdr">📊 本周统计</div>
+      <h2 class="section-hdr">📊 本周统计</h2>
       <div class="stats-grid" id="strStats"></div>
     </div>
 
     <!-- Sub-tab: Cardio -->
     <div class="sub-tab" id="subCardio">
-      <div class="section-hdr">📅 日期</div>
+      <h2 class="section-hdr">📅 日期</h2>
       <div class="date-nav">
         <button class="dn-btn" id="carPrevDay" aria-label="上一天">◀</button>
         <div class="dn-display">
@@ -112,7 +112,7 @@
       </div>
       <div class="day-vol" id="carDayVol"></div>
 
-      <div class="section-hdr">今日有氧</div>
+      <h2 class="section-hdr">今日有氧</h2>
       <button class="add-btn" id="carAddBtn">＋ 新增记录</button>
       <div class="add-card" id="carAddCard">
         <div class="fg"><div class="fl" id="carTypeLbl">运动类型</div>
@@ -142,10 +142,10 @@
 
       <div id="carList"></div>
 
-      <div class="section-hdr" style="margin-top:20px">📋 有氧计划</div>
+      <h2 class="section-hdr" style="margin-top:20px">📋 有氧计划</h2>
       <div id="carPlansList"></div>
 
-      <div class="section-hdr">本周有氧</div>
+      <h2 class="section-hdr">本周有氧</h2>
       <div class="stats-grid" id="carStats"></div>
     </div>
   </section>
@@ -160,11 +160,11 @@
 
     <!-- Sub-tab: Personal Data -->
     <div class="sub-tab active" id="subPersonal">
-      <div class="section-hdr">👤 基本信息</div>
+      <h2 class="section-hdr">👤 基本信息</h2>
       <div class="profile-card" id="profileCard"></div>
       <div id="prSection"></div>
 
-      <div class="section-hdr">⚖️ 体重记录</div>
+      <h2 class="section-hdr">⚖️ 体重记录</h2>
       <div id="wtNoteTags"></div>
       <div class="weight-form-row">
         <input type="number" class="fi" id="wtInput" aria-label="体重（公斤）" value="70.0" step="0.1" min="20" max="300" style="width:100px;text-align:center;font-size:var(--fs-lg);font-weight:700">
@@ -173,7 +173,7 @@
         <button class="sb-btn" id="wtSubmit" style="flex:0;padding:12px 20px;white-space:nowrap">📝 记录</button>
       </div>
 
-      <div class="section-hdr">📈 体重趋势</div>
+      <h2 class="section-hdr">📈 体重趋势</h2>
       <div class="chart-wrap" id="weightChart">
         <canvas id="weightCanvas"></canvas>
       </div>
@@ -266,7 +266,7 @@
     <nav class="tab-bar sub-tab-bar" role="tablist" aria-label="设置分类">
       <button class="tab-btn active" data-sub="library" role="tab" aria-selected="true" aria-controls="subLibrary">🏋️ 动作库</button>
       <button class="tab-btn" data-sub="plans" role="tab" aria-selected="false" aria-controls="subPlans">📋 计划</button>
-      <button class="tab-btn" data-sub="game" role="tab" aria-selected="false" aria-controls="subGame">🎮 挑战</button>
+      <button class="tab-btn" data-sub="game" role="tab" aria-selected="false" aria-controls="subGame">🎮 玩法</button>
       <button class="tab-btn" data-sub="data" role="tab" aria-selected="false" aria-controls="subData">📂 数据</button>
     </nav>
 
@@ -280,65 +280,65 @@
 <!-- 全屏可滚动面板容器（宠物/技能培养）：战斗用的 .battle-overlay 是 flex 布局且不支持滚动，勿复用 -->
 <div class="panel-overlay" id="panelOverlay" role="dialog" aria-modal="true" aria-label="培养面板"></div>
 
-<script src="store.js?v189"></script>
-<script src="battle-history.js?v189"></script>
-<script src="data/exercises-dataset.js?v189"></script>
-<script src="ex-dataset.js?v189"></script>
-<script src="config.js?v189"></script>
-<script src="utils.js?v189"></script>
-<script src="levels.js?v189"></script>
+<script src="store.js?v190"></script>
+<script src="battle-history.js?v190"></script>
+<script src="data/exercises-dataset.js?v190"></script>
+<script src="ex-dataset.js?v190"></script>
+<script src="config.js?v190"></script>
+<script src="utils.js?v190"></script>
+<script src="levels.js?v190"></script>
 <!-- v2.3.0 怪兽头像原型映射：只依赖 levels.js 的数据形状，放在 levels.js 之后即可 -->
-<script src="monster-archetype.js?v189"></script>
+<script src="monster-archetype.js?v190"></script>
 <!-- v2.3.2 技能图标渲染唯一入口：只含合法 id 白名单 + 路径拼接，
      不依赖任何其他模块，因此放在所有消费方（skill-ui / game-render）之前即可。
      注意：必须早于 game-render.js（316 行），否则其内部 typeof 守卫会判为未定义。 -->
-<script src="skill-icon.js?v189"></script>
-<script src="date-roll.js?v189"></script>
-<script src="monthly-reset.js?v189"></script>
-<script src="stats.js?v189"></script>
-  <script src="level-titles.js?v189"></script>
-  <script src="level-system.js?v189"></script>
-<script src="state-core.js?v189"></script>
-<script src="status-defs.js?v189"></script>
-<script src="fx-semantics.js?v189"></script>
-<script src="unit.js?v189"></script>
-<script src="talent.js?v189"></script>
-<script src="affix.js?v189"></script>
-<script src="skill.js?v189"></script>
-<script src="enemy.js?v189"></script>
-<script src="battle.js?v189"></script>
-<script src="battle-group.js?v189"></script>
-<script src="terrain.js?v189"></script>
-<script src="group-levels.js?v189"></script>
-<script src="group-progress.js?v189"></script>
-<script src="group-dual.js?v189"></script>
-<script src="ai.js?v189"></script>
-<script src="challenge.js?v189"></script>
-<script src="linechart.js?v189"></script>
-<script src="app.js?v189"></script>
-<script src="sync.js?v189"></script>
-<script src="tab-strength.js?v189"></script>
-<script src="tab-cardio.js?v189"></script>
-<script src="tab-profile.js?v189"></script>
-<script src="game-render.js?v189"></script>
-<script src="game-battle.js?v189"></script>
-<script src="game-records.js?v189"></script>
-<script src="game-refine.js?v189"></script>
-<script src="tab-game.js?v189"></script>
-<script src="tab-settings.js?v189"></script>
-<script src="pets.js?v189"></script>
-<script src="pet-materials.js?v189"></script>
-<script src="pet-codex.js?v189"></script>
-<script src="pet-store.js?v189"></script>
-<script src="pet-ui.js?v189"></script>
-<script src="skills.js?v189"></script>
-<script src="player-skill-hooks.js?v189"></script>
-<script src="skill-store.js?v189"></script>
-<script src="skill-ui.js?v189"></script>
-<script src="orbs.js?v189"></script>
-<script src="game-views.js?v189"></script>
-<script src="debug.js?v189"></script>
-  <script src="codex.js?v189"></script>
+<script src="skill-icon.js?v190"></script>
+<script src="date-roll.js?v190"></script>
+<script src="monthly-reset.js?v190"></script>
+<script src="stats.js?v190"></script>
+  <script src="level-titles.js?v190"></script>
+  <script src="level-system.js?v190"></script>
+<script src="state-core.js?v190"></script>
+<script src="status-defs.js?v190"></script>
+<script src="fx-semantics.js?v190"></script>
+<script src="unit.js?v190"></script>
+<script src="talent.js?v190"></script>
+<script src="affix.js?v190"></script>
+<script src="skill.js?v190"></script>
+<script src="enemy.js?v190"></script>
+<script src="battle.js?v190"></script>
+<script src="battle-group.js?v190"></script>
+<script src="terrain.js?v190"></script>
+<script src="group-levels.js?v190"></script>
+<script src="group-progress.js?v190"></script>
+<script src="group-dual.js?v190"></script>
+<script src="ai.js?v190"></script>
+<script src="challenge.js?v190"></script>
+<script src="linechart.js?v190"></script>
+<script src="app.js?v190"></script>
+<script src="sync.js?v190"></script>
+<script src="tab-strength.js?v190"></script>
+<script src="tab-cardio.js?v190"></script>
+<script src="tab-profile.js?v190"></script>
+<script src="game-render.js?v190"></script>
+<script src="game-battle.js?v190"></script>
+<script src="game-records.js?v190"></script>
+<script src="game-refine.js?v190"></script>
+<script src="tab-game.js?v190"></script>
+<script src="tab-settings.js?v190"></script>
+<script src="pets.js?v190"></script>
+<script src="pet-materials.js?v190"></script>
+<script src="pet-codex.js?v190"></script>
+<script src="pet-store.js?v190"></script>
+<script src="pet-ui.js?v190"></script>
+<script src="skills.js?v190"></script>
+<script src="player-skill-hooks.js?v190"></script>
+<script src="skill-store.js?v190"></script>
+<script src="skill-ui.js?v190"></script>
+<script src="orbs.js?v190"></script>
+<script src="game-views.js?v190"></script>
+<script src="debug.js?v190"></script>
+  <script src="codex.js?v190"></script>
 <script>init()</script>
 </body>
 </html>

@@ -5,6 +5,77 @@
 
 ---
 
+## v2.14.26
+
+Date: 2026-11-27
+
+**全项目 UI/UX 评审落地（14 视图 × 2 视口；批次 A + B + C）**
+
+> 评审口径：ui-skills.com 的 `pbakaus/audit`（5 维技术审计 0–4 分 /20）+ `pbakaus/critique`（Nielsen 10 项 0–4 分 /40）。
+> 客观数据：新增 `scripts/audit-whole-ui.js`（无头 Chrome + CDP，逐视图量横向溢出 / <44px 触摸目标 / <12px 正文 / 对比度 / 圆角阴影违规 / 非灰阶强调色数；对比度算法带合成自检，防假阴性）。
+> 完整报告：`doc/ui-ux-review-whole-2026-11-27.md`（结论 **技术审计 10/20、Nielsen 21/40**；上一轮局部评审 `doc/ui-ux-review-2026-11-27.md` 21/40、13/20）。
+> 作者裁决（本轮）：**「并入 v2.14.26，并且按照批次开始修复」**。
+
+### 新增功能
+
+1. **`.btn-quiet`：全站按钮收敛为三档**（`page/index.css`，评审 P2-3）
+   - `.btn-primary` = 唯一主操作（实心品牌色）、`.btn-entry` = 列表式入口（带 `›`）、`.btn-quiet` = 次级中性描边。
+   - 此前同为主/次级操作却有实心与描边两套语言：`保存资料` 是描边、数据页的 `导出/导入` 用 plan-card 按钮、`手动云同步` 用品牌描边。
+
+### 修复
+
+1. **本旬目标三卡换行错版 + 同组数值渲染两次**（`page/game-views.js` + `index.css`，评审 P1-A）
+   - 旧实现把 `'💪 N/6天'` 拼成一整串塞进三等分卡（360 宽下每卡约 100px）→ 实机折成「0/6 / 天 / 状态」三行；且第三卡数值与第一卡完全重复。
+   - 现在：数字与单位拆成 `数字 + .period-kpi-u` span、整行 `white-space:nowrap`；第三卡只表达「本旬状态：已达标 / 差 N 天」；达标时才转绿。
+2. **调试 FAB 常驻遮挡可点目标**（`page/debug.js`，评审 P1-B）
+   - 它是 `position:fixed` 右下 44px 圆钮（`opacity:.55`），360 宽下正好压在右列内容：动作库每行的 🗑️/✏️ 被整个盖住、挑战页末张关卡卡右半被盖 —— 全站唯一「点不准」来源。
+   - 现在：默认**不建 DOM**，只有 `?debug=1`（或 `localStorage.mh_debug='1'`）才挂；`DebugPanel.open()` 内部仍会补建，控制台用法不变。
+3. **图鉴激活页签计数不可读（1.3:1）**（`page/index.css`，评审 P1-C）
+   - `.codex-tab.active .codex-tab-n` 原为 `--orange` 压品牌蓝底 → 实测量得 **1.3:1**（"14" 几乎看不见），改 `--on-brand`。
+4. **个人最佳空态 CTA 是死按钮**（`page/tab-profile.js`，评审过程顺带发现）
+   - 原写 `switchTab("strength")` —— 不存在的 tab 名，点了之后所有 `.tab-content` 取消 active、页面变全空且不触发任何 render。
+   - 改 `switchTab('training')` + `switchSub('training','strength')`。
+5. **全站零标题语义**（`page/index.html` 静态 12 处 + `tab-settings/tab-profile/game-views/game-records` 渲染 8 处，评审 P2-1）
+   - h1/h2/h3 计数恒为 **0**，区块标题全是 `div/strong`，读屏无法按标题导航；现统一为 `<h2 class="section-hdr">`（视觉样式不变，`.section-hdr` 规则本就与标签无关）。
+6. **动作库 26 个纯图标按钮无可访问名称**（`page/tab-settings.js`，评审 P2-2）
+   - 读屏只会念「铅笔 / 垃圾桶」；现补 `aria-label="编辑 {动作名}" / "删除 {动作名}"`，动作名做 `& < > "` 转义。
+7. **空态三套壳 + 空态无动作**（`page/index.html`/`utils.js`/`game-views.js`/`tab-settings.js`/`index.css`，评审 P2-4 / P2-7）
+   - 记录页用无边框浅块、计划页用 2px 巨框、个人最佳用居中奖杯大留白 → 全部改走 `emptyHtml`（`.empty` 组件）。
+   - 后置密度覆盖 `.empty{padding:var(--sp-12)}`（≈48px）曾让单个空态吃掉 300–500px 屏高 → 收到 26px、图标 `--fs-2xl`。
+   - 计划页两个空态各补一个**真动作**「去训练 ›」，接 `gotoTraining / gotoCardio`，落到「训练 → 力量 / 有氧」子页签。
+8. **设置子页签与「挑战·战斗」撞名**（`page/index.html`，评审 P2-8）：`🎮 挑战` → `🎮 玩法`（`data-sub="game"` 不变）。
+
+### UI 调整
+
+1. **编队队卡降层**（`page/index.css`，评审 P2-5）：队卡原本自带 2px 外框，与编队卡/面板卡叠成「四层盒子」；改为上分隔线，层级只剩「卡 → 行」。
+2. **统计卡数值统一中性色**（`page/index.css`，评审 P2-6）：`.sc-total` 蓝 / `.sc-vol` 紫 / `.sc-rate` 橙 / `.sc-fav` 绿 —— 四张卡分四色但颜色不表达任何含义；现统一 `--text`，颜色只留给「达成(绿) / 危险(红) / 主操作(蓝)」。同理「最爱动作」为空时显示「暂无」而不是留白。
+3. **动作库权重徽标**（`page/tab-settings.js`，评审 P2-9）：`🥇 100%` → `权重 100%`（原名会被读成金牌/评分，实际是折算率 ratio）。
+4. **热力图导航**（`page/tab-profile.js`，评审 P2-9）：`📍` → `今天`（并补 `aria-label`；`◀ / ▶` 同步补「上个月 / 下个月」）。
+5. **图鉴筛选芯片触摸宽度**（`page/index.css`，评审 P2-11）：`.codex-chip` 补 `min-width:var(--touch-min)` —— `R` 实测原本只有 36.4px 宽。
+
+### 测试
+
+| 套件 | 变化 | 断言 |
+|---|---|---|
+| `test-ui-consistency.js`（新增） | P1-A…P2-11 逐条契约守卫（源码 / CSS / index.html） | **51** |
+| `test-display-float.js` | 同步 `period-kpi-u` 新 markup，补「单位独立 span 防折行」「第三卡=本旬状态」两条 | **32** |
+| `test-battle-history.js` | 记录页空态改 `.empty` 后仍加载（`gvEmpty` 在无 utils 的沙箱内降级） | **215** |
+| `test-a11y-tokens.js` | 新增 `catch` 注释带「忽略」说明（静默异常守卫） | **40/40** |
+
+- 全量 **86 套件 / 0 失败**。
+- 真机（`scripts/audit-whole-ui.js`，360×640 / 390×844）：14 视图 × 2 视口 **横向溢出 0、对比失败 0**（改前图鉴 1 处）、强调色数普遍降 1–2 档；`verify-squad-ui.js` 两视口全绿。
+- 交互验证（CDP）：默认无 `#debugFab`、`?debug=1` 有；个人最佳与计划页的空态 CTA 点击后均正确落到「训练 → 力量 / 有氧」。
+
+### 版本文件
+
+`page/utils.js`（`APP_VERSION` → `2.14.26`）、`page/index.html`（`?v189` → `?v190`，56 处）、`README.md`、`doc/changelog-v2.14.md`、`doc/VERSION-LEDGER.md`（指针 → `2.14.27`）。
+
+### 未完成（记账）
+
+- **P2-10 字号阶梯**：10–11px 中文元信息仍承担信息（战斗 48 处 / 动作库 95 处 / 图鉴 43 处），需一次整体字阶调整，不混在本轮。
+- **个人表单三层盒子**（卡 → label → 输入框）保留：label 侧置更省纵向空间，改浮动标签属独立改版。
+- **P3-3 打包**：`page/` 55 个 JS 逐文件加载、冷启动 56 请求 / 约 2.8MB（本地 180–670ms 无感，移动网络会明显），建议发布侧合并或延迟加载。
+
 ## v2.14.25
 
 Date: 2026-11-27
@@ -1491,6 +1562,7 @@ Date: 2026-10-12
 | 2.14.23 | 55 | 3550 行 game-render.js | **多队双场景改为常态 + 按关卡类型分档 + 双 Boss**（作者新规格，推翻 v1.2 Q6）：`stageIsMulti` 重写为「x1–x9 全 multi；x10 仅 `lg % MULTI_BOSS_EVERY(3) == 0` 为 multi」，240 关里 **224 关 multi**、16 个非双 Boss 关仍 single；`MULTI_SCENE_SCALE_BY_TYPE = {normal:0.85, elite:0.9, boss:0.9}` 取代单一常量（`multiSceneScale(type)`，未知回落 0.85）；`applyMultiSceneScale` 接受数字或 type 字符串；**双 Boss = 两场景各 1 Boss**（每侧完整编成，天然 2 Boss，无新编成逻辑）；开战入口 `_startDualGroupTrial` 改返回布尔，**队不足回退单场景**（不再挡住新档开战）；`test-attackable` §7 重写（53 断言）、`test-dual-battle` 分档 + 新增 §14（93 断言）；`verify-dual-layout` 支持传关卡 id，g3-1 / g3-10 / g18-5 三种类型各 28/28。全量 **84 套件 / 0 失败**，缓存戳 `?v187` |
 | 2.14.24 | 55 | 3508 行 game-render.js | **多队收口 + 编队/关卡 UI**：① **单场景不再有接力** —— 删 `_groupRelayNext` 提供方与 `_groupRelaySquads`/`_groupSquadIdx`/`_groupRelayPending` 三全局、删 `squadUnits`/`reinforce` 写入与上场 toast（引擎 `gbReinforce` 保留，`test-squad-relay` 收窄为「引擎能力 + 不接线」41 断言）；② 关卡列表加形态标签 `stageModeLabel(lg, st)`（'' / 双场景 / 双 BOSS，判据仍 `stageIsMulti`）+ `.lv-tag`，顺带修 60px 窄卡「第10关」折行与 Boss 名重复王冠；③ 培养页 `.train-lineup` 改**多队摘要**（每队一行 → 打开编队管理），删除 `data-train-pick` 就地切换；④ 编队 UI：选中态实心 + ✓、跨队占用标「在 X」+ disabled（参战阵容同源）、队卡 `↑↓🗑` 独立一行、元信息「未编队 N 只」；新增 `test-squad-ui.js`（28 断言）+ `verify-squad-ui.js`（无头 Chrome 两视口）；全量 **85 套件 / 0 失败**，缓存戳 `?v188`。⚠️ 普通档 0.85 按作者裁决保持不动，等实测 |
 | 2.14.25 | 55 | 3508 行 game-render.js | **评审后 P1+P2 收口**（ui-skills `pbakaus/audit` + `critique` 两套标准，客观数据来自新增 `scripts/audit-squad-ui.js`）：① **P1-1 去重** —— 宠物面板「出战编队」改只读摘要（非按钮芯片）+ 唯一主 CTA + 「编队管理 ›」单一编辑入口，删 `[data-pet-pick]` 就地切换与它的 `savePetBattlePicks`，`_petBattlePicks` 只经 `togglePetSquadPet → petSquadRefreshPicks` 维护；② **P1-2 样式单轨** —— 培养页 4 入口 + 开战 + 编队管理改 `.btn-entry` / `.btn-primary`，大关关卡卡从内联 `btnStyle` 改 `.gl-stage.is-open/.is-elite/.is-boss/.done/.locked`（原来被 `[style*="border-color"]` 的 `!important` 收成中性 → 10 张卡一样），守卫收窄为四类白名单；③ **P2-3 标签只标例外**（双场景不再逐卡）+ `.gl-modes` 列表头分布行 + `.lv-state{nowrap}` 修窄卡折行；④ P2-4 编队行补 `›` 与 hover/active；P2-5 徽标「作战」→「第 N 队」；P2-6 占用态 `.45→.6` 且标签改不透明 `--text2`（原 ≈2.1:1）；P2-7 核实删除**本就有** `confirm()`（评审误判，已更正）；`test-squad-ui` 41 断言、`test-pet-panel-layout` 90、`test-pet-icons` 263、`verify-squad-ui` 两视口全绿；全量 **85 套件 / 0 失败**，缓存戳 `?v189` |
+| 2.14.26 | 55 | 3508 行 game-render.js | **全项目 UI/UX 评审落地（批次 A+B+C）** —— 评审 14 视图 × 2 视口（技术审计 10/20、Nielsen 21/40），客观数据来新增 `scripts/audit-whole-ui.js`：① P1-A 本旬目标三卡拆值/单位 span + nowrap + 第三卡改「本旬状态」（原来「0/6 / 天 / 状态」三行且数值重复）；② P1-B 调试 FAB 默认不建 DOM（`?debug=1` 才挂，此前压住动作库 🗑️ 与关卡卡）；③ P1-C 图鉴激活页签计数 1.3:1 → `--on-brand`；④ P1-D 个人最佳空态 CTA 由死按钮 `switchTab("strength")` 改为训练/力量；⑤ 全站标题 `div.section-hdr` → `<h2>`（此前 h 标签 = 0）；⑥ 动作库 26 个图标按钮补 `aria-label`；⑦ 主按钮三档 + 新增 `.btn-quiet`；⑧ 空态统一 `.empty`（padding 48px→26px）且计划页补真动作；⑨ 设置子页签「挑战」→「玩法」；⑩ 队卡降层、统计卡数值中性色、权重徽标、热力图「今天」、图鉴芯片 44px；`test-ui-consistency` **51 断言**、`test-display-float` 32，全量 **86 套件 / 0 失败**，缓存戳 `?v190` |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。

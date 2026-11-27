@@ -136,3 +136,30 @@
 3. 这一轮评审要不要一并作为 v2.14.26 的版本内容（含 `scripts/audit-whole-ui.js` 与本文档），还是文档单独 `docs:` 提交、代码修复再开新版本号？
 
 *Questions skipped: none（3 个问题均已列出）。*
+
+---
+
+## 9. 落地记录（v2.14.26，2026-11-27）
+
+作者裁决：**并入 v2.14.26，按批次修复**。本轮完成批次 A + B + 批次 C 的大部分，以及评审过程中新发现的 P1-D。
+
+| 项 | 内容 | 落点 | 验证 |
+|---|---|---|---|
+| P1-A | 本旬目标三卡：数值/单位拆 `span`、`nowrap`，第三卡改「本旬状态」，去掉重复数值 | `game-views.js`（`period-kpi-*`）、`index.css` | 双视口截图整齐；`test-display-float` 32 断言 + 2 条新守卫 |
+| P1-B | 调试 FAB 默认不建 DOM（`?debug=1` / `localStorage.mh_debug='1'` 才挂） | `debug.js`（`DEBUG_UI_ON`） | CDP：默认无 `#debugFab`、`?debug=1` 有；动作库 🗑️ 不再被盖 |
+| P1-C | 激活页签计数 `--orange` → `--on-brand` | `index.css` | 量测：图鉴对比失败 1 → **0** |
+| **P1-D（新发现）** | 个人最佳空态 CTA 写 `switchTab("strength")`（不存在的 tab → 整页变空、无 render），改训练/力量两级切换 | `tab-profile.js` | CDP 点击后 `tabTraining` + `subStrength` |
+| P2-1 | 区块标题 → `<h2>`（静态 12 + 渲染 8） | `index.html` + 4 个 JS | 量测 heading 0 → 有 |
+| P2-2 | 动作库 26 个图标按钮补 `aria-label="编辑/删除 {动作名}"` | `tab-settings.js` | 量测样本出现「编辑 深蹲」 |
+| P2-3 | 主按钮三档：`.btn-primary` / `.btn-entry` / 新增 `.btn-quiet` | `index.css`、`tab-profile.js`、`tab-settings.js` | 保存资料变实心；数据页三钮同档 |
+| P2-4 / P2-7 | 空态统一 `.empty`（padding 48→26px），计划页补真动作「去训练 ›」 | `game-views.js`（`gvEmpty`）、`tab-settings.js`、`index.css` | 记录页三空态同壳；CTA 点击落到训练/力量、训练/有氧 |
+| P2-5 | 编队队卡降层（外框 → 上分隔线） | `index.css` | 面板截图：编队卡内少一层框 |
+| P2-6 | 统计卡数值统一 `--text`；「最爱动作」空 → 「暂无」 | `index.css`、`tab-profile.js` | 一屏强调色降 1–2 档 |
+| P2-8 | 设置子页签「🎮 挑战」→「🎮 玩法」 | `index.html` | 与「挑战·战斗」不再撞名 |
+| P2-9 | `🥇 100%` → `权重 100%`；热力图 `📍` → `今天`（补 aria） | `tab-settings.js`、`tab-profile.js` | 截图 |
+| P2-11 | 图鉴筛选芯片 `min-width:44px` | `index.css` | 量测：R/SR 不再低于 44 |
+
+验证汇总：**86 套件 / 0 失败**（新增 `test-ui-consistency.js` 51 断言）；`verify-squad-ui` 两视口全绿；`audit-whole-ui` 复测 14 视图 × 2 视口 **溢出 0 / 对比失败 0**。
+
+**仍未做（记账）**：P2-10 字号阶梯（10–11px 元信息：战斗 48 / 动作库 95 / 图鉴 43 处，需整体字阶改版）、个人表单三层盒子（label 侧置更省纵向，改浮动标签属独立改版）、P3-3 打包（55 个 JS / 56 请求 / 约 2.8MB，发布侧合并或延迟加载）。
+

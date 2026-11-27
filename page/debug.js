@@ -394,6 +394,17 @@
     return head + (errs.length ? pre(errs.join('\n')) : '<i style="color:var(--green)">暂无捕获的 JS 错误 ✅</i>');
   }
 
+  /* v2.14.26（评审 P1-B）：调试 FAB 不再无条件常驻。实测 360 宽下它是 position:fixed 右下 44px 圆钮，
+     正好压在右列可点目标上（动作库每行的 🗑️/✏️、挑战页末张关卡卡右半）——这是全站唯一的「点不准」来源。
+     现在：默认不建 DOM，只有显式 `?debug=1`（或 localStorage.mh_debug='1'）才挂出；
+     面板本体（window.DebugPanel.open / __dbgResetGroupProgress）照旧可从控制台调用，open() 内部会补建。 */
+  var DEBUG_UI_ON = (function () {
+    try {
+      if (typeof location !== 'undefined' && /(?:^|[?&])debug=1(?:[&#]|$)/.test(String(location.search || ''))) return true;
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('mh_debug') === '1') return true;
+    } catch (e) { /* 忽略：隐私模式 / 沙箱里 localStorage 可能抛错，按普通构建处理 */ }
+    return false;
+  })();
   /* --- 面板 DOM --- */
   var fab = null, drawer = null;
   function build() {
@@ -708,5 +719,5 @@
   /* 无 UI 的直接入口（控制台 / 测试用；绕过两步确认，**别**在界面上接线） */
   if (typeof window !== 'undefined') window.__dbgResetGroupProgress = resetGroupProgressNow;
 
-  build();
+  if (DEBUG_UI_ON) build();
 })();

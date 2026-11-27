@@ -11,7 +11,7 @@ function fmtW(w){var n=Number(w);if(isNaN(n))return w;return String(Math.round(n
 function renderProf(){
   var pc=document.getElementById('profileCard')
   var prof=getProf()
-  pc.innerHTML='<div class="pf-row"><label for="pfHeight">身高</label><input type="number" id="pfHeight" value="'+prof.height+'" step="1" min="100" max="250"></div><div class="pf-row"><label for="pfGender">性别</label><select id="pfGender"><option value="男"'+(prof.gender==='男'?' selected':'')+'>男</option><option value="女"'+(prof.gender==='女'?' selected':'')+'>女</option></select></div><div class="pf-row"><label for="pfBirth">出生年</label><input type="number" id="pfBirth" value="'+prof.birthYear+'" step="1" min="1950" max="2010"></div><button class="sb-btn" id="pfSave" style="margin-top:4px">💾 保存资料</button>'
+  pc.innerHTML='<div class="pf-row"><label for="pfHeight">身高</label><input type="number" id="pfHeight" value="'+prof.height+'" step="1" min="100" max="250"></div><div class="pf-row"><label for="pfGender">性别</label><select id="pfGender"><option value="男"'+(prof.gender==='男'?' selected':'')+'>男</option><option value="女"'+(prof.gender==='女'?' selected':'')+'>女</option></select></div><div class="pf-row"><label for="pfBirth">出生年</label><input type="number" id="pfBirth" value="'+prof.birthYear+'" step="1" min="1950" max="2010"></div><button class="sb-btn btn-primary" id="pfSave" style="margin-top:4px">💾 保存资料</button>'
   document.getElementById('pfSave').addEventListener('click',function(){
     prof.height=parseFloat(document.getElementById('pfHeight').value)||175
     prof.gender=document.getElementById('pfGender').value
@@ -122,9 +122,12 @@ function renderPRs(){
   var prs=store.get('prs')||{}
   var keys=Object.keys(prs)
   var el=document.getElementById('prSection');if(!el)return
-  if(!keys.length){el.innerHTML=emptyHtml('🏆','还没有个人最佳','完成力量训练后自动记录','<button class="empty-cta" onclick="switchTab(&quot;strength&quot;)">去记录一组</button>');return}
+  /* v2.14.26（评审 P1-D 新发现）：这里原来写的是 `switchTab("strength")` —— 不存在的 tab 名，
+     点了之后所有 .tab-content 都取消 active，页面变全空且不触发任何 render（死按钮）。
+     正确入口是「训练 → 力量」两级切换。 */
+  if(!keys.length){el.innerHTML=emptyHtml('🏆','还没有个人最佳','完成力量训练后自动记录','<button class="empty-cta" onclick="switchTab(&quot;training&quot;);switchSub(&quot;training&quot;,&quot;strength&quot;)">去记录一组</button>');return}
   var exMap=getExerciseMap()
-  var h='<div class="section-hdr">🏆 个人最佳</div><div class="stats-grid">'
+  var h='<h2 class="section-hdr">🏆 个人最佳</h2><div class="stats-grid">'
   keys.forEach(function(ex){var pr=prs[ex]
     h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-lg)">'+ex+'</div><div class="sc-l" style="font-size:var(--fs-3xs);line-height:1.5">'
     if(pr.maxWeight)h+='🏋️ '+pr.maxWeight+'kg<br>'
@@ -168,13 +171,14 @@ function renderStats(){
   strEntries.forEach(function(e){exCount[e.exercise]=(exCount[e.exercise]||0)+1})
   var top5=Object.keys(exCount).sort(function(a,b){return exCount[b]-exCount[a]}).slice(0,5)
 
-  var h='<div class="section-hdr">📊 训练统计</div>'
+  var h='<h2 class="section-hdr">📊 训练统计</h2>'
   h+='<div class="stats-grid" style="margin-bottom:8px">'
   h+='<div class="sc sc-total"><div class="sc-v">'+totalDays.size+'</div><div class="sc-l">训练天数</div></div>'
   h+='<div class="sc sc-vol"><div class="sc-v">'+strEntries.length+'</div><div class="sc-l">力量组数</div></div>'
   h+='<div class="sc sc-rate"><div class="sc-v">'+carEntries.length+'</div><div class="sc-l">有氧次数</div></div>'
   var favText=top5.slice(0,3).join('<br>')
-  h+='<div class="sc sc-fav"><div class="sc-v" style="font-size:var(--fs-sm)">'+favText+'</div><div class="sc-l">最爱动作</div></div>'
+  var favStyle='font-size:var(--fs-sm)'+(top5.length?'':';color:var(--text3)')
+  h+='<div class="sc sc-fav"><div class="sc-v" style="'+favStyle+'">'+(favText||'暂无')+'</div><div class="sc-l">最爱动作</div></div>'
   h+='</div>'
   if(volumes.some(function(v){return v>0})){
     h+='<div class="chart-wrap"><div style="font-size:var(--fs-2xs);color:var(--text3);padding:4px 8px 0">月度总容量趋势 (kg)</div><canvas id="statsCanvas"></canvas></div>'
@@ -236,7 +240,7 @@ function renderHeatmap(){
   var max=1;for(var k in dd){if(dd[k].score>max)max=dd[k].score}
   function lv(r){if(r===0)return 0;var ra=r/max;if(ra<=.1)return 1;if(ra<=.3)return 2;if(ra<=.5)return 3;if(ra<=.75)return 4;return 5}
   var modeBtn='<button class="hm-nav-btn" data-n="hmMode" style="color:'+( _hmMode==='vol'?'var(--orange)':'var(--blue)')+'" title="切换容量/次数">'+( _hmMode==='vol'?'🏋️':'🔢')+'</button>'
-  var h='<div class="section-hdr">📅 训练热力图 <span style="font-size:var(--fs-3xs);font-weight:400;margin-left:6px">('+(_hmMode==='vol'?'容量 kg':'总次数')+')</span></div><div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav">'+modeBtn+'<button class="hm-nav-btn" data-n="hmP">◀</button><button class="hm-nav-btn" data-n="hmT">📍</button><button class="hm-nav-btn" data-n="hmN">▶</button></div></div><div class="hm-grid">'
+  var h='<h2 class="section-hdr">📅 训练热力图 <span style="font-size:var(--fs-3xs);font-weight:400;margin-left:6px">('+(_hmMode==='vol'?'容量 kg':'总次数')+')</span></h2><div class="hm"><div class="hm-hdr"><div class="hm-label">'+y+'年 '+mn[m]+'</div><div class="hm-nav">'+modeBtn+'<button class="hm-nav-btn" data-n="hmP" aria-label="上个月">◀</button><button class="hm-nav-btn" data-n="hmT" aria-label="回到本月" title="回到本月">今天</button><button class="hm-nav-btn" data-n="hmN" aria-label="下个月">▶</button></div></div><div class="hm-grid">'
   wd.forEach(function(d){h+='<div class="hm-dh">'+d+'</div>'})
   for(var i=0;i<so;i++)h+='<div class="hm-cell"></div>'
   for(var d=1;d<=dim;d++){var da=dd[d],ll=lv(da.score),t=da.date===today();var tip=_hmMode==='vol'?(da.vol>0?Math.round(da.vol)+'kg':''):(da.counts>0?da.counts:'') ;h+='<div class="hm-cell'+(t?' today':'')+'" data-l="'+ll+'" data-date="'+da.date+'" data-vol="'+Math.round(da.vol)+'" data-cnt="'+da.counts+'" title="'+da.date+(tip?' · '+tip:'')+'">'+d+'</div>'}

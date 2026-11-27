@@ -307,12 +307,14 @@ box-shadow:none}
 .ec-time{margin-top:6px;font-size:var(--fs-xs);color:var(--text3)}
 
 /* Empty State */
-.empty{padding:44px 16px;text-align:center;border:var(--bw) solid var(--bd);border-radius:0;background:var(--bg2);transition:border-color 75ms ease-out}
+/* v2.14.26（评审 P2-4 / P2-7）：空态组件收紧 —— 原来 padding 44px + 2.5rem 图标，
+   一个空态就吃掉 300–500px 屏高（记录页三个空态直接占满首屏）。现在 26px + 24px 图标。 */
+.empty{padding:26px 16px;text-align:center;border:var(--bw) solid var(--bd);border-radius:0;background:var(--bg2);transition:border-color 75ms ease-out}
 .empty:hover{border-color:var(--bd-l)}
-.empty-e{font-size:var(--fs-hero);margin-bottom:10px;display:block;color:var(--text3)}
+.empty-e{font-size:var(--fs-2xl);line-height:1.4;margin-bottom:6px;display:block;color:var(--text3)}
 .empty-t{font-size:var(--fs-md);font-weight:700;color:var(--text2)}
 .empty-s{font-size:var(--fs-xs);margin-top:4px;color:var(--text3)}
-.empty-cta{margin-top:var(--sp-4);min-height:var(--touch-min);padding:0 var(--sp-5);border:var(--bw) solid var(--brand);border-radius:0;background:transparent;color:var(--brand);font-size:var(--fs-base);font-weight:700;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.empty-cta{margin-top:var(--sp-3);min-height:var(--touch-min);min-width:var(--touch-min);padding:0 var(--sp-5);border:var(--bw) solid var(--brand);border-radius:0;background:transparent;color:var(--brand);font-size:var(--fs-base);font-weight:700;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
 .empty-cta:active{background:var(--brand-fill);color:var(--on-brand)}
 
 /* Stats Grid */
@@ -321,10 +323,20 @@ box-shadow:none}
 .sc:hover{background:var(--surface-2);border-color:var(--bd-l)}
 .sc .sc-v{font-size:var(--fs-xl);font-weight:800;line-height:1.2;font-family:var(--font)}
 .sc .sc-l{font-size:var(--fs-xs);color:var(--text3);margin-top:4px;letter-spacing:.8px;font-weight:600;text-transform:uppercase}
-.sc-rate .sc-v{color:var(--orange)}
-.sc-total .sc-v{color:var(--blue)}
-.sc-vol .sc-v{color:var(--purple)}
-.sc-fav .sc-v{color:var(--green);font-size:var(--fs-base);line-height:1.4}
+/* v2.14.26（评审 P2-6 三色语义）：统计卡数值统一中性色 —— 之前 4 张卡分配 蓝/紫/橙/绿 四色，
+   颜色不代表任何含义，只制造噪音。颜色从此只留给「达成(绿) / 危险(红) / 主操作(蓝)」。 */
+.sc-total .sc-v,.sc-vol .sc-v,.sc-rate .sc-v{color:var(--text)}
+.sc-fav .sc-v{color:var(--text2);font-size:var(--fs-base);line-height:1.4}
+/* ---- 本旬目标（挑战·战斗首屏）· v2.14.26 评审 P1-A：值/单位拆开 + nowrap，杜绝「0/6 / 天」折行 ---- */
+.period-card{background:var(--bg2);border:var(--bw) solid var(--bd);padding:var(--sp-4);margin-bottom:16px}
+.period-hdr-line{font-size:var(--fs-lg);font-weight:700;margin-bottom:10px}
+.period-kpi-row{display:flex;gap:10px}
+.period-kpi{flex:1;min-width:0;background:var(--bg2);border:var(--bw) solid var(--bd);padding:12px;text-align:center}
+.period-kpi-v{font-size:var(--fs-lg);font-weight:700;line-height:1.25;white-space:nowrap;color:var(--text)}
+.period-kpi-u{font-size:var(--fs-xs);font-weight:600;color:var(--text3)}
+.period-kpi-l{font-size:var(--fs-xs);color:var(--text3);margin-top:4px}
+.period-kpi.is-done{border-color:var(--green-g)}
+.period-kpi.is-done .period-kpi-v{color:var(--green)}
 .sc-ring{position:relative;display:inline-flex;align-items:center;justify-content:center}
 .sc-ring svg{width:72px;height:72px;transform:rotate(-90deg)}
 .sc-ring__bg{fill:none;stroke:var(--bg3);stroke-width:6}
@@ -1200,7 +1212,9 @@ box-shadow:none}
 .pet-squads summary{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;min-height:var(--touch-min);font-size:var(--fs-sm);font-weight:700;cursor:pointer}
 .pet-squads-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
 .pet-squads-body{padding:0 0 var(--sp-4)}
-.pet-squad-card{border:var(--bw) solid var(--bd);padding:var(--sp-4);margin-top:var(--sp-2)}
+/* v2.14.26（评审 P2-5 降层）：队卡原本自带 2px 外框，嵌在编队卡里形成「面板卡→编队卡→队卡→芯片」四层盒子；
+   改成上方分隔线，层级只剩「卡 → 行」。 */
+.pet-squad-card{border:0;border-top:var(--bw) solid var(--bd-l);padding:var(--sp-4) 0 0;margin-top:var(--sp-2)}
 .pet-squad-hd{display:flex;align-items:center;gap:var(--sp-2)}
 .pet-squad-badge{flex:0 0 auto;font-size:var(--fs-xs);font-weight:700;color:var(--text2);border:var(--bw) solid var(--bd);padding:2px var(--sp-2);min-width:44px;text-align:center}
 .pet-squad-badge.is-first{color:var(--brand);border-color:var(--brand)}
@@ -1339,12 +1353,15 @@ box-shadow:none}
 .codex-tabs{display:flex;gap:4px;margin-bottom:10px;border-bottom:var(--bw) solid var(--bd)}
 .codex-tab{flex:1 1 0;min-width:0;padding:0 var(--sp-1);white-space:nowrap}
 .codex-tab-n{font-size:var(--fs-2xs);color:var(--text3);font-weight:600}
-.codex-tab.active .codex-tab-n{color:var(--orange)}
+/* v2.14.26（评审 P1-C）：激活页签是实心蓝底，计数原来用 --orange → 实测 1.3:1（几乎看不见）。
+   改成品牌底上的前景色，实测 ≥6:1。 */
+.codex-tab.active .codex-tab-n{color:var(--on-brand)}
 .codex-search{margin-bottom:10px}
 .codex-filters{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
 .codex-filter{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
 .codex-filter-lbl{flex-shrink:0;font-size:var(--fs-2xs);color:var(--text3)}
-.codex-chip{min-height:var(--touch-min);padding:0 var(--sp-3);font-size:var(--fs-xs)}
+/* v2.14.26（评审 P2-11）：稀有度芯片原来只有 padding，「R」实测 36.4px 宽（低于自家 44×44 基线）。 */
+.codex-chip{min-height:var(--touch-min);min-width:var(--touch-min);padding:0 var(--sp-3);font-size:var(--fs-xs)}
 .codex-count{font-size:var(--fs-xs);color:var(--text3);margin-bottom:10px}
 .codex-count b{color:var(--text)}
 .codex-note{font-size:var(--fs-2xs);line-height:1.7;color:var(--text3);background:var(--bg2);border:var(--bw) solid var(--bd-l);border-radius:0;padding:8px 10px;margin-bottom:10px;word-break:break-word;overflow-wrap:anywhere}
@@ -1433,7 +1450,9 @@ box-shadow:none}
 .panel-inner{padding-top:calc(var(--sec-y) + var(--sat))}
 .section-hdr:first-child{margin-top:var(--sp-2)}
 .section-hdr+.sc,.section-hdr+.stats-grid{margin-top:var(--sp-2)}
-.empty{padding:var(--sp-12) var(--sp-5);border:var(--bw) solid var(--bd)}
+/* 后置的密度覆盖曾把 .empty 的 padding 拉到 --sp-12（≈48px），与上面的紧凑空态冲突；
+   v2.14.26 统一按紧凑档（26px），桌面档的放大交给下面的 media 段处理。 */
+.empty{padding:26px var(--sp-5);border:var(--bw) solid var(--bd)}
 .gb-pane{padding-bottom:calc(var(--sp-12) + var(--sab))}
 
 /* ---- 7. 桌面档：留白再放大一档（移动 2rem → 桌面 3.5rem） ---- */
@@ -1459,6 +1478,11 @@ box-shadow:none}
 .btn-entry{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;margin-top:10px}
 .btn-entry:hover{background:var(--surface-2)}
 .btn-caret{font-size:var(--fs-md);color:var(--text3);flex:0 0 auto}
+/* v2.14.26（评审 P2-3 主按钮两套语言）：全站按钮只剩三档，不再各页自造
+   `.btn-primary`（唯一主操作，实心品牌色）/ `.btn-entry`（列表式入口，带 ›）/ `.btn-quiet`（次级、非主操作，中性描边）。 */
+.btn-quiet{display:flex;align-items:center;justify-content:center;width:100%;min-height:var(--touch-min);padding:var(--sp-4);border:var(--bw) solid var(--bd);background:var(--bg2);color:var(--text);font-size:var(--fs-base);font-weight:600;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color 75ms ease-out,border-color 75ms ease-out}
+.btn-quiet:hover{background:var(--surface-2);border-color:var(--bd-l)}
+.btn-quiet:active{background:var(--surface-3)}
 
 /* ---- 8. 尊重「减弱动态效果」：本层的过渡一律关掉（全局块在文件顶部） ---- */
 @media(prefers-reduced-motion:reduce){

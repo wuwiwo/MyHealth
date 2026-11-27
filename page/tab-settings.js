@@ -18,19 +18,20 @@ function renderExLibrary(){
   var strength=list.filter(function(ex){return ex.type==='strength'});
   var cardio=list.filter(function(ex){return ex.type==='cardio'});
 
-  var h='<div class="section-hdr">🏋️ 力量动作 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+strength.length+')</span></div>';
+  var h='<h2 class="section-hdr">🏋️ 力量动作 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+strength.length+')</span></h2>';
   if(strength.length){
     h+='<div class="ex-lib-list">';
     strength.forEach(function(ex){
       var ratioLabel=ex.ratio!=null?ex.ratio+'%':'100%';
-      h+=exCardHtml(ex,'💪 '+ratioLabel);
+      /* v2.14.26（评审 P2-9）：徽标 `🥇 100%` 会被读成「金牌/评分」，实际是折算率 → 改成「权重 100%」。 */
+      h+=exCardHtml(ex,'权重 '+ratioLabel);
     });
     h+='</div>';
   }else{
     h+='<div class="empty"><span class="empty-e">🏋️</span><div class="empty-t">还没有力量动作</div></div>';
   }
 
-  h+='<div class="section-hdr" style="margin-top:16px">🏃 有氧类型 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+cardio.length+')</span></div>';
+  h+='<h2 class="section-hdr" style="margin-top:16px">🏃 有氧类型 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+cardio.length+')</span></h2>';
   if(cardio.length){
     h+='<div class="ex-lib-list">';
     cardio.forEach(function(ex){
@@ -61,7 +62,9 @@ function renderExLibrary(){
 function exCardHtml(ex,badge,isCardio){
   var namePrefix=isCardio?(ex.emoji||'🏃')+' ':'';
   var linked=ex.dsId&&EXD.ready()?EXD.get(ex.dsId):null;
-  var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+(linked?' <span title="已关联动作百科" style="font-size:var(--fs-2xs)">📖</span>':'')+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'">🗑️</button></div></div>';
+  /* v2.14.26（评审 P2-2）：图标按钮补可访问名称。原来读屏只会念「铅笔 / 垃圾桶」，26 个按钮全一样。 */
+  var exName=String(ex.name==null?'':ex.name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  var h='<div class="ec"><div class="ec-hdr"><div class="ec-ex">'+namePrefix+ex.name+(linked?' <span title="已关联动作百科" style="font-size:var(--fs-2xs)">📖</span>':'')+'<span class="ec-wt">'+badge+'</span></div><div class="ec-actions"><button class="ec-act" data-a="exEdit" data-id="'+ex.id+'" aria-label="编辑 '+exName+'">✏️</button><button class="ec-act" data-a="exDel" data-id="'+ex.id+'" aria-label="删除 '+exName+'">🗑️</button></div></div>';
   if(linked){
     var m=EXD.mediaUrls(linked.img);
     // 图片外侧大图 + 中文主/英文次
@@ -350,16 +353,17 @@ function renderSettingsPlans(){
   var el=document.getElementById('subPlans');if(!el)return
   var strPlans=getPlans();
   var carPlans=getCardioPlans();
-  var h='<div class="section-hdr">🏋️ 力量计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+strPlans.length+')</span></div>';
+  var h='<h2 class="section-hdr">🏋️ 力量计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+strPlans.length+')</span></h2>';
   if(strPlans.length){
     strPlans.forEach(function(p){
       var tags=p.exercises.map(function(e){return e.exercise}).slice(0,5).join('、');
       h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditStrPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelStrPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="font-size:var(--fs-2xs);color:var(--text2)">'+tags+'</div></div></div>';
     });
   }else{
-    h+='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有力量计划</div></div>';
+    /* v2.14.26（评审 P2-7）：空态要有一个动作 —— 原来只有一句「还没有力量计划」，用户不知道下一步去哪。 */
+    h+=emptyHtml('📋','还没有力量计划','计划在「训练 → 力量」里创建并执行','<button class="empty-cta" data-a="gotoTraining">去训练 ›</button>');
   }
-  h+='<div class="section-hdr" style="margin-top:16px">🏃 有氧计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+carPlans.length+')</span></div>';
+  h+='<h2 class="section-hdr" style="margin-top:16px">🏃 有氧计划 <span style="font-size:var(--fs-3xs);color:var(--text3);font-weight:400">('+carPlans.length+')</span></h2>';
   if(carPlans.length){
     carPlans.forEach(function(p){
       var tags=p.segments.map(function(s){
@@ -369,7 +373,7 @@ function renderSettingsPlans(){
       h+='<div class="ec"><div class="ec-hdr"><div class="ec-ex">📋 '+p.name+'</div><div class="ec-actions"><button class="ec-act" data-a="setEditCarPlan" data-pid="'+p.id+'">✏️</button><button class="ec-act" data-a="setDelCarPlan" data-pid="'+p.id+'">🗑️</button></div></div><div class="ec-prog"><div style="display:flex;gap:4px;flex-wrap:wrap">'+tags.map(function(n){return '<span style="font-size:var(--fs-2xs);background:var(--bg);color:var(--text2);padding:1px 8px;border-radius:var(--rp);border:var(--bw) solid var(--bd)">'+n+'</span>'}).join('')+'</div></div></div>';
     });
   }else{
-    h+='<div class="empty"><span class="empty-e">📋</span><div class="empty-t">还没有有氧计划</div></div>';
+    h+=emptyHtml('📋','还没有有氧计划','计划在「训练 → 有氧」里创建并执行','<button class="empty-cta" data-a="gotoCardio">去训练 ›</button>');
   }
   h+='<div style="text-align:center;margin-top:8px;font-size:var(--fs-2xs);color:var(--text3)">计划在训练 Tab 中创建和执行</div>';
   el.innerHTML=h;
@@ -380,7 +384,7 @@ function renderSettingsGame(){
   var el=document.getElementById('subGame');if(!el)return
   var g=getGame();
   var recs=store.get('records')||{};
-  var h='<div class="section-hdr">📖 属性计算</div>';
+  var h='<h2 class="section-hdr">📖 属性计算</h2>';
   h+='<button class="sb-btn" id="setAttrInfoBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd);margin-bottom:16px">📖 查看属性计算方式</button>';
   /* ===== v2.14.3：图鉴入口（宠物 / 技能 / 天赋，只读）=====
      两个入口指向同一个只读面板（page/codex.js 的 renderCodexPanel）：
@@ -391,19 +395,19 @@ function renderSettingsGame(){
          设置页在任何界面都能一步进入（主导航常驻）。
      不新增 tab、不新增路由、不碰培养/战斗/记录三视图的行为。
      渲染在 page/codex.js —— 模块未加载时降级提示，不留死按钮。 */
-  h+='<div class="section-hdr" style="margin-top:16px">📖 图鉴</div>';
+  h+='<h2 class="section-hdr" style="margin-top:16px">📖 图鉴</h2>';
   h+='<button class="sb-btn" id="setCodexBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">📖 查看图鉴（宠物 / 技能 / 天赋）</button>';
   h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">只读资料 · 内容全部来自既有定义，不改动任何数值</div>';
-  h+='<div class="section-hdr">📜 属性变更日志</div>';
+  h+='<h2 class="section-hdr">📜 属性变更日志</h2>';
   h+='<button class="sb-btn" id="setAttrLogBtn" style="background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">📜 查看日志</button>';
-  h+='<div class="section-hdr" style="margin-top:16px">🏆 历史最佳记录</div>';
+  h+='<h2 class="section-hdr" style="margin-top:16px">🏆 历史最佳记录</h2>';
   h+='<div class="stats-grid">';
   if(recs.maxCleared)h+='<div class="sc"><div class="sc-v" style="font-size:var(--fs-base)">📖 '+recs.maxCleared+'</div><div class="sc-l">最高关卡</div></div>';
   if(recs.maxAtk)h+='<div class="sc sc-rate"><div class="sc-v">⚔️ '+recs.maxAtk+'</div><div class="sc-l">最高攻击</div></div>';
   if(recs.maxDef)h+='<div class="sc sc-total"><div class="sc-v">🛡️ '+recs.maxDef+'</div><div class="sc-l">最高防御</div></div>';
   if(recs.maxHp)h+='<div class="sc sc-vol"><div class="sc-v">❤️ '+recs.maxHp+'</div><div class="sc-l">最高生命</div></div>';
   h+='</div>';
-  h+='<div class="section-hdr" style="margin-top:16px">↺ 重置挑战进度</div>';
+  h+='<h2 class="section-hdr" style="margin-top:16px">↺ 重置挑战进度</h2>';
   h+='<button class="sb-btn" id="setResetGameBtn" style="background:rgba(var(--danger-rgb),.1);color:var(--red);border:var(--bw) solid rgba(var(--danger-rgb),.3)">↺ 重置挑战进度（已通关 '+g.cleared.length+' 关）</button>';
   el.innerHTML=h;
 }
@@ -411,12 +415,14 @@ function renderSettingsGame(){
 /* ========== SUB-TAB: DATA MANAGEMENT ========== */
 function renderSettingsData(){
   var el=document.getElementById('subData');if(!el)return
-  var h='<div class="section-hdr">📂 数据管理</div>';
+  var h='<h2 class="section-hdr">📂 数据管理</h2>';
+  /* v2.14.26（评审 P2-3）：导出 / 导入 / 云同步 都是次级操作，统一 `.btn-quiet`；
+     以前是「一个 plan-card__btn--edit + 一个 sb-btn（品牌描边）」混搭，视觉等级与语义无关。 */
   h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
-  h+='<button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="exportDataBtn">📤 导出数据</button>';
-  h+='<button class="plan-card__btn plan-card__btn--edit" style="flex:1;padding:12px;" id="importDataBtn">📥 导入数据</button>';
+  h+='<button class="btn-quiet" style="flex:1" id="exportDataBtn">📤 导出数据</button>';
+  h+='<button class="btn-quiet" style="flex:1" id="importDataBtn">📥 导入数据</button>';
   h+='</div>';
-  h+='<button class="sb-btn" id="syncDataBtn" style="width:100%;background:var(--bg);color:var(--text);border:var(--bw) solid var(--bd)">🔄 手动云同步</button>';
+  h+='<button class="btn-quiet" id="syncDataBtn">🔄 手动云同步</button>';
   h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">用于手动备份或跨设备转移数据</div>';
   el.innerHTML=h;
 }
@@ -429,6 +435,9 @@ function onSettingsEvent(el,id,act){
     if(confirm('确定删除这个动作？历史记录不受影响但不再出现在下拉列表')){delExercise(el.dataset.id)}
     return true}
   if(act==='setEditStrPlan'){openPlanEditor(el.dataset.pid);return true}
+  /* v2.14.26（评审 P2-7）：空态 CTA —— 计划在训练 Tab 里创建，直接把用户送到对应子页签 */
+  if(act==='gotoTraining'){switchTab('training');switchSub('training','strength');return true}
+  if(act==='gotoCardio'){switchTab('training');switchSub('training','cardio');return true}
   if(act==='setDelStrPlan'){
     if(confirm('确定删除这个计划？')){savePlans(getPlans().filter(function(p){return p.id!==el.dataset.pid}));renderSettingsPlans();renderStr()}
     return true}

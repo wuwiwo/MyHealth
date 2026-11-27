@@ -7,6 +7,15 @@
 
 var _gameTab = 'train'   // 'train' | 'battle' | 'record'
 
+/* v2.14.26（评审 P2-4 / P2-7）：本文件的空态统一走 utils.js 的 emptyHtml（.empty 组件）。
+   测试沙箱只加载本文件、不带 utils.js，故留一个同构的降级实现，保证两处渲染出的 DOM 完全一致。 */
+function gvEmpty(emoji, title, sub) {
+  if (typeof emptyHtml === 'function') return emptyHtml(emoji, title, sub, '')
+  return '<div class="empty"><span class="empty-e">' + emoji + '</span>'
+    + '<div class="empty-t">' + title + '</div>'
+    + (sub ? '<div class="empty-s">' + sub + '</div>' : '') + '</div>'
+}
+
 /* 主入口：渲染挑战页（替代原 renderGame 的视图部分） */
 function renderGameViews() {
   renderGameTabBar()
@@ -309,15 +318,19 @@ function renderBattleView() {
 
   // 本旬目标卡
   var p = stats.period
-  var wkStatus = stats.periodDays >= 6 ? '🎉 旬达标！' : ('💪 ' + stats.periodDays + '/6天')
-  h += '<div style="background:var(--bg2);border-radius:16px;padding:16px;margin-bottom:16px">'
-    +'<div style="font-size:var(--fs-lg);font-weight:700;margin-bottom:10px">🗓️ 本旬目标 · '+p.name+'</div>'
-    +'<div style="display:flex;gap:10px">'
-    +'<div style="flex:1;background:var(--bg2);border:var(--bw) solid var(--orange-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--orange)">'+stats.periodDays+'<span style="font-size:var(--fs-xs)">/6天</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">训练天数</div></div>'
+  var wkDone = stats.periodDays >= 6
+  /* v2.14.26（评审 P1-A / P2-6）：原来第三卡把 `'💪 0/6天'` 拼成一整串塞进三等分卡（360 下每卡约 100px），
+     实机折成「0/6 / 天 / 状态」三行；而且它与第一卡的数值完全重复（同一组数据渲染两次）。
+     现在：数字与单位拆成两个 span（单位小一号 + 整行 nowrap），第三卡只表达「本旬达标」状态，
+     三卡数值统一中性色，只有达成时转绿。 */
+  h += '<div class="period-card">'
+    +'<div class="period-hdr-line">🗓️ 本旬目标 · '+p.name+'</div>'
+    +'<div class="period-kpi-row">'
+    +'<div class="period-kpi"><div class="period-kpi-v">'+stats.periodDays+'<span class="period-kpi-u">/6天</span></div><div class="period-kpi-l">训练天数</div></div>'
     /* v2.2 WP-H3：`sumVolume()` 返回浮点，直接内插会渲染出 2862.1000000000004kg 这类尾数。
        展示层取整（与 tab-strength.js:39 / game-render.js:36 的同名「旬容量」显示一致），不动数值本身。 */
-    +'<div style="flex:1;background:var(--bg2);border:var(--bw) solid var(--blue-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--blue)">'+Math.round(stats.periodVol)+'<span style="font-size:var(--fs-xs)">kg</span></div><div style="font-size:var(--fs-xs);color:var(--text3)">旬容量</div></div>'
-    +'<div style="flex:1;background:var(--bg2);border:var(--bw) solid var(--green-g);border-radius:12px;padding:12px;text-align:center"><div style="font-size:var(--fs-lg);font-weight:700;color:var(--green)">'+wkStatus+'</div><div style="font-size:var(--fs-xs);color:var(--text3)">状态</div></div>'
+    +'<div class="period-kpi"><div class="period-kpi-v">'+Math.round(stats.periodVol)+'<span class="period-kpi-u">kg</span></div><div class="period-kpi-l">旬容量</div></div>'
+    +'<div class="period-kpi'+(wkDone?' is-done':'')+'"><div class="period-kpi-v">'+(wkDone?'已达标':'差 '+(6-stats.periodDays)+' 天')+'</div><div class="period-kpi-l">本旬状态</div></div>'
     +'</div></div>'
 
   // 敌群战斗（v2.1.7：12 大关 × 10 小关；文案与进度均由数据派生，不再写死）
@@ -389,11 +402,11 @@ function bhVal(v) { return (v == null) ? '不适用' : v }
 function renderBattleHistoryBlock() {
   var BH_MODES = [['single', '⚔️ 单敌挑战'], ['group', '👥 敌群试炼']]
   var hist = (typeof battleHistoryList === 'function') ? (battleHistoryList() || []) : []
-  var h = '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚔️ 战斗记录 '
-    + '<span style="font-size:var(--fs-xs);color:var(--text3)">单敌 / 敌群分列 · 各计各的</span></div>'
+  var h = '<h2 class="section-hdr">⚔️ 战斗记录 '
+    + '<span style="font-size:var(--fs-xs);color:var(--text3);font-weight:400">单敌 / 敌群分列 · 各计各的</span></h2>'
   if (!hist.length) {
-    /* 空状态：明确「无记录」，与「0 场」区分开 */
-    return h + '<div style="background:var(--bg2);border-radius:12px;padding:20px;text-align:center;font-size:var(--fs-base);color:var(--text3)">暂无战斗记录<br><span style="font-size:var(--fs-xs)">完成一场挑战后自动记录</span></div>'
+    /* 空状态：明确「无记录」，与「0 场」区分开；v2.14.26 起与其它空态同壳（.empty） */
+    return h + gvEmpty('⚔️', '暂无战斗记录', '完成一场挑战后自动记录')
   }
   BH_MODES.forEach(function (m) {
     var mk = m[0]
@@ -421,7 +434,7 @@ function renderBattleHistoryBlock() {
   h += '<div style="font-size:var(--fs-sm);font-weight:700;margin:14px 0 8px">🕒 最近战斗 '
     + '<span style="font-size:var(--fs-2xs);color:var(--text3)">最多 10 条</span></div>'
   if (!recent.length) {
-    h += '<div style="background:var(--bg2);border-radius:12px;padding:16px;text-align:center;font-size:var(--fs-sm);color:var(--text3)">暂无战斗记录</div>'
+    h += gvEmpty('🕒', '暂无战斗记录', '完成一场挑战后自动记录')
     return h
   }
   var labels = { single: '⚔️ 单敌', group: '👥 敌群' }
@@ -456,10 +469,12 @@ function renderRecordView() {
   var stats = getGameStats()
   var h = ''
 
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin-bottom:10px">🏆 历史最佳</div>'
+  h += '<h2 class="section-hdr">🏆 历史最佳</h2>'
   var keys = Object.keys(prs)
   if (!keys.length) {
-    h += '<div style="background:var(--bg2);border-radius:12px;padding:20px;text-align:center;font-size:var(--fs-base);color:var(--text3)">暂无最佳记录<br><span style="font-size:var(--fs-xs)">去训练并完成挑战吧</span></div>'
+    /* v2.14.26（评审 P2-4 / P2-7）：空态统一走 utils.js 的 emptyHtml（.empty 组件：2px 容器边 + 居中 + 可选 CTA），
+       不再各页自造「无边框浅块 / 2px 巨框 / 奖杯大留白」三套壳。 */
+    h += gvEmpty('🏆', '暂无最佳记录', '去训练并完成挑战吧', '')
   } else {
     /* v2.2 WP-H3 同口径：`pr.maxVolume` 由 `w×reps` 得出，可能是浮点（1.1×3 = 3.3000000000000003），
        展示层取整，不改存档里的 PR 值 */
@@ -477,7 +492,7 @@ function renderRecordView() {
   /* ===== v2.13.0 批次 B：⚔️ 战斗记录（单敌 / 敌群分列，禁止跨模式合并排名） ===== */
   h += renderBattleHistoryBlock()
   // 属性最佳
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">📊 属性记录</div>'
+  h += '<h2 class="section-hdr">📊 属性记录</h2>'
   h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
   h += statCell('⚔️','最高攻击',stats.atk)
   h += statCell('🛡️','最高防御',stats.def)
@@ -487,10 +502,10 @@ function renderRecordView() {
   /* ===== v2.2 WP-H4：每月挑战记录（文档「挑战页面 - 增加每个月最高记录查看」） =====
      数据源 = challenge.js 的 listChallengeMonthly()：按自然月分桶归档（跨月自动开新桶，旧月保留）。
      口径：每次通关计 1 次；「单次最高伤害」= 该月伤害最高的一次；属性奖励为该月累计。 */
-  h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">📅 每月挑战记录 <span style="font-size:var(--fs-xs);color:var(--text3)">隐藏挑战 · 跨月归档</span></div>'
+  h += '<h2 class="section-hdr">📅 每月挑战记录 <span style="font-size:var(--fs-xs);color:var(--text3);font-weight:400">隐藏挑战 · 跨月归档</span></h2>'
   var months = (typeof listChallengeMonthly === 'function') ? (listChallengeMonthly() || []) : []
   if (!months.length) {
-    h += '<div style="background:var(--bg2);border-radius:12px;padding:20px;text-align:center;font-size:var(--fs-base);color:var(--text3)">本月暂无挑战记录<br><span style="font-size:var(--fs-xs)">完成隐藏挑战后按月归档，可回看每月最高记录</span></div>'
+    h += gvEmpty('📅', '本月暂无挑战记录', '完成隐藏挑战后按月归档，可回看每月最高记录', '')
   } else {
     var curMk = (typeof chMonthOf === 'function') ? chMonthOf() : ''
     h += '<div style="max-height:280px;overflow-y:auto">'
