@@ -8,13 +8,23 @@
 
 var EXD = (function() {
   'use strict';
-  var D = window.EX_DATASET || {};
-  var K = D.keys || ['id','name','zh','cat','eq','target','mg','sec','img','gif','mid','ins','steps'];
+  /* v2.14.36：数据集 1161KB（占源码 44%），线上首屏不该为它付流量 —— 改为**按需加载**。
+     bind() 可在数据到位后重新绑定；load(cb) 负责注入 <script> 并回调。 */
+  var D = null, ROWS = [], K = ['id','name','zh','cat','eq','target','mg','sec','img','gif','mid','ins','steps'];
   var IDX = {id:0,name:1,zh:2,cat:3,eq:4,target:5,mg:6,sec:7,img:8,gif:9,mid:10,ins:11,steps:12};
-  var ROWS = D.items || [];
   var _byId = null;
   var _catList = null;
   var _eqList = null;
+  var _loadState = 0;   /* 0=未开始 1=加载中 2=已尝试 */
+  var _loadCbs = [];
+
+  function bind() {
+    D = (typeof window !== 'undefined' && window.EX_DATASET) || {};
+    if (D.keys && D.keys.length) K = D.keys;
+    ROWS = D.items || [];
+    _byId = null; _catList = null; _eqList = null;
+  }
+  bind();
 
   /* 部位/器械中英映射（筛选显示中文） */
   var CAT_LABELS = {
@@ -69,6 +79,31 @@ var EXD = (function() {
 
   function ready() { return ROWS.length > 0; }
   function attribution() { return D.attribution || ''; }
+
+  /* 按需加载数据集（幂等）：数据已在（源码页直接 <script> 引入）→ 立刻回调 true。
+     加载中 → 排队；失败 → 回调 false，UI 走「数据集未加载」既有分支。 */
+  function load(cb) {
+    if (ready()) { if (cb) cb(true); return; }
+    if (cb) _loadCbs.push(cb);
+    if (_loadState !== 0) return;
+    _loadState = 1;
+    var flush = function(okFlag) {
+      _loadState = 2;
+      var q = _loadCbs; _loadCbs = [];
+      q.forEach(function(f) { try { f(okFlag); } catch (e) { console.warn('[EXD] 加载回调失败（已忽略）', e); } });
+    };
+    if (typeof document === 'undefined' || !document.createElement) { flush(false); return; }
+    var s = document.createElement('script');
+    /* 戳用版本号：数据集不变时可长期命中缓存；变了跟版本一起翻 */
+    s.src = 'data/exercises-dataset.js?v' + String((typeof APP_VERSION !== 'undefined' && APP_VERSION) || '1').replace(/\./g, '');
+    s.async = true;
+    s.onload = function() {
+      try { bind(); } catch (e) { console.warn('[EXD] 数据集绑定失败', e); }
+      flush(ready());
+    };
+    s.onerror = function() { flush(false); };
+    (document.head || document.body || document.documentElement).appendChild(s);
+  }
 
   function byIdMap() {
     if (!_byId) {
@@ -184,6 +219,8 @@ var EXD = (function() {
 
   return {
     ready: ready,
+    load: load,
+    bind: bind,
     attribution: attribution,
     count: function(){ return ROWS.length; },
     get: get,

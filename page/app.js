@@ -146,12 +146,30 @@ function init(){
 
   autoLinkExercises()
   renderStr();renderCar();renderProf();renderGame();renderSettings();renderSummonPanel()
+  /* v2.14.36：动作数据集 1161KB（占源码 44%）不再进首屏包 —— 空闲时补拉，
+     拉到后把依赖它的卡片（动作库 / 训练动作图）刷一遍。 */
+  setTimeout(prefetchDataset,1200)
 }
 
-/* 自动关联动作百科：给未关联动作按中文名匹配 dsId（持久化） */
+function refreshAfterDataset(){
+  try{
+    if(typeof renderExLibrary==='function')renderExLibrary()
+    if(typeof renderStr==='function')renderStr()
+    if(typeof initCardioTypes==='function')initCardioTypes()
+  }catch(e){console.warn('[app] 数据集到达后刷新失败（已忽略）',e)}
+}
+
+function prefetchDataset(){
+  try{ if(typeof EXD==='undefined'||EXD.ready())return; EXD.load(function(ok){ if(ok)refreshAfterDataset() }) }
+  catch(e){console.warn('[app] 动作百科空闲预取失败（已忽略）',e)}
+}
+
+/* 自动关联动作百科：给未关联动作按中文名匹配 dsId（持久化）
+   v2.14.36：数据集可能尚未加载 → 先触发加载再回填（不阻塞首屏渲染） */
 function autoLinkExercises(){
   try{
-    if(typeof EXD==='undefined'||!EXD.ready())return;
+    if(typeof EXD==='undefined')return;
+    if(!EXD.ready()){EXD.load(function(ok){ if(ok)autoLinkExercises() });return}
     var list=store.get('exercises')||[];
     var changed=false;
     list.forEach(function(ex){

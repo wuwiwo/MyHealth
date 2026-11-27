@@ -117,7 +117,7 @@ doc/
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.34）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.35）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.36）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -489,5 +489,6 @@ node scripts/test-bundle-fresh.js # 过期守卫：源码重算指纹 + 重算�
 | **2.14.33** | **2026-11-27** | **全项目评审批次 H：清单剩余四项收口（P2-4 / P2-6 / P2-7 / P2-9）** — ① 边框与色彩纪律写进 `index.css` 文件头（容器 2px / 分隔单边 1px / 强调边 2px；蓝=主操作·红=危险·绿=达成，紫只属数据属性、黄只属瞬时提示），五处「四周 1px」容器收成 2px；② 计划页两块空态改 `.empty-compact`（188px → 125px，360×640 首屏可见两个 CTA），`emptyHtml()` 加类名参数；③ `📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️、属性计算→🧮，宠物「结算」→「离线补算」；④ `test-ui-consistency` 70 → **86 断言**；全量 **87 套件 / 0 失败**；缓存戳 `?v196` → **`?v197`** |
 | **2.14.34** | **2026-11-27** | **无障碍收口：容器级弹层焦点陷阱 + 双主题审计 + 键盘可达性审计** — ① **焦点陷阱**（`page/utils.js` 末尾 `MODAL FOCUS TRAP` 段）：打开弹层记录来源焦点并送焦点入层、Tab 在层内首尾环回、焦点逃到背后被拉回、关闭归还焦点、非 Tab 不拦（Esc 不受影响）；**容器级接管**（`document` 捕获 + `MutationObserver` 同帧合并），12 个弹层调用点一行未改。② **双主题审计**：`scripts/audit-whole-ui.js` 扩为 2 主题 × 2 视口 × 14 视图 = 56 柱，深色对比失败 **0**。③ **键盘可达性审计**：新增 `scripts/audit-tab-order.js`（CDP 9345）量「可点不可聚焦 / 隐藏可聚焦 / DOM 与视觉序倒置 / 焦点环缺失 / 模态焦点」六项，11 视图全 0，模态探针由 false 转 true。④ **新增测试** `scripts/test-modal-focus.js` **21 断言**。修：加载即初始化打崩 4 套 vm 沙箱（`document` stub 缺方法）→ 改能力探测守卫。全量 **88 套件 0 失败**。 |
 | **2.14.35** | **2026-11-27** | **删除可撤销（30 秒）** — ① `page/utils.js` 新增 `UNDO DELETE` 段：`showUndoBar(text,onUndo)` / `clearUndoBar()` / `insertAt(list,item,index)`（纯函数，按**原下标**插回，越界退化为追加、不改入参）；**一次只有一条**，新删除顶掉旧条。② 结构：`role="status"` 正文 + **独立倒计时 `30s`**（`aria-hidden`，每秒递减）+「撤销」+ `✕`（`aria-label`）。③ 接线三处（删动作 / 删力量计划 / 删有氧计划），`confirm` 一条未拆。④ 样式：贴导航上方、层级 998、按钮 ≥44×44、只用既有令牌。**真机抓修**：正文在 360px 被截断（`（30 秒内...`）→ 改倒计时标签；`.undo-x` 四周 1px → `border:none`。新增 `scripts/test-undo-delete.js`（38 断言）+ `scripts/verify-undo.js`（真机 13 断言：26 → 25 → 26，31 秒后条消失）。全量 **89 套件 0 失败**。 |
+| **2.14.36** | **2026-11-27** | **首屏 2.6MB → 1.5MB：动作数据集懒加载** — 先量后改：线上压缩后 `app.js` **662KB**、整包 715KB，且版本戳每次发版换 URL，**按体积切三段收益≈0**（否决原「拆包」建议）。改找「首屏不需要的部分」：`data/exercises-dataset.js` **1161KB = 源码 43.8%**，只服务动作百科 / 动作卡配图 / dsId 关联。① `page/ex-dataset.js` 新增 `bind()`（可重绑，清空索引缓存）与 `load(cb)`（幂等：已有→同步回调 `true`；首次→注入带版本戳的 `<script>`；加载中→排队不重复请求；失败→回调 `false`）。② `scripts/build-bundle.js` 增 `LAZY` 清单把数据集移出包（**2630 → 1472KB**），源码页仍逐文件引入、测试行为不变。③ 三触发点：**空闲预取**（`init` 后 1200ms + `refreshAfterDataset()`）、`autoLinkExercises` 数据未到先拉、`openDsPicker` 打开百科先拉（失败 toast）。④ 新增 `scripts/test-lazy-dataset.js`（28 断言）+ `scripts/verify-lazy-dataset.js`（真机 7 断言：数据集在 app.js 之后才拉、1324 条、201 张卡图、百科 40 芯片）。⑤ `test-bundle-fresh` 22 → **25**。全量 **90 套件 0 失败**，`verify-bundle` 14 视图逐字一致。 |
 
-> 当前版本：**v2.14.35**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+> 当前版本：**v2.14.36**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

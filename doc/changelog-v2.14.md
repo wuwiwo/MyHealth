@@ -5,6 +5,51 @@
 
 ---
 
+## v2.14.36
+
+Date: 2026-11-27
+
+**首屏 2.6MB → 1.5MB：动作数据集改为懒加载（评审 §18.4 / §19.4 剩余建议①「拆包」的实测替代方案）**
+
+> 评审留了两条建议，第一条是「拆包（core / 战斗 / 视图）」。本版先用**真实网络数据**判定这条建议到底该怎么做，结论和原建议不一样，并已落地。
+
+**① 先量，再决定（否决「按体积切三段」）**
+- 线上实测（`_tmp-uiskill/measure-transfer.js`，CDP 9347 读 `encodedDataLength`）：`index.css` 48KB + `_build/app.js` **662KB**，合计 **715KB** —— 源码 2631KB 经 Vercel 压缩后约 4:1。
+- 关键事实：入口脚本带版本戳（`?vNNN`），**每次发版整包换 URL**；同一版本内不会重复下载。所以「按体积切三段」在真实使用中**收益≈0**（只是把 662KB 拆成三个不可复用的冷启动请求，还多 2 次 RTT）。
+- 结论：**不做纯体积切分**；要找的是「首屏不需要那部分」。
+
+**② 找到真正的 44%：动作数据集**
+- 体积分布实测：`data/exercises-dataset.js` **1161KB = 源码的 43.8%**（次席 `game-render.js` 208KB / 7.9%）。
+- 它只服务「动作百科 overlay / 动作卡配图 / dsId 自动关联」，**首屏渲染不需要**。
+
+**③ 落地：运行时懒加载（`page/ex-dataset.js`）**
+- `bind()`：把原先「加载时一次性读 `window.EX_DATASET`」改成可**重绑**（重设 `D/ROWS/K`，清空 `_byId/_catList/_eqList` 缓存）。
+- `load(cb)`：幂等。数据已在 → 同步回调 `true`；首次 → 注入 `<script src="data/exercises-dataset.js?v<版本>">`；加载中重复调用只排队不重复请求；失败回调 `false`，UI 走既有的「数据集未加载」分支。
+- `scripts/build-bundle.js` 增加 `LAZY = ['data/exercises-dataset.js']`：该文件**不进包**，源码页 `index.src.html` 仍按普通脚本引入（本地开发与全部逐文件测试行为不变）。
+
+**④ 三个触发点（保证「最终一定加载」，只是不挡首屏）**
+- **空闲预取**：`init()` 末尾 `setTimeout(prefetchDataset,1200)`；到位后 `refreshAfterDataset()` 刷动作库 / 训练卡 / 有氧类型。
+- **用到先拉**：`autoLinkExercises()` 数据未到时先 `EXD.load`，就绪后再回填 dsId（避免首屏丢自动关联）。
+- **打开百科**：`openDsPicker(onPick)` 数据未到先拉，拉到位用同一 `onPick` 重开；失败 `toast('动作百科数据加载失败','e')`。
+
+**测试与验证**
+- 新增 `scripts/test-lazy-dataset.js` **28 断言**（构建契约 / `bind` 重绑语义 / `load` 幂等与假 DOM 真跑 / 三处接线）。
+- 新增 `scripts/verify-lazy-dataset.js`（真机，CDP 9348）**7 断言**：实测首屏只有 `index.css` + `_build/app.js`，数据集在 **app.js +100ms 之后**才拉（一次），到位后 `ready=true`、**1324 条**、动作卡出图 **201 张**、百科 overlay 40 个筛选芯片正常。
+- `test-bundle-fresh` 由 22 → **25 断言**（新增「包内不含数据集」「入口页不引用数据集」「体积 < 1.6MB」；指纹重算同步跳过懒加载项）。
+- `verify-bundle`：14 视图逐字一致（**产物 3 资源 / JS 55 → 2**）。
+- 全量 **90 套件 / 0 失败**；双主题 × 双视口审计 0 失败；键盘六项 0 与模态 `trapOn:true` 不变。
+
+**权衡**
+- 数据集**不删不留**：只挪出首屏。首次进「动作百科」仍需等 1161KB（可长期命中缓存，因为戳跟着版本走、数据集很少变）；换来的是**每次冷启动少下 44%**。
+- 不做真正的多包拆分：等真有「仅 core 可用」的场景（如首屏 skeleton + 交互后加载战斗模块）再拆，现在拆只增加复杂度。
+
+**本版文件**
+- 改：`page/ex-dataset.js`、`page/app.js`、`page/tab-settings.js`、`scripts/build-bundle.js`、`scripts/test-bundle-fresh.js`、`page/index.src.html`（戳 `?v200`）、`page/index.html` / `page/_build/app.js`（构建产物）
+- 增：`scripts/test-lazy-dataset.js`、`scripts/verify-lazy-dataset.js`
+- 文档：`doc/changelog-v2.14.md`、`README.md`、`doc/design-tokens-v2.1.md`（§19）、`doc/ui-ux-review-whole-2026-11-27.md`（§20）、`doc/VERSION-LEDGER.md`
+
+---
+
 ## v2.14.35
 
 Date: 2026-11-27
@@ -1936,6 +1981,7 @@ Date: 2026-10-12
 | 2.14.32 | 55 | 3508 行 game-render.js | **入口即产物：`page/index.html` 改由构建生成**（v2.14.31 的 rewrite 被线上实测证伪后的修正）—— ① 线上实测：`/` 返回 200 但正文仍是逐文件版（`index.css?v195` + 55 个 `<script>`，18571B），而 `/index.bundle.html`（200/15877B）与 `/_build/app.js`（200/2685742B）均正常 —— **产物部署无问题，只是入口没切**；Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总把 `/` 解析到 `index.html`，`source:"/"` 匹配不到 → 改「入口文件本身即产物」，不依赖平台规则；② 源码页改名 **`page/index.src.html`**（唯一真源，本地/测试/逐文件加载都走它），`build-bundle.js` 读它、把 55 个 `<script src>` 整段换成 `<script src="_build/app.js?vNNN">` 后写出 `page/index.html`（body/header 逐字节同构），删掉旧 `index.bundle.html`（入口只剩一条路径）；③ `page/vercel.json` 移除失效 `rewrites`；④ 21 个测试/审计脚本的 `index.html` → `index.src.html`（保留「源码是唯一真源」）；⑤ `test-bundle-fresh` **19 → 22 断言**：新增「按同一规则重算期望入口页与磁盘 `index.html` **逐字节比对**」（手改产物页或忘重建即红）、入口脚本唯一且戳正确、`index.css` 带戳、旧 bundle 页已移除、`vercel.json` 不再声明 `/` rewrite；⑥ `verify-bundle` 比对对象改 `/index.src.html` vs `/index.html`：**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → `?v196`。回滚：`cp page/index.src.html page/index.html` 再推 |
 | 2.14.33 | 55 | 3508 行 game-render.js | **全项目评审批次 H：清单剩余四项收口** —— ① **P2-4 边框纪律**：写进 `index.css` 文件头（容器 2px `--bw`+`--bd` / 分隔单边 1px `--bw-thin`+`--surface-3` / 强调边 2px），并把五处「四周 1px」容器（`.refine-src` / `.pet-exp-log` / `.orb-bag` / `.pet-rest` / `.train-mat-fold`）收成 2px —— 扁平风无阴影，1px 四周边框会被读成分隔线；② **P2-6 色彩纪律**：三语义定稿（蓝=主操作/进度/选中、红=危险/敌方/BOSS、绿=达成/友方/治疗；紫只属数据属性、黄只属瞬时提示），并断言按钮与空态不得用紫；③ **P2-7 空态**：`emptyHtml()` 加第 5 参类名 + `.empty-compact`（图标与标题同行、CTA 撑满），计划页两块空态 **188px → 125px**，360×640 首屏可见两个 CTA；④ **P2-9 图标语义**：`📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️（4 处）、属性计算→🧮，宠物「结算」→**「离线补算」**；⑤ `test-ui-consistency` **70 → 86 断言**（新增 `[17]` 十六类规则）、`test-pet-panel-layout` 一条文案断言随行为更新；全量 **87 套件 / 0 失败**、`audit-whole-ui` 14×2 复测溢出/对比/触摸/圆角全 0；缓存戳 `?v196` → `?v197`。权衡：强调色计数仍 7–12（成对的主题蓝/绿本就计两个，压低只能减语义色，不做） |
 | 2.14.34 | 55 | 3508 行 game-render.js | **无障碍收口**：容器级弹层焦点陷阱（打开送焦点/关闭归还/Tab 首尾环回/背后拉回，12 个弹层调用点零改动）+ 审计扩为**双主题 × 2 视口 × 14 视图**（深色对比失败 0）+ 新增键盘可达性六项审计（11 视图全 0，模态真缺口已修）。修复：加载即初始化打崩 4 套 vm 沙箱 → 改能力探测守卫。测试 88 套件 0 失败、`test-modal-focus` 21 断言。 |
+| 2.14.36 | 55 | 3508 行 game-render.js | **首屏 2.6MB → 1.5MB：动作数据集懒加载**（对「拆包」建议的实测替代）—— 线上实测压缩后 app.js **662KB**、整包 715KB，且版本戳每次发版换 URL → **按体积切三段收益≈0**（否决原建议）；改找「首屏不需要的部分」：`data/exercises-dataset.js` **1161KB = 源码 43.8%** 只服务动作百科/配图 → `ex-dataset.js` 增 `bind()`（可重绑）与 `load(cb)`（幂等注入脚本、失败回调 false），构建脚本加 `LAZY` 清单移出包（2630 → **1472KB**）；三触发点：空闲 1.2s 预取 / `autoLink` 先拉 / 打开百科先拉。新增 `test-lazy-dataset`（28 断言）+ `verify-lazy-dataset`（真机 7 断言：数据集在 app.js 之后才拉、1324 条、201 张卡图）；`test-bundle-fresh` 22 → 25。90 套件 0 失败。 |
 | 2.14.35 | 55 | 3508 行 game-render.js | **删除可撤销**：`showUndoBar` / `clearUndoBar` / `insertAt`（30 秒窗口、按原下标插回、一次一条、独立倒计时 `30s` 且 `aria-hidden`、撤销按钮 ≥44×44、层级 998）；删动作 / 删力量计划 / 删有氧计划三处接线，`confirm` 一条未拆。真机抓修：正文被 360px 截断 → 改倒计时标签；`.undo-x` 四周 1px → `border:none`。新增 `test-undo-delete`（38 断言）+ `verify-undo`（真机 13 断言，26→25→26）。89 套件 0 失败。 |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**

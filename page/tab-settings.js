@@ -254,6 +254,11 @@ function delExercise(id){
 var _exdPage=50,_exdShown=50;
 
 function openDsPicker(onPick){
+  /* v2.14.36：数据集按需加载 —— 未就绪时先拉，拉到后重开同一个入口（onPick 语义不变） */
+  if(typeof EXD!=='undefined'&&!EXD.ready()){
+    EXD.load(function(ok){ if(ok)openDsPicker(onPick); else toast('动作百科数据加载失败','e') });
+    return;
+  }
   var ov=document.createElement('div');ov.className='modal-overlay open';ov.id='dsPicker';
   var h='<div class="modal-sheet" style="height:92vh;max-height:92vh;display:flex;flex-direction:column">'
     +'<div class="modal-handle"></div>'

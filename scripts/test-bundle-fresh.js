@@ -33,10 +33,13 @@ const SCRIPT_RE = /<script src="([^"]+)\?v(\d+)"><\/script>/g;
 const srcs = [...srcHtml.matchAll(SCRIPT_RE)].map(m => ({ src: m[1], stamp: m[2], full: m[0] }));
 const stamp = srcs.length ? srcs[0].stamp : null;
 
-/* 与 build-bundle.js 逐字一致的合成规则，用来重算指纹与期望入口页 */
+/* 与 build-bundle.js 逐字一致的合成规则，用来重算指纹与期望入口页
+   v2.14.36：动作数据集不进包（运行时懒加载），重算时必须同样跳过，否则指纹必然对不上 */
+const LAZY_SRC = ['data/exercises-dataset.js'];
 function recompute() {
   let out = '';
   for (const m of srcs) {
+    if (LAZY_SRC.indexOf(m.src) >= 0) continue;
     const body = fs.readFileSync(path.join(PAGE, m.src), 'utf8')
       .replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
     out += '/* ===== ' + m.src + ' ===== */\n' + body + '\n;\n';
@@ -60,7 +63,11 @@ const lastIdx = srcHtml.indexOf(srcs[srcs.length - 1].full) + srcs[srcs.length -
 const expectEntry = srcHtml.slice(0, firstIdx) + '<script src="_build/app.js?v' + stamp + '"></script>' + srcHtml.slice(lastIdx);
 ok(entry === expectEntry, 'index.html 与「源码页 + 单脚本替换」重算结果逐字节一致（未被手改）');
 ok(/index\.css\?v(\d+)"/.test(entry), '入口页仍引用 index.css 且带戳');
-ok(fs.existsSync(BUNDLE) && fs.statSync(BUNDLE).size > 2 * 1024 * 1024, 'app.js 体积 > 2MB（真的合进去了）');
+ok(fs.existsSync(BUNDLE) && fs.statSync(BUNDLE).size > 1.2 * 1024 * 1024, 'app.js 体积 > 1.2MB（真的合进去了）');
+/* v2.14.36：1161KB 数据集移出包 —— 断言体积回落且包里不含数据集内容 */
+ok(fs.statSync(BUNDLE).size < 1.6 * 1024 * 1024, 'app.js < 1.6MB（数据集已移出包）');
+ok(bundle.indexOf('window.EX_DATASET =') < 0, '包内不含动作数据集（懒加载）');
+ok(entry.indexOf('data/exercises-dataset.js') < 0, '入口页不直接引用数据集脚本');
 ok(!fs.existsSync(path.join(PAGE, 'index.bundle.html')), '旧的 page/index.bundle.html 已移除（入口只剩 index.html 一条路径）');
 
 function walkJs(dir) {
@@ -76,8 +83,8 @@ ok(!fs.existsSync(path.join(PAGE, 'bundle.js')), 'page/ 根没有遗留 bundle.j
 
 console.log('\n[3] 文件清单与顺序');
 const marks = [...bundle.matchAll(/\/\* ===== ([^ ]+) ===== \*\//g)].map(m => m[1]);
-ok(marks.length === srcs.length, '标记数 = 脚本数（' + marks.length + ' / ' + srcs.length + '）');
-ok(marks.join(',') === srcs.map(s => s.src).join(','), '标记顺序与 index.src.html 逐项一致');
+ok(marks.length === srcs.length - LAZY_SRC.length, '标记数 = 打包脚本数（' + marks.length + ' / ' + (srcs.length - LAZY_SRC.length) + '）');
+ok(marks.join(',') === srcs.filter(s => LAZY_SRC.indexOf(s.src) < 0).map(s => s.src).join(','), '标记顺序与 index.src.html 逐项一致（已去掉懒加载项）');
 
 console.log('\n[4] 源码页仍是唯一真源');
 ok(srcs.length === 55, 'index.src.html 仍是 55 个带戳的逐文件脚本（实测 ' + srcs.length + '）');

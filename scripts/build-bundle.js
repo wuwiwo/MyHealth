@@ -41,9 +41,16 @@ if (!matches.length) { console.error('未在 index.src.html 里找到外部脚�
 const stamp = matches[0].stamp;
 let out = '';
 const parts = [];
+/* v2.14.36：动作数据集（1161KB，占源码 44%）**不进包** —— 它只有打开动作百科 /
+   动作卡图时才需要，首屏不该为它付 44% 流量。运行时由 page/ex-dataset.js 的
+   EXD.load() 注入 <script src="data/exercises-dataset.js?v<版本>">，并在到位后刷新卡片。
+   源码页 index.src.html 仍按普通脚本引入（本地开发与全部测试走逐文件加载，行为不变）。 */
+const LAZY = ['data/exercises-dataset.js'];
+let lazyBytes = 0;
 for (const m of matches) {
   const file = path.join(PAGE, m.src);
   if (!fs.existsSync(file)) { console.error('缺文件：' + m.src); process.exit(2); }
+  if (LAZY.indexOf(m.src) >= 0) { lazyBytes += fs.statSync(file).size; continue; }
   const body = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
   parts.push({ src: m.src, bytes: body.length });
   out += '/* ===== ' + m.src + ' ===== */\n' + body + '\n;\n';
@@ -73,8 +80,9 @@ fs.writeFileSync(path.join(PAGE, 'index.html'), outHtml, 'utf8');
 const bundleKb = Math.round(fs.statSync(path.join(OUT, 'app.js')).size / 1024);
 const quiet = process.argv.includes('--quiet');
 if (!quiet) {
-  console.log('✔ 合成 ' + matches.length + ' 个脚本 → page/_build/app.js（' + bundleKb + ' KB）');
+  console.log('✔ 合成 ' + parts.length + ' 个脚本 → page/_build/app.js（' + bundleKb + ' KB）');
+  console.log('✔ 懒加载 ' + LAZY.length + ' 个数据集脚本（' + Math.round(lazyBytes / 1024) + ' KB，首屏不含）');
   console.log('✔ 生成 page/index.html（线上入口，1 个 <script> + 1 个 <link>；源码页为 page/index.src.html）');
-  console.log('  首屏请求：' + (matches.length + 1) + ' → 2（html 本身不计入资源条目）');
+  console.log('  首屏请求：' + (matches.length + 1) + ' → 2（html 本身不计入资源条目；数据集在空闲/用到时才拉）');
   console.log('  最大单文件：' + parts.sort((a, b) => b.bytes - a.bytes).slice(0, 3).map(p => p.src + ' ' + Math.round(p.bytes / 1024) + 'KB').join(' / '));
 }
