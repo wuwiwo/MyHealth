@@ -116,12 +116,14 @@ const INJECT_STAGES = `
 
 const MEASURE_STAGES = `
 (function(){
-  var out = { cards:[], scrollW:document.documentElement.scrollWidth, errors:[] };
+  var out = { cards:[], scrollW:document.documentElement.scrollWidth, errors:[],
+    modes: (document.querySelector('.gl-modes')||{}).textContent || '' };
   Array.prototype.forEach.call(document.querySelectorAll('[data-stage]'), function(c){
     var r = c.getBoundingClientRect();
     var tags = Array.prototype.map.call(c.querySelectorAll('.lv-tag'), function(t){ return t.textContent.trim(); });
     out.cards.push({ id:c.getAttribute('data-stage'), h:+r.height.toFixed(1), w:+r.width.toFixed(1),
       right:+r.right.toFixed(1), tags:tags,
+      cls: c.className,
       overflowX: c.scrollWidth > c.clientWidth + 1 });
   });
   return out;
@@ -153,6 +155,10 @@ const INJECT_PET = `
 const MEASURE_PET = `
 (function(){
   var out = { cards:[], chips:{sel:[], taken:[]}, scrollW:document.documentElement.scrollWidth, errors:[],
+    summary: { pickChips: document.querySelectorAll('.pet-pick-chip').length,
+               clickableChips: document.querySelectorAll('[data-pet-pick]').length,
+               jump: !! document.getElementById('petSquadEditJump'),
+               count: (document.querySelector('.pet-lineup-count')||{}).textContent || '' },
     dbg: { squads: (typeof getPetSquads==='function') ? getPetSquads() : null,
            pets: (getPetStore().pets||[]).map(function(p){ return p.speciesId + ':' + p.stage + (p.isDead?'(dead)':'') }) } };
   Array.prototype.forEach.call(document.querySelectorAll('.pet-squad-card'), function(card){
@@ -248,13 +254,18 @@ const MEASURE_PET = `
       check('g3 有 10 个关卡卡片', n2 === 10, n2);
       const m2 = (await cdp.send('Runtime.evaluate', { expression: MEASURE_STAGES, returnByValue: true })).result.value;
       const by = id => m2.cards.filter(c => c.id === id)[0] || {};
-      check('g3-1 标「双场景」', /双场景/.test((by('g3-1').tags || []).join()), JSON.stringify(by('g3-1').tags));
-      check('g3-5 精英关标「双场景」', /双场景/.test((by('g3-5').tags || []).join()), JSON.stringify(by('g3-5').tags));
+      /* v2.14.25（评审 P2-3）：形态改「只标例外」—— 常规双场景不再逐卡打标，分布写在 .gl-modes */
+      check('g3-1 不再逐卡打「双场景」', (by('g3-1').tags || []).length === 0, JSON.stringify(by('g3-1').tags));
+      check('g3-5 精英关同样不打标', (by('g3-5').tags || []).length === 0, JSON.stringify(by('g3-5').tags));
       check('g3-10 标「双 BOSS」', /双 BOSS/.test((by('g3-10').tags || []).join()), JSON.stringify(by('g3-10').tags));
       check('g4-10 不标（单场景 Boss）', (by('g4-10').tags || []).length === 0, JSON.stringify(by('g4-10').tags));
+      check('列表头写明形态分布（9 关双场景）', /9 关双场景/.test(m2.modes), m2.modes);
+      check('列表头点出双 BOSS 数量', /1 关双 BOSS/.test(m2.modes), m2.modes);
+      check('关卡卡状态走类（可挑战 = .is-open 或 .locked）',
+        m2.cards.every(c => /is-open|locked|done/.test(c.cls)), JSON.stringify(m2.cards.map(c => c.cls)));
       check('所有卡片无横向溢出', m2.cards.every(c => !c.overflowX && c.right <= vp.w + 1), JSON.stringify(m2.cards.filter(c => c.overflowX)));
       check('页面无横向溢出', m2.scrollW <= vp.w + 1, 'scrollW=' + m2.scrollW);
-      console.log('    g3-1 标签 ' + JSON.stringify(by('g3-1').tags) + ' · g3-10 标签 ' + JSON.stringify(by('g3-10').tags));
+      console.log('    g3-1 标签 ' + JSON.stringify(by('g3-1').tags) + ' · g3-10 标签 ' + JSON.stringify(by('g3-10').tags) + ' · 头 ' + m2.modes.trim());
       await shot(vp, 'stages');
 
       /* 3) 宠物面板编队管理 */
@@ -263,6 +274,11 @@ const MEASURE_PET = `
       check('编队区已展开渲染', inj3 === true, inj3);
       const m3 = (await cdp.send('Runtime.evaluate', { expression: MEASURE_PET, returnByValue: true })).result.value;
       check('两张队伍卡', m3.cards.length === 2, JSON.stringify(m3.cards));
+      /* v2.14.25（评审 P1-1）：摘要只读 + 唯一编辑入口 */
+      check('出战编队摘要 = 首发 2 只只读芯片', m3.summary.pickChips === 2, m3.summary.pickChips);
+      check('摘要里没有可点芯片（data-pet-pick = 0）', m3.summary.clickableChips === 0, m3.summary.clickableChips);
+      check('有「编队管理 ›」跳转入口', m3.summary.jump === true, m3.summary.jump);
+      check('摘要容量显示 2/4', /2\/4/.test(m3.summary.count), m3.summary.count);
       /* 选中芯片 = 一队 2 只 + 二队 1 只（跨两张卡统计） */
       check('选中芯片实心填充（背景不透明）', m3.chips.sel.length === 3 && m3.chips.sel.every(c => !/rgba\(0, 0, 0, 0\)/.test(c.bg)),
         JSON.stringify(m3.chips.sel.map(c => c.name + ':' + c.bg)));

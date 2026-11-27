@@ -270,9 +270,9 @@ function petSquadPanelHtml(ready) {
     var p = ready.filter(function (x) { return x.speciesId === sid; })[0];
     return !!(p && p.injured);
   };
-  var h = '<details class="pet-squads"' + (_petSquadsOpen ? ' open' : '') + '>'
+  var h = '<details class="pet-squads" id="petSquadDetails"' + (_petSquadsOpen ? ' open' : '') + '>'
     + '<summary>🐾 编队管理 <span class="pet-squads-hint">'
-    + squads.length + ' 队 · 一队为首发 · 点开编辑</span></summary>'
+    + squads.length + ' 队 · 首发在第一队 · 点开编辑</span></summary>'
     + '<div class="pet-squads-body">';
   squads.forEach(function (sq, i) {
     var injuredN = sq.petIds.filter(injuredOf).length;
@@ -309,7 +309,7 @@ function petSquadPanelHtml(ready) {
     h += '<div class="pet-squad-card">'
       + '<div class="pet-squad-hd">'
       + '<span class="pet-squad-badge' + (i === 0 ? ' is-first' : '') + '">'
-      + (i === 0 ? '首发' : '作战') + '</span>'
+      + (i === 0 ? '首发' : '第 ' + (i + 1) + ' 队') + '</span>'
       + '<input class="pet-squad-name" type="text" data-squad-name="' + sq.id + '"'
       + ' value="' + petSquadEsc(sq.name) + '" maxlength="' + nameMax + '"'
       + ' aria-label="「' + petSquadEsc(sq.name) + '」名称（最多 ' + nameMax + ' 个字）">'
@@ -372,44 +372,46 @@ function renderPetPanel() {
           + (st.due + st.firstTimers) + ' 只宠物）" style="padding:10px 14px;min-height:44px;font-size:var(--fs-base);border-color:var(--green);color:var(--green)">结算</button>'
       : '')
     +'</div>'
-  /* ⚔️ 参战阵容（v2.3：从列表底部**上移到顶部**）—— 成熟 + 未阵亡的宠物都能被选，
-     选中态由 `_petBattlePicks` 决定；未选择时开战会自动带成熟宠物（game-render.js autoPickPets），
-     这句话写在摘要里，免得「空摘要」让人以为开战不带宠。 */
+  /* ⚔️ 出战编队（v2.14.25 收口，评审 P1-1）——
+     · 本块**只读**：显示首发队成员 + 容量 + 两个动作（开战 / 进编队管理）；
+     · **编辑只剩一处**：下方 `.pet-squads`（编队管理）的芯片。
+     v2.14.24 时这里还是「一排可点芯片」，与编队管理里的首发队卡把同一组数据渲染了两遍，
+     用户要自己推断两块的关系、两处还能各自改选中（评审实测：两块选中集合完全相同）。 */
   var ready = d.pets.filter(function(p){return p.stage==='mature'&&!p.isDead})
   if (ready.length) {
     var _petMaxLabel = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
     var _picks = _petBattlePicks || []
-    /* v2.14.24：参战阵容 = **首发队**。已编在其它小队的宠物在这里也标出来（置灰 + 「在 X」），
-       否则点一下会把它从原队悄悄搬走（savePetBattlePicks → sanitize 先到先得）。 */
-    var _sqTaken = {}
-    if (typeof getPetSquads === 'function') {
-      getPetSquads().forEach(function (sq, j) {
-        if (j === 0) return
-        sq.petIds.forEach(function (pid) { _sqTaken[pid] = sq.name || ('第' + (j + 1) + '队') })
-      })
-    }
+    var _squadsN = (typeof getPetSquads === 'function') ? getPetSquads().length : 0
+    var _byId = {}
+    ready.forEach(function (p) { _byId[p.speciesId] = p })
     h += '<div class="pet-lineup">'
-      +'<div class="pet-lineup-hd">⚔️ 参战阵容（首发队）'
+      +'<div class="pet-lineup-hd">⚔️ 出战编队'
       +'<span class="pet-lineup-count">'+_picks.length+'/'+_petMaxLabel+'</span>'
-      +'<span class="pet-lineup-hint">'+(_picks.length ? '点宠物名切换' : '还没选 · 开战会自动带成熟宠物')+'</span>'
+      +'<span class="pet-lineup-hint">'+(_squadsN > 1 ? '首发＝第一队 · 共 ' + _squadsN + ' 队' : '首发＝开战第一队')+'</span>'
       +'</div>'
-      +'<div class="pet-pick-chips">'
-    ready.forEach(function(p) {
-      var sel = _picks.indexOf(p.speciesId) > -1
-      var host = (!sel && _sqTaken[p.speciesId]) ? _sqTaken[p.speciesId] : ''
-      /* v2.2.29：参战芯片加 32px 头像，扫一眼就能认出是哪只（原来只有文字）
-         ⚠️ 头像 <img> 必须紧跟按钮起始标签（test-pet-icons.js 4d 的契约） */
-      h += '<button class="speed-btn pet-pick-chip' + (host ? ' is-taken' : '') + '" data-pet-pick="'+p.speciesId+'" aria-pressed="'+(sel?'true':'false')+'"'
-        + (host ? ' disabled aria-disabled="true" title="已编在「'+petSquadEsc(host)+'」：先在编队管理里从那队移出"' : '')
-        + ' style="padding:3px 10px;'+(sel?'border-color:var(--brand-fill);color:var(--on-brand);background:var(--brand-fill);font-weight:700':'')+'">'
-        + petIconHtml(p.speciesId, 32) + '<span>'+(getPetCodex(p.speciesId)||{}).name+'</span>'
-        + (host ? '<span class="pet-squad-chip-tag">在 '+petSquadEsc(host)+'</span>' : '') + '</button>'
-    })
-    h += '</div>'
-    /* 开战按钮随「参战选择」一起上移：它作用的正是上面这份选择 */
-    h += '<button class="speed-btn pet-start-battle" id="petStartBattle" style="border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button>'
-    h += '</div>'
-    /* v2.18（阶段 A）：编队管理（多小队）。放在阵容卡之后、材料区之前 —— 与"阵容"语义相邻。 */
+      +'<div class="pet-lineup-sum"><span class="pet-lineup-slot">首发</span><div class="pet-pick-chips">'
+    if (_picks.length) {
+      _picks.forEach(function (sid) {
+        var p = _byId[sid]
+        var nm = (typeof getPetCodex === 'function' && (getPetCodex(sid) || {}).name) || (p && p.name) || sid
+        h += '<span class="pet-pick-chip" title="' + petSquadEsc(nm) + (p && p.injured ? '：受伤中，本场不会上场' : '') + '">'
+          + ((typeof petIconHtml === 'function') ? petIconHtml(sid, 16) : '🐾')
+          + '<span>' + petSquadEsc(nm) + '</span>'
+          + (p && p.injured ? '<span class="pet-lineup-warn" aria-hidden="true">⚠️</span>' : '')
+          + '</span>'
+      })
+    } else {
+      h += '<span class="pet-lineup-empty">还没编队 · 开战会自动带成熟宠物</span>'
+    }
+    h += '</div></div>'
+      /* 动作区：开战（唯一动作）+ 进编队管理（唯一编辑入口）。两者都是 44px 命中区。 */
+      +'<div class="pet-lineup-ops">'
+      +'<button class="speed-btn pet-start-battle btn-primary" id="petStartBattle" type="button">⚔️ 开始敌群试炼（带宠物）</button>'
+      +'<button class="speed-btn pet-squad-jump" id="petSquadEditJump" type="button"'
+      +  ' aria-controls="petSquadDetails">🐾 编队管理<span class="pet-squad-jump-caret" aria-hidden="true">›</span></button>'
+      +'</div>'
+      +'</div>'
+    /* v2.18（阶段 A）：编队管理（多小队）—— **唯一编辑入口**，紧跟在阵容摘摘要之后 */
     h += petSquadPanelHtml(ready)
   }
   // 材料（v2.3：数字独占一行，按钮组另起一行；一键治疗全宽独占一行）
@@ -690,21 +692,15 @@ function renderPetPanel() {
       renderPetPanel()
     })
   })
-  ov.querySelectorAll('[data-pet-pick]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var sid = btn.getAttribute('data-pet-pick')
-      /* v2.2 WP-H1：先确保已从存档恢复，再改选择 */
-      if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
-      _petBattlePicks = _petBattlePicks || []
-      var i = _petBattlePicks.indexOf(sid)
-      var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
-      if (i > -1) _petBattlePicks.splice(i, 1)
-      else if (_petBattlePicks.length < _petMax) _petBattlePicks.push(sid)
-      else { toast('最多携带 ' + _petMax + ' 只宠物 ⚔️', 'e'); return }
-      /* v2.2 WP-H1：选择落盘（刷新 / 重开后保留） */
-      if (typeof savePetBattlePicks === 'function') savePetBattlePicks(_petBattlePicks)
-      renderPetPanel()
-    })
+  /* v2.14.25：`[data-pet-pick]` 就地切换**已删除**（评审 P1-1）——
+     阵容编辑只有一条路：编队管理芯片 → `togglePetSquadPet` → `petSquadRefreshPicks`。
+     这里只保留「进编队管理」的跳转；不再有第二处能改首发选中。 */
+  var squadJump = document.getElementById('petSquadEditJump')
+  if (squadJump) squadJump.addEventListener('click', function () {
+    _petSquadsOpen = true
+    renderPetPanel()
+    var det = document.getElementById('petSquadDetails')
+    if (det && typeof det.scrollIntoView === 'function') det.scrollIntoView({ block: 'nearest' })
   })
   /* ===== v2.18（阶段 A）：编队管理的事件 =====
      ⚠️ 一律「调 pet-store 入口 → 刷新首发缓存 → 重渲染」，不在本文件写存档、不自己判上限/互斥。 */

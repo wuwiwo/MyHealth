@@ -5,6 +5,71 @@
 
 ---
 
+## v2.14.25
+
+Date: 2026-11-27
+
+**UI/UX 评审后的 P1 + P2 收口（编队 / 出战场 / 关卡列表）**
+
+> 评审口径：ui-skills.com 的 `pbakaus/audit`（5 维技术审计）+ `pbakaus/critique`（Nielsen 10 项 / P0–P3）；客观数字来自新增 `scripts/audit-squad-ui.js`（无头 Chrome + CDP 量测，非目测）。完整报告见 `doc/ui-ux-review-2026-11-27.md`。
+> 作者裁决（本轮）：**「P1 和 P2 全部一起做」**、平衡性不再测试（实机为准）。
+
+### 新增功能
+
+1. **宠物面板「⚔️ 出战编队」改为只读摘要 + 单一编辑入口**（`page/pet-ui.js` + `page/index.css`，评审 P1-1）
+   - 摘要行：`首发` 标签 + 首发成员芯片（**无边框、非按钮**，带 ⚠️ 受伤标记）+ 容量 `N/4`；空态给一句「还没编队 · 开战会自动带成熟宠物」。
+   - 动作区只剩两个：`⚔️ 开始敌群试炼`（唯一主 CTA，`.btn-primary`）与 `🐾 编队管理 ›`（`#petSquadEditJump`，`aria-controls` 指向 `<details id="petSquadDetails">`，点开自动展开并滚到编队区）。
+   - **删除** `[data-pet-pick]` 就地切换及其 `savePetBattlePicks` 调用 —— 首发阵容只由 `togglePetSquadPet → petSquadRefreshPicks` 维护，一个面板里不再有两处能改同一组数据。
+   - 标题统一「出战编队」（不再叫「参战阵容（首发队）」）。
+2. **动作层级：一屏一个主 CTA**（`page/game-views.js` + `index.css`，评审 P3-9 / P1-2）
+   - 新增 `.btn-primary`（实心 `--brand-fill`，仅开战按钮用）与 `.btn-entry`（中性描边 + 右对齐 `›`，用于技能培养 / 图鉴 / 炼魂 / 挑战关卡 / 编队管理 / 更多养成）。
+   - 培养页 4 个入口与 2 个入口按钮**去掉内联语义色**（原来写 `border-color/color/border-radius` 内联，其中 `border-radius:12px` 早已被 `[style*="border-radius"]` 守卫吃掉，属死代码）。
+
+### 修复
+
+1. **大关内页关卡卡「十张长得一模一样」**（`game-views.js` + `index.css`，评审 P1-2）
+   - 根因：4 种状态（已通关 / 可挑战 / 未解锁 + Boss/精英配色）全部写在内联 `btnStyle` 里，被 `index.css` 的「内联语义色收敛」规则 `.speed-btn[style*="border-color"]{…!important}` 统一收成中性。
+   - 改为类驱动 `.gl-stage.is-open / .is-elite / .is-boss / .done / .locked`（**不复用 `.lv-card`**，那是「挑战关卡」章节卡的既有样式）；状态文字抽成 `.lv-state` 并由状态类着色。
+   - 守卫收窄为 `:not(.btn-entry):not(.btn-primary):not(.gl-stage):not(.train-start-battle)`，只留给尚未收口的历史内联。
+2. **「🔒 未解锁」在 130px 窄卡里折成两行**：`.lv-state{white-space:nowrap}`；锁定卡不透明度 `.6 → .7`（原来整卡连同文字一起发灰、对比不足）。
+
+### UI 调整
+
+- **形态标签只标例外**（评审 P2-3）：`groupStageModeTag` 对「双场景」直接返回 `''`，只有「双 BOSS」打 `.lv-tag.is-boss`；列表头新增 `.gl-modes` 一行「本大关 10 关：9 关双场景 · 1 关双 BOSS」（原来 10 张卡里 9 张重复同一标签，把唯一的例外淹掉）。
+- **培养页编队行补可点提示**（评审 P2-4）：行尾 `›` + `.train-squad-row:hover/:active` 底色反馈（量测原为 `hasAffordance=false`，整行是按钮却毫无提示）。
+- **徽标文案统一**（评审 P2-5）：「首发 / 作战」→「首发 / 第 N 队」，与培养页、编队摘要一致。
+- **跨队占用可读性**（评审 P2-6）：`.pet-squad-chip.is-taken` 不透明度 `.45 → .6`；「在 X队」标签由 `currentColor` 半透明改为不透明 `--text2`（原有效对比 ≈2.1:1，而这正是要传达的信息）。
+- **更正**（评审报告）：`[data-squad-del]` 本就有原生 `confirm('删除这支小队？…')`，「无二次确认」系评审误判，已在报告与台账标注；本轮未改该逻辑，仅保留红色专用于破坏性操作。
+
+### 测试
+
+| 套件 | 变化 |
+|---|---|
+| `scripts/test-squad-ui.js` | §2 重写为「只读摘要」契约（2 只只读芯片 / `data-pet-pick` = 0 / 跳转入口 / 标题与徽标文案）；§3 补「只标例外」「`.gl-modes`」「关卡卡不再内联 btnStyle」守卫；CSS 契约列表换 `.gl-stage` / `.btn-primary` / `.btn-entry` / `.train-squad-caret` / `.pet-lineup-sum` / `.pet-squad-jump` → **41 断言** |
+| `scripts/test-pet-panel-layout.js` | 「5 个可点芯片 + aria-pressed」改为「4 只只读摘要芯片 + 摘要区 0 个可点芯片」；`<details>` 断言改正则（新增 id）→ **90 通过** |
+| `scripts/test-pet-icons.js` | 4d 改为先注入首发再渲染（摘要只列首发成员），头像契约不变 → **263 通过** |
+| `scripts/verify-squad-ui.js`（真机） | 断言改为 g3-1 / g3-5 **不打标**、g3-10 打「双 BOSS」、`.gl-modes` 文案、关卡卡走类、摘要只读 2 只 + 无 `data-pet-pick` + 跳转入口；360×640 / 390×844 **全绿** |
+| `scripts/audit-squad-ui.js`（新增，评审工具） | 5 类客观量测：触摸高度 / 字号 / 对比度 / 焦点可达 / 标签密度 / 重复数据，输出 `_tmp-audit/metrics.json` |
+
+全量 **85 套件 / 0 失败**。
+
+### 版本文件
+
+- `page/utils.js`：`APP_VERSION` `2.14.24` → **`2.14.25`**
+- `page/index.html`：缓存戳 `?v188` → **`?v189`**（56 处）
+- `README.md`：副标题、目录树台账指针（`2.14.26`）、`2.14.25` 版本表行、当前版本行
+- `doc/VERSION-LEDGER.md`：`2.14.25` 领号 + 已发布行
+- 新增文件：`scripts/audit-squad-ui.js`（评审量测，不进全量回归）、`doc/ui-ux-review-2026-11-27.md`（评审报告）
+- `page/` JS 数 **55**，最大文件 `game-render.js` **3508 行**
+
+### 未完成
+
+- 普通档 `normal:0.85` 按作者裁决**保持不动**，等实机体感。
+- 其余 **8 处**历史内联语义色未收口（宠物列表「🧪营养 / ✨炼化」、技能「装备中」、宝珠「装配」、惩罚横幅「知道了」、引导「开始挑战」、空态「获取初始蛋」），属后续批次（守卫已收窄，不影响新类）。
+- 评审报告里的 P3 项（11px 元信息、同权重全宽按钮的进一步收敛）未做。
+
+---
+
 ## v2.14.24
 
 Date: 2026-11-27
@@ -1425,6 +1490,7 @@ Date: 2026-10-12
 | 2.14.22 | 55 | 3543 行 game-render.js | **阶段 E（真机双栏复核 + 平衡实测定值）**：新增 `scripts/verify-dual-layout.js`（无头 Chrome + 自建 CDP 客户端，Node 22 自带 WebSocket）在 360×640 / 390×844 真开 g18-5 量测 **28 项**，抓到**双栏芯片溢出广场下沿**（A 越界 153px / B 81px）并修复 —— 双栏改紧凑芯片 `--gb-unit-w:44px` / `--gb-unit-ico:18px`（`min-width`/`min-height` 仍 **44px = 触摸下限**）、中央区压到 2px、`.gb-dual .gb-arena-row` 取消 `max-height` 裁切、控制条标题压成无空格；新增 `scripts/balance-dual.js`（同关同阵容、40 种子、单场景用户基线）实测把 `MULTI_SCENE_ENEMY_SCALE` **0.85 → 0.95**（0.85 时双场景比同关单场景**容易 4~40pp**，与精英关定位相反；0.95 持平或略难）。全量 **84 套件 / 0 失败** + a11y **40/40**，缓存戳 `?v186` |
 | 2.14.23 | 55 | 3550 行 game-render.js | **多队双场景改为常态 + 按关卡类型分档 + 双 Boss**（作者新规格，推翻 v1.2 Q6）：`stageIsMulti` 重写为「x1–x9 全 multi；x10 仅 `lg % MULTI_BOSS_EVERY(3) == 0` 为 multi」，240 关里 **224 关 multi**、16 个非双 Boss 关仍 single；`MULTI_SCENE_SCALE_BY_TYPE = {normal:0.85, elite:0.9, boss:0.9}` 取代单一常量（`multiSceneScale(type)`，未知回落 0.85）；`applyMultiSceneScale` 接受数字或 type 字符串；**双 Boss = 两场景各 1 Boss**（每侧完整编成，天然 2 Boss，无新编成逻辑）；开战入口 `_startDualGroupTrial` 改返回布尔，**队不足回退单场景**（不再挡住新档开战）；`test-attackable` §7 重写（53 断言）、`test-dual-battle` 分档 + 新增 §14（93 断言）；`verify-dual-layout` 支持传关卡 id，g3-1 / g3-10 / g18-5 三种类型各 28/28。全量 **84 套件 / 0 失败**，缓存戳 `?v187` |
 | 2.14.24 | 55 | 3508 行 game-render.js | **多队收口 + 编队/关卡 UI**：① **单场景不再有接力** —— 删 `_groupRelayNext` 提供方与 `_groupRelaySquads`/`_groupSquadIdx`/`_groupRelayPending` 三全局、删 `squadUnits`/`reinforce` 写入与上场 toast（引擎 `gbReinforce` 保留，`test-squad-relay` 收窄为「引擎能力 + 不接线」41 断言）；② 关卡列表加形态标签 `stageModeLabel(lg, st)`（'' / 双场景 / 双 BOSS，判据仍 `stageIsMulti`）+ `.lv-tag`，顺带修 60px 窄卡「第10关」折行与 Boss 名重复王冠；③ 培养页 `.train-lineup` 改**多队摘要**（每队一行 → 打开编队管理），删除 `data-train-pick` 就地切换；④ 编队 UI：选中态实心 + ✓、跨队占用标「在 X」+ disabled（参战阵容同源）、队卡 `↑↓🗑` 独立一行、元信息「未编队 N 只」；新增 `test-squad-ui.js`（28 断言）+ `verify-squad-ui.js`（无头 Chrome 两视口）；全量 **85 套件 / 0 失败**，缓存戳 `?v188`。⚠️ 普通档 0.85 按作者裁决保持不动，等实测 |
+| 2.14.25 | 55 | 3508 行 game-render.js | **评审后 P1+P2 收口**（ui-skills `pbakaus/audit` + `critique` 两套标准，客观数据来自新增 `scripts/audit-squad-ui.js`）：① **P1-1 去重** —— 宠物面板「出战编队」改只读摘要（非按钮芯片）+ 唯一主 CTA + 「编队管理 ›」单一编辑入口，删 `[data-pet-pick]` 就地切换与它的 `savePetBattlePicks`，`_petBattlePicks` 只经 `togglePetSquadPet → petSquadRefreshPicks` 维护；② **P1-2 样式单轨** —— 培养页 4 入口 + 开战 + 编队管理改 `.btn-entry` / `.btn-primary`，大关关卡卡从内联 `btnStyle` 改 `.gl-stage.is-open/.is-elite/.is-boss/.done/.locked`（原来被 `[style*="border-color"]` 的 `!important` 收成中性 → 10 张卡一样），守卫收窄为四类白名单；③ **P2-3 标签只标例外**（双场景不再逐卡）+ `.gl-modes` 列表头分布行 + `.lv-state{nowrap}` 修窄卡折行；④ P2-4 编队行补 `›` 与 hover/active；P2-5 徽标「作战」→「第 N 队」；P2-6 占用态 `.45→.6` 且标签改不透明 `--text2`（原 ≈2.1:1）；P2-7 核实删除**本就有** `confirm()`（评审误判，已更正）；`test-squad-ui` 41 断言、`test-pet-panel-layout` 90、`test-pet-icons` 263、`verify-squad-ui` 两视口全绿；全量 **85 套件 / 0 失败**，缓存戳 `?v189` |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。

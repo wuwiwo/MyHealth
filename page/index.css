@@ -426,9 +426,31 @@ box-shadow:none}
 .lv-status.current{color:var(--orange)}
 .lv-status.locked{color:var(--text3)}
 /* v2.14.24：关卡形态标签（双场景 / 双 BOSS）—— 开战前就能看出本关形态。
-   只借既有颜色 token（普通档蓝、Boss 档红），不加新色、不加动效。 */
+   只借既有颜色 token（普通档蓝、Boss 档红），不加新色、不加动效。
+   v2.14.25：只用于**例外**（双 BOSS）；常规「双场景」改由 .gl-modes 在列表头说一次。 */
 .lv-tag{display:inline-block;margin-top:3px;padding:1px 5px;border:var(--bw) solid currentColor;border-radius:0;font-size:var(--fs-2xs);line-height:1.5;color:var(--blue);white-space:nowrap}
 .lv-tag.is-boss{color:var(--red)}
+/* v2.14.25（评审 P2-3）：形态分布一行（本大关 N 关：9 关双场景 · 1 关双 BOSS） */
+.gl-modes{font-size:var(--fs-xs);color:var(--text2);margin:-4px 0 12px}
+.gl-modes-boss{color:var(--red)}
+/* v2.14.25（评审 P1-2 / P2-3）：大关内页的关卡卡片改**类驱动**（原来 4 种状态写在内联 style，
+   被「内联语义色收敛」的 !important 规则统一收成中性 → 整屏 10 张卡一模一样）。
+   状态只改描边与状态文字色，卡片本身仍是中性底：一屏只有一个强调色，由「可挑战」承担。
+   ⚠️ 用独立类 .gl-stage，不复用 .lv-card（后者是「挑战关卡」章节卡片的既有样式，不能串味）。 */
+.gl-stage{display:flex;flex-direction:column;align-items:center;gap:0;padding:10px 4px;min-height:56px;font-size:var(--fs-sm)}
+.gl-stage-ico{font-size:var(--fs-lg);line-height:1}
+.gl-stage .lv-stage-name{font-size:var(--fs-2xs);margin-top:2px}
+.lv-state{font-size:var(--fs-2xs);margin-top:2px;white-space:nowrap}
+.gl-stage.is-open{border-color:var(--brand-fill)}
+.gl-stage.is-open .lv-state{color:var(--brand-fill)}
+.gl-stage.is-open.is-boss{border-color:var(--red)}
+.gl-stage.is-open.is-boss .lv-state{color:var(--red)}
+.gl-stage.is-open.is-elite{border-color:var(--orange)}
+.gl-stage.is-open.is-elite .lv-state{color:var(--orange)}
+.gl-stage.done{opacity:.5;border-color:var(--green)}
+.gl-stage.done .lv-state{color:var(--green)}
+.gl-stage.locked{opacity:.7;color:var(--text3)}
+.gl-stage.locked .lv-state{color:var(--text3)}
 
 /* Chapter */
 .chapter-hdr{font-size:var(--fs-base);font-weight:700;margin:var(--sec-y) 0 var(--sp-4);color:var(--text);display:flex;align-items:center;gap:8px}
@@ -1160,8 +1182,17 @@ box-shadow:none}
 .pet-lineup-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:var(--fs-sm);font-weight:700}
 .pet-lineup-count{color:var(--text2);font-variant-numeric:tabular-nums}
 .pet-lineup-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
-.pet-pick-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.pet-start-battle{width:100%;margin-top:10px;min-height:var(--touch-min);padding:10px 14px;font-size:var(--fs-sm)}
+/* v2.14.25：只读摘要行（「首发」+ 成员芯片 + 容量），不再放可点芯片 —— 编辑入口只有编队管理。
+   仍复用 .pet-pick-chips / .pet-pick-chip 两个类名（图标与文字对齐的契约不变，不新增一套样式）。 */
+.pet-lineup-sum{display:flex;align-items:flex-start;gap:8px;margin-top:8px}
+.pet-lineup-slot{flex:0 0 auto;padding:1px 6px;border:var(--bw) solid var(--bd-l);font-size:var(--fs-2xs);font-weight:700;line-height:1.6;color:var(--text3)}
+.pet-lineup-empty{font-size:var(--fs-xs);color:var(--text3)}
+.pet-lineup-warn{font-size:var(--fs-xs)}
+.pet-pick-chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0;flex:1 1 auto}
+.pet-lineup-ops{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)}
+.pet-start-battle{width:100%;min-height:var(--touch-min);padding:10px 14px;font-size:var(--fs-sm)}
+.pet-squad-jump{width:100%;min-height:var(--touch-min);font-size:var(--fs-sm);justify-content:space-between;padding:0 var(--sp-3)}
+.pet-squad-jump-caret{font-size:var(--fs-md);color:var(--text3)}
 /* ===== v2.18（阶段 A）：编队管理（多小队）=====
    复用既有令牌与 .speed-btn 底座（44px 热区 / 2px 边 / 圆角 0 / 75ms 过渡都在底座里），
    此处只补布局与层级；不新增颜色、不用渐变、不用阴影。 */
@@ -1186,19 +1217,19 @@ box-shadow:none}
 .pet-squad-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:var(--fs-sm);max-width:100%}
 .pet-squad-chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:8em}
 /* v2.14.24：选中态 = **实心填充 + ✓**（不再只靠边框变绿），与 aria-pressed 同源；
-   被别的队伍占用的宠物：置灰 + 「在 X」标签 + disabled（不靠点了才报错）。 */
+   被别的队伍占用的宠物：置灰 + 「在 X」标签 + disabled（不靠点了才报错）。
+   v2.14.25（评审 P2-6）：占用态从 .45 提到 .6 —— .45 时「在 X队」有效对比仅 ≈2.1:1，
+   而这正是要传达的关键信息；标签本身改用不透明文字色，不跟着一起褪。 */
 .pet-squad-chip[aria-pressed="true"]:not(:hover){background:var(--brand-fill);color:var(--on-brand);border-color:var(--brand-fill);font-weight:700}
 .pet-squad-chip-mark{font-weight:900;line-height:1}
-.pet-squad-chip.is-taken{opacity:.45;cursor:not-allowed}
+.pet-squad-chip.is-taken{opacity:.6;cursor:not-allowed}
 .pet-squad-chip.is-taken:hover{background:transparent;color:inherit}
-.pet-squad-chip-tag{flex:0 0 auto;padding:0 4px;border:var(--bw) solid currentColor;font-size:var(--fs-2xs);line-height:1.5;opacity:.9}
+.pet-squad-chip-tag{flex:0 0 auto;padding:0 4px;border:var(--bw) solid var(--text2);color:var(--text2);font-size:var(--fs-2xs);line-height:1.5}
 .pet-squad-meta{font-size:var(--fs-2xs);color:var(--text3);margin-top:var(--sp-2)}
-/* v2.14.24：参战阵容（= 首发队）里已被其它小队占用的宠物，同样置灰标注 */
-.pet-pick-chip.is-taken{opacity:.45;cursor:not-allowed}
-/* v2.14.24：参战芯片选中态统一为实心填充（与编队芯片同一视觉语言；文字用 on-brand 保证对比度） */
-.pet-pick-chip[aria-pressed="true"]:not(:hover){background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand);font-weight:700}
-.pet-pick-chip[aria-pressed="true"]:not(:hover) span{color:var(--on-brand)}
-.pet-pick-chip.is-taken:hover{background:transparent;color:inherit}
+/* v2.14.25：出战编队摘要里的成员芯片 = **只读**（span，不是 button）。
+   刻意**不加边框、不加底色**：一眼就能和下面「可点的编队芯片」区分开（本块只读、那块可编辑）。 */
+.pet-pick-chip{padding:2px 6px 2px 0;border:0;font-size:var(--fs-xs);color:var(--text2);max-width:100%}
+.pet-pick-chip>span:not(.pet-lineup-warn){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:9em}
 .pet-squad-warn{font-size:var(--fs-xs);color:var(--yellow);margin-top:var(--sp-2)}
 .pet-squad-add{width:100%;margin-top:var(--sp-3);font-size:var(--fs-sm);border-color:var(--brand);color:var(--brand)}
 .pet-squad-note{font-size:var(--fs-xs);color:var(--text3);margin-top:var(--sp-2)}
@@ -1415,9 +1446,19 @@ box-shadow:none}
    page/game-views.js 的 5 个面板入口按钮把语义色写在**内联 style** 里
    （宠物绿 / 技能蓝 / 图鉴 --bd-l / 炼魂紫 / 关卡紫），扁平规范要求「黑白 + 一个强调色」，
    故这里用属性选择器把它们收回中性；语义色仍保留在区块标题文字上（那里本来就是 deliberate）。
-   阶段 2 把这些内联样式收进类名后可整块删除本规则。 */
-.speed-btn[style*="border-color"]{border-color:var(--bd-l)!important;color:var(--text)!important}
-.speed-btn[style*="border-color"]:hover{background:var(--text)!important;color:var(--bg)!important;border-color:var(--text)!important}
+   v2.14.25：**阶段 2 已对本轮涉及的入口完成**（培养页 4 个入口 + 开战按钮 + 编队管理 + 大关关卡卡
+   全部改成类驱动：`.btn-entry` / `.btn-primary` / `.gl-stage`），下面这条守卫只留给尚未收口的旧内联。 */
+.speed-btn[style*="border-color"]:not(.btn-entry):not(.btn-primary):not(.gl-stage):not(.train-start-battle){border-color:var(--bd-l)!important;color:var(--text)!important}
+.speed-btn[style*="border-color"]:not(.btn-entry):not(.btn-primary):not(.gl-stage):not(.train-start-battle):hover{background:var(--text)!important;color:var(--bg)!important;border-color:var(--text)!important}
+
+/* ---- 7.6 动作层级（v2.14.25，评审 P3-9）----
+   一屏只有一个主 CTA（实心 --brand-fill），其余入口走中性描边 + 右侧 ›，
+   不再「6 个全宽同权重按钮」并列 —— 用户一眼知道「先开战」。全部复用既有令牌。 */
+.btn-primary{background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand);font-weight:700}
+.btn-primary:hover{background:var(--brand-fill-d);border-color:var(--brand-fill-d);color:var(--on-brand)}
+.btn-entry{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;margin-top:10px}
+.btn-entry:hover{background:var(--surface-2)}
+.btn-caret{font-size:var(--fs-md);color:var(--text3);flex:0 0 auto}
 
 /* ---- 8. 尊重「减弱动态效果」：本层的过渡一律关掉（全局块在文件顶部） ---- */
 @media(prefers-reduced-motion:reduce){
@@ -1647,6 +1688,10 @@ box-shadow:none}
 .train-squads{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .train-lineup-empty{padding:8px 0;font-size:var(--fs-xs);color:var(--text3);line-height:1.6}
 .train-squad-row{display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;text-align:left;min-height:var(--touch-min);padding:8px 10px;font-weight:400}
+/* v2.14.25（评审 P2-4）：整行是按钮，补「可点」信号 —— › 与 hover/active 反馈（原来毫无提示） */
+.train-squad-row:hover{background:var(--surface-2);border-color:var(--bd-l)}
+.train-squad-row:active{background:var(--surface-3)}
+.train-squad-caret{flex:0 0 auto;margin-left:2px;font-size:var(--fs-md);line-height:1;color:var(--text3)}
 .train-squad-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .train-squad-badge{flex:0 0 auto;padding:1px 6px;border:var(--bw) solid var(--bd-l);font-size:var(--fs-2xs);font-weight:700;line-height:1.6;color:var(--text3)}
 .train-squad-badge.is-first{border-color:var(--brand);color:var(--brand)}

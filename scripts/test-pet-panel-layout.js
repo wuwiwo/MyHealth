@@ -208,22 +208,27 @@ ok(iCard > iMat, '材料区仍在宠物列表之前（顺序未被打乱）', iM
 ok(H.indexOf('petStartBattle') > iLineup && H.indexOf('petStartBattle') < iMat,
   '「开始敌群试炼」跟着参战选择一起上移（它是这份选择的动作）');
 
-const nPicks = (H.match(/data-pet-pick="/g) || []).length;
-ok(nPicks === 5, '参战芯片 = 成熟且未阵亡的 5 只（排除蛋期 1 只 + 阵亡 1 只），实际 ' + nPicks);
-ok(H.indexOf('data-pet-pick="chirpbird"') < 0, '蛋期宠物不进参战芯片');
-ok(H.indexOf('data-pet-pick="darkcrow"') < 0, '已阵亡宠物不进参战芯片');
-ok(H.indexOf('class="pet-lineup-count">4/4<') >= 0, '阵容摘要显示已选数量 4/4');
-/* v2.18：编队区块（.pet-squads）里也有 aria-pressed 的编队芯片，
-   所以这两条断言必须**只在阵容区块内计数**（语义仍是「阵容芯片带切换语义」，不放松要求）。 */
+/* v2.14.25（评审 P1-1）：出战编队改为**只读摘要** —— 逐只列首发成员，但**不可点**
+   （原来这里是一排可点芯片，与编队管理里的首发队卡把同一组数据渲染两遍、且各自能改选中）。 */
+const nPicks = (H.match(/class="pet-pick-chip"/g) || []).length;
+ok(nPicks === 4, '摘要芯片 = 首发已选 4 只，实际 ' + nPicks);
+ok(H.indexOf('data-pet-pick="') < 0, '摘要里不再有可点芯片（编辑入口收敛到编队管理）');
+ok(H.indexOf('id="petSquadEditJump"') > 0, '有「编队管理 ›」跳转入口');
+ok(H.indexOf('data-pet-pick="chirpbird"') < 0, '蛋期宠物不进摘要');
+ok(H.indexOf('data-pet-pick="darkcrow"') < 0, '已阵亡宠物不进摘要');
+ok(H.indexOf('class="pet-lineup-count">4/4<') >= 0, '摘要显示已选数量 4/4');
+/* v2.14.25：摘要区只是展示 —— 里面不该再出现切换语义（aria-pressed / disabled 芯片）。
+   编队区块（.pet-squads）才是唯一编辑处，它的 aria-pressed 断言在 test-squad-ui.js。 */
 const lineupBlock = H.slice(iLineup, H.indexOf('class="pet-squads"') > iLineup
   ? H.indexOf('class="pet-squads"') : iMat);
-ok((lineupBlock.match(/aria-pressed="true"/g) || []).length === 4, '4 个已选芯片带 aria-pressed="true"（切换语义）');
-ok((lineupBlock.match(/aria-pressed="false"/g) || []).length === 1, '1 个未选芯片带 aria-pressed="false"');
+ok((lineupBlock.match(/aria-pressed="true"/g) || []).length === 0, '摘要区没有 aria-pressed（不再原地切换）');
+ok((lineupBlock.match(/<button[^>]*pet-pick-chip/g) || []).length === 0, '摘要芯片不是 button（只读）');
 
 /* v2.18（阶段 A）：编队管理区块的 UI 契约（位置 / 结构 / 默认折叠 / 首发徽标） */
 const iSquads = H.indexOf('class="pet-squads"');
 ok(iSquads > iLineup && iSquads < iMat, '编队管理区在阵容之后、材料之前', iLineup + ' / ' + iSquads + ' / ' + iMat);
-ok(H.indexOf('<details class="pet-squads">') >= 0, '编队区默认折叠（<details> 无 open 属性）');
+ok(/<details class="pet-squads"[^>]*>/.test(H) && !/<details class="pet-squads"[^>]* open/.test(H),
+  '编队区默认折叠（<details> 无 open 属性）');
 ok(H.indexOf('id="petSquadAdd"') > iSquads, '有「＋ 新建小队」按钮');
 ok((H.match(/data-squad-pick="/g) || []).length === 5, '默认 1 支队 × 5 只可战宠物 = 5 个编队芯片');
 ok(H.indexOf('data-squad-name="sq-1"') > iSquads, '首发队有可改名的输入框');

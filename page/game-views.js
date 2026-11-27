@@ -122,6 +122,8 @@ function renderTrainView() {
           + '<span>' + nm + '</span></span>'
       })
       if (!ids.length) chips = '<span class="train-squad-empty">空队 · 点开把宠物编进来</span>'
+      /* v2.14.25（评审 P2-4）：整行是 button，但原来没有任何「可点」信号 —— 补一个 › 与 aria 提示，
+         并把 hover/active 反馈交给 CSS（.train-squad-row:hover） */
       h += '<button class="speed-btn train-squad-row" type="button" data-train-squad="' + sq.id + '"'
         + ' aria-label="' + sq.name + '（' + (i === 0 ? '首发' : '第 ' + (i + 1) + ' 队') + '），'
         + ids.length + '/' + _petMax + ' 只，点开编队管理">'
@@ -129,28 +131,29 @@ function renderTrainView() {
         +   '<span class="train-squad-badge' + (i === 0 ? ' is-first' : '') + '">' + (i === 0 ? '首发' : '第 ' + (i + 1) + ' 队') + '</span>'
         +   '<span class="train-squad-name">' + sq.name + '</span>'
         +   '<span class="train-squad-count">' + ids.length + '/' + _petMax + '</span>'
+        +   '<span class="train-squad-caret" aria-hidden="true">›</span>'
         + '</span>'
         + '<span class="train-squad-chips">' + chips + '</span>'
         + '</button>'
     })
   }
   h += '</div>'
-    + '<button class="speed-btn train-start-battle" id="trainStartBattle" type="button"'
-    +   ' style="border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button>'
-    + '<button class="speed-btn train-more-pet" id="trainSquadEdit" type="button" data-open-squad>'
-    +   '🐾 编队管理（多队 / 替补顺序）</button>'
-    + '<button class="speed-btn train-more-pet" id="trainMorePet" type="button" data-open-pet>'
-    +   '🐾 更多养成（喂食 / 炼化 / 宝珠）</button>'
+    + '<button class="speed-btn btn-primary train-start-battle" id="trainStartBattle" type="button">'
+    +   '⚔️ 开始敌群试炼（带宠物）</button>'
+    + '<button class="speed-btn btn-entry" id="trainSquadEdit" type="button" data-open-squad>'
+    +   '🐾 编队管理（多队 / 替补顺序）<span class="btn-caret" aria-hidden="true">›</span></button>'
+    + '<button class="speed-btn btn-entry" id="trainMorePet" type="button" data-open-pet>'
+    +   '🐾 更多养成（喂食 / 炼化 / 宝珠）<span class="btn-caret" aria-hidden="true">›</span></button>'
     + '</div>'
   // 技能区块
   h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚡ 技能 <span style="font-size:var(--fs-xs);color:var(--text3)">'+(st.loadout||[]).filter(Boolean).length+'/'+st.slotsUnlocked+' 已装备</span></div>'
-  h += '<button class="speed-btn" data-open-skill style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--blue);color:var(--blue)">⚡ 技能培养面板</button>'
+  h += '<button class="speed-btn btn-entry" data-open-skill>⚡ 技能培养面板<span class="btn-caret" aria-hidden="true">›</span></button>'
   /* v2.14.3：📖 图鉴（只读）—— 主入口。宠物面板 / 技能面板就在上面两行，
      图鉴要查的正是这三样东西（宠物 / 技能 / 天赋），放成一排最顺手。
      不新增 tab、不新增路由：点开复用 #panelOverlay，渲染在 page/codex.js。 */
-  h += '<button class="speed-btn" data-open-codex style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--bd-l);color:var(--text2);margin-top:10px">📖 图鉴（宠物 / 技能 / 天赋）</button>'
+  h += '<button class="speed-btn btn-entry" data-open-codex>📖 图鉴（宠物 / 技能 / 天赋）<span class="btn-caret" aria-hidden="true">›</span></button>'
   h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">🔮 炼魂 <span style="font-size:var(--fs-xs);color:var(--text3)">角色属性强化</span></div>'
-  h += '<button class="speed-btn" data-open-refine style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">🔮 炼魂系统</button>'
+  h += '<button class="speed-btn btn-entry" data-open-refine>🔮 炼魂系统<span class="btn-caret" aria-hidden="true">›</span></button>'
   /* 材料区块：v2.15 精简 —— 「获取方式 + 最近获取」两张长卡合并进一个默认折叠的
      原生 <details>，培养页首屏只剩角色卡 / 出战阵容 / 技能 / 炼魂 / 图鉴五个主块。
      用原生 details 而非自定义 aria-expanded，键盘 / 读屏开箱可用。 */
@@ -232,8 +235,10 @@ function groupStageModeTag(glv, st) {
   var stNum = parseInt(String(st.id || '').split('-').pop(), 10)
   if (!lgNum || !stNum) return ''
   var label = stageModeLabel(lgNum, stNum)
-  if (!label) return ''
-  return '<span class="lv-tag' + (label === '双 BOSS' ? ' is-boss' : '') + '">' + label + '</span>'
+  /* v2.14.25（评审 P2-3）：**只标例外** —— 「双场景」已是常态（224/240 关），逐卡重复等于噪声；
+     常规形态改由列表头一行说明（见 showGroupStages 的 .gl-modes）。 */
+  if (label !== '双 BOSS') return ''
+  return '<span class="lv-tag is-boss">' + label + '</span>'
 }
 
 /* 大关内 10 小关列表 */
@@ -250,28 +255,37 @@ function showGroupStages(groupId) {
     +'<span class="gl-group-count">'+pg.cleared+'/'+pg.total+'</span>'
     +'</div>'
   h += '<div style="font-size:var(--fs-xs);color:var(--text3);margin-bottom:12px">'+glv.desc+'</div>'
+  /* v2.14.25（评审 P2-3）：形态分布一次性说清（原来 10 张卡里 9 张重复「双场景」，把「双 BOSS」淹没） */
+  var lgNum = parseInt(String(groupId).replace(/[^0-9]/g, ''), 10)
+  if (typeof stageModeLabel === 'function' && lgNum) {
+    var modes = { '双场景': 0, '双 BOSS': 0, '': 0 }
+    glv.stages.forEach(function (st) {
+      var lb = stageModeLabel(lgNum, parseInt(String(st.id || '').split('-').pop(), 10)) || ''
+      modes[lb] = (modes[lb] || 0) + 1
+    })
+    var parts = []
+    if (modes['双场景']) parts.push(modes['双场景'] + ' 关双场景')
+    if (modes['双 BOSS']) parts.push('<b class="gl-modes-boss">' + modes['双 BOSS'] + ' 关双 BOSS</b>')
+    if (modes['']) parts.push(modes[''] + ' 关单场景')
+    h += '<div class="gl-modes">本大关 ' + glv.stages.length + ' 关：' + parts.join(' · ') + '</div>'
+  }
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:8px">'
   glv.stages.forEach(function (st) {
     var cleared = isGroupStageCleared(st.id)
     var unlocked = isGroupStageUnlocked(st.id)
     var icon = st.type === 'boss' ? '👑' : st.type === 'elite' ? '⭐' : '⚔️'
-    var color = st.type === 'boss' ? 'var(--red)' : st.type === 'elite' ? 'var(--orange)' : 'var(--blue)'
-    // 状态：已通关（锁定灰）/ 可挑战 / 未解锁
-    var statusHtml, btnStyle
-    if (cleared) {
-      statusHtml = '<span style="font-size:var(--fs-2xs);color:var(--green)">✅ 已通关</span>'
-      btnStyle = 'opacity:.5;border-color:var(--green);color:var(--green)'
-    } else if (unlocked) {
-      statusHtml = '<span style="font-size:var(--fs-2xs)">⚔️ 可挑战</span>'
-      btnStyle = 'border-color:' + color + ';color:' + color
-    } else {
-      statusHtml = '<span style="font-size:var(--fs-2xs)">🔒 未解锁</span>'
-      // v2.1.7：原 opacity:.35 让"未解锁"文字几乎不可读，放宽到 .6 并弱化文字色
-      btnStyle = 'opacity:.6;color:var(--text3)'
-    }
-    h += '<button class="speed-btn" data-stage="'+st.id+'" '+(unlocked && !cleared ? '' : 'disabled')+' style="padding:10px 4px;min-height:56px;font-size:var(--fs-sm);border-radius:10px;'+btnStyle+';display:flex;flex-direction:column;align-items:center">'
-      +'<span style="font-size:var(--fs-lg);line-height:1">'+icon+'</span>'
-      +'<span class="lv-stage-name" style="font-size:var(--fs-2xs);margin-top:2px">'+st.name.replace(/^[\s⭐👑\uFE0F\u200D]+/,'')+'</span>'
+    /* v2.14.25：状态与类型全部走类（.lv-card.is-open / .done / .locked / .is-boss / .is-elite）——
+       原来这 4 种视觉写在内联 style 里，被「内联语义色收敛」那条 !important 规则统一收成中性，
+       于是整屏 10 张卡长得一模一样，看不出哪关是 Boss / 哪关能打。 */
+    var stateCls = cleared ? ' done' : (unlocked ? ' is-open' : ' locked')
+    var typeCls = st.type === 'boss' ? ' is-boss' : st.type === 'elite' ? ' is-elite' : ''
+    var statusHtml = cleared ? '<span class="lv-state">✅ 已通关</span>'
+      : unlocked ? '<span class="lv-state">⚔️ 可挑战</span>'
+      : '<span class="lv-state">🔒 未解锁</span>'
+    h += '<button class="speed-btn gl-stage'+typeCls+stateCls+'" data-stage="'+st.id+'" '
+      +(unlocked && !cleared ? '' : 'disabled')+'>'
+      +'<span class="lv-card-ico">'+icon+'</span>'
+      +'<span class="lv-stage-name">'+st.name.replace(/^[\s⭐👑\uFE0F\u200D]+/,'')+'</span>'
       + groupStageModeTag(glv, st)
       +statusHtml
       +'</button>'
@@ -332,7 +346,7 @@ function renderBattleView() {
 
   // 关卡试炼（原关卡列表，简化为入口）
   h += '<div style="font-size:var(--fs-lg);font-weight:700;margin:18px 0 10px">⚔️ 关卡试炼</div>'
-  h += '<button class="speed-btn" data-open-levels style="width:100%;padding:14px;font-size:var(--fs-md);min-height:48px;border-radius:12px;border-color:var(--purple,#a855f7);color:var(--purple,#a855f7)">🗺️ 挑战关卡（'+Object.keys(LEVELS).length+' 章）</button>'
+  h += '<button class="speed-btn btn-entry" data-open-levels>🗺️ 挑战关卡（'+Object.keys(LEVELS).length+' 章）<span class="btn-caret" aria-hidden="true">›</span></button>'
 
   v.innerHTML = h
   v.querySelectorAll('[data-group]').forEach(function (c) {

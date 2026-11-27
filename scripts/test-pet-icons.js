@@ -216,13 +216,14 @@ seedStore([mkPet('darkcrow', 'mature')]);
 sb.renderPetDetail(sb.getPetStore().pets[0], 0);
 ok(sb.__ov.innerHTML.includes('src="media/pets/darkcrow.svg"'), '宠物详情页头部未渲染头像');
 
-/* 4d 参战芯片 + 对比芯片 */
+/* 4d 出战编队摘要芯片 + 对比芯片（v2.14.25：摘要芯片改为只读 span，头像契约不变） */
 seedStore([mkPet('icecrystal', 'mature'), mkPet('nonebear', 'mature')]);
+sb._petBattlePicks = ['icecrystal'];
 sb.renderPetPanel();
 const h4 = sb.__ov.innerHTML;
-ok(h4.includes('pet-pick-chip'), '参战芯片未加 .pet-pick-chip（头像与文字无法对齐）');
+ok(h4.includes('pet-pick-chip'), '摘要芯片未加 .pet-pick-chip（头像与文字无法对齐）');
 ok(/pet-pick-chip[^>]*>\s*<img[^>]*media\/pets\/icecrystal\.svg/.test(h4.replace(/\n/g, '')),
-  '参战芯片内未渲染头像 <img>');
+  '摘要芯片内未渲染头像 <img>');
 sb.renderPetDetail(sb.getPetStore().pets[0], 0);
 ok(sb.__ov.innerHTML.includes('data-pet-cmp="nonebear"') && sb.__ov.innerHTML.includes('media/pets/nonebear.svg'),
   '对比宠物芯片内未渲染头像');

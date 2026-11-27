@@ -97,18 +97,14 @@ ok(!!c2b && !/is-taken/.test(c2b) && /aria-pressed="true"/.test(c2b), '本队自
 ok(H.includes('pet-squad-meta'), '每支小队有元信息行（首发说明 / 未编队 N 只）');
 ok(/未编队 3 只/.test(H), '未编队数量按「不在任何队」实算（6 只里 3 只已编 → 3）');
 
-console.log('\n[2] 参战阵容（= 首发队）：同样标出跨队占用');
-const pickOf = sid => {
-  const re = new RegExp('<button[^>]*data-pet-pick="' + sid + '"[^>]*>[\\s\\S]*?</button>');
-  const m = re.exec(H);
-  return m ? m[0] : null;
-};
-const pNone = pickOf('nonebear');
-ok(!!pNone && pNone.includes('is-taken') && / disabled/.test(pNone), '已在二队的 nonebear 在参战芯片里禁用');
-ok(!!pNone && pNone.includes('在 二队'), '标出「在 二队」');
-const pSpark = pickOf('sparkle');
-ok(!!pSpark && /background:var\(--brand-fill\)/.test(pSpark), '已选的参战芯片用实心填充（与编队选中态同一视觉语言）');
-ok(/参战阵容（首发队）/.test(H), '标题写明「首发队」（与多队模型一致）');
+console.log('\n[2] 出战编队摘要（只读）：不再与编队管理重复编辑');
+const pickChips = (H.match(/class="pet-pick-chip"/g) || []).length;
+ok(pickChips === 2, '摘要芯片 = 首发队 2 只，实际 ' + pickChips);
+ok(!/data-pet-pick="/.test(H), '摘要里没有可点芯片（编辑入口只剩编队管理）');
+ok((H.match(/<button[^>]*pet-pick-chip/g) || []).length === 0, '摘要芯片是 span 不是 button（只读）');
+ok(H.includes('id="petSquadEditJump"'), '有「编队管理 ›」跳转入口（aria-controls 指向编队区）');
+ok(/⚔️ 出战编队/.test(H) && !/参战阵容/.test(H), '标题统一为「出战编队」（不再叫「参战阵容」）');
+ok(!/作战/.test(H), '徽标不再用「作战」（统一为「首发 / 第 N 队」）');
 
 console.log('\n[3] 源码守卫：培养页多队摘要 + 单源标签');
 const gv = src('game-views.js');
@@ -118,10 +114,19 @@ ok(!gv.includes('data-train-pick') && gv.indexOf('savePetBattlePicks(') < 0, '�
 ok(gv.includes('_petSquadsOpen = true'), '点队伍会先展开编队区再渲染面板');
 ok(/stageModeLabel\(/.test(gv) && !/stageIsMulti\(/.test(gv), '形态标签只调 stageModeLabel（视图不再自己判 mode）');
 ok(!/function groupStageModeTag[\s\S]{0,400}stageIsMulti/.test(gv), 'groupStageModeTag 内没有第二套判据');
+/* v2.14.25（评审 P2-3）：形态标签只标例外 + 分布写在列表头 */
+ok(gv.includes("if (label !== '双 BOSS') return ''"), '「双场景」不再逐卡打标（只标例外「双 BOSS」）');
+ok(gv.includes('gl-modes'), '列表头有一行形态分布（本大关 N 关：…）');
+/* v2.14.25（评审 P1-2）：大关关卡卡改用类驱动，不再写内联状态色 */
+ok(!/btnStyle/.test(gv), '关卡卡不再用内联 btnStyle（改 .gl-stage 状态类）');
+ok(gv.includes('gl-stage'), '关卡卡用 .gl-stage 类');
+ok(!/style="width:100%;padding:14px;font-size:var\(--fs-md\).*border-color:var\(--blue\)/.test(gv),
+  '培养页入口按钮不再写内联语义色（改 .btn-entry）');
 
 const css = src('index.css');
-['.train-squad-row', '.train-squad-chip', '.pet-squad-chip.is-taken', '.pet-squad-chip-tag', '.lv-tag',
- '.pet-pick-chip.is-taken', '.pet-squad-meta'].forEach(sel => {
+['.train-squad-row', '.train-squad-chip', '.train-squad-caret', '.pet-squad-chip.is-taken', '.pet-squad-chip-tag',
+ '.lv-tag', '.gl-modes', '.gl-stage', '.btn-primary', '.btn-entry', '.pet-squad-meta',
+ '.pet-lineup-sum', '.pet-squad-jump'].forEach(sel => {
   ok(css.includes(sel), 'CSS 契约：' + sel);
 });
 ok(/\.pet-squad-chip\[aria-pressed="true"\][^{]*\{[^}]*background:var\(--brand-fill\)/.test(css),
