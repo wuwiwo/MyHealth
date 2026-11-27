@@ -19,10 +19,13 @@ function saveSyncTime(){_lastSyncTime=Date.now();localStorage.setItem('dh-sync-t
 
 /* UI indicator */
 function setSync(s){var e=document.getElementById('syncIndicator');if(!e)return
-e.className='sync-dot';if(s==='synced'){e.classList.add('synced');e.textContent='✓'}
-else if(s==='syncing'){e.classList.add('syncing');e.textContent='↻'}
-else if(s==='error'){e.classList.add('error');e.textContent='⚠'}
-else e.textContent='🔄'}
+e.className='sync-dot'
+/* v2.14.29：状态灯也是「图标 + 文案」，只换 `.hb-ico`（原来整块 textContent 会把「状态」二字冲掉） */
+var ico=e.querySelector('.hb-ico')||e
+if(s==='synced'){e.classList.add('synced');ico.textContent='✓'}
+else if(s==='syncing'){e.classList.add('syncing');ico.textContent='↻'}
+else if(s==='error'){e.classList.add('error');ico.textContent='⚠'}
+else ico.textContent='○'}
 
 /* Network layer — with automatic retry (exponential backoff) */
 var MAX_RETRY=2

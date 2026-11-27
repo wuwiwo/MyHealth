@@ -163,8 +163,22 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .header-title{font-size:var(--fs-xl);font-weight:800;letter-spacing:1px;line-height:1;color:var(--text)}
 .header-title span{color:var(--orange)}
 .header-subtitle{font-size:var(--fs-xs);color:var(--text3);font-weight:500;letter-spacing:1.2px;margin-top:1px}
+/* v2.14.29（评审 P3-2）：顶栏按钮改「图标 + 11px 文案」竖排 —— 44px 方框里单摆一个 emoji，
+   用户不知道它是同步、主题还是状态；图标 16px、文案 11px 中性色，44px 高不变。 */
 .header-right{display:flex;align-items:center;gap:8px}
-.header-btn,.sync-dot{width:var(--touch-min);height:var(--touch-min);border:var(--bw) solid var(--bd);border-radius:0;background:var(--bg2);cursor:pointer;font-size:var(--fs-base);display:flex;align-items:center;justify-content:center;transition:background-color 75ms ease-out,color 75ms ease-out,border-color 75ms ease-out,outline-color 75ms ease-out;color:var(--text2);flex-shrink:0}
+.header-btn,.sync-dot{width:var(--touch-min);height:var(--touch-min);border:var(--bw) solid var(--bd);border-radius:0;background:var(--bg2);cursor:pointer;font-size:var(--fs-base);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:background-color 75ms ease-out,color 75ms ease-out,border-color 75ms ease-out,outline-color 75ms ease-out;color:var(--text2);flex-shrink:0}
+.hb-ico{font-size:16px;line-height:1;color:inherit}
+.hb-lbl{font-size:var(--fs-3xs);line-height:1;font-weight:600;color:var(--text3);letter-spacing:0}
+/* v2.14.29（评审 P3-5）：版本号从内联样式搬成类 —— 360 宽要单独控制它，
+   原来内联 `font-size/color/margin` 与副标题的整行 `display:none` 绑在一起，改不动。 */
+.hs-ver{font-size:var(--fs-xs);color:var(--orange);font-weight:600;margin-left:4px;letter-spacing:0}
+/* v2.14.29（评审 P3-5）：手机宽度（≤430）只留版本号。英文品牌词在 390 宽就会折成
+   「Personal Health / Manager」，比整行藏掉更难看；版本号才是小屏真正要看的信息。
+   平板/桌面（≥431）仍显示完整的「Personal Health Manager v2.14.xx」。 */
+@media(max-width:430px){
+  .header-subtitle{letter-spacing:.5px}
+  .hs-brand{display:none}
+}
 .header-btn:hover{background:var(--bg3);color:var(--text)}
 
 .sync-dot{cursor:default;transition:border-color 75ms ease-out,background 75ms ease-out,color 75ms ease-out}
@@ -188,7 +202,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
 /* Section Header */
 .section-hdr{font-size:var(--fs-sm);font-weight:700;margin:var(--sec-y) 0 var(--sp-4);display:flex;align-items:center;gap:8px;color:var(--text2);letter-spacing:.5px}
-.section-hdr::after{content:'';flex:1;height:1px;background:var(--orange-g)}
+/* v2.14.29（评审 P3-1 配套）：区块标题的引导线改中性 —— 原为品牌色 1px 短线，
+   与「激活页签下划线」同色同宽，一屏并排出现时读不出哪个是状态、哪个是分隔。
+   现在蓝只用于「状态 / 主操作」，分隔一律中性 `--bd`。 */
+.section-hdr::after{content:'';flex:1;height:1px;background:var(--bd)}
 
 /* Date Nav */
 .date-nav{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px;background:var(--bg2);border-radius:0;padding:6px;border:var(--bw) solid var(--bd);gap:4px;box-shadow:none}
@@ -602,7 +619,6 @@ box-shadow:none}
   .tab-btn{font-size:var(--fs-xs);padding:10px 2px}
   .stats-grid{grid-template-columns:1fr 1fr}
   .lv-grid{grid-template-columns:repeat(3,1fr);gap:6px}
-  .header-subtitle{display:none}
 }
 @media(min-width:600px){
   :root{--pad-screen:24px}
@@ -1495,6 +1511,16 @@ box-shadow:none}
    居中单行放不下（原来那句只说了「用于手动备份」，没答最关键的覆盖/合并）。 */
 .data-hint{margin-top:8px;font-size:var(--fs-2xs);line-height:1.55;color:var(--text3);text-align:left}
 .data-hint strong{color:var(--text2);font-weight:600}
+
+/* ========== v2.14.29（评审 P3-1）：两级页签不再同时实心填充 ==========
+   顶栏页签（一级）保持实心 --brand-fill；子页签（二级）只保留 2px 品牌下划线 + 品牌字，
+   底色退回透明 —— 原来两级都填满蓝，层级看不出高下，且区块标题的蓝色下划线与它们同色，
+   一屏出现三条同宽度蓝条。子页签本来就带 `border-bottom:2px solid transparent`（`.tab-btn`），
+   激活时那 2px 已被着色，这里只需撤掉背景填充。 */
+.sub-tab-bar>.tab-btn.active,.sub-tab-bar>.tab-btn.active[style]{
+  background:transparent!important;color:var(--orange)!important}
+.sub-tab-bar>.tab-btn.active:hover,.sub-tab-bar>.tab-btn.active:focus{
+  background:rgba(var(--brand-rgb),.08)!important;color:var(--orange)!important}
 
 /* ---- 8. 尊重「减弱动态效果」：本层的过渡一律关掉（全局块在文件顶部） ---- */
 @media(prefers-reduced-motion:reduce){

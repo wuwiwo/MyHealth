@@ -129,5 +129,18 @@ const syncJs = src('sync.js');
 ok(/导入 = 按键合并/.test(syncJs), '导入前写明「按键合并」语义');
 ok(/导入 = 按键合并[^']*[\n ]*[^']*confirm\(/.test(syncJs) || /如果|文件里包含的/.test(syncJs), '导入前有覆盖语义确认');
 
+console.log('\n[16] P3-1/P3-2/P3-5 顶栏与层级的收尾（v2.14.29）');
+const hdr = html().match(/class="header-btn"[^\n]*/g) || [];
+ok(hdr.length === 2 && hdr.every(s => s.indexOf('hb-ico') > 0 && s.indexOf('hb-lbl') > 0), '两枚顶栏按钮都带「图标 + 文案」');
+ok(/id="syncIndicator"[^\n]*hb-ico[^\n]*hb-lbl/.test(html()), '状态灯也带「图标 + 文案」');
+ok(/\.hb-lbl\{font-size:var\(--fs-3xs\)/.test(c), '顶栏按钮文案 11px（不再只有 emoji）');
+const ts2 = src('utils.js');
+ok(/btn\.querySelector\('\.hb-ico'\)/.test(ts2), 'setTheme 只换 .hb-ico（不冲掉「主题」二字）');
+ok(/e\.querySelector\('\.hb-ico'\)/.test(syncJs), 'setSync 只换 .hb-ico（不冲掉「状态」二字）');
+ok(/<span class="hs-brand">/.test(html()), '副标题拆出 .hs-brand');
+ok(/\.hs-brand\{display:none\}/.test(c) && !/\.header-subtitle\{display:none\}/.test(c), '360 宽只藏品牌词、版本号仍在');
+ok(/\.sub-tab-bar>\.tab-btn\.active,[^}]*background:transparent!important/.test(c), '子页签激活不再实心填充（只留 2px 下划线）');
+ok(/\.section-hdr::after\{content:'';flex:1;height:1px;background:var\(--bd\)\}/.test(c), '区块标题引导线改中性（蓝只表示状态/主操作）');
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 if (fail) { console.log('失败项:\n - ' + fails.join('\n - ')); process.exit(1); }

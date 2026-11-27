@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>💪 MyHealth</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
-<link rel="stylesheet" href="index.css?v192">
+<link rel="stylesheet" href="index.css?v193">
 </head>
 <body>
 <div id="app">
@@ -17,13 +17,15 @@
           <div class="header-logo">💪</div>
           <div class="header-title-group">
             <div class="header-title">My<span>Health</span></div>
-            <div class="header-subtitle">Personal Health Manager <span id="appVersion" style="font-size:var(--fs-xs);color:var(--orange);font-weight:600;margin-left:4px"></span></div>
+            <div class="header-subtitle"><span class="hs-brand">Personal Health Manager </span><span id="appVersion" class="hs-ver"></span></div>
           </div>
         </div>
+        <!-- v2.14.29（评审 P3-2）：三枚顶栏按钮原来只有 emoji、44px 方框里 emoji 偏小且无可见文案，用户只能靠猜。
+             现在改成「图标 + 11px 文字」竖排（同步 / 主题 / 状态），图标 16px，`aria-label` 与 title 保留。 -->
         <div class="header-right">
-          <button class="header-btn" id="syncBtn" title="同步数据" aria-label="同步数据" style="font-size:var(--fs-xs)">🔄</button>
-          <button class="header-btn" id="themeToggle" aria-label="切换主题">🌙</button>
-          <div class="sync-dot" id="syncIndicator" title="同步状态" role="status" aria-live="polite">🔄</div>
+          <button class="header-btn" id="syncBtn" title="同步数据" aria-label="同步数据"><span class="hb-ico" aria-hidden="true">🔄</span><span class="hb-lbl">同步</span></button>
+          <button class="header-btn" id="themeToggle" title="切换主题" aria-label="切换主题"><span class="hb-ico" aria-hidden="true">🌙</span><span class="hb-lbl">主题</span></button>
+          <div class="sync-dot" id="syncIndicator" title="同步状态" role="status" aria-live="polite" aria-label="同步状态"><span class="hb-ico" aria-hidden="true">○</span><span class="hb-lbl">状态</span></div>
         </div>
       </div>
     </div>
@@ -280,65 +282,65 @@
 <!-- 全屏可滚动面板容器（宠物/技能培养）：战斗用的 .battle-overlay 是 flex 布局且不支持滚动，勿复用 -->
 <div class="panel-overlay" id="panelOverlay" role="dialog" aria-modal="true" aria-label="培养面板"></div>
 
-<script src="store.js?v192"></script>
-<script src="battle-history.js?v192"></script>
-<script src="data/exercises-dataset.js?v192"></script>
-<script src="ex-dataset.js?v192"></script>
-<script src="config.js?v192"></script>
-<script src="utils.js?v192"></script>
-<script src="levels.js?v192"></script>
+<script src="store.js?v193"></script>
+<script src="battle-history.js?v193"></script>
+<script src="data/exercises-dataset.js?v193"></script>
+<script src="ex-dataset.js?v193"></script>
+<script src="config.js?v193"></script>
+<script src="utils.js?v193"></script>
+<script src="levels.js?v193"></script>
 <!-- v2.3.0 怪兽头像原型映射：只依赖 levels.js 的数据形状，放在 levels.js 之后即可 -->
-<script src="monster-archetype.js?v192"></script>
+<script src="monster-archetype.js?v193"></script>
 <!-- v2.3.2 技能图标渲染唯一入口：只含合法 id 白名单 + 路径拼接，
      不依赖任何其他模块，因此放在所有消费方（skill-ui / game-render）之前即可。
      注意：必须早于 game-render.js（316 行），否则其内部 typeof 守卫会判为未定义。 -->
-<script src="skill-icon.js?v192"></script>
-<script src="date-roll.js?v192"></script>
-<script src="monthly-reset.js?v192"></script>
-<script src="stats.js?v192"></script>
-  <script src="level-titles.js?v192"></script>
-  <script src="level-system.js?v192"></script>
-<script src="state-core.js?v192"></script>
-<script src="status-defs.js?v192"></script>
-<script src="fx-semantics.js?v192"></script>
-<script src="unit.js?v192"></script>
-<script src="talent.js?v192"></script>
-<script src="affix.js?v192"></script>
-<script src="skill.js?v192"></script>
-<script src="enemy.js?v192"></script>
-<script src="battle.js?v192"></script>
-<script src="battle-group.js?v192"></script>
-<script src="terrain.js?v192"></script>
-<script src="group-levels.js?v192"></script>
-<script src="group-progress.js?v192"></script>
-<script src="group-dual.js?v192"></script>
-<script src="ai.js?v192"></script>
-<script src="challenge.js?v192"></script>
-<script src="linechart.js?v192"></script>
-<script src="app.js?v192"></script>
-<script src="sync.js?v192"></script>
-<script src="tab-strength.js?v192"></script>
-<script src="tab-cardio.js?v192"></script>
-<script src="tab-profile.js?v192"></script>
-<script src="game-render.js?v192"></script>
-<script src="game-battle.js?v192"></script>
-<script src="game-records.js?v192"></script>
-<script src="game-refine.js?v192"></script>
-<script src="tab-game.js?v192"></script>
-<script src="tab-settings.js?v192"></script>
-<script src="pets.js?v192"></script>
-<script src="pet-materials.js?v192"></script>
-<script src="pet-codex.js?v192"></script>
-<script src="pet-store.js?v192"></script>
-<script src="pet-ui.js?v192"></script>
-<script src="skills.js?v192"></script>
-<script src="player-skill-hooks.js?v192"></script>
-<script src="skill-store.js?v192"></script>
-<script src="skill-ui.js?v192"></script>
-<script src="orbs.js?v192"></script>
-<script src="game-views.js?v192"></script>
-<script src="debug.js?v192"></script>
-  <script src="codex.js?v192"></script>
+<script src="skill-icon.js?v193"></script>
+<script src="date-roll.js?v193"></script>
+<script src="monthly-reset.js?v193"></script>
+<script src="stats.js?v193"></script>
+  <script src="level-titles.js?v193"></script>
+  <script src="level-system.js?v193"></script>
+<script src="state-core.js?v193"></script>
+<script src="status-defs.js?v193"></script>
+<script src="fx-semantics.js?v193"></script>
+<script src="unit.js?v193"></script>
+<script src="talent.js?v193"></script>
+<script src="affix.js?v193"></script>
+<script src="skill.js?v193"></script>
+<script src="enemy.js?v193"></script>
+<script src="battle.js?v193"></script>
+<script src="battle-group.js?v193"></script>
+<script src="terrain.js?v193"></script>
+<script src="group-levels.js?v193"></script>
+<script src="group-progress.js?v193"></script>
+<script src="group-dual.js?v193"></script>
+<script src="ai.js?v193"></script>
+<script src="challenge.js?v193"></script>
+<script src="linechart.js?v193"></script>
+<script src="app.js?v193"></script>
+<script src="sync.js?v193"></script>
+<script src="tab-strength.js?v193"></script>
+<script src="tab-cardio.js?v193"></script>
+<script src="tab-profile.js?v193"></script>
+<script src="game-render.js?v193"></script>
+<script src="game-battle.js?v193"></script>
+<script src="game-records.js?v193"></script>
+<script src="game-refine.js?v193"></script>
+<script src="tab-game.js?v193"></script>
+<script src="tab-settings.js?v193"></script>
+<script src="pets.js?v193"></script>
+<script src="pet-materials.js?v193"></script>
+<script src="pet-codex.js?v193"></script>
+<script src="pet-store.js?v193"></script>
+<script src="pet-ui.js?v193"></script>
+<script src="skills.js?v193"></script>
+<script src="player-skill-hooks.js?v193"></script>
+<script src="skill-store.js?v193"></script>
+<script src="skill-ui.js?v193"></script>
+<script src="orbs.js?v193"></script>
+<script src="game-views.js?v193"></script>
+<script src="debug.js?v193"></script>
+  <script src="codex.js?v193"></script>
 <script>init()</script>
 </body>
 </html>

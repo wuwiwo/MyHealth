@@ -2,7 +2,7 @@
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.28';
+const APP_VERSION = '2.14.29';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -167,7 +167,8 @@ function effTheme(){var t=getTheme();return t==='system'?(_sysMq&&_sysMq.matches
 function setTheme(t){store.set('theme',t)
 const d=effTheme()==='dark';document.documentElement.setAttribute('data-theme',d?'':'light')
 var btn=document.getElementById('themeToggle')
-if(btn){btn.textContent=d?'🌙':'☀️';btn.setAttribute('aria-label','切换主题，当前'+(d?'深色':'浅色'))}}
+/* v2.14.29：按钮从「单个 emoji」变成「图标 + 文案」，所以只换 `.hb-ico`，不能整块 textContent（会把「主题」两个字冲掉） */
+if(btn){var ico=btn.querySelector('.hb-ico');(ico||btn).textContent=d?'🌙':'☀️';btn.setAttribute('aria-label','切换主题，当前'+(d?'深色':'浅色'))}}
 function toggleTheme(){setTheme(effTheme()==='dark'?'light':'dark')}
 if(_sysMq&&_sysMq.addEventListener)_sysMq.addEventListener('change',function(){if(getTheme()==='system')setTheme('system')})
 
