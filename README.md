@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.26
+> Personal Health Manager — 个人健身健康管理应用 v2.14.27
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -114,7 +114,7 @@ doc/
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
 ├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.27）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.26）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.27）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -458,4 +458,6 @@ Vercel 项目设置：
 
 | **2.14.26** | **2026-11-27** | **全项目 UI/UX 评审落地（14 视图 × 2 视口；批次 A + B + C）**。评审依据 ui-skills 的 `pbakaus/audit`（5 维技术审计 /20）+ `pbakaus/critique`（Nielsen /40），客观数据来自新增 `scripts/audit-whole-ui.js`（CDP：逐视图量横向溢出 / <44px 目标 / <12px 正文 / 对比度 / 圆角阴影 / 强调色数），结论见 `doc/ui-ux-review-whole-2026-11-27.md`（技术审计 **10/20**、Nielsen **21/40**）。**批次 A（P1）**：① **本旬目标三卡换行错版 + 同组数值渲染两次** → 值/单位拆成 `数字 + .period-kpi-u` span 且 `nowrap`，第三卡改「本旬状态（已达标 / 差 N 天）」不再重复第一卡数值；② **调试 FAB 常驻遮挡可点目标**（360 宽下 fixed 44px 圆钮正好压在动作库 ✏️/🗑️、关卡卡右列）→ 默认**不建 DOM**，只有 `?debug=1` 或 `localStorage.mh_debug='1'` 才挂，`DebugPanel.open()` 仍会补建；③ **图鉴激活页签计数 1.3:1**（橙字压蓝底）→ 改 `--on-brand`；④ **顺带发现 P1-D**：个人最佳空态 CTA 写的是 `switchTab("strength")`（不存在的 tab 名 → 点了整页变空、无任何 render），改 `switchTab('training')` + `switchSub('training','strength')`。**批次 B（P2 一致性五件套）**：① 全站区块标题 `div.section-hdr` → **`<h2>`**（此前 h1/h2/h3 = 0，屏幕阅读器无法按标题导航），index.html 静态 12 处 + 各 JS 渲染 8 处；② 动作库 **26 个纯图标按钮**补 `aria-label="编辑/删除 {动作名}"`（动作名做属性转义）；③ 主按钮收敛为**三档**（`.btn-primary` 唯一主操作 / `.btn-entry` 列表入口 / 新增 `.btn-quiet` 次级中性）——保存资料改实心，数据页导出/导入/云同步统一 `.btn-quiet`；④ **边框与空态统一**：空态全部走 utils 的 `emptyHtml`（`.empty`），并把后置密度覆盖 `padding:--sp-12(≈48px)` 收到 26px（一个空态曾吃掉 300–500px 屏高）；⑤ 设置子页签「🎮 挑战」→「🎮 玩法」（不再与「挑战·战斗」撞名）。**批次 C（观感）**：宠物面板队卡**降层**（2px 外框 → 上分隔线，四层盒子 → 两层）、统计卡数值统一中性色（此前 4 张卡分蓝/紫/橙/绿四色）、计划页空态加**真动作**「去训练 ›」（接 `gotoTraining/gotoCardio` 并落到对应子页签）、动作库徽标「🥇 100%」→「权重 100%」、热力图「📍」→「今天」、图鉴 R/SR 芯片 `min-width:44px`。**测试**：新增 `scripts/test-ui-consistency.js` **51 断言**（P1-A…P2-11 逐条钉死）；`test-display-float` 同步新 markup 并补 2 条折行回归守卫 → **32 断言**；全量 **86 套件 / 0 失败** + a11y **40/40**；`verify-squad-ui` 两视口全绿；`audit-whole-ui` 复测 **14 视图 × 2 视口：横向溢出 0、对比失败 0（此前图鉴 1 处）、强调色数下降 1–2 档**；交互验证（CDP）：默认无 debugFab、`?debug=1` 有、两处空态 CTA 均真跳到训练/力量与训练/有氧。缓存戳 `?v189` → **`?v190`**（56 处）；`page/` JS 数 **55**，最大文件 `game-render.js` **3508 行**。⚠️ **未做（记账）**：P2-10 字号阶梯（10–11px 元信息，战斗 48 / 动作库 95 / 图鉴 43 处，需整体字阶调整）、个人表单的三层盒子、55 个 JS 逐文件加载（56 请求 / 2.8MB，建议发布侧合并或延迟加载） | `doc/changelog-v2.14.md` |
 
-> 当前版本：**v2.14.26**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+| **2.14.27** | **2026-11-27** | **全项目评审批次 D：字号阶梯（评审 P2-10）** — 只动字阶、不动结构。**① 10px 这一档下线**：`--fs-3xs` 由 `.625rem` 提到 **`.6875rem`（11px）**，与 `--fs-2xs` 同值并保留 token 名 → **49 处 JS 内联 + CSS 引用一次抬升**，无需逐处替换（360 宽实机里 10px 中文字形仅 ~5px 高，而它承载「还差 4 天 / 单敌·敌群 / 标签」这类要读的信息）。**② 试炼卡副标题与状态行 11px → 12px**：`.gl-group-desc` / `.gl-group-state` 改 `--fs-xs`，它们要区分「基础 / 进阶 / 高阶」与「进行中 / 未开启」，是单屏最密的 11px 文本区 → 战斗页 <12px 文本 **48 → 0**；实测 12px 下「进阶试炼（最多 3 敌+魂攻防）」仍折 **2 行**、卡高与改前一致。**验证**：`audit-whole-ui.js` 14 视图 × 360×640 / 390×844 横向溢出 **0**、对比失败 **0**，抽样字阶由 10px 变 11px；全量 **86 套件 / 0 失败**、a11y 40/40；缓存戳 `?v190` → **`?v191`** |
+
+> 当前版本：**v2.14.27**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

@@ -5,6 +5,38 @@
 
 ---
 
+## v2.14.27
+
+Date: 2026-11-27
+
+**全项目评审批次 D：字号阶梯（评审 P2-10）**
+
+> 上一版（v2.14.26）把 P2-10 记为「未做」：14 视图实测中 <12px 文本承担真实信息 —— 战斗 48 处（试炼卡副标题/状态）、动作库 95 处（中文标签 + 英文名 + 计数）、图鉴 43 处（稀有度芯片/数值脚注）。本版只动字阶，不动任何结构。
+
+### UI 调整
+
+1. **10px 这一档整体下线**（`page/index.css` 令牌段）
+   - `--fs-3xs` 由 `.625rem`（10px）提到 **`.6875rem`（11px）**，与 `--fs-2xs` 同值；保留 token 名字，因此 **49 处 JS 内联 + CSS 引用一次抬升**，无需逐处替换。
+   - 理由：360 宽实机里 10px 中文字形只有 ~5px 高，而它承载的是「还差 4 天 / 单敌·敌群 / 标签」这类要读的内容，不是装饰。
+   - 复测：`audit-whole-ui.js` 抽样字阶由 `[10]` 变为 **`[11]`**，全 14 视图 **10px 文本计数 = 0**。
+2. **试炼卡副标题 / 状态行 11px → 12px**（`.gl-group-desc` / `.gl-group-state`）
+   - 这两行要区分「基础 / 进阶 / 高阶」与「进行中 / 未开启」，是单屏最密的 11px 文本区；提到 `--fs-xs` 后战斗页 <12px 文本 **48 → 0**。
+   - 风险评估：试炼卡 2 列、每列约 156px，「进阶试炼（最多 3 敌+魂攻防）」在 11px 已折 2 行 —— 12px 实测仍为 **2 行**，卡片高度与改前一致，未出现 3 行或横向溢出。
+
+### 验证
+
+- `scripts/audit-whole-ui.js` 14 视图 × 360×640 / 390×844：**横向溢出 0、对比失败 0**，与 v2.14.26 持平。
+- 全量 **86 套件 / 0 失败**；`test-a11y-tokens` 40/40。
+- 缓存戳 `?v190` → **`?v191`**（56 处）。
+
+### 仍未做（后续批次）
+
+- **个人表单三层盒子**（卡 → label → 输入框）→ v2.14.28。
+- **打包 / 首屏 56 请求**（`page/` 55 个 JS 逐文件加载）→ v2.14.29。
+- 其他 P3：双行实心蓝、顶栏三枚图标按钮（💾/☀️/↻）尺寸与无可见文案、设置·数据未写明「合并」语义、360 宽隐藏副标题。
+
+---
+
 ## v2.14.26
 
 Date: 2026-11-27
@@ -1563,6 +1595,7 @@ Date: 2026-10-12
 | 2.14.24 | 55 | 3508 行 game-render.js | **多队收口 + 编队/关卡 UI**：① **单场景不再有接力** —— 删 `_groupRelayNext` 提供方与 `_groupRelaySquads`/`_groupSquadIdx`/`_groupRelayPending` 三全局、删 `squadUnits`/`reinforce` 写入与上场 toast（引擎 `gbReinforce` 保留，`test-squad-relay` 收窄为「引擎能力 + 不接线」41 断言）；② 关卡列表加形态标签 `stageModeLabel(lg, st)`（'' / 双场景 / 双 BOSS，判据仍 `stageIsMulti`）+ `.lv-tag`，顺带修 60px 窄卡「第10关」折行与 Boss 名重复王冠；③ 培养页 `.train-lineup` 改**多队摘要**（每队一行 → 打开编队管理），删除 `data-train-pick` 就地切换；④ 编队 UI：选中态实心 + ✓、跨队占用标「在 X」+ disabled（参战阵容同源）、队卡 `↑↓🗑` 独立一行、元信息「未编队 N 只」；新增 `test-squad-ui.js`（28 断言）+ `verify-squad-ui.js`（无头 Chrome 两视口）；全量 **85 套件 / 0 失败**，缓存戳 `?v188`。⚠️ 普通档 0.85 按作者裁决保持不动，等实测 |
 | 2.14.25 | 55 | 3508 行 game-render.js | **评审后 P1+P2 收口**（ui-skills `pbakaus/audit` + `critique` 两套标准，客观数据来自新增 `scripts/audit-squad-ui.js`）：① **P1-1 去重** —— 宠物面板「出战编队」改只读摘要（非按钮芯片）+ 唯一主 CTA + 「编队管理 ›」单一编辑入口，删 `[data-pet-pick]` 就地切换与它的 `savePetBattlePicks`，`_petBattlePicks` 只经 `togglePetSquadPet → petSquadRefreshPicks` 维护；② **P1-2 样式单轨** —— 培养页 4 入口 + 开战 + 编队管理改 `.btn-entry` / `.btn-primary`，大关关卡卡从内联 `btnStyle` 改 `.gl-stage.is-open/.is-elite/.is-boss/.done/.locked`（原来被 `[style*="border-color"]` 的 `!important` 收成中性 → 10 张卡一样），守卫收窄为四类白名单；③ **P2-3 标签只标例外**（双场景不再逐卡）+ `.gl-modes` 列表头分布行 + `.lv-state{nowrap}` 修窄卡折行；④ P2-4 编队行补 `›` 与 hover/active；P2-5 徽标「作战」→「第 N 队」；P2-6 占用态 `.45→.6` 且标签改不透明 `--text2`（原 ≈2.1:1）；P2-7 核实删除**本就有** `confirm()`（评审误判，已更正）；`test-squad-ui` 41 断言、`test-pet-panel-layout` 90、`test-pet-icons` 263、`verify-squad-ui` 两视口全绿；全量 **85 套件 / 0 失败**，缓存戳 `?v189` |
 | 2.14.26 | 55 | 3508 行 game-render.js | **全项目 UI/UX 评审落地（批次 A+B+C）** —— 评审 14 视图 × 2 视口（技术审计 10/20、Nielsen 21/40），客观数据来新增 `scripts/audit-whole-ui.js`：① P1-A 本旬目标三卡拆值/单位 span + nowrap + 第三卡改「本旬状态」（原来「0/6 / 天 / 状态」三行且数值重复）；② P1-B 调试 FAB 默认不建 DOM（`?debug=1` 才挂，此前压住动作库 🗑️ 与关卡卡）；③ P1-C 图鉴激活页签计数 1.3:1 → `--on-brand`；④ P1-D 个人最佳空态 CTA 由死按钮 `switchTab("strength")` 改为训练/力量；⑤ 全站标题 `div.section-hdr` → `<h2>`（此前 h 标签 = 0）；⑥ 动作库 26 个图标按钮补 `aria-label`；⑦ 主按钮三档 + 新增 `.btn-quiet`；⑧ 空态统一 `.empty`（padding 48px→26px）且计划页补真动作；⑨ 设置子页签「挑战」→「玩法」；⑩ 队卡降层、统计卡数值中性色、权重徽标、热力图「今天」、图鉴芯片 44px；`test-ui-consistency` **51 断言**、`test-display-float` 32，全量 **86 套件 / 0 失败**，缓存戳 `?v190` |
+| 2.14.27 | 55 | 3508 行 game-render.js | **全项目评审批次 D：字号阶梯（P2-10）** —— `--fs-3xs` 由 10px 提到 **11px**（保留 token 名，49 处 JS 内联引用一次抬升），**10px 这一档下线**：360 宽实机里 10px 中文字形仅 ~5px 高，却承载「还差 4 天 / 单敌·敌群 / 标签」要读的信息；试炼卡副标题与状态行 `.gl-group-desc`/`.gl-group-state` 11px → **12px**（要区分「基础/进阶/高阶」与「进行中/未开启」，是单屏最密的 11px 区），战斗页 <12px 文本 **48 → 0**，12px 下仍折 2 行、卡高不变。14 视图 × 2 视口横向溢出 0、对比失败 0；全量 **86 套件 / 0 失败**；缓存戳 `?v190` → `?v191` |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。

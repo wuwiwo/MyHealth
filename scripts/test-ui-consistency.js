@@ -114,5 +114,12 @@ ok(/data-n="hmT" aria-label="回到本月" title="回到本月">今天</.test(tp
 console.log('\n[13] P2-11 图鉴筛选芯片触摸宽度');
 ok(/\.codex-chip\{min-height:var\(--touch-min\);min-width:var\(--touch-min\)/.test(c), 'R/SR 芯片 min-width 44');
 
+console.log('\n[14] P2-10 字号阶梯（v2.14.27：10px 档下线）');
+ok(/--fs-3xs:\.6875rem/.test(c), '--fs-3xs 已提到 .6875rem（11px）');
+ok(!/--fs-3xs:\.625rem/.test(c), '不再出现 10px（.625rem）这一档');
+ok(/--fs-2xs:\.6875rem/.test(c), '--fs-3xs 与 --fs-2xs 同值（最小档只有一个尺寸）');
+ok(/\.gl-group-desc\{font-size:var\(--fs-xs\)/.test(c), '试炼卡副标题提到 12px（--fs-xs）');
+ok(/\.gl-group-state\{font-size:var\(--fs-xs\)/.test(c), '试炼卡状态行提到 12px（--fs-xs）');
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 if (fail) { console.log('失败项:\n - ' + fails.join('\n - ')); process.exit(1); }

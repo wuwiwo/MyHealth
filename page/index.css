@@ -61,7 +61,10 @@
   /* v2.16 大留白：区块纵向间距与卡片内边距（移动端 ≥2rem 区块 / ≥1.25rem 卡片） */
   --sec-y:var(--sp-8);--card-pad:var(--sp-5);
   /* ---- Type（31 档 → 10 阶，末 2 档微字号仅用于密集元信息） ---- */
-  --fs-3xs:.625rem;--fs-2xs:.6875rem;
+  /* v2.14.27（评审 P2-10 字阶）：10px 这一档下线 —— 中文 10px 在 360 宽的实机里只有 ~5px 字形高，
+     而它承担的是「还差4天 / 单敌·敌群 / 标签」这类要读的信息。--fs-3xs 保留名字、值提到 11px（与 --fs-2xs 同档），
+     这样 49 处 JS + CSS 引用无需逐个改，视觉上少一档、可读性抬一档。 */
+  --fs-3xs:.6875rem;--fs-2xs:.6875rem;
   --fs-xs:.75rem;--fs-sm:.8125rem;--fs-base:.875rem;--fs-md:.9375rem;
   --fs-lg:1.0625rem;--fs-xl:1.25rem;--fs-2xl:1.5rem;--fs-3xl:2rem;--fs-hero:2.5rem;
   --lh-tight:1.2;--lh-base:1.5;--lh-loose:1.7;
@@ -482,11 +485,13 @@ box-shadow:none}
 .gl-group-top{display:flex;align-items:baseline;gap:8px}
 .gl-group-name{flex:1;min-width:0;font-size:var(--fs-md);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gl-group-count{font-size:var(--fs-xs);color:var(--text2);font-variant-numeric:tabular-nums;flex-shrink:0}
-.gl-group-desc{font-size:var(--fs-2xs);color:var(--text3);line-height:1.4}
+/* v2.14.27（评审 P2-10）：试炼卡的两行副标题 / 状态行抬到 12px —— 它们要区分「基础 / 进阶 / 高阶」与
+   「进行中 / 未开启」，是全站最密的 11px 文本区（单屏 48 处）。 */
+.gl-group-desc{font-size:var(--fs-xs);color:var(--text3);line-height:1.4}
 .gl-bar{height:4px;background:var(--surface-3);border-radius:0;overflow:hidden}
 .gl-bar-fill{height:100%;background:var(--brand-fill);border-radius:0;transition:width var(--dur-2) var(--ease-out)}
 .gl-bar-fill.done{background:var(--green)}
-.gl-group-state{font-size:var(--fs-2xs);color:var(--text3)}
+.gl-group-state{font-size:var(--fs-xs);color:var(--text3)}
 .gl-group-card.state-locked .gl-group-name{color:var(--text3)}
 .gl-group-card.state-done .gl-group-state{color:var(--green)}
 .battle-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:var(--bw) solid var(--bd);flex-shrink:0;gap:8px;flex-wrap:wrap;row-gap:8px}
