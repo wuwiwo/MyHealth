@@ -1,4 +1,4 @@
-/* MyHealth bundle · v200 · hash:3ac5cce39b8e7310 · 由 scripts/build-bundle.js 生成，勿手改 */
+/* MyHealth bundle · v201 · hash:3f39cb8f02dbbc2a · 由 scripts/build-bundle.js 生成，勿手改 */
 /* ===== store.js ===== */
 /* ============================================
    MyHealth — Store Module v1.3 (M2a S0)
@@ -908,7 +908,7 @@ window.MEDIA_BASE = '';
    MyHealth — Constants & Utilities
    ============================================ */
 
-const APP_VERSION = '2.14.36';
+const APP_VERSION = '2.14.37';
 
 /* ========== CONSTANTS ========== */
 const COMMON_W = [1,2,3,4,5,6,7,8,10,12,15,20,25];
@@ -17657,7 +17657,8 @@ function showMark(targetEl,text,lifeMs){
   var life=(typeof lifeMs==='number'&&lifeMs>0)?lifeMs:600
   var mark=document.createElement('div');mark.className='bc-mark'
   mark.textContent=text
-  mark.style.left='50%';mark.style.top='16%'
+  /* v2.14.37：与伤害飘字同一修法 —— 锚到角色上方，避免状态短提示盖住 HP 文本 */
+  mark.style.left='50%';mark.style.top='auto';mark.style.bottom='100%'
   if(mark.style)mark.style.animationDuration=life+'ms'
   targetEl.appendChild(mark)
   setTimeout(function(){if(mark.parentNode)mark.remove()},life)
@@ -17806,7 +17807,10 @@ function runBattle(){
 
 function renderBattleHP(){
   document.getElementById('bpHP').style.width=Math.max(0,_battle.player.hp/(_battle.player.maxHP||1)*100)+'%'
-  document.getElementById('bpHPText').textContent='HP: '+Math.max(0,_battle.player.hp)
+  /* v2.14.37（真开战复核）：玩家侧原先只写「HP: 56」、敌方写「HP: 118/120」——
+     同一屏两种血量格式。统一为 cur/max（分母缺失时退化为 cur）。 */
+  var pMax=_battle.player.maxHP||0
+  document.getElementById('bpHPText').textContent='HP: '+Math.max(0,_battle.player.hp)+(pMax?'/'+pMax:'')
   document.getElementById('beHP').style.width=Math.max(0,_battle.enemy.hp/_battle.enemy.maxHP*100)+'%'
   document.getElementById('beHPText').textContent='HP: '+Math.max(0,_battle.enemy.hp)+'/'+_battle.enemy.maxHP
 }
@@ -17826,7 +17830,10 @@ function showImpact(targetEl,ev,amount,lifeMs){
   var life=(typeof lifeMs==='number'&&lifeMs>0)?lifeMs:600
   var impact=document.createElement('div');impact.className='bc-impact';
   impact.textContent=(ev.sourceSide==='player'?'💥':'✨')+n;
-  impact.style.left='50%';impact.style.top='30%';
+  /* v2.14.37（真开战复核抓到的视觉缺陷）：原先锚点 in-char top=30% 正好压住「HP: xx」文本，
+     伤害数字盖住血量 → 血量读不出来。改为**锚到角色上方**（bottom:100%），向上飘出画面外，
+     两者矩形不再相交（断言见 scripts/verify-battle-visual.js）。 */
+  impact.style.left='50%';impact.style.top='auto';impact.style.bottom='100%';
   if(impact.style)impact.style.animationDuration=life+'ms';   /* 动画与生命期同步（旧实现固定 .6s） */
   targetEl.appendChild(impact);
   setTimeout(function(){if(impact.parentNode)impact.remove()},life);

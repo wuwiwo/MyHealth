@@ -5,6 +5,45 @@
 
 ---
 
+## v2.14.37
+
+Date: 2026-11-27
+
+**真开战视觉复核：飘字不再压血量、双方血量格式统一（评审 §20.5 唯一「仍未验证」项收口）**
+
+> 评审从 §17 到 §20 一直挂着同一句「群战 overlay / 结算弹窗 / toast 的真实开战视觉仍未验证」。本版把这条**真跑起来**：headless 里真进战斗、真打到结束，结果抓到两个一直没被发现的视觉缺陷。
+
+**① 怎么做到的（可复跑）**
+- 新增 `scripts/verify-battle-visual.js`（CDP 9350）：预置「今天 1-1 已尝试一次」绕过「今天没训练不能挑战」拦截 → `startBattle('1-1')` → 抓一帧有伤害飘字的画面 → 自动 + 8 倍速打到底 → 量结算区。
+- 断言 **11 项**：飘字与双方「HP:」文本矩形**不相交**、HP 字号 ≥ 11px、**双方血量格式同口径**、控制条 6 个按钮均 ≥ 44×44、双方卡片宽度对称（差 0px）、战报有内容、结算区有可读文案、结算后仍可关闭。
+
+**② 抓到并修掉的两个真缺陷**
+- **伤害/状态飘字盖住血量读数**（P1）：飘字锚点原为角色容器内 `top:30%`，正好落在 `bc-hp-bar / bc-hp-text` 上；大字号（`--fs-2xl`）把它彻底糊住 —— 玩家那一侧只剩一个「23」。改为**锚到角色上方**（`bottom:100%`，向上飘出到 arena 空白区）+ 字号降一档到 `--fs-xl`；`showMark`（阵亡/状态短提示）同一修法。真机复测：**重叠 0 处**。
+- **同一屏两种血量格式**（P2）：玩家侧 `renderBattleHP()` 只写 `HP: 56`，敌方写 `HP: 118/120` —— 用户无法判断「56 是当前值还是上限」。统一为 `cur/max`（分母缺失才退化），真机实测 `HP: 56/100` / `HP: 118/120`。
+
+**③ 结算与 toast**
+- 结算区实测：`💀 战败` + `继续` 按钮，位置在战报下方、不与战斗区重叠；`.be-result` 字号可读。
+- 自动战斗在 8 倍速下能自然打到失败并停（「失败即停」安全阀有效）；本脚本另留一条「18 秒未自然结束 → 调 `endBattle(true)`」兜底，只为复核结算 UI（落盘标注 `forced`，不当自然流程证据）。
+
+**④ 群战路径的覆盖说明（诚实记账）**
+- 编队 overlay：`scripts/verify-squad-ui.js` **通过**（出战摘要 2 只只读芯片、跨队占用禁用、栏宽无溢出）。
+- 双栏群战：`scripts/verify-dual-layout.js` **28 项通过**（两场景芯片无裁切、推 12 拍无异常、两栏之后仍能看到页签）。
+- 因此「群战 overlay」不是未验证，而是**早已有脚本守着**；本版补的是「单敌真实开战 + 结算 + 飘字层」这一段。
+
+**测试与验证**
+- 全量 **90 套件 / 0 失败**；`verify-battle-visual` **11/11**；`verify-bundle` 14 视图逐字一致；`verify-lazy-dataset` 7/7；双主题 × 双视口审计 0 失败。
+
+**权衡**
+- 飘字上移后，最大伤害数字会飘到 arena 上缘的空白区：这不是缺陷 —— 那块本来就没信息（战斗双方在中线）；把飘字放在「没有信息的地方」比放在「要读的数字上」正确。
+- 血量格式只改玩家侧一行：敌方原本就是 `cur/max`，统一由「敌方口径」为准，避免再引出第三套写法。
+
+**本版文件**
+- 改：`page/game-battle.js`（`showImpact` / `showMark` 锚点、`renderBattleHP` 格式）、`page/index.css`（`.bc-impact` 字号）、`page/index.src.html`（戳 `?v201`）、`page/index.html` / `page/_build/app.js`（构建产物）
+- 增：`scripts/verify-battle-visual.js`
+- 文档：`doc/changelog-v2.14.md`、`README.md`、`doc/design-tokens-v2.1.md`（§20）、`doc/ui-ux-review-whole-2026-11-27.md`（§21）、`doc/VERSION-LEDGER.md`
+
+---
+
 ## v2.14.36
 
 Date: 2026-11-27
@@ -1985,6 +2024,7 @@ Date: 2026-10-12
 | 2.14.32 | 55 | 3508 行 game-render.js | **入口即产物：`page/index.html` 改由构建生成**（v2.14.31 的 rewrite 被线上实测证伪后的修正）—— ① 线上实测：`/` 返回 200 但正文仍是逐文件版（`index.css?v195` + 55 个 `<script>`，18571B），而 `/index.bundle.html`（200/15877B）与 `/_build/app.js`（200/2685742B）均正常 —— **产物部署无问题，只是入口没切**；Vercel 静态站点（`outputDirectory:"."` + `cleanUrls`）总把 `/` 解析到 `index.html`，`source:"/"` 匹配不到 → 改「入口文件本身即产物」，不依赖平台规则；② 源码页改名 **`page/index.src.html`**（唯一真源，本地/测试/逐文件加载都走它），`build-bundle.js` 读它、把 55 个 `<script src>` 整段换成 `<script src="_build/app.js?vNNN">` 后写出 `page/index.html`（body/header 逐字节同构），删掉旧 `index.bundle.html`（入口只剩一条路径）；③ `page/vercel.json` 移除失效 `rewrites`；④ 21 个测试/审计脚本的 `index.html` → `index.src.html`（保留「源码是唯一真源」）；⑤ `test-bundle-fresh` **19 → 22 断言**：新增「按同一规则重算期望入口页与磁盘 `index.html` **逐字节比对**」（手改产物页或忘重建即红）、入口脚本唯一且戳正确、`index.css` 带戳、旧 bundle 页已移除、`vercel.json` 不再声明 `/` rewrite；⑥ `verify-bundle` 比对对象改 `/index.src.html` vs `/index.html`：**14/14 逐字一致、资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v195` → `?v196`。回滚：`cp page/index.src.html page/index.html` 再推 |
 | 2.14.33 | 55 | 3508 行 game-render.js | **全项目评审批次 H：清单剩余四项收口** —— ① **P2-4 边框纪律**：写进 `index.css` 文件头（容器 2px `--bw`+`--bd` / 分隔单边 1px `--bw-thin`+`--surface-3` / 强调边 2px），并把五处「四周 1px」容器（`.refine-src` / `.pet-exp-log` / `.orb-bag` / `.pet-rest` / `.train-mat-fold`）收成 2px —— 扁平风无阴影，1px 四周边框会被读成分隔线；② **P2-6 色彩纪律**：三语义定稿（蓝=主操作/进度/选中、红=危险/敌方/BOSS、绿=达成/友方/治疗；紫只属数据属性、黄只属瞬时提示），并断言按钮与空态不得用紫；③ **P2-7 空态**：`emptyHtml()` 加第 5 参类名 + `.empty-compact`（图标与标题同行、CTA 撑满），计划页两块空态 **188px → 125px**，360×640 首屏可见两个 CTA；④ **P2-9 图标语义**：`📖` 只留图鉴/动作百科，最高关卡→🏁、章节→🗺️、详情卡→ℹ️（4 处）、属性计算→🧮，宠物「结算」→**「离线补算」**；⑤ `test-ui-consistency` **70 → 86 断言**（新增 `[17]` 十六类规则）、`test-pet-panel-layout` 一条文案断言随行为更新；全量 **87 套件 / 0 失败**、`audit-whole-ui` 14×2 复测溢出/对比/触摸/圆角全 0；缓存戳 `?v196` → `?v197`。权衡：强调色计数仍 7–12（成对的主题蓝/绿本就计两个，压低只能减语义色，不做） |
 | 2.14.34 | 55 | 3508 行 game-render.js | **无障碍收口**：容器级弹层焦点陷阱（打开送焦点/关闭归还/Tab 首尾环回/背后拉回，12 个弹层调用点零改动）+ 审计扩为**双主题 × 2 视口 × 14 视图**（深色对比失败 0）+ 新增键盘可达性六项审计（11 视图全 0，模态真缺口已修）。修复：加载即初始化打崩 4 套 vm 沙箱 → 改能力探测守卫。测试 88 套件 0 失败、`test-modal-focus` 21 断言。 |
+| 2.14.37 | 55 | 3508 行 game-render.js | **真开战视觉复核（评审唯一「仍未验证」项收口）** —— 新增 `verify-battle-visual`（CDP 9350，真开战 + 真打到结束，11 断言）抓出并修掉两个一直没被发现的缺陷：① **伤害/状态飘字盖住血量读数**：锚点 `top:30%` 正压在 `bc-hp-bar/bc-hp-text` 上、字号 `--fs-2xl` → 改锚到角色上方（`bottom:100%`）+ 字号降一档 `--fs-xl`（`showMark` 同修），真机复测重叠 **0**；② **同屏两种血量格式**：玩家 `HP: 56` vs 敌方 `HP: 118/120` → `renderBattleHP` 统一 `cur/max`。另复核：控制条 6 钮均 ≥44×44、双方卡片对称差 0px、结算区「💀 战败 / 继续」可读；编队 overlay（verify-squad-ui）与双栏群战（verify-dual-layout 28 项）均通过。90 套件 0 失败。 |
 | 2.14.36 | 55 | 3508 行 game-render.js | **首屏 2.6MB → 1.5MB：动作数据集懒加载**（对「拆包」建议的实测替代）—— 线上实测压缩后 app.js **662KB**、整包 715KB，且版本戳每次发版换 URL → **按体积切三段收益≈0**（否决原建议）；改找「首屏不需要的部分」：`data/exercises-dataset.js` **1161KB = 源码 43.8%** 只服务动作百科/配图 → `ex-dataset.js` 增 `bind()`（可重绑）与 `load(cb)`（幂等注入脚本、失败回调 false），构建脚本加 `LAZY` 清单移出包（2630 → **1472KB**）；三触发点：空闲 1.2s 预取 / `autoLink` 先拉 / 打开百科先拉。新增 `test-lazy-dataset`（28 断言）+ `verify-lazy-dataset`（真机 7 断言：数据集在 app.js 之后才拉、1324 条、201 张卡图）；`test-bundle-fresh` 22 → 25。90 套件 0 失败。 |
 | 2.14.35 | 55 | 3508 行 game-render.js | **删除可撤销**：`showUndoBar` / `clearUndoBar` / `insertAt`（30 秒窗口、按原下标插回、一次一条、独立倒计时 `30s` 且 `aria-hidden`、撤销按钮 ≥44×44、层级 998）；删动作 / 删力量计划 / 删有氧计划三处接线，`confirm` 一条未拆。真机抓修：正文被 360px 截断 → 改倒计时标签；`.undo-x` 四周 1px → `border:none`。新增 `test-undo-delete`（38 断言）+ `verify-undo`（真机 13 断言，26→25→26）。89 套件 0 失败。 |
 

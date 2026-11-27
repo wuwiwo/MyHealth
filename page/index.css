@@ -553,7 +553,9 @@ box-shadow:none}
    但颜色中性（--text）、字号小一档，避免与伤害数字抢注意力。 */
 .bc-mark{position:absolute;font-size:var(--fs-lg);font-weight:800;color:var(--text);
   pointer-events:none;animation:impactPop .6s ease forwards;z-index:4}
-.bc-impact{position:absolute;font-size:var(--fs-2xl);font-weight:900;color:var(--orange);pointer-events:none;animation:impactPop .6s ease forwards;z-index:5}
+/* v2.14.37：伤害/状态飘字锚到角色**上方**（见 game-battle.js showImpact 的注释），
+   字号从 --fs-2xl 降一档到 --fs-xl —— 覆盖面积小了才不会吃掉血量读数。 */
+.bc-impact{position:absolute;font-size:var(--fs-xl);font-weight:900;color:var(--orange);pointer-events:none;animation:impactPop .6s ease forwards;z-index:5}
 @keyframes impactPop{0%{opacity:0;transform:translate(-50%,0) scale(.3)}30%{opacity:1;transform:translate(-50%,-10px) scale(1.2)}100%{opacity:0;transform:translate(-50%,-40px) scale(.8)}}
 .bc-hp-fill{height:100%;border-radius:0;background:var(--green-d);transition:width 75ms ease}
 .bc-hp-fill.enemy{background:var(--red)}
