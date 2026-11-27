@@ -27,10 +27,12 @@ Date: 2026-11-27
 - `panel-pet`、`panel-codex`、`game-train`、`game-battle`、`game-record` 五个视图加 `needsPack: true`；产物侧注入快照前先 `loadGamePack()`，再轮询（12×250ms）等 `renderGameViews` 就绪。
 - 改后 **14 视图逐字一致**，资源条目「源码 57 → 产物 3（JS 56 → 2）」。
 
-**④ 实测（本地全绿，线上待部署后回填）**
+**④ 实测**
 - 全量 **93 套件 / 0 失败**；`test-game-pack` 25 断言、`test-bundle-fresh` 35 断言、`test-pack-call-guards` 0 缺守卫。
 - 真机：`verify-game-pack.js`（CDP 9355，打开产物入口页）**11/11**；`verify-bundle.js` 14 视图逐字一致；`audit-whole-ui.js`（2 主题 × 2 视口 × 14 视图 = 56 柱）0 失败；`audit-viewports.js` 42 柱 0 问题；`audit-tab-order.js` 11 视图 0 问题。
 - 体积（本地 gzip 实测）：`app.js` 1356KB 源 / **454KB** gzip；`pack-game.js` 116KB 源 / 38KB gzip；`index.css` 46KB gzip；首屏合计（app + css + html，不含按需包与数据集）**504KB**。
+- **线上实测（浏览器视角，含压缩，`measure-transfer.js`）**：`_build/app.js` **437 → 457 KB**（比 v2.14.40 多 20KB，即回主包的 `pet-codex` 在传输层的实际代价）；`index.css` 49KB；首屏合计 **511 KB**（不含懒加载的动作数据集 173KB）；`pack-game.js` 静止态不占首屏流量。
+- 线上烟测（`prod-smoke.js`）：`/`、`index.css?v205`、`_build/app.js?v205`、`data/exercises-dataset.js?v21441` 全 200，版本 **v2.14.41**，console 报错 **0**。
 
 **权衡**
 - 这 +17KB 是主动买的保险：v2.14.40 的 137KB 里，`pet-codex` 的 41KB 需要四处接线才能安全，而它的调用点（训练页召唤面板、宠物面板、战斗结算发蛋）都不是「点挑战 tab 才发生」——一旦漏一处就是运行时报错，且只在特定玩法路径上暴露，测试很难覆盖。
