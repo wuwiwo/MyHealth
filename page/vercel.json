@@ -3,5 +3,8 @@
   "buildCommand": "echo ok",
   "outputDirectory": ".",
   "framework": null,
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/", "destination": "/index.bundle.html" }
+  ]
 }

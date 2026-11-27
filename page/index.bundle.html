@@ -1,0 +1,288 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>💪 MyHealth</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
+<link rel="stylesheet" href="index.css?v195">
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="header-top">
+        <div class="header-brand">
+          <div class="header-logo">💪</div>
+          <div class="header-title-group">
+            <div class="header-title">My<span>Health</span></div>
+            <div class="header-subtitle"><span class="hs-brand">Personal Health Manager </span><span id="appVersion" class="hs-ver"></span></div>
+          </div>
+        </div>
+        <!-- v2.14.29（评审 P3-2）：三枚顶栏按钮原来只有 emoji、44px 方框里 emoji 偏小且无可见文案，用户只能靠猜。
+             现在改成「图标 + 11px 文字」竖排（同步 / 主题 / 状态），图标 16px，`aria-label` 与 title 保留。 -->
+        <div class="header-right">
+          <button class="header-btn" id="syncBtn" title="同步数据" aria-label="同步数据"><span class="hb-ico" aria-hidden="true">🔄</span><span class="hb-lbl">同步</span></button>
+          <button class="header-btn" id="themeToggle" title="切换主题" aria-label="切换主题"><span class="hb-ico" aria-hidden="true">🌙</span><span class="hb-lbl">主题</span></button>
+          <div class="sync-dot" id="syncIndicator" title="同步状态" role="status" aria-live="polite" aria-label="同步状态"><span class="hb-ico" aria-hidden="true">○</span><span class="hb-lbl">状态</span></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tab Bar -->
+  <nav class="tab-bar" id="mainTabBar" role="tablist" aria-label="主导航">
+    <button class="tab-btn active" id="tabBtnTraining" data-tab="training" role="tab" aria-selected="true" aria-controls="tabTraining">🏋️ 训练</button>
+    <button class="tab-btn" id="tabBtnProfile" data-tab="profile" role="tab" aria-selected="false" aria-controls="tabProfile">📊 个人</button>
+    <button class="tab-btn" id="tabBtnGame" data-tab="game" role="tab" aria-selected="false" aria-controls="tabGame">🎮 挑战</button>
+    <button class="tab-btn" id="tabBtnSettings" data-tab="settings" role="tab" aria-selected="false" aria-controls="tabSettings">⚙️ 设置</button>
+  </nav>
+
+  <!-- ===== TAB: TRAINING (strength + cardio sub-tabs) ===== -->
+  <section class="tab-content active" id="tabTraining">
+    <nav class="tab-bar sub-tab-bar" role="tablist" aria-label="训练分类">
+      <button class="tab-btn active" data-sub="strength" role="tab" aria-selected="true" aria-controls="subStrength">💪 力量</button>
+      <button class="tab-btn" data-sub="cardio" role="tab" aria-selected="false" aria-controls="subCardio">🏃 有氧</button>
+    </nav>
+
+    <!-- Today snapshot: weekly + period progress -->
+    <div id="todaySnapshot"></div>
+
+    <!-- Hidden challenge summon button -->
+    <div id="summonPanel"></div>
+
+    <!-- Sub-tab: Strength -->
+    <div class="sub-tab active" id="subStrength">
+      <h2 class="section-hdr">📅 日期</h2>
+      <div class="date-nav">
+        <button class="dn-btn" id="strPrevDay" aria-label="上一天">◀</button>
+        <div class="dn-display">
+          <div class="dn-main" id="strDateMain">加载中...</div>
+          <div class="dn-sub" id="strDateSub"></div>
+        </div>
+        <button class="dn-btn" id="strNextDay" aria-label="下一天">▶</button>
+        <button class="dn-btn dn-today" id="strGoToday">今天</button>
+      </div>
+      <div class="day-vol" id="strDayVol"></div>
+
+      <h2 class="section-hdr">今日训练</h2>
+      <button class="add-btn" id="strAddBtn">＋ 新增一组</button>
+      <div class="add-card" id="strAddCard">
+        <div class="fg">
+          <label class="fl" for="strExercise">动作</label>
+          <div class="ex-suggest" id="strSuggest"></div>
+          <input class="fi" id="strExercise" list="strExList" placeholder="输入或选择...">
+          <datalist id="strExList"></datalist>
+        </div>
+        <div class="fg" id="strWeightFg"><div class="fl" id="strWtLbl">重量 (kg)</div><div class="weight-grid" id="strWeight" role="group" aria-labelledby="strWtLbl"></div></div>
+        <div class="fg" id="strEqWeightInfo" style="display:none"><div class="fl">等效重量</div><div id="strEqWeightDisplay" style="font-size:.85rem;color:var(--text2);padding:8px 0">—</div></div>
+        <div class="fg" id="strRepsFg">
+          <div class="fl" id="strRepsLabel">次数</div>
+          <div class="reps-row" role="group" aria-labelledby="strRepsLabel">
+            <div class="rg"><div class="fl">目标</div><div class="stepper"><button class="sp-btn" data-s="strTgt" data-d="-" aria-label="减少目标次数">−</button><span class="sp-val" id="strTgtVal">12</span><button class="sp-btn" data-s="strTgt" data-d="+" aria-label="增加目标次数">+</button></div></div>
+            <div class="rg"><div class="fl">实际</div><div class="stepper"><button class="sp-btn" data-s="strAct" data-d="-" aria-label="减少实际次数">−</button><span class="sp-val" id="strActVal">12</span><button class="sp-btn" data-s="strAct" data-d="+" aria-label="增加实际次数">+</button></div></div>
+          </div>
+        </div>
+        <button class="sb-btn" id="strSubmit">⚡ 记录</button>
+      </div>
+
+      <div id="strList"></div>
+
+      <!-- Break note for missed days -->
+      <h2 class="section-hdr" style="margin-top:20px">📋 训练计划</h2>
+      <div id="strPlansList"></div>
+
+      <h2 class="section-hdr" style="margin-top:20px">📝 断签说明</h2>
+      <div id="strMissedDays"></div>
+
+      <h2 class="section-hdr">📊 本周统计</h2>
+      <div class="stats-grid" id="strStats"></div>
+    </div>
+
+    <!-- Sub-tab: Cardio -->
+    <div class="sub-tab" id="subCardio">
+      <h2 class="section-hdr">📅 日期</h2>
+      <div class="date-nav">
+        <button class="dn-btn" id="carPrevDay" aria-label="上一天">◀</button>
+        <div class="dn-display">
+          <div class="dn-main" id="carDateMain">加载中...</div>
+          <div class="dn-sub" id="carDateSub"></div>
+        </div>
+        <button class="dn-btn" id="carNextDay" aria-label="下一天">▶</button>
+        <button class="dn-btn dn-today" id="carGoToday">今天</button>
+      </div>
+      <div class="day-vol" id="carDayVol"></div>
+
+      <h2 class="section-hdr">今日有氧</h2>
+      <button class="add-btn" id="carAddBtn">＋ 新增记录</button>
+      <div class="add-card" id="carAddCard">
+        <div class="fg"><div class="fl" id="carTypeLbl">运动类型</div>
+          <div class="car-types" id="carTypes" role="group" aria-labelledby="carTypeLbl"></div>
+          <button class="md-write" id="carCustomType" style="margin-top:4px;font-size:.7rem">＋ 自定义类型</button>
+        </div>
+        <div class="fg"><div class="fl" id="carIntLbl">强度</div>
+          <div class="car-types" id="carIntensity" role="group" aria-labelledby="carIntLbl"></div>
+        </div>
+        <div class="fg"><label class="fl" id="carDurLbl">时长 (分钟)</label>
+          <div class="stepper" role="group" aria-labelledby="carDurLbl" style="max-width:200px">
+            <button class="sp-btn" id="carDurDown" aria-label="减少时长">−</button>
+            <span class="sp-val" id="carDurVal">30</span>
+            <button class="sp-btn" id="carDurUp" aria-label="增加时长">+</button>
+          </div>
+        </div>
+        <div class="fg"><label class="fl" id="carDistLbl">距离 (km) <span class="fl-note" id="carDistLabel">可选</span></label>
+          <div class="stepper" role="group" aria-labelledby="carDistLbl" style="max-width:200px">
+            <button class="sp-btn" id="carDistDown" aria-label="减少距离">−</button>
+            <span class="sp-val" id="carDistVal">0</span>
+            <button class="sp-btn" id="carDistUp" aria-label="增加距离">+</button>
+          </div>
+        </div>
+        <div class="fg"><label class="fl" for="carNote">备注</label><input class="fi" id="carNote" placeholder="感觉怎么样？"></div>
+        <button class="sb-btn" id="carSubmit">🏃 记录</button>
+      </div>
+
+      <div id="carList"></div>
+
+      <h2 class="section-hdr" style="margin-top:20px">📋 有氧计划</h2>
+      <div id="carPlansList"></div>
+
+      <h2 class="section-hdr">本周有氧</h2>
+      <div class="stats-grid" id="carStats"></div>
+    </div>
+  </section>
+
+  <!-- ===== TAB: PROFILE ===== -->
+  <section class="tab-content" id="tabProfile">
+    <!-- Sub-tab bar -->
+    <nav class="tab-bar sub-tab-bar" role="tablist" aria-label="个人数据分类">
+      <button class="tab-btn active" data-sub="personal" role="tab" aria-selected="true" aria-controls="subPersonal">👤 个人数据</button>
+      <button class="tab-btn" data-sub="training" role="tab" aria-selected="false" aria-controls="subTraining">📊 训练数据</button>
+    </nav>
+
+    <!-- Sub-tab: Personal Data -->
+    <div class="sub-tab active" id="subPersonal">
+      <h2 class="section-hdr">👤 基本信息</h2>
+      <div class="profile-card" id="profileCard"></div>
+      <div id="prSection"></div>
+
+      <h2 class="section-hdr">⚖️ 体重记录</h2>
+      <div id="wtNoteTags"></div>
+      <div class="weight-form-row">
+        <input type="number" class="fi" id="wtInput" aria-label="体重（公斤）" value="70.0" step="0.1" min="20" max="300" style="width:100px;text-align:center;font-size:var(--fs-lg);font-weight:700">
+        <span style="font-size:.85rem;color:var(--text2)">kg</span>
+        <input class="fi" id="wtNote" aria-label="体重记录备注" placeholder="备注（可选）" style="flex:1;max-width:200px">
+        <button class="sb-btn" id="wtSubmit" style="flex:0;padding:12px 20px;white-space:nowrap">📝 记录</button>
+      </div>
+
+      <h2 class="section-hdr">📈 体重趋势</h2>
+      <div class="chart-wrap" id="weightChart">
+        <canvas id="weightCanvas"></canvas>
+      </div>
+      <div id="weightList"></div>
+    </div>
+
+    <!-- Sub-tab: Training Data -->
+    <div class="sub-tab" id="subTraining">
+      <div id="statsSection"></div>
+      <div id="profileHeatmap"></div>
+    </div>
+  </section>
+
+  <!-- ===== TAB: GAME ===== -->
+  <section class="tab-content" id="tabGame">
+    <!-- v2.0.5: 旧属性条/旬目标卡/记录卡容器已删（三视图培养/战斗/记录完整接管） -->
+
+    <!-- v2.0 三视图选项卡（培养/战斗/记录）— game-views.js 静态按钮 -->
+    <nav class="tab-bar sub-tab-bar" id="gameViewTabBar" role="tablist" aria-label="挑战视图" style="margin-bottom:10px">
+      <button class="tab-btn" data-gtab="train" role="tab" aria-selected="true" aria-controls="gameTrainView">🐾 培养</button>
+      <button class="tab-btn" data-gtab="battle" role="tab" aria-selected="false" aria-controls="gameBattleView">⚔️ 战斗</button>
+      <button class="tab-btn" data-gtab="record" role="tab" aria-selected="false" aria-controls="gameRecordView">📊 记录</button>
+    </nav>
+
+    <!-- v2.0 三视图容器 -->
+    <div id="gameTrainView"></div>
+    <div id="gameBattleView" style="display:none"></div>
+    <div id="gameRecordView" style="display:none"></div>
+
+    <!-- 关卡列表（battle 视图内「挑战关卡」展开时显示） -->
+    <div id="gameContent"></div>
+
+    <!-- Battle overlay (full screen inside tab) -->
+    <div class="battle-overlay" id="battleOverlay" role="dialog" aria-modal="true" aria-label="战斗">
+      <div class="battle-hdr">
+        <div class="battle-level" id="battleLevel">1-1</div>
+        <div class="battle-speed">
+          <button class="speed-btn active" data-speed="1">1×</button>
+          <button class="speed-btn" data-speed="2">2×</button>
+          <button class="speed-btn" data-speed="4">4×</button>
+          <button class="speed-btn" data-speed="8">8×</button>
+          <button class="speed-btn" id="battleAuto" title="自动模式：胜利后自动下一关">🔄 自动</button>
+        </div>
+        <button class="speed-btn" id="battleClose">✕</button>
+      </div>
+      <div class="battle-arena" id="battleArena">
+        <div class="battle-char" id="battlePlayer">
+          <div class="bc-name">🧑 你</div>
+          <div class="bc-hp-bar"><div class="bc-hp-fill" id="bpHP" style="width:100%"></div></div>
+          <div class="bc-hp-text" id="bpHPText">HP: 100</div>
+          <div class="bc-atk" id="bpAtk">⚔️ 1</div>
+          <div class="bc-def" id="bpDef">🛡️ 1</div>
+          <div class="bc-soul" id="bpSoulAtk" style="font-size:.62rem;color:var(--purple)">👻 0</div>
+          <div class="bc-soul" id="bpSoulDef" style="font-size:.62rem;color:var(--purple)">🔮 0</div>
+        </div>
+        <div class="battle-vs">⚔️</div>
+        <div class="battle-char" id="battleEnemy">
+          <div class="bc-name" id="beName">👹 敌人</div>
+          <div class="bc-hp-bar"><div class="bc-hp-fill enemy" id="beHP" style="width:100%"></div></div>
+          <div class="bc-hp-text" id="beHPText">HP: 100</div>
+          <div class="bc-atk" id="beAtk">⚔️ 1</div>
+          <div class="bc-def" id="beDef">🛡️ 1</div>
+          <div class="bc-soul" id="beSoulAtk" style="font-size:.62rem;color:var(--purple)">👻 0</div>
+          <div class="bc-soul" id="beSoulDef" style="font-size:.62rem;color:var(--purple)">🔮 0</div>
+        </div>
+      </div>
+      <div class="battle-log" id="battleLog"></div>
+      <div class="battle-end" id="battleEnd"></div>
+    </div>
+
+    <!-- Share card modal -->
+    <div class="share-overlay" id="shareOverlay" role="dialog" aria-modal="true" aria-label="分享战报">
+      <div class="share-card" id="shareCard">
+        <div class="share-header">🏆 挑战胜利！</div>
+        <div class="share-level" id="shareLevel">1-1 试炼之始</div>
+        <div class="share-stats" id="shareStats"></div>
+        <div class="share-vs" id="shareVS"></div>
+        <div class="share-footer">MyHealth · 练就强大</div>
+        <div class="share-watermark">myhealth.app</div>
+      </div>
+      <div class="share-actions">
+        <button class="sb-btn" id="shareClose">关闭</button>
+        <button class="sb-btn" id="shareSave" style="background:var(--green)">💾 保存图片</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== TAB: SETTINGS ===== -->
+  <section class="tab-content" id="tabSettings">
+    <nav class="tab-bar sub-tab-bar" role="tablist" aria-label="设置分类">
+      <button class="tab-btn active" data-sub="library" role="tab" aria-selected="true" aria-controls="subLibrary">🏋️ 动作库</button>
+      <button class="tab-btn" data-sub="plans" role="tab" aria-selected="false" aria-controls="subPlans">📋 计划</button>
+      <button class="tab-btn" data-sub="game" role="tab" aria-selected="false" aria-controls="subGame">🎮 玩法</button>
+      <button class="tab-btn" data-sub="data" role="tab" aria-selected="false" aria-controls="subData">📂 数据</button>
+    </nav>
+
+    <div class="sub-tab active" id="subLibrary"></div>
+    <div class="sub-tab" id="subPlans"></div>
+    <div class="sub-tab" id="subGame"></div>
+    <div class="sub-tab" id="subData"></div>
+  </section>
+</div>
+
+<!-- 全屏可滚动面板容器（宠物/技能培养）：战斗用的 .battle-overlay 是 flex 布局且不支持滚动，勿复用 -->
+<div class="panel-overlay" id="panelOverlay" role="dialog" aria-modal="true" aria-label="培养面板"></div>
+
+<script src="_build/app.js?v195"></script>
+<script>init()</script>
+</body>
+</html>

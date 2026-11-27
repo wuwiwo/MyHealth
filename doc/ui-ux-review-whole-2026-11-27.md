@@ -213,4 +213,19 @@
 
 验证：全量 **87 套件 / 0 失败**；缓存戳 `?v193` → `?v194`。
 
+## 14. 落地记录（v2.14.31，线上入口切换）
+
+作者回复「修改后推送」→ 真正把 `/` 指向产物页，并补上过期守卫。
+
+| 改动 | 文件 | 证据 |
+|---|---|---|
+| 产物入库（Vercel 从仓库构建，忽略则 rewrite 落 404） | `page/_build/app.js`、`page/index.bundle.html`、`.gitignore` | 文件存在且随版本提交 |
+| `/` rewrite → `/index.bundle.html`（回滚=删该条） | `page/vercel.json` | `test-bundle-fresh` 断言 rewrite 指向 |
+| 产物头部内容指纹 `hash:<16>`，防「同版本号却跑旧代码」 | `scripts/build-bundle.js` | 头部 `hash:` 与源码重算一致 |
+| 过期守卫：不重建，源码重算指纹比对 + 逐字节包含 + 结构/顺序/入口断言 | `scripts/test-bundle-fresh.js`（13 → 19 断言） | 19/19 |
+
+权衡（记入 changelog，勿当 bug）：整包 2.6MB 每版重下，未改文件不再命中缓存；换来首屏请求 56 → 2。若日后嫌重，可改 core/views/battle 三包。
+
+验证：`verify-bundle` **14 视图逐字一致 / 产物 0 报错 / 资源 56 → 2**；全量 **87 套件 / 0 失败**；缓存戳 `?v194` → `?v195`。
+
 

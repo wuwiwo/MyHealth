@@ -11,6 +11,5 @@ backup/
 .workbuddy/
 .workbuddy-ai/
 
-# v2.14.30 打包产物（node scripts/build-bundle.js 生成，不入库）
-/page/_build/
-/page/index.bundle.html
+# v2.14.30 起：打包产物随仓库走（v2.14.31 起作为线上入口），不再忽略。
+# 只忽略本地产物目录外的临时审计输出。

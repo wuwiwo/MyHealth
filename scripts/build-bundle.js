@@ -46,8 +46,11 @@ for (const m of matches) {
   out += '/* ===== ' + m.src + ' ===== */\n' + body + '\n;\n';
 }
 
-/* 顶部一行说明 + 版本戳，便于线上直接核对产物是否过期 */
-const head = '/* MyHealth bundle · v' + stamp + ' · 由 scripts/build-bundle.js 生成，勿手改 */\n';
+/* 顶部一行说明 + 版本戳 + **内容指纹**。指纹的作用：v2.14.31 起产物入库，
+   若只改了源码忘了重建（版本号往往也不变），线上的 app.js 就会是旧的 ——
+   指纹可由 test-bundle-fresh.js 用源码重算比对，直接抓住「过期产物」。 */
+const FINGERPRINT = require('crypto').createHash('sha256').update(out).digest('hex').slice(0, 16);
+const head = '/* MyHealth bundle · v' + stamp + ' · hash:' + FINGERPRINT + ' · 由 scripts/build-bundle.js 生成，勿手改 */\n';
 fs.writeFileSync(path.join(OUT, 'app.js'), head + out, 'utf8');
 
 /* 生成 index.bundle.html：整段脚本标签替换成一条 */
