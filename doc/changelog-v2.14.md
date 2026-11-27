@@ -36,6 +36,10 @@ Date: 2026-11-27
 - 新增 `scripts/test-lazy-dataset.js` **28 断言**（构建契约 / `bind` 重绑语义 / `load` 幂等与假 DOM 真跑 / 三处接线）。
 - 新增 `scripts/verify-lazy-dataset.js`（真机，CDP 9348）**7 断言**：实测首屏只有 `index.css` + `_build/app.js`，数据集在 **app.js +100ms 之后**才拉（一次），到位后 `ready=true`、**1324 条**、动作卡出图 **201 张**、百科 overlay 40 个筛选芯片正常。
 - `test-bundle-fresh` 由 22 → **25 断言**（新增「包内不含数据集」「入口页不引用数据集」「体积 < 1.6MB」；指纹重算同步跳过懒加载项）。
+
+**上线实测（v2.14.36 部署后回填，非估算）**
+- `_build/app.js` 传输 **662 → 491 KB**；首屏合计（html + css + app.js）**715 → 544 KB（−24%）**；数据集 1161KB 压缩后 **173 KB**，改为首屏后约 1.2s 拉取（长缓存）。
+- 线上烟测：`/` 200、`index.css?v200` 200、`_build/app.js?v200` 200、`data/exercises-dataset.js?v21436` 200；版本 `v2.14.36`、console 0 报错。
 - `verify-bundle`：14 视图逐字一致（**产物 3 资源 / JS 55 → 2**）。
 - 全量 **90 套件 / 0 失败**；双主题 × 双视口审计 0 失败；键盘六项 0 与模态 `trapOn:true` 不变。
 
