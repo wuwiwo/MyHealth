@@ -18,7 +18,9 @@
 
 ## 当前领号指针
 
-**2.14.33**（下一个可用）
+**2.14.34**（下一个可用）
+
+> 2026-11-27：`2.14.33` 已领用 —— **全项目评审批次 H：清单剩余四项收口**（P2-4 边框纪律（容器 2px / 分隔单边 1px）+ 五处 1px 容器收口、P2-6 三色语义定稿并断言按钮/空态不用紫、P2-7 计划页空态改 `.empty-compact`（188 → 125px）、P2-9 `📖` 语义收口 + 宠物「结算」→「离线补算」，`test-ui-consistency` 70 → 86 断言），属同一 UI 评审大类内的 patch；领号前确认全仓无既有使用，指针推进到 `2.14.34`。
 
 > 2026-11-27：`2.14.32` 已领用 —— **入口即产物：`page/index.html` 改由构建生成**：v2.14.31 的 `/ → /index.bundle.html` rewrite 线上实测不生效（`/` 仍返回逐文件版，而 `index.bundle.html` / `_build/app.js` 均 200），根因是 Vercel 静态站点把 `/` 直接解析到 `index.html`；改为源码页改名 `page/index.src.html`、`build-bundle.js` 读它生成 `page/index.html`（1 个 script + 1 个 CSS），删旧 bundle 页、移除失效 rewrite、21 个脚本改读源码页、`test-bundle-fresh` 19 → 22 断言（含期望入口页逐字节比对），属同一 UI 评审大类内的 patch；领号前确认全仓无既有使用，指针推进到 `2.14.33`。
 
@@ -110,6 +112,7 @@
 | 版本 | 线 / 负责人 | 工作内容 | commit | changelog |
 |---|---|---|---|---|
 | 2.14.32 | 主控线（全项目 UI/UX） | **入口即产物：`page/index.html` 改由构建生成** —— v2.14.31 的 `/ → /index.bundle.html` rewrite 线上实测不生效（`/` 返回 200 但正文是逐文件版 18571B，而 `/index.bundle.html` 200/15877B、`/_build/app.js` 200/2685742B 均正常）；根因 Vercel 静态站点把 `/` 直接解析到 `index.html` → 改「入口文件本身即产物」：源码页改名 `page/index.src.html`（唯一真源），`build-bundle.js` 读它把 55 个 `<script>` 换成 `<script src="_build/app.js?vNNN">` 写出 `page/index.html`，删旧 `index.bundle.html`，`vercel.json` 移除失效 rewrite，21 个测试/审计脚本改读源码页；`test-bundle-fresh` 19 → **22 断言**（新增「重算期望入口页与磁盘 `index.html` 逐字节比对」）、`verify-bundle` 比对 `/index.src.html` vs `/index.html`；14/14 逐字一致、资源 56 → 2；全量 87 套件 / 0 失败；缓存戳 `?v196`；回滚 `cp page/index.src.html page/index.html` | 待填 | `doc/changelog-v2.14.md` |
+| 2.14.33 | 主控线（全项目 UI/UX） | **评审批次 H：清单剩余四项收口** —— ① P2-4 边框纪律（容器 2px `--bw`+`--bd` / 分隔单边 1px `--bw-thin`+`--surface-3` / 强调边 2px）写进 `index.css` 文件头，五处「四周 1px」容器（`.refine-src`/`.pet-exp-log`/`.orb-bag`/`.pet-rest`/`.train-mat-fold`）收成 2px；② P2-6 三语义（蓝=主操作·红=危险·绿=达成，紫只属数据属性、黄只属瞬时提示）+ 断言按钮/空态不用紫；③ P2-7 `.empty-compact`（计划页两块空态 188 → 125px，首屏两个 CTA）+ `emptyHtml()` 第 5 参；④ P2-9 `📖` 只留图鉴/动作百科（🏁/🗺️/ℹ️/🧮 各归其位）、宠物「结算」→「离线补算」；`test-ui-consistency` 70 → **86 断言**；全量 87 套件 / 0 失败；缓存戳 `?v197` | 待填 | `doc/changelog-v2.14.md` |
 | 2.14.31 | 主控线（全项目 UI/UX） | **线上入口切到打包产物** —— 产物入库（`page/_build/app.js` 2.6MB + `page/index.bundle.html`，Vercel 从仓库构建，不入库则 rewrite 404）+ `page/vercel.json` rewrite `/ → /index.bundle.html`（首屏 2 资源 / JS 1；`/index.html` 直链保留用于比对与回滚）；产物头部加内容指纹 `hash:`，`test-bundle-fresh` 改为**不重建**的过期守卫（源码重算指纹比对 + 逐字节包含 + rewrite/.gitignore 断言，13 → 19 断言）；`verify-bundle` 14 视图逐字一致、资源 56 → 2；全量 87 套件 / 0 失败；缓存戳 `?v195` | aa70bbc | `doc/changelog-v2.14.md` |
 | 2.14.30 | 主控线（全项目 UI/UX） | **评审批次 G：首屏请求 56 → 2（P3-3）** —— `scripts/build-bundle.js`（原序合成 55 脚本 → `page/_build/app.js` 2.6MB + `page/index.bundle.html`，文件标记 + 末尾 `\n;\n` 显式化 ASI；产物落子目录避免污染 `page/*.js` 守卫）、`scripts/verify-bundle.js`（14 视图 innerText sha256 逐字比对：14/14 一致、产物 0 报错、资源 56 → 2 / JS 55 → 1）、`scripts/test-bundle-fresh.js`（13 断言守卫）；产物不入库，默认入口与部署均未改；全量 87 套件 / 0 失败；缓存戳 `?v194` | d425aaf | `doc/changelog-v2.14.md` |
 | 2.14.29 | 主控线（全项目 UI/UX） | **评审批次 F：层级与顶栏收尾** —— ① 两级页签改「一级实心 / 二级 2px 品牌下划线 + 品牌字」、`section-hdr::after` 引导线改中性 `--bd`；② 顶栏三钮改「图标 16px + 文案 11px」竖排（同步/主题/状态）、状态灯空闲图标 ○，`setTheme`/`setSync` 只换 `.hb-ico`；③ 小屏保留版本号（`.hs-brand`/`.hs-ver` 拆分，≤430 只藏英文词）；`test-ui-consistency` 61 → 70 断言；全量 86 套件 / 0 失败；缓存戳 `?v193` | c7c5f61 | `doc/changelog-v2.14.md` |
