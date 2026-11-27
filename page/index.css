@@ -196,6 +196,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   .header-subtitle{letter-spacing:.5px}
   .hs-brand{display:none}
 }
+/* v2.14.38（评审 §21.4 扣分项③）：手机横放的头部压缩已挪到文件末尾 —— 那里才在 `:root` 定型之后，
+   否则 --tabbar-h/--sec-y 会被 1531 行的 :root 覆盖。 */
 .header-btn:hover{background:var(--bg3);color:var(--text)}
 
 .sync-dot{cursor:default;transition:border-color 75ms ease-out,background 75ms ease-out,color 75ms ease-out}
@@ -1811,5 +1813,23 @@ box-shadow:none}
 .train-mat-fold>summary::after{content:'▾';flex:0 0 auto;margin-left:auto;color:var(--text3);font-size:var(--fs-xs)}
 .train-mat-fold[open]>summary::after{content:'▴'}
 .train-mat-fold>summary:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
-.train-mat-body{padding:var(--sp-3)}
+/* v2.14.38（评审 §21.4 扣分项③）：手机横放（高 390）时，头部 + 两排页签 + 段间距把第一屏吃光
+   —— 真机审计 audit-viewports 在 844×390 抓出「首屏只有导航，看不到任何训练内容」。
+   本块必须放在文件末尾：`--sec-y`、`--tabbar-h` 在 1531 行等处才被定成 56px / 48px，
+   媒体查询插在中间会被后面的 `:root` 覆盖掉（实测 firstContentTop 206 不降）。 */
+@media(max-height:520px) and (orientation:landscape){
+  :root{--tabbar-h:44px;--sec-y:var(--sp-8)}
+  .header-inner{padding:6px 12px}
+  .header-logo{width:28px;height:28px;font-size:var(--fs-base)}
+  .header-title{font-size:var(--fs-base);letter-spacing:.5px}
+  /* 副标题只藏英文品牌词、保留版本号 —— 与 ≤430 的规则同口径（test-ui-consistency 有一断言守着） */
+  .hs-brand{display:none}
+  .header-subtitle{letter-spacing:.5px}
+  .header-right{gap:6px}
+}
+/* v2.14.38：平板（≥700 宽）内容宽 500 居中，两侧留白本就宽，56px 段间距在 1024 高上显得散
+   —— 收到 40px。手机（<700）不受影响。 */
+@media(min-width:700px){
+  :root{--sec-y:var(--sp-10)}
+}
 
