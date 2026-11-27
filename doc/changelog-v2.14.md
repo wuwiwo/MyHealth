@@ -5,6 +5,66 @@
 
 ---
 
+## v2.14.24
+
+Date: 2026-11-27
+
+**多队收口 + 编队 / 关卡 UI（作者 7 项裁决）**
+
+> 作者原话：① 单场景 Boss 关是否保留「小队接力」→「不可以」；② 关卡列表无「双场景 / 双 Boss」标记 →「增加 tag 标记」；③ 培养页 `.train-lineup` →「用多队入口代替参战阵容模块」；④ 普通档 0.85 →「等待实际测试」；⑤ 未跟踪文件 →「没用的都删除」；⑥ 阵容配置 →「选中样式更明显，已设置在其他队伍的宠物要标记出来」；⑦ 「参照接入 ui-skill（ui-skills.com）进行项目优化」。
+
+### 新增功能
+
+1. **关卡列表形态标签**（`group-levels.js` + `game-views.js` + `index.css`）
+   - `group-levels.js` 新增 `stageModeLabel(lg, st)` → `''` / `'双场景'` / `'双 BOSS'`，判据仍是 `stageIsMulti`（单一来源）；`window` / `globalThis` 同步导出。
+   - `game-views.js` 的 `groupStageModeTag(glv, st)` 只负责把标签套进 `.lv-tag`（普通档蓝 / 双 Boss 档红，沿用既有 token，不新增颜色）。
+   - 大关内页每关卡片在名字下显示标签；顺带修掉窄卡里「第10关」折行与 Boss 名重复王冠（`st.name` 前缀剥离扩到 `U+FE0F/U+200D`，名字改 `--fs-2xs` + nowrap）。
+2. **培养页「⚔️ 出战编队」改为多队摘要**（`game-views.js` + `index.css`）
+   - 按编队顺序每队一行：首发徽标 + 队名 + `N/4` + 宠物芯片（未成熟/阵亡芯片置灰、空队给提示）。
+   - 整行 / 「🐾 编队管理」按钮 → 打开宠物面板并自动展开编队区（`_petSquadsOpen = true`）。
+   - **删除** 原来的 `data-train-pick` 就地切换与 `savePetBattlePicks` 调用：选择入口收敛到编队管理（唯一编辑器）。
+3. **编队管理 / 阵容配置 UI 优化**（`pet-ui.js` + `index.css`；参照 ui-skills `ibelick/baseline-ui` 的可迁移原则）
+   - 选中态 = **实心填充 + ✓**（不再只改边框色），视觉与 `aria-pressed` 同源。
+   - **跨队占用标记**：每队芯片上，已被别队占用的宠物标「在 X队」+ 置灰 + `disabled` + 原因 `title`；参战阵容（= 首发队）同样标注并禁用（防点一下把宠物从别队悄悄搬走）。
+   - 队卡头部拆成「徽标 + 队名 + 计数」与单独一行右对齐的 `↑ ↓ 🗑`（原来在 360px 上与队名抢宽度、折行且顺序错乱）。
+   - 每队补 `pet-squad-meta`（首发说明 / 未编队 N 只）；名字省略号、计数 `tabular-nums`。
+
+### 修复
+
+1. **单场景不再有「小队接力」**（`page/game-render.js`，作者裁决）
+   - 拆掉 v2.14.19 的单场景接线：删除 `_groupRelayNext` 提供方、`_groupRelaySquads` / `_groupSquadIdx` / `_groupRelayPending` 三个全局、`_groupBattle.squadUnits/reinforce` 写入、上场 toast 与 `window.__groupRelayNext` 探针。
+   - 多队只在双场景导演里生效；单场景（非双 Boss 的 16 个 x-10 + 队不足回退）就是首发队一场打到底。
+   - 引擎侧 `gb.reinforce` / `gbReinforce()` **保留未改**（后续若恢复接力也不必重写引擎）。
+2. 关卡名前缀剥离的正则原来只认 `[⭐👑] ` 单字符，Boss 名带变体选择符时会残留第二个王冠 → 改为剥 `[\s⭐👑\uFE0F\u200D]+`。
+
+### UI 调整
+
+- `.lv-tag` / `.lv-stage-name` / `.train-squad-*` / `.pet-squad-ops` / `.pet-squad-chip.is-taken` / `.pet-squad-chip-tag` / `.pet-squad-meta` / `.pet-pick-chip.is-taken` 新增；`.pet-squad-chip[aria-pressed="true"]` 由「绿框绿字」改为实心填充。
+- 编队区提示文案改为「✓ 实心 = 已在本队；标『在 X』并置灰 = 已编在别的小队」。
+- 参战阵容标题改为「⚔️ 参战阵容（首发队）」。
+
+### 测试
+
+- 新增 `scripts/test-squad-ui.js`（**28 断言**）：选中 `is-sel`+✓、跨队 `is-taken`+`disabled`+「在一队」、参战芯片同源标注、培养页源码守卫（不再自改阵容）、CSS 契约。
+- `scripts/test-attackable.js` §7 补 `stageModeLabel` 5 条 → **58 断言**。
+- `scripts/test-squad-relay.js` 收窄为「引擎能力 + 单场景不接线」（§7 改守已删除、§10 改守不写 `squadUnits/reinforce`）→ **41 断言**。
+- `scripts/test-orb-wiring.js` 培养页断言改为多队摘要（`data-train-squad` / `data-open-squad`）+ 反向断言「不再自改参战阵容」。
+- 新增 `scripts/verify-squad-ui.js`（无头 Chrome + CDP，360×640 / 390×844）：编队卡行高/溢出、g3 内页标签正确性（g3-1/g3-5 双场景、g3-10 双 BOSS、g4-10 不标）、编队芯片实心/占用/禁用 —— 两视口全部通过。
+- 全量回归 **85 套件 / 0 失败**（新增 1 套件）。
+
+### 版本 / 文件
+
+- `APP_VERSION` **2.14.23 → 2.14.24**；缓存戳 `?v187` → **`?v188`**（56 处）。
+- `page/` JS 数 **55**（未增删 page 文件）；最大文件 `game-render.js` **3508 行**（删掉接力实现后从 3550 降下来）。
+- 新增 `scripts/test-squad-ui.js`、`scripts/verify-squad-ui.js`。
+
+### 未完成（按作者裁决暂不动）
+
+- 普通档 `normal: 0.85` 保持不动 —— 作者要求「等待实际测试」再调。
+- 双 Boss 关的专项平衡模拟仍未做（`balance-dual.js` 用通用单位，不覆盖 Boss 天赋/遗言）。
+
+---
+
 ## v2.14.23
 
 Date: 2026-11-26
@@ -1364,6 +1424,7 @@ Date: 2026-10-12
 | 2.14.21 | 55 | 3542 行 game-render.js | **多队双场景阶段 D（导演 + 双栏 + 玩家轮转 + 替补绑定，首次开放多队）**：新模块 `group-dual.js`（`MULTI_SCENE_ENEMY_SCALE=0.85` 缩放 / `createDualBattle` / `dualStep` 换边与冻结跳过 / `dualMovePlayer` 回合边界双池搬移 / `dualReinforce` 未上场队列按序满血补给并绑定场景 / `dualMergedBattle` 门面 / 场景文案）；`game-render.js` 唯一 `glv.mode==='multi'` 分支 → `_startDualGroupTrial`（A←一队、B←二队、两队任一不可战即不开战、每侧各调一次 `groupStageEnemies` 完整编成 ×0.85、敌人 id `enemyA-`/`enemyB-`、**一个共享 rng 注入两个 gb**、双场景不做时间旅行），`_groupStep` 改走 `_dualStepOnce` 且 `_groupBattle` 降级为当前场景活指针，导演 notes → toast，`renderGroupBattlePane(gb,sfx)` id 参数化 + 双栏 dense 阈值 5，`renderGroupOverlay` 双栏 `.gb-dual` + 栏头状态 + 两侧合计血量 + 控制条「回合 / 当前 / 替补」，`_gbFindUnit` 跨两场景查单位，结算仍单入口（`dualMergedBattle` 门面喂既有奖励/受伤/统计/历史）；修两处开发期缺陷（替补队列 `buildSquad` 未入 `dir` 导致空转判败、`_groupDual` 未在开战入口复位导致陈旧导演接管下一场）；新增 `test-dual-battle`（78 断言，含真走 g18-5 开战入口的集成段）；全量 **84 套件 / 0 失败** + a11y 40/40；缓存戳 `?v184` → **`?v185`** |
 | 2.14.22 | 55 | 3543 行 game-render.js | **阶段 E（真机双栏复核 + 平衡实测定值）**：新增 `scripts/verify-dual-layout.js`（无头 Chrome + 自建 CDP 客户端，Node 22 自带 WebSocket）在 360×640 / 390×844 真开 g18-5 量测 **28 项**，抓到**双栏芯片溢出广场下沿**（A 越界 153px / B 81px）并修复 —— 双栏改紧凑芯片 `--gb-unit-w:44px` / `--gb-unit-ico:18px`（`min-width`/`min-height` 仍 **44px = 触摸下限**）、中央区压到 2px、`.gb-dual .gb-arena-row` 取消 `max-height` 裁切、控制条标题压成无空格；新增 `scripts/balance-dual.js`（同关同阵容、40 种子、单场景用户基线）实测把 `MULTI_SCENE_ENEMY_SCALE` **0.85 → 0.95**（0.85 时双场景比同关单场景**容易 4~40pp**，与精英关定位相反；0.95 持平或略难）。全量 **84 套件 / 0 失败** + a11y **40/40**，缓存戳 `?v186` |
 | 2.14.23 | 55 | 3550 行 game-render.js | **多队双场景改为常态 + 按关卡类型分档 + 双 Boss**（作者新规格，推翻 v1.2 Q6）：`stageIsMulti` 重写为「x1–x9 全 multi；x10 仅 `lg % MULTI_BOSS_EVERY(3) == 0` 为 multi」，240 关里 **224 关 multi**、16 个非双 Boss 关仍 single；`MULTI_SCENE_SCALE_BY_TYPE = {normal:0.85, elite:0.9, boss:0.9}` 取代单一常量（`multiSceneScale(type)`，未知回落 0.85）；`applyMultiSceneScale` 接受数字或 type 字符串；**双 Boss = 两场景各 1 Boss**（每侧完整编成，天然 2 Boss，无新编成逻辑）；开战入口 `_startDualGroupTrial` 改返回布尔，**队不足回退单场景**（不再挡住新档开战）；`test-attackable` §7 重写（53 断言）、`test-dual-battle` 分档 + 新增 §14（93 断言）；`verify-dual-layout` 支持传关卡 id，g3-1 / g3-10 / g18-5 三种类型各 28/28。全量 **84 套件 / 0 失败**，缓存戳 `?v187` |
+| 2.14.24 | 55 | 3508 行 game-render.js | **多队收口 + 编队/关卡 UI**：① **单场景不再有接力** —— 删 `_groupRelayNext` 提供方与 `_groupRelaySquads`/`_groupSquadIdx`/`_groupRelayPending` 三全局、删 `squadUnits`/`reinforce` 写入与上场 toast（引擎 `gbReinforce` 保留，`test-squad-relay` 收窄为「引擎能力 + 不接线」41 断言）；② 关卡列表加形态标签 `stageModeLabel(lg, st)`（'' / 双场景 / 双 BOSS，判据仍 `stageIsMulti`）+ `.lv-tag`，顺带修 60px 窄卡「第10关」折行与 Boss 名重复王冠；③ 培养页 `.train-lineup` 改**多队摘要**（每队一行 → 打开编队管理），删除 `data-train-pick` 就地切换；④ 编队 UI：选中态实心 + ✓、跨队占用标「在 X」+ disabled（参战阵容同源）、队卡 `↑↓🗑` 独立一行、元信息「未编队 N 只」；新增 `test-squad-ui.js`（28 断言）+ `verify-squad-ui.js`（无头 Chrome 两视口）；全量 **85 套件 / 0 失败**，缓存戳 `?v188`。⚠️ 普通档 0.85 按作者裁决保持不动，等实测 |
 
 > **「JS文件数」** = `page/` 下 `*.js` 文件数量（**含子目录**，如 `page/data/exercises-dataset.js`）→ 本版（2.14.21）实测 **55**
 > （2.14.20 的 54 + 本版新增 `page/group-dual.js`）。

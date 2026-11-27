@@ -419,10 +419,16 @@ box-shadow:none}
 .lv-card.locked:hover{background:var(--surface);border-color:var(--bd)}
 .lv-num{font-family:var(--font);font-size:var(--fs-xl);font-weight:800}
 .lv-name{font-size:var(--fs-xs);color:var(--text2);margin-top:2px}
+/* v2.14.24：大关内页的关卡名（60px 窄卡里「第10关」也不折行） */
+.lv-stage-name{color:inherit;white-space:nowrap;line-height:1.4}
 .lv-status{font-size:var(--fs-xs);margin-top:4px}
 .lv-status.done{color:var(--green)}
 .lv-status.current{color:var(--orange)}
 .lv-status.locked{color:var(--text3)}
+/* v2.14.24：关卡形态标签（双场景 / 双 BOSS）—— 开战前就能看出本关形态。
+   只借既有颜色 token（普通档蓝、Boss 档红），不加新色、不加动效。 */
+.lv-tag{display:inline-block;margin-top:3px;padding:1px 5px;border:var(--bw) solid currentColor;border-radius:0;font-size:var(--fs-2xs);line-height:1.5;color:var(--blue);white-space:nowrap}
+.lv-tag.is-boss{color:var(--red)}
 
 /* Chapter */
 .chapter-hdr{font-size:var(--fs-base);font-weight:700;margin:var(--sec-y) 0 var(--sp-4);color:var(--text);display:flex;align-items:center;gap:8px}
@@ -1164,19 +1170,35 @@ box-shadow:none}
 .pet-squads-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
 .pet-squads-body{padding:0 0 var(--sp-4)}
 .pet-squad-card{border:var(--bw) solid var(--bd);padding:var(--sp-4);margin-top:var(--sp-2)}
-.pet-squad-hd{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
-.pet-squad-badge{font-size:var(--fs-xs);font-weight:700;color:var(--text2);border:var(--bw) solid var(--bd);padding:2px var(--sp-2);min-width:44px;text-align:center}
+.pet-squad-hd{display:flex;align-items:center;gap:var(--sp-2)}
+.pet-squad-badge{flex:0 0 auto;font-size:var(--fs-xs);font-weight:700;color:var(--text2);border:var(--bw) solid var(--bd);padding:2px var(--sp-2);min-width:44px;text-align:center}
 .pet-squad-badge.is-first{color:var(--brand);border-color:var(--brand)}
-.pet-squad-name{flex:1 1 96px;min-width:0;min-height:var(--touch-min);padding:var(--sp-2) 10px;font-size:var(--fs-sm);font-weight:600;background:var(--bg2);color:var(--text);border:var(--bw) solid var(--bd);border-radius:0;font-family:inherit}
+.pet-squad-name{flex:1 1 auto;min-width:0;min-height:var(--touch-min);padding:var(--sp-2) 10px;font-size:var(--fs-sm);font-weight:600;background:var(--bg2);color:var(--text);border:var(--bw) solid var(--bd);border-radius:0;font-family:inherit}
 .pet-squad-name:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
-.pet-squad-count{font-size:var(--fs-xs);color:var(--text2);font-variant-numeric:tabular-nums}
+.pet-squad-count{flex:0 0 auto;font-size:var(--fs-xs);color:var(--text2);font-variant-numeric:tabular-nums}
+/* v2.14.24：操作按钮单独一行 —— 原来与队名抢宽度，在 360px 上折行且 ↑↓🗑 顺序错乱 */
+.pet-squad-ops{display:flex;justify-content:flex-end;gap:6px;margin-top:6px}
 .pet-squad-op{min-width:var(--touch-min);padding:0 10px;font-size:var(--fs-md)}
 .pet-squad-op[disabled]{color:var(--text3);border-color:var(--bd);cursor:not-allowed}
 .pet-squad-del{color:var(--red);border-color:var(--red)}
 .pet-squad-del[disabled]{color:var(--text3);border-color:var(--bd)}
 .pet-squad-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--sp-2)}
-.pet-squad-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:var(--fs-sm)}
-.pet-squad-chip[aria-pressed="true"]{border-color:var(--green);color:var(--green)}
+.pet-squad-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:var(--fs-sm);max-width:100%}
+.pet-squad-chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:8em}
+/* v2.14.24：选中态 = **实心填充 + ✓**（不再只靠边框变绿），与 aria-pressed 同源；
+   被别的队伍占用的宠物：置灰 + 「在 X」标签 + disabled（不靠点了才报错）。 */
+.pet-squad-chip[aria-pressed="true"]:not(:hover){background:var(--brand-fill);color:var(--on-brand);border-color:var(--brand-fill);font-weight:700}
+.pet-squad-chip-mark{font-weight:900;line-height:1}
+.pet-squad-chip.is-taken{opacity:.45;cursor:not-allowed}
+.pet-squad-chip.is-taken:hover{background:transparent;color:inherit}
+.pet-squad-chip-tag{flex:0 0 auto;padding:0 4px;border:var(--bw) solid currentColor;font-size:var(--fs-2xs);line-height:1.5;opacity:.9}
+.pet-squad-meta{font-size:var(--fs-2xs);color:var(--text3);margin-top:var(--sp-2)}
+/* v2.14.24：参战阵容（= 首发队）里已被其它小队占用的宠物，同样置灰标注 */
+.pet-pick-chip.is-taken{opacity:.45;cursor:not-allowed}
+/* v2.14.24：参战芯片选中态统一为实心填充（与编队芯片同一视觉语言；文字用 on-brand 保证对比度） */
+.pet-pick-chip[aria-pressed="true"]:not(:hover){background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand);font-weight:700}
+.pet-pick-chip[aria-pressed="true"]:not(:hover) span{color:var(--on-brand)}
+.pet-pick-chip.is-taken:hover{background:transparent;color:inherit}
 .pet-squad-warn{font-size:var(--fs-xs);color:var(--yellow);margin-top:var(--sp-2)}
 .pet-squad-add{width:100%;margin-top:var(--sp-3);font-size:var(--fs-sm);border-color:var(--brand);color:var(--brand)}
 .pet-squad-note{font-size:var(--fs-xs);color:var(--text3);margin-top:var(--sp-2)}
@@ -1615,17 +1637,26 @@ box-shadow:none}
 .pet-rest[open]>summary::after{content:'▴'}
 .pet-rest>summary:focus-visible{outline:var(--bw) solid var(--orange);outline-offset:calc(-1 * var(--bw))}
 .pet-rest-body{padding:0 var(--sp-2) var(--sp-2)}
-/* ④ 培养页「出战阵容」常驻醒目卡：2px 品牌描边（唯一强调），
-   与角色属性卡的橙色描边区分层级；芯片 = 头像 + 名，选中态由 aria-pressed 同源上色。 */
+/* ④ 培养页「出战编队」常驻醒目卡（v2.14.24：由单阵容切换改为多队摘要）：
+   2px 品牌描边（唯一强调），与角色属性卡的橙色描边区分层级。
+   每支小队一行 = 徽标 + 队名 + 数量 + 宠物芯片；整行都是按钮，点开编队管理。 */
 .train-lineup{background:var(--bg2);border:var(--bw) solid var(--brand);padding:var(--sp-4) var(--sp-5);margin-bottom:16px}
 .train-lineup-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:var(--fs-sm);font-weight:700}
 .train-lineup-count{color:var(--brand);font-variant-numeric:tabular-nums}
 .train-lineup-hint{font-size:var(--fs-xs);font-weight:400;color:var(--text3)}
-.train-lineup-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.train-squads{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .train-lineup-empty{padding:8px 0;font-size:var(--fs-xs);color:var(--text3);line-height:1.6}
-.train-pick-chip{gap:6px;min-height:var(--touch-min);padding:0 10px;font-size:var(--fs-xs)}
-/* 选中态只认 aria-pressed（JS 同步），:not(:hover) 让 hover 沿用 .speed-btn 反色规则 */
-.train-pick-chip[aria-pressed="true"]:not(:hover){border-color:var(--green);color:var(--green)}
+.train-squad-row{display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;text-align:left;min-height:var(--touch-min);padding:8px 10px;font-weight:400}
+.train-squad-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.train-squad-badge{flex:0 0 auto;padding:1px 6px;border:var(--bw) solid var(--bd-l);font-size:var(--fs-2xs);font-weight:700;line-height:1.6;color:var(--text3)}
+.train-squad-badge.is-first{border-color:var(--brand);color:var(--brand)}
+.train-squad-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm);font-weight:700}
+.train-squad-count{flex:0 0 auto;font-size:var(--fs-xs);color:var(--text2);font-variant-numeric:tabular-nums}
+.train-squad-chips{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.train-squad-chip{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-2xs);color:var(--text2);min-width:0}
+.train-squad-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:9em}
+.train-squad-chip.is-off{opacity:.6}
+.train-squad-empty{font-size:var(--fs-2xs);color:var(--text3)}
 .train-start-battle{width:100%;margin-top:10px;min-height:var(--touch-min);padding:10px 14px;font-size:var(--fs-sm)}
 .train-more-pet{width:100%;margin-top:8px;min-height:var(--touch-min);padding:10px 14px;font-size:var(--fs-sm)}
 /* ⑤ 培养页「道具材料 / 获取与记录」默认折叠 —— 首屏从 6 块压到 5 块，

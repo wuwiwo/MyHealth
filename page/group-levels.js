@@ -436,6 +436,13 @@ function stageIsMulti(lg, st) {
   return true;                                          // x1–x9（含 x5 精英）全部多队
 }
 
+/* 关卡形态的**展示标签**（v2.14.24）：'' = 单场景（不显示）/ '双场景' / '双 BOSS'。
+   ⚠️ 判据只有 stageIsMulti（本文件），UI 层只负责把它套进 HTML —— 不要在视图里再判一次。 */
+function stageModeLabel(lg, st) {
+  if (!stageIsMulti(lg, st)) return '';
+  return (st === 10) ? '双 BOSS' : '双场景';
+}
+
 /* 生成全部 GROUP_MAX 大关 × 10 小关
    （v2.1.19 由 15 扩到 18；v2.1.29 由 18 扩到 21；v2.1.30 由 21 扩到 24；g13+ 为超限试炼。循环边界由 GROUP_MAX 派生） */
 var GROUP_LEVELS = {};
@@ -625,6 +632,7 @@ if (typeof window !== 'undefined') {
   window.groupTailMul = groupTailMul;
   window.getGroupStage = getGroupStage;
   window.stageIsMulti = stageIsMulti;
+  window.stageModeLabel = stageModeLabel;
   window.MULTI_BOSS_EVERY = MULTI_BOSS_EVERY;
   window.GROUP_ANCHOR = GROUP_ANCHOR;
   window.groupAnchorT = groupAnchorT;
@@ -658,6 +666,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.groupTailMul = groupTailMul;
   globalThis.getGroupStage = getGroupStage;
   globalThis.stageIsMulti = stageIsMulti;
+  globalThis.stageModeLabel = stageModeLabel;
   globalThis.MULTI_BOSS_EVERY = MULTI_BOSS_EVERY;
   globalThis.GROUP_ANCHOR = GROUP_ANCHOR;
   globalThis.groupAnchorT = groupAnchorT;

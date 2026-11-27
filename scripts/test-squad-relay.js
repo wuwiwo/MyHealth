@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-/* v2.14.19 阶段 B：**小队接力**（普通战斗单队接力）测试
-   覆盖：引擎默认行为逐字不变 / gbReinforce 幂等与双池同步 / 本队全灭先增援后判负 /
-        D3（有替补不判负、用尽才判负）/ winnerRule 'all' 与 'pets' 的区别 /
-        增援只对新单位补跑 onBattleStart（老单位不重放）/ 提供方（_groupRelayNext）跳过空队与全员不可战 /
-        game-render 接线源码守卫
-   设计依据：doc/design-pet-squad-battle-v1.md §3 / Q5 / Q7（定稿 v1.2）
+/* v2.14.19 阶段 B → **v2.14.24 收窄**：「小队接力」只在双场景导演里使用
+   （作者裁决：单场景关不保留接力）。
+   覆盖：引擎 reinforce 能力（默认行为逐字不变 / gbReinforce 幂等与双池同步 /
+        本队全灭先增援后判负 / D3 / winnerRule 'all' 与 'pets' / 增援只对新单位补跑 onBattleStart）+
+        **单场景已不接线**（提供方与三个全局删除）
+   设计依据：doc/design-pet-squad-battle-v1.md §3 / Q5 / Q7（定稿 v1.2）+ v2.14.24 裁决
    Run: node scripts/test-squad-relay.js */
 'use strict';
 const fs = require('fs');
@@ -217,39 +217,16 @@ console.log('\n[6] 增援时只对**新单位**补跑 onBattleStart');
   ok(gb.log.length > 0 && gb.log[gb.log.length - 1].unit === '增援', '增援开场事件落进战斗日志（unit=增援）');
 })();
 
-/* ---------- 7. 提供方 _groupRelayNext：跳过空队 / 全员不可战 ---------- */
-console.log('\n[7] 提供方按编队顺序接力，跳过空队与全员不可战的小队');
+/* ---------- 7. v2.14.24 裁决：单场景**不再有**接力提供方 ---------- */
+console.log('\n[7] 单场景接力提供方已删除（v2.14.24 作者裁决：只在双场景里用多队）');
 (function () {
-  const SPECIES = ['sparkle', 'dream', 'kirin', 'nonebear', 'flamechick', 'rocksteady'];
-  const d = sb.getPetStore();
-  SPECIES.forEach(sid => {
-    const pet = sb.createPet({ speciesId: sid, rarity: (sb.getPetCodex(sid) || {}).rarity || 'R', name: sid });
-    pet.stage = 'mature'; pet.isDead = false; pet.injured = false;
-    d.pets.push(pet);
-  });
-  sb.savePetStore(d);
-  /* 一队 sparkle；二队【空】；三队 dream；四队全员受伤（应被跳过） */
-  sb.savePetSquads([
-    { id: 'sq-1', name: '一队', petIds: ['sparkle'] },
-    { id: 'sq-2', name: '空队', petIds: [] },
-    { id: 'sq-3', name: '三队', petIds: ['dream'] },
-    { id: 'sq-4', name: '伤兵队', petIds: ['kirin'] }
-  ]);
-  const d2 = sb.getPetStore();
-  d2.pets.forEach(p => { if (p.speciesId === 'kirin') p.injured = true; });
-  sb.savePetStore(d2);
-  /* 模拟 startGroupTrial 的接线 */
-  const pb = mkUnit('你', 'ally', 100); pb._isPlayer = true;
-  const e1 = mkUnit('敌', 'enemy', 60);
-  const gb = build({ allies: [pb], enemies: [e1], seed: 9 });
-  sb._groupRelaySquads = sb.getPetSquads();
-  sb._groupSquadIdx = 0;
-  const u1 = sb.__groupRelayNext(gb);
-  ok(u1 && u1.length === 1 && u1[0].hp > 0, '第一次问 → 拿到三队（跳过了空的二队）', u1 && u1.length);
-  ok(sb._groupRelayPending === '三队', '提示队名 = 三队（二队被跳过）', sb._groupRelayPending);
-  const u2 = sb.__groupRelayNext(gb);
-  ok(u2 === null, '第二次问 → null（四队全员受伤不可战 → 用尽）');
-  ok(u1[0].hp === u1[0].base.hp, '增援单位是**满血**的（不继承上一队伤势）');
+  ok(typeof sb.__groupRelayNext === 'undefined', '全局探针 __groupRelayNext 已移除');
+  ok(typeof sb._groupRelaySquads === 'undefined', '开战快照 _groupRelaySquads 已移除');
+  ok(typeof sb._groupSquadIdx === 'undefined', '接力游标 _groupSquadIdx 已移除');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'page', 'game-render.js'), 'utf8');
+  ok(!/function _groupRelayNext/.test(src), '源码里不再有 _groupRelayNext 定义');
+  ok(!/_groupBattle\.reinforce\s*=/.test(src), '单场景不再给引擎挂 reinforce（不接线 ⇒ 永不触发）');
+  ok(!/_groupBattle\.squadUnits\s*=/.test(src), '单场景不再给引擎传 squadUnits');
 })();
 
 /* ---------- 9. 回滚（时间旅行）不把替补"带回过去" ---------- */
@@ -269,21 +246,21 @@ console.log('\n[9] 回滚到增援之前的快照 → 替补单位被摘除');
   ok(gb.allies.length === 2 && gb.units.length === 3, '单位池回到快照形状');
 });
 
-/* ---------- 10. game-render 接线源码守卫 ---------- */
+/* ---------- 10. game-render 接线源码守卫（v2.14.24：单场景不接线） ---------- */
 console.log('\n[10] game-render 接线守卫');
 (function () {
   const src = fs.readFileSync(path.join(__dirname, '..', 'page', 'game-render.js'), 'utf8');
   ok(src.indexOf('player._isPlayer=true') > -1, '玩家单位打了 _isPlayer 标记（pets 口径据此排除玩家）');
-  ok(/if\(_groupRelaySquads&&_groupRelaySquads\.length>1&&petUnits\.length\)/.test(src),
-    '只有 ≥2 支小队且首发有宠物时才挂接力（单队走改前路径）');
-  ok(src.indexOf('_groupBattle.squadUnits=petUnits.slice()') > -1, '首发小队单位交给引擎（判本队全灭）');
-  ok(src.indexOf('_groupBattle.reinforce=_groupRelayNext') > -1, '增援提供方接到引擎');
-  ok(/buildGroupBattlePets\(ids,max\)/.test(src), '接力建单位仍走 buildGroupBattlePets 唯一入口（不另写数值）');
-  ok(src.indexOf('_groupRelayPending=') > -1 && src.indexOf('满血接力') > -1, '上场有一次性提示（且提示后清空）');
+  ok(!/_groupRelaySquads/.test(src) && !/_groupSquadIdx/.test(src) && !/_groupRelayPending/.test(src),
+    '单场景接力三个全局一律不存在（不残留半套）');
+  ok(src.indexOf('reinforce') < 0 || !/_groupBattle\.reinforce\s*=/.test(src),
+    '单场景不往引擎写 reinforce（唯一写入口在导演层）');
   const eng = fs.readFileSync(path.join(__dirname, '..', 'page', 'battle-group.js'), 'utf8');
   ok(/winnerRule: opts\.winnerRule \|\| 'all'/.test(eng), '引擎默认 winnerRule 仍是 all');
   ok(eng.indexOf('var res = gbReinforce(gb, more);') > -1, 'checkGroupWin 里先增援再判负');
   ok(eng.indexOf('while (guard++ < 16)') > -1, '增援循环有上限（防提供方恒给空队）');
+  ok(/buildGroupBattlePets/.test(fs.readFileSync(path.join(__dirname, '..', 'page', 'group-dual.js'), 'utf8')),
+    '双场景替补建单位仍走 buildGroupBattlePets 唯一入口');
 })();
 
 console.log(fail ? '\nFAIL ' + fail : '\nALL PASS (' + pass + ')');

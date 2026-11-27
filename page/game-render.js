@@ -501,10 +501,10 @@ var _gbTab='battle'      // v2.1.14：战斗页 / 日志页双 Tab（'battle' | 
 var _groupPaused=false   // v2.1.14：打开详情时暂停自动推进，避免详情被下一步渲染刷掉
 var _groupRewarded=false // v2.1.19：本次战斗是否已结算过奖励（防手动模式重复领取）
 var _groupSeed=null      // v2.1.27 [7c]：本场战斗的随机种子（用于复现）
-/* v2.14.19（阶段 B）：**小队接力**的本场状态（全部 runtime，不落盘） */
-var _groupRelaySquads=null   // 开战时的编队快照（getPetSquads()；只有 >1 支才启用接力）
-var _groupSquadIdx=0         // 已上场到的下标（0 = 首发）
-var _groupRelayPending=''    // 刚上场的队名（供 _groupStep 提示一次，提示后清空）
+/* v2.14.24 作者裁决：**单场景不再有小队接力** ——
+   多队只走双场景导演（group-dual.js）；非双 Boss 的单场景关一律「首发队一场打到底」。
+   引擎侧 `gb.reinforce` / `gb.squadUnits` 能力保留（battle-group.js 未改、测试仍覆盖），
+   但 game-render 的单场景路径**不再接线**，所以线上不会触发。 */
 /* v2.14.21（阶段 D）：**多队双场景导演**（group-dual.js 的 createDualBattle）。
    null = 走单场景路径（所有既有关卡）；非 null 时 `_groupBattle` 只是「当前推进场景」的
    活指针（渲染 / 日志 / 特效继续按它在既有代码里工作），真正轮转由导演负责。 */
@@ -881,17 +881,9 @@ function startGroupTrial(groupId){
   /* v2.1.27 [7c]：给本场一个种子，使战斗可复现 / 可回退 */
   _groupSeed = ((Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0
   _groupBattle=createGroupBattle({allies:allies,enemies:enemies,terrain:terrain,seed:_groupSeed})
-  /* v2.14.19（阶段 B）：**小队接力接线** —— 只有真的有 ≥2 支「有可战宠物」的小队时才挂。
-     单队（包括所有旧存档派生出来的「一队」）走的就是改前那条路径：不传 squadUnits / reinforce，
-     引擎里那段增援代码根本不执行 ⇒ 日志、RNG、判负时机与 v2.14.18 逐字节一致。
-     首发的 petUnits 仍是上面那一次 buildGroupBattlePets（同一份调用、同一顺序，未改）。 */
-  _groupSquadIdx=0
-  _groupRelaySquads=(typeof getPetSquads==='function')?getPetSquads():null
-  _groupRelayPending=''
-  if(_groupRelaySquads&&_groupRelaySquads.length>1&&petUnits.length){
-    _groupBattle.squadUnits=petUnits.slice()
-    _groupBattle.reinforce=_groupRelayNext
-  }
+  /* v2.14.24 作者裁决：单场景**不再接线小队接力** —— 不传 squadUnits / reinforce。
+     多队只在双场景导演里生效；单场景关（非双 Boss 的 x-10，以及队伍不足时的回退）
+     就是首发队一场打到底。日志 / RNG / 判负时机与 v2.14.19 之前完全一致。 */
   /* v2.1.27 [7d]：初始快照（重放 / 时间旅行的起点） */
   try {
     window.__groupSnaps = []
@@ -959,10 +951,8 @@ function _startDualGroupTrial(glv, player, anchorG){
   var sharedRng=(typeof makeSeededRng==='function')?makeSeededRng(_groupSeed):Math.random
   var gbA=createGroupBattle({allies:[player].concat(uA),enemies:enemiesFor('A',[player].concat(uA)),terrain:terrain,rng:sharedRng})
   var gbB=createGroupBattle({allies:uB.slice(),enemies:enemiesFor('B',uB),terrain:terrain,rng:sharedRng})
-  /* 双场景的补给归导演；单场景接力的两个全局在双场景下必须是空的（防两套接力同时生效） */
-  _groupRelaySquads=null
-  _groupRelayPending=''
-  _groupSquadIdx=0
+  /* 双场景的补给 / 替补全部归导演（pendingSquads = 第 3 队及以后）；
+     单场景已无接力可复位（v2.14.24 裁决）。 */
   _groupDual=(typeof createDualBattle==='function')?createDualBattle({
     player:player,
     scenes:{
@@ -1003,7 +993,7 @@ function _dualStepOnce(){
   return step
 }
 
-/* v2.14.21（阶段 D）：给测试 / 调试用的只读探针（与 `__groupRelayNext` 同类，不参与线上逻辑）。 */
+/* v2.14.21（阶段 D）：给测试 / 调试用的只读探针（与 `__groupSnaps` 同类，不参与线上逻辑）。 */
 window.__groupDualState = function(){ return _groupDual }
 
 /* 自动选参战宠物（最多 n 只成熟宠物） */
@@ -1013,38 +1003,10 @@ function autoPickPets(n){
   return ready.slice(0,n||2).map(function(p){return p.speciesId})
 }
 
-/* v2.14.19（阶段 B）：**下一支小队** —— 引擎的增援提供方 `gb.reinforce(gb) → Unit[]|null`
-   · 队伍来源 = 开战时 `getPetSquads()` 的快照（阶段 A 的单一来源），按数组顺序接力，第 1 支首发；
-   · **现建单位 → 满血**、不继承上一队伤势；仍走 `buildGroupBattlePets()` 唯一入口
-     （凝聚 / 共鸣 / 等级 / 共享技能与首发同一口径，禁止另写一份数值）；
-   · 空队 / 全员不可战（受伤、阵亡——`canPetBattle` 在建单位时已过滤）→ 跳过该队继续找；
-     全部用尽 → `null`，引擎据此判负（这就是 D3「没有替补就算失败」的落点）；
-   · **不掷骰**：本函数不碰 `gb.rng`，同种子战斗的可复现性不受影响。 */
-function _groupRelayNext(gb){
-  var squads=_groupRelaySquads||[]
-  var max=(typeof PET_BATTLE_MAX==='number')?PET_BATTLE_MAX:4
-  while(++_groupSquadIdx<squads.length){
-    var sq=squads[_groupSquadIdx]
-    var ids=sq&&sq.petIds
-    if(!ids||!ids.length)continue
-    try{
-      var units=(typeof buildGroupBattlePets==='function')
-        ?buildGroupBattlePets(ids,max)
-        :createPetUnitsForBattle(ids,max)
-      if(!units||!units.length)continue
-      _groupRelayPending=sq.name||('第'+(_groupSquadIdx+1)+'队')
-      return units
-    }catch(e){
-      /* 单队建单位失败不应打断整场战斗：记录下来并跳过（不空 swallow） */
-      console.warn('[group] 增援建单位失败，跳过该小队', e)
-    }
-  }
-  return null
-}
-
-/* 测试观察点（与 `window.__groupSnaps` 同类）：只供 scripts/test-squad-relay.js 直接验证接力提供方，
-   不参与任何线上逻辑。 */
-if(typeof window!=='undefined')window.__groupRelayNext=_groupRelayNext
+/* v2.14.19（阶段 B）的 `_groupRelayNext` 提供方已在 v2.14.24 删除：
+   单场景不再接力（作者裁决），替补 / 多队只由双场景导演负责。
+   引擎侧 `gb.reinforce` 能力仍在 battle-group.js（测试 test-squad-relay.js 仍覆盖它），
+   只是不再有任何线上调用方给它接线。 */
 
 /* 群战推进 —— **自动 / 手动共用的唯一入口**
    （`#gbStep` 手动按钮、`#gbAuto` 自动开关、`_groupAutoStep` 定时器都只调这个函数，零参数；
@@ -1097,10 +1059,6 @@ function _groupStep(){
         else if (n.type === 'sceneWon') toast('🏆 场景 ' + n.scene + ' 已清场（冻结）', 's')
         else if (n.type === 'sceneLost') toast('💀 场景 ' + n.scene + ' 全灭，已无替补可用', 'e')
       })
-    }
-    if (_groupRelayPending) {
-      toast('🔄 ' + _groupRelayPending + ' 上场（满血接力）', 's')
-      _groupRelayPending = ''
     }
     renderGroupOverlay(false)
     // 攻击反馈动画：解析本次行动的日志，高亮受击目标 + 伤害飘字

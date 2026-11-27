@@ -234,6 +234,12 @@ console.log('\n[7] 关卡 mode：x1–x9 全 multi；Boss 关仅「双 Boss」�
   ok(!sb.stageIsMulti(30, 5), '超过 GROUP_MAX 的 g30-5 不派生（防越界）');
   ok(!sb.stageIsMulti(1, 10) && sb.stageIsMulti(3, 10), 'x-10 只在 lg%3==0 时派生（g1-10 false / g3-10 true）');
   ok(sb.MULTI_BOSS_EVERY === 3, '双 Boss 节律常量 = 3（唯一来源 group-levels.js）');
+  /* v2.14.24：关卡列表的形态标签也走同一判据（UI 只调用，不再自己判） */
+  ok(sb.stageModeLabel(3, 1) === '双场景', 'stageModeLabel：普通关 = 双场景');
+  ok(sb.stageModeLabel(3, 5) === '双场景', 'stageModeLabel：x5 精英关 = 双场景');
+  ok(sb.stageModeLabel(3, 10) === '双 BOSS', 'stageModeLabel：g3-10 = 双 BOSS');
+  ok(sb.stageModeLabel(4, 10) === '', 'stageModeLabel：非双 Boss 的 x-10 不显示标签（单场景）');
+  ok(sb.stageModeLabel(30, 5) === '' && sb.stageModeLabel(1, 11) === '', 'stageModeLabel：越界一律空（不猜）');
   /* 双 Boss 编成：每侧一份完整编成（1 Boss + 2 护卫）⇒ 两场景合计 2 个 Boss，不需要新逻辑 */
   const bossStage = sb.getGroupStage('g3-10');
   const bossCfgs = sb.groupStageEnemies('g3-10', bossStage);

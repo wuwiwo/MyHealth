@@ -211,16 +211,18 @@ assert('月重置：碎片清空', bag4.orbShard === 0);
   assert('challenge.js 已接 rollOrbDrop（宝珠改为挑战掉落）', ch.indexOf('rollOrbDrop') >= 0);
   assert('challenge.js 结算面板已接宝珠图标 orbIconHtml', ch.indexOf('orbIconHtml(state.orbReward.type') >= 0);
 
-  /* v2.15 培养页：出战阵容常驻 + 材料/获取记录默认折叠 + 就地切换 / 开战接线。 */
+  /* v2.15 培养页：出战阵容常驻 + 材料/获取记录默认折叠 + 就地切换 / 开战接线。
+     v2.14.24：阵容卡改为**多队摘要**（点任一队 → 宠物面板的编队管理），不再就地切换。 */
   const gv = fs.readFileSync(path.join(__dirname, '..', 'page', 'game-views.js'), 'utf8');
-  assert('game-views.js 培养页有常驻 train-lineup 阵容卡', gv.indexOf('class="train-lineup"') >= 0);
-  assert('game-views.js 阵容芯片用 data-train-pick 就地切换', gv.indexOf('data-train-pick') >= 0);
+  assert('game-views.js 培养页有常驻 train-lineup 编队卡', gv.indexOf('class="train-lineup"') >= 0);
+  assert('game-views.js 每支小队一行（data-train-squad，点开编队管理）',
+    gv.indexOf('data-train-squad=') >= 0 && gv.indexOf('data-open-squad') >= 0);
   assert('game-views.js 培养页有 #trainStartBattle 开战入口', gv.indexOf('trainStartBattle') >= 0);
   assert('game-views.js 开战走唯一入口 startGroupTrialWithPets', gv.indexOf('startGroupTrialWithPets(stage') >= 0);
   assert('game-views.js 材料区默认折叠（<details class="train-mat-fold">）',
     gv.indexOf('<details class="train-mat-fold">') >= 0);
-  assert('game-views.js 阵容选择落盘 savePetBattlePicks（与 pet-ui 同源）',
-    gv.indexOf('savePetBattlePicks(_petBattlePicks)') >= 0);
+  assert('game-views.js 培养页不再自己改参战阵容（选择入口收敛到编队管理）',
+    gv.indexOf('savePetBattlePicks(_petBattlePicks)') < 0 && gv.indexOf('data-train-pick') < 0);
 
   const css = fs.readFileSync(path.join(__dirname, '..', 'page', 'index.css'), 'utf8');
   ['.orb-ico', '.orb-bag', '.orb-stock', '.train-lineup', '.train-mat-fold', '.pet-rest'].forEach(function (c) {

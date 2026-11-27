@@ -276,6 +276,36 @@ function petSquadPanelHtml(ready) {
     + '<div class="pet-squads-body">';
   squads.forEach(function (sq, i) {
     var injuredN = sq.petIds.filter(injuredOf).length;
+    /* v2.14.24：**跨队占用标记** —— 本队之外的队伍里已经有的宠物，逐个标出「在·X队」并置灰，
+       不用点了才报错（同一宠物只能出现在一支小队，pet-store 的 toggle 是唯一判据）。 */
+    var taken = {};
+    squads.forEach(function (other, j) {
+      if (other.id === sq.id) return;
+      other.petIds.forEach(function (pid) { taken[pid] = other.name || ('第' + (j + 1) + '队'); });
+    });
+    var freeN = 0;
+    var chips = '';
+    ready.forEach(function (p) {
+      var sel = sq.petIds.indexOf(p.speciesId) > -1;
+      var inj = !!p.injured;
+      var host = (!sel && taken[p.speciesId]) ? taken[p.speciesId] : '';
+      if (!sel && !host) freeN++;
+      var nm = ((typeof getPetCodex === 'function' && (getPetCodex(p.speciesId) || {}).name) || p.name || p.speciesId);
+      var tip = sel ? '再点一次＝移出本队'
+        : host ? ('已编在「' + host + '」：同一宠物只能在一支小队，先从那队移出')
+        : inj ? '受伤中：留在队里，但本场不会上场（先用营养液治疗）'
+        : '点一下＝编入本队';
+      chips += '<button class="speed-btn pet-squad-chip' + (sel ? ' is-sel' : '') + (host ? ' is-taken' : '') + '"'
+        + ' type="button" data-squad-pick="' + sq.id + '|' + p.speciesId + '"'
+        + ' aria-pressed="' + (sel ? 'true' : 'false') + '"'
+        + (host ? ' disabled aria-disabled="true"' : '')
+        + ' title="' + petSquadEsc(tip) + '">'
+        + (sel ? '<span class="pet-squad-chip-mark" aria-hidden="true">✓</span>' : '')
+        + ((typeof petIconHtml === 'function') ? petIconHtml(p.speciesId, 16) : '🐾')
+        + '<span class="pet-squad-chip-name">' + petSquadEsc(nm) + (inj ? ' ⚠️' : '') + '</span>'
+        + (host ? '<span class="pet-squad-chip-tag">在 ' + petSquadEsc(host) + '</span>' : '')
+        + '</button>';
+    });
     h += '<div class="pet-squad-card">'
       + '<div class="pet-squad-hd">'
       + '<span class="pet-squad-badge' + (i === 0 ? ' is-first' : '') + '">'
@@ -284,6 +314,8 @@ function petSquadPanelHtml(ready) {
       + ' value="' + petSquadEsc(sq.name) + '" maxlength="' + nameMax + '"'
       + ' aria-label="「' + petSquadEsc(sq.name) + '」名称（最多 ' + nameMax + ' 个字）">'
       + '<span class="pet-squad-count">' + sq.petIds.length + '/' + max + '</span>'
+      + '</div>'
+      + '<div class="pet-squad-ops">'
       + '<button class="speed-btn pet-squad-op" type="button" data-squad-move="' + sq.id + '|-1"'
       + ' aria-label="把「' + petSquadEsc(sq.name) + '」上移"' + (i === 0 ? ' disabled aria-disabled="true"' : '')
       + '>↑</button>'
@@ -294,18 +326,9 @@ function petSquadPanelHtml(ready) {
       + ' aria-label="删除「' + petSquadEsc(sq.name) + '」"' + (squads.length <= 1 ? ' disabled aria-disabled="true"' : '')
       + '>🗑</button>'
       + '</div>'
-      + '<div class="pet-squad-chips">';
-    ready.forEach(function (p) {
-      var sel = sq.petIds.indexOf(p.speciesId) > -1;
-      var inj = !!p.injured;
-      var nm = ((typeof getPetCodex === 'function' && (getPetCodex(p.speciesId) || {}).name) || p.name || p.speciesId);
-      h += '<button class="speed-btn pet-squad-chip" type="button" data-squad-pick="' + sq.id + '|' + p.speciesId + '"'
-        + ' aria-pressed="' + (sel ? 'true' : 'false') + '"'
-        + (inj ? ' title="受伤中：留在队里，但本场不会上场（先用营养液治疗）"' : '')
-        + '>' + ((typeof petIconHtml === 'function') ? petIconHtml(p.speciesId, 32) : '🐾')
-        + '<span>' + petSquadEsc(nm) + (inj ? ' ⚠️' : '') + '</span></button>';
-    });
-    h += '</div>';
+      + '<div class="pet-squad-chips">' + chips + '</div>'
+      + '<div class="pet-squad-meta">' + (i === 0 ? '首发＝开战时第一支上场的队伍' : '第 ' + (i + 1) + ' 队 · 首发之后依次上场')
+      + ' · 未编队 ' + freeN + ' 只</div>';
     if (injuredN) {
       h += '<div class="pet-squad-warn" role="note">⚠️ 有 ' + injuredN
         + ' 只受伤中：仍保留在队里，但开战不会上场（先喂营养液）</div>';
@@ -313,8 +336,8 @@ function petSquadPanelHtml(ready) {
     h += '</div>';
   });
   h += '<button class="speed-btn pet-squad-add" id="petSquadAdd" type="button">＋ 新建小队</button>'
-    + '<div class="pet-squad-note" role="note">同一宠物不能同时出现在两个小队；'
-    + '一队就是首发（上方「参战阵容」的芯片与它同步）。后续战斗按此顺序接力上场。</div>'
+    + '<div class="pet-squad-note" role="note">✓ 实心 = 已在本队；标「在 X」并置灰 = 已编在别的小队'
+    + '（同一宠物只能出现在一支小队，先从原队移出再编）。首发队就是开战第一队，其余按顺序接力 / 分场。</div>'
     + '</div></details>';
   return h;
 }
@@ -356,18 +379,31 @@ function renderPetPanel() {
   if (ready.length) {
     var _petMaxLabel = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
     var _picks = _petBattlePicks || []
+    /* v2.14.24：参战阵容 = **首发队**。已编在其它小队的宠物在这里也标出来（置灰 + 「在 X」），
+       否则点一下会把它从原队悄悄搬走（savePetBattlePicks → sanitize 先到先得）。 */
+    var _sqTaken = {}
+    if (typeof getPetSquads === 'function') {
+      getPetSquads().forEach(function (sq, j) {
+        if (j === 0) return
+        sq.petIds.forEach(function (pid) { _sqTaken[pid] = sq.name || ('第' + (j + 1) + '队') })
+      })
+    }
     h += '<div class="pet-lineup">'
-      +'<div class="pet-lineup-hd">⚔️ 参战阵容'
+      +'<div class="pet-lineup-hd">⚔️ 参战阵容（首发队）'
       +'<span class="pet-lineup-count">'+_picks.length+'/'+_petMaxLabel+'</span>'
       +'<span class="pet-lineup-hint">'+(_picks.length ? '点宠物名切换' : '还没选 · 开战会自动带成熟宠物')+'</span>'
       +'</div>'
       +'<div class="pet-pick-chips">'
     ready.forEach(function(p) {
       var sel = _picks.indexOf(p.speciesId) > -1
+      var host = (!sel && _sqTaken[p.speciesId]) ? _sqTaken[p.speciesId] : ''
       /* v2.2.29：参战芯片加 32px 头像，扫一眼就能认出是哪只（原来只有文字）
          ⚠️ 头像 <img> 必须紧跟按钮起始标签（test-pet-icons.js 4d 的契约） */
-      h += '<button class="speed-btn pet-pick-chip" data-pet-pick="'+p.speciesId+'" aria-pressed="'+(sel?'true':'false')+'" style="padding:3px 10px;'+(sel?'border-color:var(--green);color:var(--green)':'')+'">'
-        + petIconHtml(p.speciesId, 32) + '<span>'+(getPetCodex(p.speciesId)||{}).name+'</span></button>'
+      h += '<button class="speed-btn pet-pick-chip' + (host ? ' is-taken' : '') + '" data-pet-pick="'+p.speciesId+'" aria-pressed="'+(sel?'true':'false')+'"'
+        + (host ? ' disabled aria-disabled="true" title="已编在「'+petSquadEsc(host)+'」：先在编队管理里从那队移出"' : '')
+        + ' style="padding:3px 10px;'+(sel?'border-color:var(--brand-fill);color:var(--on-brand);background:var(--brand-fill);font-weight:700':'')+'">'
+        + petIconHtml(p.speciesId, 32) + '<span>'+(getPetCodex(p.speciesId)||{}).name+'</span>'
+        + (host ? '<span class="pet-squad-chip-tag">在 '+petSquadEsc(host)+'</span>' : '') + '</button>'
     })
     h += '</div>'
     /* 开战按钮随「参战选择」一起上移：它作用的正是上面这份选择 */

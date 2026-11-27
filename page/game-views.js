@@ -85,39 +85,60 @@ function renderTrainView() {
     +statCell('💠','技能点',st.points)
     +'</div>'
     +'</div>'
-  /* ===== v2.15：出战阵容常驻培养页 =====
-     改前「参战 / 开战」藏在宠物面板里，从培养页要点一次按钮才看得到（作者：太不明显）。
-     现在把阵容摘要 + 就地切换 + 开战按钮合并进这张醒目卡片；宠物面板降级为
-     卡片内的「更多养成」次级入口（喂食 / 炼化 / 宝珠 / 图鉴仍在面板里，语义不变）。
-     ⚠️ 选择逻辑与 pet-ui.js 同源：ensurePetBattlePicksLoaded → _petBattlePicks → savePetBattlePicks。 */
+  /* ===== v2.15 出战阵容卡 → **v2.14.24 改为多队摘要**（作者裁决：
+     「培养页 .train-lineup 用多队入口代替参战阵容模块」）=====
+     · 只读摘要：按编队顺序列出每支小队（首发打头），点任一队 = 打开宠物面板的编队管理；
+     · 不再在这里做「点宠物名切换」—— 选择入口收敛到编队管理（唯一编辑器），
+       避免编排逻辑分散在两处（宠物面板的「参战阵容」是首队的只读镜像，两处恒等）。
+     · 数据仍全部来自 pet-store 的 getPetSquads()（单一来源，不在这里推导上限/互斥）。 */
   var _readyPets = d.pets.filter(function(p){ return p.stage === 'mature' && !p.isDead })
   if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
-  var _picks = (typeof _petBattlePicks !== 'undefined' && _petBattlePicks) ? _petBattlePicks : []
   var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
+  var _squads = (typeof getPetSquads === 'function') ? getPetSquads() : []
+  var _readyById = {}
+  _readyPets.forEach(function (p) { _readyById[p.speciesId] = p })
+  var _squadPets = 0
+  _squads.forEach(function (sq) { _squadPets += (sq.petIds || []).length })
   h += '<div class="train-lineup">'
-    + '<div class="train-lineup-hd">⚔️ 出战阵容'
-    +   '<span class="train-lineup-count">' + _picks.length + '/' + _petMax + '</span>'
-    +   '<span class="train-lineup-hint">'
-    +     (_picks.length ? '点宠物名切换' : '还没选 · 开战会自动带成熟宠物') + '</span></div>'
-    + '<div class="train-lineup-chips">'
+    + '<div class="train-lineup-hd">⚔️ 出战编队'
+    +   '<span class="train-lineup-count">' + _squads.length + ' 队 · ' + _squadPets + ' 只</span>'
+    +   '<span class="train-lineup-hint">' + (_squads.length > 1 ? '首发打头 · 其余按序接力 / 分场' : '单队 · 点开可加第二队') + '</span></div>'
+    + '<div class="train-squads">'
   if (!_readyPets.length) {
-    h += '<div class="train-lineup-empty">还没有可出战的成熟宠物 🐾</div>'
+    h += '<div class="train-lineup-empty">还没有可出战的成熟宠物 🐾<br>先在宠物面板里养成一只成熟宠物</div>'
+  } else if (!_squads.length) {
+    h += '<div class="train-lineup-empty">还没有编队 · 点下面「编队管理」建一支</div>'
   } else {
-    _readyPets.forEach(function(p){
-      var sel = _picks.indexOf(p.speciesId) > -1
-      var nm = (typeof getPetCodex === 'function' && (getPetCodex(p.speciesId)||{}).name) || p.name || p.speciesId
-      /* 选中态只由 aria-pressed 表达，上色交给 CSS 的
-         .train-pick-chip[aria-pressed="true"]:not(:hover)（与 .gb-auto-btn 同源）；
-         不写内联 style —— 视觉状态与无障碍状态永远同源。 */
-      h += '<button class="speed-btn train-pick-chip" type="button" data-train-pick="' + p.speciesId + '"'
-        + ' aria-pressed="' + (sel ? 'true' : 'false') + '">'
-        + ((typeof petIconHtml === 'function') ? petIconHtml(p.speciesId, 32) : '🐾')
-        + '<span>' + nm + '</span></button>'
+    _squads.forEach(function (sq, i) {
+      var ids = (sq.petIds || []).slice()
+      var chips = ''
+      ids.forEach(function (sid) {
+        var p = _readyById[sid]
+        var nm = ((typeof getPetCodex === 'function' && (getPetCodex(sid) || {}).name) || (p && p.name) || sid)
+        var off = !p   /* 未成熟 / 已阵亡：留在队里但本场不上场 */
+        chips += '<span class="train-squad-chip' + (off ? ' is-off' : '') + '" title="'
+          + (off ? '未成熟或已阵亡：留在队里，本场不会上场' : nm) + '">'
+          + ((typeof petIconHtml === 'function') ? petIconHtml(sid, 16) : '🐾')
+          + '<span>' + nm + '</span></span>'
+      })
+      if (!ids.length) chips = '<span class="train-squad-empty">空队 · 点开把宠物编进来</span>'
+      h += '<button class="speed-btn train-squad-row" type="button" data-train-squad="' + sq.id + '"'
+        + ' aria-label="' + sq.name + '（' + (i === 0 ? '首发' : '第 ' + (i + 1) + ' 队') + '），'
+        + ids.length + '/' + _petMax + ' 只，点开编队管理">'
+        + '<span class="train-squad-top">'
+        +   '<span class="train-squad-badge' + (i === 0 ? ' is-first' : '') + '">' + (i === 0 ? '首发' : '第 ' + (i + 1) + ' 队') + '</span>'
+        +   '<span class="train-squad-name">' + sq.name + '</span>'
+        +   '<span class="train-squad-count">' + ids.length + '/' + _petMax + '</span>'
+        + '</span>'
+        + '<span class="train-squad-chips">' + chips + '</span>'
+        + '</button>'
     })
   }
   h += '</div>'
     + '<button class="speed-btn train-start-battle" id="trainStartBattle" type="button"'
     +   ' style="border-color:var(--orange);color:var(--orange)">⚔️ 开始敌群试炼（带宠物）</button>'
+    + '<button class="speed-btn train-more-pet" id="trainSquadEdit" type="button" data-open-squad>'
+    +   '🐾 编队管理（多队 / 替补顺序）</button>'
     + '<button class="speed-btn train-more-pet" id="trainMorePet" type="button" data-open-pet>'
     +   '🐾 更多养成（喂食 / 炼化 / 宝珠）</button>'
     + '</div>'
@@ -163,29 +184,15 @@ function renderTrainView() {
   h += '</div>'
   h += '</div></details>'
   v.innerHTML = h
-  /* v2.15：出战阵容就地切换 —— 与 pet-ui.js 的 data-pet-pick 同源（读存档 → 改
-     _petBattlePicks → savePetBattlePicks），但只就地刷新芯片 / 计数，不整块重绘，
-     这样材料 <details> 的展开状态不会被一次点击重置。 */
-  v.querySelectorAll('[data-train-pick]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var sid = btn.getAttribute('data-train-pick')
-      if (typeof ensurePetBattlePicksLoaded === 'function') ensurePetBattlePicksLoaded()
-      _petBattlePicks = _petBattlePicks || []
-      var i = _petBattlePicks.indexOf(sid)
-      var _petMax = (typeof PET_BATTLE_MAX === 'number') ? PET_BATTLE_MAX : 4
-      if (i > -1) _petBattlePicks.splice(i, 1)
-      else if (_petBattlePicks.length < _petMax) _petBattlePicks.push(sid)
-      else { toast('最多携带 ' + _petMax + ' 只宠物 ⚔️', 'e'); return }
-      if (typeof savePetBattlePicks === 'function') savePetBattlePicks(_petBattlePicks)
-      v.querySelectorAll('[data-train-pick]').forEach(function(c){
-        var on = _petBattlePicks.indexOf(c.getAttribute('data-train-pick')) > -1
-        c.setAttribute('aria-pressed', on ? 'true' : 'false')
-      })
-      var cnt = v.querySelector('.train-lineup-count')
-      if (cnt) cnt.textContent = _petBattlePicks.length + '/' + _petMax
-      var hint = v.querySelector('.train-lineup-hint')
-      if (hint) hint.textContent = _petBattlePicks.length ? '点宠物名切换' : '还没选 · 开战会自动带成熟宠物'
-    })
+  /* v2.14.24：培养页不再就地切换宠物 —— 点任一队（或「编队管理」按钮）都打开
+     宠物面板的编队管理（唯一编辑器）；`_petSquadsOpen` 是 pet-ui.js 的纯 UI 态。 */
+  function openSquadEditor() {
+    if (typeof renderPetPanel !== 'function') { toast('宠物面板未加载', 'e'); return }
+    if (typeof _petSquadsOpen !== 'undefined') _petSquadsOpen = true
+    renderPetPanel()
+  }
+  v.querySelectorAll('[data-train-squad], [data-open-squad]').forEach(function (btn) {
+    btn.addEventListener('click', openSquadEditor)
   })
   /* v2.15：培养页直接开战 —— 目标关取 currentGroupStageId()（唯一进度源），
      开战仍走 startGroupTrialWithPets() → startGroupTrial()，不另建战斗对象。 */
@@ -216,6 +223,18 @@ function statCell(icon, label, val) {
 }
 
 /* ===== 战斗视图：本旬目标 + 敌群 + 关卡 ===== */
+
+/* v2.14.24：关卡形态标签 —— 开战前就能看出本关是「双场景 / 双 BOSS」。
+   判定只在 group-levels.js 的 `stageModeLabel(lg, st)`（唯一来源）；模块缺失时不显示，不猜。 */
+function groupStageModeTag(glv, st) {
+  if (typeof stageModeLabel !== 'function' || !glv || !st) return ''
+  var lgNum = parseInt(String(glv.id || '').replace(/[^0-9]/g, ''), 10)
+  var stNum = parseInt(String(st.id || '').split('-').pop(), 10)
+  if (!lgNum || !stNum) return ''
+  var label = stageModeLabel(lgNum, stNum)
+  if (!label) return ''
+  return '<span class="lv-tag' + (label === '双 BOSS' ? ' is-boss' : '') + '">' + label + '</span>'
+}
 
 /* 大关内 10 小关列表 */
 function showGroupStages(groupId) {
@@ -250,9 +269,10 @@ function showGroupStages(groupId) {
       // v2.1.7：原 opacity:.35 让"未解锁"文字几乎不可读，放宽到 .6 并弱化文字色
       btnStyle = 'opacity:.6;color:var(--text3)'
     }
-    h += '<button class="speed-btn" data-stage="'+st.id+'" '+(unlocked && !cleared ? '' : 'disabled')+' style="padding:12px 4px;min-height:56px;font-size:var(--fs-sm);border-radius:10px;'+btnStyle+';display:flex;flex-direction:column;align-items:center">'
-      +'<span style="font-size:var(--fs-lg)">'+icon+'</span>'
-      +'<span style="font-size:var(--fs-xs);margin-top:2px">'+st.name.replace(/^[⭐👑] /,'')+'</span>'
+    h += '<button class="speed-btn" data-stage="'+st.id+'" '+(unlocked && !cleared ? '' : 'disabled')+' style="padding:10px 4px;min-height:56px;font-size:var(--fs-sm);border-radius:10px;'+btnStyle+';display:flex;flex-direction:column;align-items:center">'
+      +'<span style="font-size:var(--fs-lg);line-height:1">'+icon+'</span>'
+      +'<span class="lv-stage-name" style="font-size:var(--fs-2xs);margin-top:2px">'+st.name.replace(/^[\s⭐👑\uFE0F\u200D]+/,'')+'</span>'
+      + groupStageModeTag(glv, st)
       +statusHtml
       +'</button>'
   })

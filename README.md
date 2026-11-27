@@ -1,6 +1,6 @@
 # MyHealth
 
-> Personal Health Manager — 个人健身健康管理应用 v2.14.23
+> Personal Health Manager — 个人健身健康管理应用 v2.14.24
 
 🟢 **线上体验**：<https://my-health-six.vercel.app/>
 📦 **源码仓库**：<https://github.com/wuwiwo/MyHealth>
@@ -66,7 +66,8 @@ page/
 ├── battle.js           单敌战斗引擎（rng 注缝 + 五段式 hook + Boss 词条）
 ├── battle-group.js     多对多群战引擎（速度行动队列 + 单步执行）
 ├── terrain.js          战斗场地（6 种）
-├── group-levels.js     敌群关卡（24 大关 × 10 小关 = 240 关，程序化生成）
+├── group-levels.js     敌群关卡（24 大关 × 10 小关 = 240 关，程序化生成；含 `stageIsMulti` / `stageModeLabel` 形态判据）
+├── group-dual.js       多队双场景导演（两场景轮转 / 替补绑定 / 按关卡类型分档的敌人系数）
 ├── group-progress.js   敌群线性解锁进度
 ├── ai.js               敌人 AI（斩杀/治疗/集火/Boss 大招）
 ├── challenge.js        隐藏挑战召唤 + 小游戏 + 伤害兑月奖励 + 技能点
@@ -111,9 +112,9 @@ doc/
 ├── wiki/  ← 📚 **系统现行事实（唯一权威）**：`00 系统总览.md` 总索引 + 12 个大类各一页 + `01 Glossary/` 术语真源，`[[wikilinks]]` 互联
 ├── HANDOFF.md  ← 🤝 AI/开发者交接文档（环境/纪律/模块/测试/待办/踩坑；§6 为历史快照）
 ├── design-tokens-v2.1.md  ← 🎨 设计规范（唯一权威：令牌/对比度/触控/无障碍）
-├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.22）
+├── VERSION-LEDGER.md  ← 🔢 版本发号处（当前下一个可用 2.14.25）
 ├── design-battle-experience-v1.md / design-v2.0.md / 2.0 敌群设计.md / mechanics-biopsy-v2.0.4.md  ← 🗄️ 历史设计稿与评审存档（不作现行规则；状态见 `wiki/12 术语表与过时文档对照.md`）
-├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.23）
+├── changelog-v1.3 ~ v2.14.md   版本日志（当前最新 `changelog-v2.14.md`，当前版本 v2.14.24）
 └── archive/  📦 历史归档（使命已完成，仅供追溯）
     ├── code-review-v1.0.md / code-review-v1.5.md   早期代码评审
     ├── roadmap-v1.6.md                              v1.6 架构重构执行计划
@@ -452,5 +453,6 @@ Vercel 项目设置：
 
 | **2.14.22** | **2026-11-26** | **阶段 E：真机双栏复核 + 平衡实测定值** — 设计 `doc/design-pet-squad-battle-v1.md` v1.2 §10.1 阶段 E。**① 真机双栏复核（自建工具，非目测）**：新增 `scripts/verify-dual-layout.js`（无头 Chrome + 自建 CDP 客户端，Node 22 自带 `WebSocket`；不依赖 Playwright / Python），在 **360×640** 与 **390×844**（`dsf=2`、mobile）两个视口真开 `g18-5`，量测 **28 项**：两栏并排（栏宽 156 / 183px）、同一行、页面无横向溢出、栏头文案（推进中/待机）、每个芯片相对其广场的四向越界、广场 `scrollHeight/clientHeight`、页签仍可见、推 12 拍后场景键合法。**首轮抓到一个真实缺陷**：芯片溢出广场下沿（360 视口 A 越界 **153px**、内容高 349 vs 可视 196；B 81px；390 视口 A 126px；B 54px）—— 根因：双栏只有 156px 宽，标准芯片（`--gb-unit-w:56px`、`min-width:52px`）一行只放 2 枚 → 5 宠折成 3 行，被 `.gb-arena{overflow:hidden}` 裁掉末行。**② 修复（双栏专用紧凑芯片，不牺牲 a11y）**：`.gb-dual .gb-arena` 改 `--gb-unit-w:44px` / `--gb-unit-ico:18px`，芯片 `min-width/min-height:44px`（**仍等于 `--touch-min` 触摸下限，未缩水**）、名字 `2xs` + 省略号、血条 4px、`gap:2px`；**中央区在双栏里压到 2px**、`.gb-dual .gb-arena-row` 取消 `max-height` 裁切 —— 156px 一行 3 枚 ⇒ 5 宠 2 行 + 3 敌 1 行全部落在广场内。控制条标题压成无空格「双场景·回合1·A·替补1」（原标题在 360 上折成两行）。复测 **28/28 全绿**（两视口）；同时修掉校验工具自身的假阳性（overlay 挂在隐藏页签里 → 补 `switchTab('game')` 后量测归真）。截图落 `_tmp-dual-verify/`（未跟踪）。**③ 平衡实测与定值**：新增 `scripts/balance-dual.js`（同关同阵容、40 种子、单场景基线＝4 宠 + 玩家、`winnerRule='all'`；双场景＝8 宠分两队 + 每侧完整编成 × scale），校准关 `g7-10`（单场景胜率落 53~100% 的两档阵容）实测：**scale 1.00 → 双场景 17~60%**、**0.95 → 57~83%**、**0.90 → 80~93%**、**0.85 → 97~98%**、**0.80/0.70 → 100%**（胜场剩余血量 44%→78%）。结论：**0.85 让「双场景」比同关单场景更容易 4~40pp**（与「多队精英关」定位相反，因为双倍宠物池把失败风险摊薄），**0.95 才与单场景持平或略难**、1.00 偏硬（B 队常弱于 A 队还会更低）⇒ `MULTI_SCENE_ENEMY_SCALE` **0.85 → 0.95**（常量仍只在 `group-dual.js` 一处，`applyMultiSceneScale` 只乘 base 五项、floor、下限 1、不改原编成）。`test-dual-battle.js` 5 条系数相关断言同步改为 0.95（**78 断言全绿**）；全量 **84 套件 / 0 失败** + `test-a11y-tokens` **40/40**。**缓存戳 `?v185` → `?v186`（56 处）**；`page/` JS 数不变（**55**）；最大文件 `game-render.js` 3543 行。⚠️ **开放项**：0.95 为实测推荐值，作者若要求「精英关更硬」可上调至 1.00（只动这一个常量）；多队全灭但玩家仍存活的判负口径仍为 `'pets'`（设计 Q4/Q5 已裁），时间旅行不回退接力指针（阶段 B 遗留）| `doc/changelog-v2.14.md` |
 | **2.14.23** | **2026-11-26** | **多队双场景改为常态 + 系数按关卡类型分档 + Boss 关双 Boss**（作者新规格，**推翻 v1.2 的 Q6「只有 g18-5 / g24-5」**）。**① 适用范围**：`stageIsMulti` 重写 —— `x1–x9` 全部 `multi`（普通关与 `x5` 精英关都开），`x10` Boss 关仅 **每 3 大关 1 次**（`lg % MULTI_BOSS_EVERY(3) == 0`：g3 / g6 / … / g24）为 multi，**其余 Boss 关保持单场景单 Boss**；越界不派生。结果：240 关里 **224 关 multi**，只剩 16 个「非双 Boss」的 x-10 是 single。**② 系数分档**：`MULTI_SCENE_SCALE_BY_TYPE = {normal:0.85, elite:0.9, boss:0.9}`（唯一来源 `group-dual.js`），`multiSceneScale(type)` 未知/缺省回落 0.85（绝不返回 0）；`applyMultiSceneScale` 接受**数字或 type 字符串**，语义仍是「只乘 base 五项、floor、下限 1、不改原编成」；v2.14.22 的单一常量 0.95 已替换。**③ 双 Boss**：不需要新编成逻辑 —— Boss 关每侧拿一份完整编成（既有「1 Boss + 2 护卫」），两场景各一份 ⇒ 全场正好 2 个 Boss（真机 g3-10 截图已核）。**④ 入口改「能开就开、开不了回退」**：`_startDualGroupTrial` 改**返回布尔**，`startGroupTrial` 按返回值决定收工；队不足/空队 → **回退单场景并开战**（阶段 D 的「队不足即不可开战」废止，否则只有 1 支编队的新档会在 x1–x9 全线卡死），回退时给一次 toast 说明。**⑤ 测试**：`test-attackable` §7 全量重写（multi 数量 = 24×9 + 8、single 只剩非双 Boss 的 x-10、g1-5 也 multi、g18-10 是双 Boss、节律常量、Boss 编成含 Boss+护卫）→ **53 断言**；`test-dual-battle` 分档断言 + §13 精英 0.9 + 新增 §14（双 Boss 两侧各 1 Boss / g4-10 仍 single / 单队与空队回退 false / 入口按返回值收工）→ **93 断言**；`verify-dual-layout.js` 支持传关卡 id，实测 **g3-1（普通）/ g3-10（双 Boss）/ g18-5（精英）** 三类型各 **28/28 全绿**；全量 **84 套件 / 0 失败** + a11y **40/40**。缓存戳 `?v186` → **`?v187`**（56 处）；`page/` JS 数 **55**，最大文件 `game-render.js` **3550 行**。⚠️ **平衡影响如实披露**：多队从「全期 2 关」变成「224/240 关」，按 v2.14.22 实测（同关同阵容、40 种子）双场景在 0.85 时比同关单场景**容易 4~40pp**，故**整体难度明显下移、单场耗时约翻倍**；若体感偏易，只改 `MULTI_SCENE_SCALE_BY_TYPE` 这张表 | `doc/changelog-v2.14.md` |
+| **2.14.24** | **2026-11-27** | **多队收口 + 编队/关卡 UI（7 项作者裁决）**。**① 单场景不再有「小队接力」**：作者裁决「单场景 Boss 关不可以接力」→ 拆掉 v2.14.19 的接线（`_groupRelayNext` 提供方、`_groupRelaySquads` / `_groupSquadIdx` / `_groupRelayPending` 三个全局、`_groupBattle.squadUnits/reinforce` 写入、上场 toast 全删）；多队只在双场景导演里生效，单场景（非双 Boss 的 16 个 x-10 + 队不足回退）就是首发队一场打到底。引擎侧 `gb.reinforce` / `gbReinforce()` **保留未改**（`test-squad-relay.js` §1–§6 继续覆盖引擎能力，§7/§10 改守「单场景不接线」）→ **41 断言**。**② 关卡列表加形态标签**：`group-levels.js` 新增 `stageModeLabel(lg, st)`（唯一判据 `stageIsMulti`）→ `''` / `双场景` / `双 BOSS`；`game-views.js` 的 `groupStageModeTag` 只负责套 `.lv-tag`（普通档蓝 / Boss 档红，沿用既有 token），大关内页每关卡片在名字下显示标签；顺带修掉窄卡里「第10关」折行与 Boss 名重复王冠（`st.name` 前缀剥离含 `U+FE0F/U+200D`，名字用 `--fs-2xs` 且 nowrap）。**③ 培养页 `.train-lineup` 改为多队摘要**（作者：「用多队入口代替参战阵容模块」）：按编队顺序每队一行（首发徽标 + 队名 + `N/4` + 宠物芯片 + 空队提示），整行点击 → 打开宠物面板并自动展开「编队管理」；**删除**原来的 `data-train-pick` 就地切换（`savePetBattlePicks` 在培养页的调用一并删除），选择入口收敛到唯一编辑器。**④ 编队/阵容 UI 优化（参照 ui-skills `ibelick/baseline-ui` 的可迁移原则）**：选中态改**实心填充 + ✓**（不再只改边框绿）、`aria-pressed` 与视觉同源；**跨队占用**在每队芯片上标「在 X队」+ 置灰 + `disabled`（不靠点了才报错），参战阵容（= 首发队）同样标注；队卡头部拆成「徽标+队名+计数」与单独一行右对齐的 `↑↓🗑`（原来在 360px 上与队名抢宽度、折行且顺序错乱）；每队补 `pet-squad-meta`（首发说明 / 未编队 N 只）、名字省略号、计数 `tabular-nums`。**⑤ 测试**：新增 `scripts/test-squad-ui.js`（**28 断言**：选中 `is-sel`+✓、跨队 `is-taken`+`disabled`+「在一队」、参战芯片同源标注、培养页源码守卫、CSS 契约）+ `test-attackable` 补 `stageModeLabel` 5 条（**58 断言**）；新增真机校验 `scripts/verify-squad-ui.js`（无头 Chrome + CDP，360×640 / 390×844：编队卡行高/溢出、g3 内页标签正确性、编队芯片实心/占用/禁用，**全部通过**，截图 `_tmp-squad-verify/`）。全量 **85 套件 / 0 失败**。缓存戳 `?v187` → **`?v188`**（56 处）；`page/` JS 数 **55**，最大文件 `game-render.js` **3508 行**。⚠️ **未动项（按作者裁决）**：普通档 0.85 保持不动，等实测体感再调；双 Boss 关平衡专项模拟仍未做 | `doc/changelog-v2.14.md` |
 
-> 当前版本：**v2.14.23**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）
+> 当前版本：**v2.14.24**（设计规范：`doc/design-tokens-v2.1.md`｜变更日志：`doc/changelog-v2.14.md`）

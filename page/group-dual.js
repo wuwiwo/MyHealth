@@ -281,7 +281,7 @@ function dualSceneLabel(dir, key) {
 /* 剩余未上场小队数（控制条展示）。 */
 function dualPendingCount(dir) { return dir && dir.pending ? dir.pending.length : 0; }
 
-/* 测试 / 工具暴露（与 `window.__groupRelayNext` 同类，不参与线上逻辑）。 */
+/* 测试 / 工具暴露（与 `window.__groupSnaps` 同类，不参与线上逻辑）。 */
 if (typeof window !== 'undefined') {
   window.MULTI_SCENE_ENEMY_SCALE = MULTI_SCENE_ENEMY_SCALE;
   window.MULTI_SCENE_SCALE_BY_TYPE = MULTI_SCENE_SCALE_BY_TYPE;
