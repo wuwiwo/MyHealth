@@ -40,6 +40,8 @@ Date: 2026-11-27
 - 新增 `scripts/verify-game-pack.js`（CDP 9355），**11/11**：
   首屏资源里 **pack-game.js 出现 0 次**、`renderGameViews` 未定义、训练页正常渲染（body 589 字）｜点「挑战」→ pack 被拉 **1 次**、`renderGameViews` 已定义、挑战页渲染出 44 个按钮 / 535 字｜离开再回来 **仍只 1 次**（幂等）｜打开宠物面板 overlay 正常、内容含「营养液」材料行。
 - 体积：主包 `app.js` **1469 → 1300 KB**（-169KB 源码），按需包 134KB；首屏不再为挑战/宠物付这 134KB。
+- **线上实测（浏览器视角，含压缩，`measure-transfer.js`）**：`_build/app.js` **491 → 437 KB（−54KB / −11%）**；首屏资源合计（不含懒加载的动作数据集）**544 → 491 KB**；`pack-game.js` 只在进「挑战」时出现，静止态不占首屏流量。
+- 线上烟测（`prod-smoke.js`）：`/`、`index.css?v204`、`_build/app.js?v204` 均 200，版本 **v2.14.40**，console 报错 **0**。
 
 **④ 测试**
 - 新增 `scripts/test-game-pack.js`（**24 断言**）：构建契约（三文件真移出、按需包 100–200KB、入口页不引用）、`game-pack.js` 用 vm 跑真源码验幂等/排队/失败不重试/retry 复位/单个回调异常不影响其它、`switchTab` 接线文本断言。
