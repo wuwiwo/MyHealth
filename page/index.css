@@ -397,10 +397,13 @@ box-shadow:none}
 
 /* Profile */
 .profile-card{background:var(--bg2);border-radius:0;padding:var(--card-pad);border:var(--bw) solid var(--bd);margin-bottom:8px;box-shadow:none}
+/* v2.14.28（评审 P2-5 续）：个人资料原先是「卡片 2px 框 → 每行 label → 每行 input 2px 框」三层盒子，
+   一张卡里叠 3 个等宽方框，视觉上分不清哪个是容器。现在输入项只留**一条 2px 下划线**（宽度不变、无底色），
+   层级变成「一张卡 + 三条下划线」；label 仍侧置（纵向最省），获焦时下划线转品牌色，不改变任何尺寸。 */
 .pf-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .pf-row label{font-size:var(--fs-xs);color:var(--text3);width:60px;flex-shrink:0;font-weight:600}
-.pf-row input,.pf-row select{flex:1;padding:9px 12px;border:var(--bw) solid var(--bd);border-radius:0;font-size:var(--fs-sm);background:var(--bg);color:var(--text);font-family:inherit;outline:none;transition:border-color 75ms ease-out}
-.pf-row input:focus,.pf-row select:focus{border-color:var(--orange);box-shadow:none}
+.pf-row input,.pf-row select{flex:1;padding:9px 2px;border:0;border-bottom:var(--bw) solid var(--bd);border-radius:0;font-size:var(--fs-sm);background:transparent;color:var(--text);font-family:inherit;outline:none;transition:border-color 75ms ease-out}
+.pf-row input:focus,.pf-row select:focus{border-bottom-color:var(--brand);box-shadow:none}
 
 /* Weight */
 .weight-form-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
@@ -1488,6 +1491,10 @@ box-shadow:none}
 .btn-quiet{display:flex;align-items:center;justify-content:center;width:100%;min-height:var(--touch-min);padding:var(--sp-4);border:var(--bw) solid var(--bd);background:var(--bg2);color:var(--text);font-size:var(--fs-base);font-weight:600;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color 75ms ease-out,border-color 75ms ease-out}
 .btn-quiet:hover{background:var(--surface-2);border-color:var(--bd-l)}
 .btn-quiet:active{background:var(--surface-3)}
+/* v2.14.28（评审 P3-4）：数据页说明行 —— 左对齐多行小字，用来讲清「导入是按键合并」这类语义，
+   居中单行放不下（原来那句只说了「用于手动备份」，没答最关键的覆盖/合并）。 */
+.data-hint{margin-top:8px;font-size:var(--fs-2xs);line-height:1.55;color:var(--text3);text-align:left}
+.data-hint strong{color:var(--text2);font-weight:600}
 
 /* ---- 8. 尊重「减弱动态效果」：本层的过渡一律关掉（全局块在文件顶部） ---- */
 @media(prefers-reduced-motion:reduce){

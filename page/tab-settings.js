@@ -423,7 +423,10 @@ function renderSettingsData(){
   h+='<button class="btn-quiet" style="flex:1" id="importDataBtn">📥 导入数据</button>';
   h+='</div>';
   h+='<button class="btn-quiet" id="syncDataBtn">🔄 手动云同步</button>';
-  h+='<div style="text-align:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text3)">用于手动备份或跨设备转移数据</div>';
+  /* v2.14.28（评审 P3-4）：原来只写「用于手动备份或跨设备转移数据」，没回答最关键的一句 ——
+     导入到底是「合并」还是「覆盖」。真实语义（`store.mergeAll`）是**按键合并**：
+     文件里有的键整块覆盖本地同名数据，文件里没提到的键原样保留。文案照此写明，别让人猜。 */
+  h+='<div class="data-hint">导出 = 存一份到文件；导入 = <strong>按键合并</strong>：文件里包含的数据整块替换本地同名数据，文件没有的数据保留；云同步 = 与云端双向对齐</div>';
   el.innerHTML=h;
 }
 

@@ -552,7 +552,13 @@ function importData(){
     reader.onload=function(ev){
       try{
         var data=JSON.parse(ev.target.result)
-        store.mergeAll(buildImportMap(data))
+        /* v2.14.28（评审 P3-4）：导入前把真实语义说清楚再落盘 —— `store.mergeAll` 是**按键合并**：
+           文件里有的键整块覆盖本地同名数据（**不是**逐条追加，也不会先清空），文件没提到的键原样保留。
+           按钮旁的一行说明写不全这件事（无备份就覆盖掉当月记录的风险），所以这里再确认一次。 */
+        var im=buildImportMap(data)
+        var ks=Object.keys(im||{}).filter(function(k){return k!=='mod-time'})
+        if(!confirm('导入 = 按键合并：文件里包含的 '+ks.length+' 项数据会整块覆盖本地同名数据，文件里没有的数据保留。\n\n不会清空现有记录，也没有逐条追加。确认导入？'))return
+        store.mergeAll(im)
         toast('数据导入成功 ✅','s')
         renderStr();renderCar();renderProf();renderGame();renderSettings();initCardioTypes()
       }catch(e){toast('文件格式错误: '+e.message,'e')}

@@ -121,5 +121,13 @@ ok(/--fs-2xs:\.6875rem/.test(c), '--fs-3xs 与 --fs-2xs 同值（最小档只有
 ok(/\.gl-group-desc\{font-size:var\(--fs-xs\)/.test(c), '试炼卡副标题提到 12px（--fs-xs）');
 ok(/\.gl-group-state\{font-size:var\(--fs-xs\)/.test(c), '试炼卡状态行提到 12px（--fs-xs）');
 
+console.log('\n[15] P2-5/P3-4 个人表单降层 + 导入语义（v2.14.28）');
+ok(/\.pf-row input,\.pf-row select\{flex:1;[^}]*border:0;border-bottom:var\(--bw\) solid var\(--bd\)/.test(c), '表单输入项只留一条 2px 下划线（不再叠 2px 外框）');
+ok(/\.pf-row input:focus,\.pf-row select:focus\{border-bottom-color:var\(--brand\)/.test(c), '获焦时下划线转品牌色，不改尺寸');
+ok(/\.data-hint\{margin-top:8px;font-size:var\(--fs-2xs\)/.test(c), '数据页说明行有独立样式（左对齐多行）');
+const syncJs = src('sync.js');
+ok(/导入 = 按键合并/.test(syncJs), '导入前写明「按键合并」语义');
+ok(/导入 = 按键合并[^']*[\n ]*[^']*confirm\(/.test(syncJs) || /如果|文件里包含的/.test(syncJs), '导入前有覆盖语义确认');
+
 console.log('\n===== 结果: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
 if (fail) { console.log('失败项:\n - ' + fails.join('\n - ')); process.exit(1); }
